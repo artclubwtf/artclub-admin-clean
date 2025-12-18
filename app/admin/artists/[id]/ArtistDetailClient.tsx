@@ -662,9 +662,9 @@ export default function ArtistDetailClient({ artistId }: Props) {
     ? selectedCollectionTitle || publicKategorie
     : "Keine Kategorie ausgewählt";
 
-  const formatStage = (value: string) => (value === "Offer" ? "Offer (Angebot)" : value);
+  const formatStage = (value: (typeof stageOptions)[number]) => (value === "Offer" ? "Offer (Angebot)" : value);
   const stageOrder = stageOptions;
-  const stageIndex = Math.max(0, stageOrder.indexOf(stage));
+  const stageIndex = Math.max(0, stageOrder.indexOf(stage as (typeof stageOptions)[number]));
   const isUnderContract = stage === "Under Contract";
   const canViewMedia = stageIndex >= stageOrder.indexOf("In Review");
   const canViewArtworks = stageIndex >= stageOrder.indexOf("In Review");
