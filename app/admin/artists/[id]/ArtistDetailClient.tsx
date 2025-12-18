@@ -417,33 +417,37 @@ export default function ArtistDetailClient({ artistId }: Props) {
     setSelectedCollectionTitle(selected?.title ?? null);
   };
 
+  const persistArtist = async () => {
+    const res = await fetch(`/api/artists/${encodeURIComponent(artistId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: name.trim(),
+        email: email.trim() || undefined,
+        phone: phone.trim() || undefined,
+        stage,
+        internalNotes: internalNotes.trim(),
+        publicProfile: buildPublicProfilePayload(),
+      }),
+    });
+
+    if (!res.ok) {
+      const payload = await res.json().catch(() => null);
+      throw new Error(parseErrorMessage(payload));
+    }
+    const json = await res.json();
+    const updated = json.artist as Artist;
+    setArtist(updated);
+    return updated;
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setSaveMessage(null);
     setError(null);
 
     try {
-      const res = await fetch(`/api/artists/${encodeURIComponent(artistId)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          email: email.trim() || undefined,
-          phone: phone.trim() || undefined,
-          stage,
-          internalNotes: internalNotes.trim(),
-          publicProfile: buildPublicProfilePayload(),
-        }),
-      });
-
-      if (!res.ok) {
-        const payload = await res.json().catch(() => null);
-        throw new Error(parseErrorMessage(payload));
-      }
-
-      const json = await res.json();
-      const updated = json.artist as Artist;
-      setArtist(updated);
+      await persistArtist();
       setSaveMessage("Saved");
     } catch (err: any) {
       setError(err?.message ?? "Failed to save artist");
@@ -543,6 +547,9 @@ export default function ArtistDetailClient({ artistId }: Props) {
     }
     setShopifySyncing(true);
     try {
+      // Persist latest form state before syncing so Shopify receives up-to-date data.
+      await persistArtist();
+
       const res = await fetch(`/api/artists/${encodeURIComponent(artistId)}/shopify-sync`, {
         method: "POST",
       });
