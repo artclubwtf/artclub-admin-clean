@@ -29,10 +29,10 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
       handle: artist.shopifySync?.handle || undefined,
       displayName,
       bio,
-      instagram: artist.publicProfile?.instagram,
-      website: artist.publicProfile?.website,
-      location: artist.publicProfile?.location,
-      heroImageUrl: artist.publicProfile?.heroImageUrl,
+      instagram: artist.publicProfile?.instagram || undefined,
+      website: artist.publicProfile?.website || undefined,
+      location: artist.publicProfile?.location || undefined,
+      heroImageUrl: artist.publicProfile?.heroImageUrl || undefined,
       internalStage: artist.stage,
     });
 
