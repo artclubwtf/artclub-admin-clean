@@ -106,6 +106,7 @@ type FileUploadStatus = {
 };
 
 const stageOptions = ["Idea", "In Review", "Offer", "Under Contract"] as const;
+type Stage = (typeof stageOptions)[number];
 type TabKey = "overview" | "media" | "artworks" | "publicProfile" | "contracts" | "payout";
 
 function parseErrorMessage(payload: any) {
@@ -126,7 +127,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [stage, setStage] = useState<string>("Idea");
+  const [stage, setStage] = useState<Stage>("Idea");
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [internalNotes, setInternalNotes] = useState("");
   const [publicName, setPublicName] = useState("");
@@ -353,7 +354,8 @@ export default function ArtistDetailClient({ artistId }: Props) {
         setName(data.name ?? "");
         setEmail(data.email ?? "");
         setPhone(data.phone ?? "");
-        setStage(data.stage ?? "Idea");
+        const nextStage = stageOptions.includes(data.stage as Stage) ? (data.stage as Stage) : "Idea";
+        setStage(nextStage);
         setInternalNotes(data.internalNotes ?? "");
         setPublicName(data.publicProfile?.name ?? data.publicProfile?.displayName ?? "");
         setPublicInstagram(data.publicProfile?.instagram ?? "");
@@ -662,9 +664,9 @@ export default function ArtistDetailClient({ artistId }: Props) {
     ? selectedCollectionTitle || publicKategorie
     : "Keine Kategorie ausgewählt";
 
-  const formatStage = (value: (typeof stageOptions)[number]) => (value === "Offer" ? "Offer (Angebot)" : value);
+  const formatStage = (value: Stage) => (value === "Offer" ? "Offer (Angebot)" : value);
   const stageOrder = stageOptions;
-  const stageIndex = Math.max(0, stageOrder.indexOf(stage as (typeof stageOptions)[number]));
+  const stageIndex = Math.max(0, stageOrder.indexOf(stage));
   const isUnderContract = stage === "Under Contract";
   const canViewMedia = stageIndex >= stageOrder.indexOf("In Review");
   const canViewArtworks = stageIndex >= stageOrder.indexOf("In Review");
@@ -1705,7 +1707,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
                 Stage
                 <select
                   value={stage}
-                  onChange={(e) => setStage(e.target.value)}
+                  onChange={(e) => setStage(e.target.value as Stage)}
                   className="rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
                 >
                   {stageOptions.map((s) => (
