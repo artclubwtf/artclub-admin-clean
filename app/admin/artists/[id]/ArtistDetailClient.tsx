@@ -1,38 +1,19 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import type { ShopifyKuenstler } from "@/lib/shopify";
 
-type Artist = {
-  _id: string;
-  name: string;
-  email?: string;
-  status?: string;
-  tags?: string[];
-  notes?: string;
+type Props = {
+  artistId: string;
 };
 
-const statusOptions = ["lead", "onboarding", "active", "paused"] as const;
-
-function normalizeId(value: any) {
-  if (typeof value === "string") return value;
-  if (value && typeof value.$oid === "string") return value.$oid;
-  if (value && typeof value.toHexString === "function") return value.toHexString();
-  if (value && typeof value.toString === "function") return value.toString();
-  return "";
-}
-
-function normalizeArtist(raw: any): Artist {
-  return {
-    _id: normalizeId(raw?._id),
-    name: raw?.name ?? "",
-    email: raw?.email ?? "",
-    status: raw?.status ?? "",
-    tags: raw?.tags ?? [],
-    notes: raw?.notes ?? "",
-  };
-}
+type ArtistProduct = {
+  id: string;
+  title: string;
+  handle: string;
+  featuredImage: string | null;
+};
 
 function parseErrorMessage(payload: any) {
   if (!payload) return "Unexpected error";
@@ -44,20 +25,19 @@ function parseErrorMessage(payload: any) {
   return "Unexpected error";
 }
 
-export default function ArtistDetailClient({ artistId }: { artistId: string }) {
-  const router = useRouter();
-  const [artist, setArtist] = useState<Artist | null>(null);
+export default function ArtistDetailClient({ artistId }: Props) {
+  const [artist, setArtist] = useState<ShopifyKuenstler | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<string>("lead");
-  const [tagsInput, setTagsInput] = useState("");
-  const [notes, setNotes] = useState("");
+  const [instagram, setInstagram] = useState("");
+  const [quote, setQuote] = useState("");
+  const [einleitung1, setEinleitung1] = useState("");
+  const [text1, setText1] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [products, setProducts] = useState<ArtistProduct[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -65,20 +45,21 @@ export default function ArtistDetailClient({ artistId }: { artistId: string }) {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/artists/${artistId}`, { cache: "no-store" });
+        const res = await fetch(`/api/artists/${encodeURIComponent(artistId)}`, { cache: "no-store" });
         if (!res.ok) {
           const payload = await res.json().catch(() => null);
           throw new Error(parseErrorMessage(payload));
         }
         const json = await res.json();
         if (!active) return;
-        const data: Artist = normalizeArtist(json.data);
+        const data = json.artist as ShopifyKuenstler;
         setArtist(data);
         setName(data.name ?? "");
-        setEmail(data.email ?? "");
-        setStatus(data.status ?? "lead");
-        setTagsInput(data.tags?.join(", ") ?? "");
-        setNotes(data.notes ?? "");
+        setInstagram(data.instagram ?? "");
+        setQuote(data.quote ?? "");
+        setEinleitung1(data.einleitung_1 ?? "");
+        setText1(data.text_1 ?? "");
+        setProducts(Array.isArray(json.products) ? json.products : []);
       } catch (err: any) {
         if (!active) return;
         setError(err?.message ?? "Failed to load artist");
@@ -93,27 +74,21 @@ export default function ArtistDetailClient({ artistId }: { artistId: string }) {
     };
   }, [artistId]);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const handleSave = async () => {
     setSaving(true);
     setSaveMessage(null);
     setError(null);
 
-    const tags = tagsInput
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-
     try {
-      const res = await fetch(`/api/artists/${artistId}`, {
+      const res = await fetch(`/api/artists/${encodeURIComponent(artistId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: name.trim() || undefined,
-          email: email.trim() || undefined,
-          status: status || undefined,
-          tags,
-          notes: notes.trim() || undefined,
+          name: name.trim(),
+          instagram: instagram.trim(),
+          quote: quote.trim(),
+          einleitung_1: einleitung1.trim(),
+          text_1: text1.trim(),
         }),
       });
 
@@ -123,30 +98,13 @@ export default function ArtistDetailClient({ artistId }: { artistId: string }) {
       }
 
       const json = await res.json();
-      setArtist(normalizeArtist(json.data));
+      const updated = json.artist as ShopifyKuenstler;
+      setArtist(updated);
       setSaveMessage("Saved");
     } catch (err: any) {
       setError(err?.message ?? "Failed to save artist");
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    setDeleteError(null);
-    const confirmed = window.confirm("Delete this artist? This cannot be undone.");
-    if (!confirmed) return;
-
-    try {
-      const res = await fetch(`/api/artists/${artistId}`, { method: "DELETE" });
-      if (!res.ok) {
-        const payload = await res.json().catch(() => null);
-        throw new Error(parseErrorMessage(payload));
-      }
-      router.push("/admin/artists");
-      router.refresh();
-    } catch (err: any) {
-      setDeleteError(err?.message ?? "Failed to delete artist");
     }
   };
 
@@ -176,106 +134,141 @@ export default function ArtistDetailClient({ artistId }: { artistId: string }) {
     );
   }
 
+  const readonlyFields = [
+    { label: "Handle", value: artist.handle },
+    { label: "Bilder (file_reference)", value: artist.bilder },
+    { label: "Bild 1 (file_reference)", value: artist.bild_1 },
+    { label: "Bild 2 (file_reference)", value: artist.bild_2 },
+    { label: "Bild 3 (file_reference)", value: artist.bild_3 },
+    { label: "Kategorie", value: artist.kategorie },
+  ];
+
   return (
     <section className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-xs text-slate-500">ID</div>
-          <div className="font-mono text-sm text-slate-700">{artist._id}</div>
+          <div className="font-mono text-sm text-slate-700 break-all">{artist.id}</div>
         </div>
         <Link href="/admin/artists" className="text-sm text-blue-600 underline">
           Back to artists
         </Link>
       </div>
 
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
-      >
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Name</label>
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-6">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Name
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
               placeholder="Name"
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-              required
             />
-          </div>
+          </label>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Email</label>
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Instagram
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="email@example.com"
+              value={instagram}
+              onChange={(e) => setInstagram(e.target.value)}
               className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="@handle"
             />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Status</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            >
-              {statusOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Tags</label>
-            <input
-              value={tagsInput}
-              onChange={(e) => setTagsInput(e.target.value)}
-              placeholder="comma,separated,tags"
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            />
-            <p className="text-xs text-slate-500">Enter tags separated by commas.</p>
-          </div>
+          </label>
         </div>
 
-        <div className="space-y-1">
-          <label className="text-sm font-medium">Notes</label>
+        <label className="space-y-1 text-sm font-medium text-slate-700">
+          Quote
           <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Notes"
+            value={quote}
+            onChange={(e) => setQuote(e.target.value)}
+            rows={2}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            placeholder="Quote"
+          />
+        </label>
+
+        <label className="space-y-1 text-sm font-medium text-slate-700">
+          Einleitung 1
+          <textarea
+            value={einleitung1}
+            onChange={(e) => setEinleitung1(e.target.value)}
+            rows={3}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            placeholder="Einleitung"
+          />
+        </label>
+
+        <label className="space-y-1 text-sm font-medium text-slate-700">
+          Text 1
+          <textarea
+            value={text1}
+            onChange={(e) => setText1(e.target.value)}
             rows={4}
             className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            placeholder="Text"
           />
-        </div>
+        </label>
 
         {error && <p className="text-sm text-red-600">Error: {error}</p>}
         {saveMessage && <p className="text-sm text-green-600">{saveMessage}</p>}
 
-        <div className="flex items-center justify-between">
+        <div className="flex justify-end">
           <button
             type="button"
-            onClick={handleDelete}
-            className="text-sm text-red-600 underline"
-          >
-            Delete artist
-          </button>
-
-          <button
-            type="submit"
+            onClick={handleSave}
             disabled={saving}
             className="inline-flex items-center rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
           >
             {saving ? "Saving..." : "Save changes"}
           </button>
         </div>
+      </div>
 
-        {deleteError && <p className="text-sm text-red-600">Delete failed: {deleteError}</p>}
-      </form>
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <h3 className="text-sm font-semibold text-slate-800">Read-only fields</h3>
+        <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+          {readonlyFields.map(({ label, value }) => (
+            <div key={label}>
+              <dt className="text-xs uppercase tracking-wide text-slate-500">{label}</dt>
+              <dd className="text-sm text-slate-700 break-all">{value || "—"}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-800">Products (Kategorie)</h3>
+          {artist.kategorie && (
+            <span className="text-xs text-slate-500">Collection: {artist.kategorie}</span>
+          )}
+        </div>
+        {!artist.kategorie && <p className="text-sm text-slate-600">No category linked.</p>}
+        {artist.kategorie && products.length === 0 && (
+          <p className="text-sm text-slate-600">No products found for this category.</p>
+        )}
+        {artist.kategorie && products.length > 0 && (
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {products.map((product) => (
+              <li key={product.id} className="flex gap-3 rounded border border-slate-200 p-3">
+                {product.featuredImage && (
+                  <img
+                    src={product.featuredImage}
+                    alt={product.title}
+                    className="h-16 w-16 rounded object-cover"
+                  />
+                )}
+                <div className="space-y-1">
+                  <div className="font-medium">{product.title}</div>
+                  <div className="text-xs text-slate-500">{product.handle}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </section>
   );
 }
