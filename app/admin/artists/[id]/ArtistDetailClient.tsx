@@ -2,17 +2,20 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import type { ShopifyKuenstler } from "@/lib/shopify";
 
 type Props = {
   artistId: string;
 };
 
-type ArtistProduct = {
-  id: string;
-  title: string;
-  handle: string;
-  featuredImage: string | null;
+type Artist = {
+  _id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  stage?: string;
+  internalNotes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type Contract = {
@@ -38,6 +41,8 @@ type PayoutDetails = {
   taxId?: string;
 };
 
+const stageOptions = ["Idea", "In Review", "Offer", "Under Contract"] as const;
+
 function parseErrorMessage(payload: any) {
   if (!payload) return "Unexpected error";
   if (typeof payload === "string") return payload;
@@ -49,18 +54,17 @@ function parseErrorMessage(payload: any) {
 }
 
 export default function ArtistDetailClient({ artistId }: Props) {
-  const [artist, setArtist] = useState<ShopifyKuenstler | null>(null);
+  const [artist, setArtist] = useState<Artist | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [name, setName] = useState("");
-  const [instagram, setInstagram] = useState("");
-  const [quote, setQuote] = useState("");
-  const [einleitung1, setEinleitung1] = useState("");
-  const [text1, setText1] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [stage, setStage] = useState<string>("Idea");
+  const [internalNotes, setInternalNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const [products, setProducts] = useState<ArtistProduct[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [contractsLoading, setContractsLoading] = useState(false);
   const [contractsError, setContractsError] = useState<string | null>(null);
@@ -96,14 +100,13 @@ export default function ArtistDetailClient({ artistId }: Props) {
         }
         const json = await res.json();
         if (!active) return;
-        const data = json.artist as ShopifyKuenstler;
+        const data = json.artist as Artist;
         setArtist(data);
         setName(data.name ?? "");
-        setInstagram(data.instagram ?? "");
-        setQuote(data.quote ?? "");
-        setEinleitung1(data.einleitung_1 ?? "");
-        setText1(data.text_1 ?? "");
-        setProducts(Array.isArray(json.products) ? json.products : []);
+        setEmail(data.email ?? "");
+        setPhone(data.phone ?? "");
+        setStage(data.stage ?? "Idea");
+        setInternalNotes(data.internalNotes ?? "");
       } catch (err: any) {
         if (!active) return;
         setError(err?.message ?? "Failed to load artist");
@@ -189,10 +192,10 @@ export default function ArtistDetailClient({ artistId }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
-          instagram: instagram.trim(),
-          quote: quote.trim(),
-          einleitung_1: einleitung1.trim(),
-          text_1: text1.trim(),
+          email: email.trim() || undefined,
+          phone: phone.trim() || undefined,
+          stage,
+          internalNotes: internalNotes.trim(),
         }),
       });
 
@@ -202,7 +205,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
       }
 
       const json = await res.json();
-      const updated = json.artist as ShopifyKuenstler;
+      const updated = json.artist as Artist;
       setArtist(updated);
       setSaveMessage("Saved");
     } catch (err: any) {
@@ -312,21 +315,12 @@ export default function ArtistDetailClient({ artistId }: Props) {
     );
   }
 
-  const readonlyFields = [
-    { label: "Handle", value: artist.handle },
-    { label: "Bilder (file_reference)", value: artist.bilder },
-    { label: "Bild 1 (file_reference)", value: artist.bild_1 },
-    { label: "Bild 2 (file_reference)", value: artist.bild_2 },
-    { label: "Bild 3 (file_reference)", value: artist.bild_3 },
-    { label: "Kategorie", value: artist.kategorie },
-  ];
-
   return (
     <section className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-xs text-slate-500">ID</div>
-          <div className="font-mono text-sm text-slate-700 break-all">{artist.id}</div>
+          <div className="font-mono text-sm text-slate-700 break-all">{artist._id}</div>
         </div>
         <Link href="/admin/artists" className="text-sm text-blue-600 underline">
           Back to artists
@@ -346,46 +340,50 @@ export default function ArtistDetailClient({ artistId }: Props) {
           </label>
 
           <label className="space-y-1 text-sm font-medium text-slate-700">
-            Instagram
+            Email
             <input
-              value={instagram}
-              onChange={(e) => setInstagram(e.target.value)}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              type="email"
               className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-              placeholder="@handle"
+              placeholder="email@example.com"
             />
+          </label>
+
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Phone
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="+49 ..."
+            />
+          </label>
+
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Stage
+            <select
+              value={stage}
+              onChange={(e) => setStage(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            >
+              {stageOptions.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
 
         <label className="space-y-1 text-sm font-medium text-slate-700">
-          Quote
+          Internal notes
           <textarea
-            value={quote}
-            onChange={(e) => setQuote(e.target.value)}
-            rows={2}
-            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            placeholder="Quote"
-          />
-        </label>
-
-        <label className="space-y-1 text-sm font-medium text-slate-700">
-          Einleitung 1
-          <textarea
-            value={einleitung1}
-            onChange={(e) => setEinleitung1(e.target.value)}
-            rows={3}
-            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            placeholder="Einleitung"
-          />
-        </label>
-
-        <label className="space-y-1 text-sm font-medium text-slate-700">
-          Text 1
-          <textarea
-            value={text1}
-            onChange={(e) => setText1(e.target.value)}
+            value={internalNotes}
+            onChange={(e) => setInternalNotes(e.target.value)}
             rows={4}
             className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            placeholder="Text"
+            placeholder="Notes"
           />
         </label>
 
@@ -403,50 +401,6 @@ export default function ArtistDetailClient({ artistId }: Props) {
           </button>
         </div>
       </div>
-
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 className="text-sm font-semibold text-slate-800">Read-only fields</h3>
-        <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-          {readonlyFields.map(({ label, value }) => (
-            <div key={label}>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">{label}</dt>
-              <dd className="text-sm text-slate-700 break-all">{value || "—"}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-800">Products (Kategorie)</h3>
-          {artist.kategorie && (
-            <span className="text-xs text-slate-500">Collection: {artist.kategorie}</span>
-          )}
-        </div>
-        {!artist.kategorie && <p className="text-sm text-slate-600">No category linked.</p>}
-        {artist.kategorie && products.length === 0 && (
-          <p className="text-sm text-slate-600">No products found for this category.</p>
-        )}
-        {artist.kategorie && products.length > 0 && (
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {products.map((product) => (
-              <li key={product.id} className="flex gap-3 rounded border border-slate-200 p-3">
-            {product.featuredImage && (
-              <img
-                src={product.featuredImage}
-                alt={product.title}
-                className="h-16 w-16 rounded object-cover"
-              />
-            )}
-            <div className="space-y-1">
-              <div className="font-medium">{product.title}</div>
-              <div className="text-xs text-slate-500">{product.handle}</div>
-            </div>
-          </li>
-        ))}
-      </ul>
-    )}
-  </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
         <div className="flex items-center justify-between">

@@ -1,14 +1,15 @@
 import { InferSchemaType, Model, Schema, model, models } from "mongoose";
 import { z } from "zod";
 
-const artistStatuses = ["lead", "onboarding", "active", "paused"] as const;
+export const artistStages = ["Idea", "In Review", "Offer", "Under Contract"] as const;
 
 export const createArtistSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email().optional(),
-  status: z.enum(artistStatuses).optional(),
+  phone: z.string().optional(),
+  stage: z.enum(artistStages).optional(),
+  internalNotes: z.string().optional(),
   tags: z.array(z.string()).optional(),
-  notes: z.string().optional(),
 });
 
 export const updateArtistSchema = createArtistSchema
@@ -19,9 +20,17 @@ const artistSchema = new Schema(
   {
     name: { type: String, required: true },
     email: { type: String },
-    status: { type: String, enum: artistStatuses, default: "lead" },
+    phone: { type: String },
+    stage: { type: String, enum: artistStages, default: "Idea" },
+    internalNotes: { type: String, default: "" },
     tags: { type: [String], default: [] },
-    notes: { type: String },
+    shopifySync: {
+      metaobjectId: { type: String },
+      handle: { type: String },
+      lastSyncedAt: { type: Date },
+      lastSyncStatus: { type: String, enum: ["idle", "ok", "error"], default: "idle" },
+      lastSyncError: { type: String },
+    },
   },
   { timestamps: true },
 );
