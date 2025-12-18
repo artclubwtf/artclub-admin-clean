@@ -127,7 +127,6 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [stage, setStage] = useState<string>("Idea");
-  const [advancedSectionsEnabled, setAdvancedSectionsEnabled] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [internalNotes, setInternalNotes] = useState("");
   const [publicName, setPublicName] = useState("");
@@ -669,26 +668,91 @@ export default function ArtistDetailClient({ artistId }: Props) {
     ? selectedCollectionTitle || publicKategorie
     : "Keine Kategorie ausgewählt";
 
+  const formatStage = (value: string) => (value === "Offer" ? "Offer (Angebot)" : value);
+  const stageOrder = stageOptions;
+  const stageIndex = Math.max(0, stageOrder.indexOf(stage));
   const isUnderContract = stage === "Under Contract";
-  const showAdvancedSections = isUnderContract || advancedSectionsEnabled;
+  const canViewMedia = stageIndex >= stageOrder.indexOf("In Review");
+  const canViewArtworks = stageIndex >= stageOrder.indexOf("In Review");
+  const canViewContracts = stageIndex >= stageOrder.indexOf("Offer");
+  const canViewPublicProfile = stageIndex >= stageOrder.indexOf("Under Contract");
+  const canViewPayout = canViewPublicProfile;
+  const tabAvailability: Record<TabKey, { enabled: boolean; reason?: string }> = {
+    overview: { enabled: true },
+    media: { enabled: canViewMedia, reason: "Available from In Review" },
+    artworks: { enabled: canViewArtworks, reason: "Available from In Review" },
+    contracts: { enabled: canViewContracts, reason: "Available from Offer/Angebot" },
+    publicProfile: { enabled: canViewPublicProfile, reason: "Available from Under Contract" },
+    payout: { enabled: canViewPayout, reason: "Available from Under Contract" },
+  };
+  const hasMedia = media.length > 0;
+  const hasArtworkProgress = artworks.length > 0 || selectedMediaIds.length > 0;
+  const hasPublicImage = [publicBilder, publicBild1, publicBild2, publicBild3].some((value) => value && value.trim().length > 0);
+  const hasPublicProfileRequired = publicName.trim().length > 0 && publicText1.trim().length > 0 && hasPublicImage;
+  const hasContract = contracts.length > 0;
+  const hasPayoutRequired = Boolean(accountHolder.trim() && iban.trim() && bic.trim());
   const canSync = isUnderContract && publicName.trim().length > 0 && publicText1.trim().length > 0;
-  const hasPublicProfileRequired = publicName.trim().length > 0 && publicText1.trim().length > 0;
   const lastShopifyStatus = artist?.shopifySync?.lastSyncStatus;
   const lastShopifySyncedAt = artist?.shopifySync?.lastSyncedAt;
   const lastShopifyError = artist?.shopifySync?.lastSyncError;
   const overviewStatusChip = name.trim() ? "Basics added" : "Missing name";
-  const mediaStatusChip = mediaLoading ? "Loading..." : media.length ? `${media.length} file${media.length === 1 ? "" : "s"}` : "No files";
-  const artworksStatusChip = artworksLoading ? "Loading..." : artworks.length ? `${artworks.length} artwork${artworks.length === 1 ? "" : "s"}` : "No artworks";
-  const publicProfileStatusChip = hasPublicProfileRequired ? "Ready" : "Missing required fields";
-  const contractsStatusChip = contractsLoading ? "Loading..." : contracts.length ? `${contracts.length} file${contracts.length === 1 ? "" : "s"}` : "No files";
-  const payoutStatusChip = payoutLoading ? "Loading..." : [accountHolder, iban, bic, bankName, address, taxId].some((value) => value.trim()) ? "Draft" : "Missing";
-
-  useEffect(() => {
-    const advancedTabs: TabKey[] = ["publicProfile", "contracts", "payout"];
-    if (!showAdvancedSections && advancedTabs.includes(activeTab)) {
-      setActiveTab("overview");
+  const mediaStatusChip = mediaLoading ? "Loading..." : canViewMedia ? (hasMedia ? "OK" : "Missing") : "Locked";
+  const artworksStatusChip = artworksLoading ? "Loading..." : canViewArtworks ? (hasArtworkProgress ? "OK" : "Missing") : "Locked";
+  const publicProfileStatusChip = isUnderContract ? (hasPublicProfileRequired ? "OK" : "Missing") : "Not required";
+  const contractsStatusChip = contractsLoading
+    ? "Loading..."
+    : canViewContracts
+      ? hasContract
+        ? "OK"
+        : "Missing"
+      : "Locked";
+  const payoutStatusChip = payoutLoading
+    ? "Loading..."
+    : isUnderContract
+      ? hasPayoutRequired
+        ? "OK"
+        : "Missing"
+      : "Not required";
+  const badgeTone = (state: "ready" | "missing" | "locked" | "info") => {
+    switch (state) {
+      case "ready":
+        return "border-green-100 bg-green-50 text-green-700";
+      case "missing":
+        return "border-amber-100 bg-amber-50 text-amber-700";
+      case "locked":
+        return "border-slate-100 bg-slate-50 text-slate-700";
+      default:
+        return "border-slate-100 bg-slate-50 text-slate-700";
     }
-  }, [activeTab, showAdvancedSections]);
+  };
+  const statusBadges = [
+    { label: "Media", text: mediaStatusChip, tone: badgeTone(canViewMedia ? (hasMedia ? "ready" : "missing") : "locked") },
+    { label: "Artworks", text: artworksStatusChip, tone: badgeTone(canViewArtworks ? (hasArtworkProgress ? "ready" : "missing") : "locked") },
+    { label: "Contracts", text: contractsStatusChip, tone: badgeTone(canViewContracts ? (hasContract ? "ready" : "missing") : "locked") },
+    {
+      label: "Public profile",
+      text: publicProfileStatusChip,
+      tone: badgeTone(isUnderContract ? (hasPublicProfileRequired ? "ready" : "missing") : "locked"),
+    },
+    {
+      label: "Payout",
+      text: payoutStatusChip,
+      tone: badgeTone(isUnderContract ? (hasPayoutRequired ? "ready" : "missing") : "locked"),
+    },
+  ];
+  const goToTab = (tab: TabKey) => setActiveTab(tab);
+  const checklistItems: Array<{
+    key: TabKey;
+    label: string;
+    done: boolean;
+    requiredStage: string;
+  }> = [
+    { key: "media", label: "Add media", done: hasMedia, requiredStage: "In Review" },
+    { key: "artworks", label: "Create artworks", done: hasArtworkProgress, requiredStage: "In Review" },
+    { key: "contracts", label: "Upload contract", done: hasContract, requiredStage: "Offer/Angebot" },
+    { key: "publicProfile", label: "Complete public profile", done: hasPublicProfileRequired, requiredStage: "Under Contract" },
+    { key: "payout", label: "Add payout details", done: hasPayoutRequired, requiredStage: "Under Contract" },
+  ];
 
   const handleSyncShopify = async () => {
     setShopifyError(null);
@@ -718,6 +782,31 @@ export default function ArtistDetailClient({ artistId }: Props) {
       setShopifySyncing(false);
     }
   };
+
+  const contextualCta = (() => {
+    if (stage === "Idea") {
+      return { label: "Add media", action: () => goToTab("media"), primary: true };
+    }
+    if (stage === "In Review") {
+      return { label: "Upload media", action: () => goToTab("media"), primary: true };
+    }
+    if (stage === "Offer") {
+      return { label: "Upload contract", action: () => goToTab("contracts"), primary: true };
+    }
+    if (isUnderContract) {
+      if (!hasPublicProfileRequired) {
+        return { label: "Complete profile", action: () => goToTab("publicProfile"), primary: true };
+      }
+      if (!hasContract) {
+        return { label: "Upload contract", action: () => goToTab("contracts"), primary: true };
+      }
+      if (!hasPayoutRequired) {
+        return { label: "Add payout details", action: () => goToTab("payout"), primary: true };
+      }
+      return { label: "Sync to Shopify", action: handleSyncShopify, primary: true, disabled: shopifySyncing || !canSync };
+    }
+    return null;
+  })();
 
   const handleUploadMedia = async (e: FormEvent) => {
     e.preventDefault();
@@ -1094,6 +1183,48 @@ export default function ArtistDetailClient({ artistId }: Props) {
 
   const overviewPanel = (
     <div className="space-y-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-800">Next actions</h3>
+          <span className="text-xs font-medium text-slate-500">Stage: {formatStage(stage)}</span>
+        </div>
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {checklistItems
+            .filter((item) => {
+              if (item.key === "contracts") return stageIndex >= stageOrder.indexOf("Offer");
+              if (item.key === "publicProfile" || item.key === "payout") return isUnderContract;
+              return true;
+            })
+            .map((item) => {
+              const availability = tabAvailability[item.key];
+              const locked = !availability.enabled;
+              const statusLabel = item.done ? "Done" : locked ? availability.reason || "Locked" : "Missing";
+              const statusTone = item.done
+                ? "bg-green-50 text-green-700 border-green-100"
+                : locked
+                  ? "bg-slate-50 text-slate-700 border-slate-100"
+                  : "bg-amber-50 text-amber-700 border-amber-100";
+              return (
+                <li key={item.key}>
+                  <button
+                    type="button"
+                    onClick={() => goToTab(item.key)}
+                    className="flex w-full items-center justify-between rounded border border-slate-200 bg-slate-50 px-3 py-2 text-left transition hover:border-slate-300"
+                  >
+                    <div>
+                      <div className="text-sm font-medium text-slate-800">{item.label}</div>
+                      <div className="text-xs text-slate-600">
+                        {locked ? availability.reason : item.done ? "Completed" : "Tap to complete this step"}
+                      </div>
+                    </div>
+                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${statusTone}`}>{statusLabel}</span>
+                  </button>
+                </li>
+              );
+            })}
+        </ul>
+      </div>
+
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-1 text-sm font-medium text-slate-700">
@@ -1529,13 +1660,9 @@ export default function ArtistDetailClient({ artistId }: Props) {
     { key: "overview", label: "Overview", chip: overviewStatusChip },
     { key: "media", label: "Media", chip: mediaStatusChip },
     { key: "artworks", label: "Artworks", chip: artworksStatusChip },
-    ...(showAdvancedSections
-      ? [
-          { key: "publicProfile" as const, label: "Public Profile", chip: publicProfileStatusChip },
-          { key: "contracts" as const, label: "Contracts", chip: contractsStatusChip },
-          { key: "payout" as const, label: "Payout", chip: payoutStatusChip },
-        ]
-      : []),
+    { key: "publicProfile", label: "Public Profile", chip: publicProfileStatusChip },
+    { key: "contracts", label: "Contracts", chip: contractsStatusChip },
+    { key: "payout", label: "Payout", chip: payoutStatusChip },
   ];
 
   if (loading) {
@@ -1589,34 +1716,32 @@ export default function ArtistDetailClient({ artistId }: Props) {
                 >
                   {stageOptions.map((s) => (
                     <option key={s} value={s}>
-                      {s}
+                      {formatStage(s)}
                     </option>
                   ))}
                 </select>
               </label>
-              {!isUnderContract && (
-                <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300 text-black focus:ring-black"
-                    checked={advancedSectionsEnabled}
-                    onChange={(e) => setAdvancedSectionsEnabled(e.target.checked)}
-                  />
-                  Advanced sections
-                </label>
-              )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {isUnderContract && (
+              {contextualCta && (
                 <button
                   type="button"
-                  onClick={handleSyncShopify}
-                  disabled={shopifySyncing || !canSync}
+                  onClick={contextualCta.action}
+                  disabled={contextualCta.disabled}
                   className="inline-flex items-center rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
                 >
-                  {shopifySyncing ? "Syncing..." : "Sync to Shopify"}
+                  {contextualCta.label}
                 </button>
               )}
+              <button
+                type="button"
+                onClick={handleSyncShopify}
+                disabled={shopifySyncing || !isUnderContract || !canSync}
+                title={!isUnderContract ? "Sync is available in Under Contract stage" : !canSync ? "Name und text_1 erforderlich" : undefined}
+                className="inline-flex items-center rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 shadow-sm transition hover:border-slate-400 disabled:opacity-60"
+              >
+                {shopifySyncing ? "Syncing..." : "Sync to Shopify"}
+              </button>
               <button
                 type="button"
                 onClick={handleSave}
@@ -1627,9 +1752,14 @@ export default function ArtistDetailClient({ artistId }: Props) {
               </button>
             </div>
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-600">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {statusBadges.map((badge) => (
+              <span key={badge.label} className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold ${badge.tone}`}>
+                <span className="text-xs">{badge.label}:</span> {badge.text}
+              </span>
+            ))}
             {lastShopifyStatus && (
-              <span>
+              <span className="text-xs text-slate-600">
                 Shopify: {lastShopifyStatus}
                 {lastShopifySyncedAt && ` • ${new Date(lastShopifySyncedAt).toLocaleString()}`}
               </span>
@@ -1656,22 +1786,28 @@ export default function ArtistDetailClient({ artistId }: Props) {
       {!isUnderContract && (
         <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
           <div className="flex flex-col gap-2 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
-            <p>Only internal fields are shown. Switch to &quot;Under Contract&quot; to unlock contracts, payout and Shopify sync.</p>
-            <p className="text-xs text-slate-500">You can also temporarily enable advanced sections via the toggle above.</p>
+            <p>Sections unlock as the stage advances. Media/Artworks start in In Review, Contracts in Offer, Public Profile and Payout in Under Contract.</p>
+            <p className="text-xs text-slate-500">Change the stage in the header to progress.</p>
           </div>
         </div>
       )}
 
       <nav className="flex flex-wrap items-center gap-2">
         {tabs.map((tab) => {
+          const availability = tabAvailability[tab.key];
+          const disabled = !availability.enabled;
           const isActive = activeTab === tab.key;
           return (
             <button
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition ${
-                isActive ? "border-slate-900 bg-slate-900 text-white shadow-sm" : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+              disabled={disabled}
+              title={disabled ? availability.reason : undefined}
+              className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                isActive
+                  ? "border-slate-900 bg-slate-900 text-white shadow-sm"
+                  : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
               }`}
             >
               <span>{tab.label}</span>
@@ -1689,7 +1825,15 @@ export default function ArtistDetailClient({ artistId }: Props) {
         })}
       </nav>
 
-      <div className="space-y-4">{tabPanels[activeTab]}</div>
+      <div className="space-y-4">
+        {tabAvailability[activeTab].enabled ? (
+          tabPanels[activeTab]
+        ) : (
+          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-700">
+            This section is locked. {tabAvailability[activeTab].reason || "Change the stage to continue."}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
