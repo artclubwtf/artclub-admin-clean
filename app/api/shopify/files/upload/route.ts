@@ -76,7 +76,7 @@ async function createStagedUpload(file: File, filename: string): Promise<StagedU
         resource: "FILE",
         filename,
         mimeType: file.type || "image/*",
-        fileSize: file.size,
+        fileSize: String(file.size),
         httpMethod: "POST",
       },
     ],
