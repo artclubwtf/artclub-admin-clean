@@ -490,12 +490,6 @@ export default function ArtistDetailClient({ artistId }: Props) {
   }, [artistId]);
 
   useEffect(() => {
-    if (stage !== "Under Contract") {
-      setAdvancedSectionsEnabled(false);
-    }
-  }, [stage]);
-
-  useEffect(() => {
     let active = true;
     const controller = new AbortController();
     const timeout = setTimeout(async () => {
