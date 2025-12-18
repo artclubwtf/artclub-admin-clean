@@ -25,8 +25,8 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
     }
 
     const result = await upsertArtistMetaobject({
-      metaobjectId: artist.shopifySync?.metaobjectId,
-      handle: artist.shopifySync?.handle,
+      metaobjectId: artist.shopifySync?.metaobjectId || undefined,
+      handle: artist.shopifySync?.handle || undefined,
       displayName,
       bio,
       instagram: artist.publicProfile?.instagram,
