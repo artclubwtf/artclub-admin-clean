@@ -401,6 +401,43 @@ export async function upsertArtistMetaobject(input: UpsertArtistMetaobjectInput)
     throw new Error("At least one metaobject field is required");
   }
 
+  // Update existing metaobject when we already have an id; Shopify's upsert input
+  // no longer accepts an id, so we must call metaobjectUpdate instead.
+  if (input.metaobjectId) {
+    const mutation = `
+      mutation UpdateArtist($id: ID!, $fields: [MetaobjectFieldInput!]!) {
+        metaobjectUpdate(id: $id, metaobject: { fields: $fields }) {
+          metaobject { id handle }
+          userErrors { field message }
+        }
+      }
+    `;
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": token,
+      },
+      body: JSON.stringify({ query: mutation, variables: { id: input.metaobjectId, fields } }),
+      cache: "no-store",
+    });
+
+    const text = await res.text();
+    if (!res.ok) throw new Error(`Shopify API error ${res.status}: ${text}`);
+    const json = JSON.parse(text) as any;
+    if (json.errors) throw new Error(`Shopify GraphQL errors: ${JSON.stringify(json.errors)}`);
+
+    const payload = json.data?.metaobjectUpdate;
+    if (!payload) throw new Error("Shopify metaobjectUpdate returned no result");
+    const userErrors = payload.userErrors ?? [];
+    if (userErrors.length) throw new Error(`Shopify metaobjectUpdate errors: ${JSON.stringify(userErrors)}`);
+
+    const metaobject = payload.metaobject;
+    if (!metaobject) throw new Error("Shopify metaobjectUpdate missing metaobject");
+    return { id: metaobject.id as string, handle: metaobject.handle as string };
+  }
+
   const mutation = `
     mutation UpsertArtist($handle: MetaobjectHandleInput!, $metaobject: MetaobjectUpsertInput!) {
       metaobjectUpsert(handle: $handle, metaobject: $metaobject) {
@@ -413,7 +450,6 @@ export async function upsertArtistMetaobject(input: UpsertArtistMetaobjectInput)
   const variables = {
     handle: { type: SHOPIFY_METAOBJECT_TYPE_KUENSTLER, handle: derivedHandle },
     metaobject: {
-      id: input.metaobjectId,
       fields,
     },
   };
