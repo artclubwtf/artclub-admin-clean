@@ -10,6 +10,16 @@ export const createArtistSchema = z.object({
   stage: z.enum(artistStages).optional(),
   internalNotes: z.string().optional(),
   tags: z.array(z.string()).optional(),
+  publicProfile: z
+    .object({
+      displayName: z.string().optional(),
+      bio: z.string().optional(),
+      location: z.string().optional(),
+      website: z.string().optional(),
+      instagram: z.string().optional(),
+      heroImageUrl: z.string().optional(),
+    })
+    .optional(),
 });
 
 export const updateArtistSchema = createArtistSchema
@@ -24,6 +34,14 @@ const artistSchema = new Schema(
     stage: { type: String, enum: artistStages, default: "Idea" },
     internalNotes: { type: String, default: "" },
     tags: { type: [String], default: [] },
+    publicProfile: {
+      displayName: { type: String },
+      bio: { type: String },
+      location: { type: String },
+      website: { type: String },
+      instagram: { type: String },
+      heroImageUrl: { type: String },
+    },
     shopifySync: {
       metaobjectId: { type: String },
       handle: { type: String },

@@ -258,6 +258,157 @@ export async function updateKuenstler(id: string, patch: KuenstlerUpdatePatch): 
   };
 }
 
+type MetaobjectFieldInput = { key: string; value: string };
+
+type UpsertArtistMetaobjectInput = {
+  metaobjectId?: string;
+  handle?: string;
+  displayName: string;
+  bio: string;
+  instagram?: string;
+  website?: string;
+  location?: string;
+  heroImageUrl?: string;
+  internalStage?: string;
+};
+
+export async function upsertArtistMetaobject(input: UpsertArtistMetaobjectInput) {
+  const shop = mustEnv("SHOPIFY_SHOP_DOMAIN");
+  const token = mustEnv("SHOPIFY_ADMIN_ACCESS_TOKEN");
+  const version = process.env.SHOPIFY_API_VERSION || "2024-10";
+  const metaobjectType = process.env.SHOPIFY_ARTIST_METAOBJECT_TYPE || "artist";
+  const url = `https://${shop}/admin/api/${version}/graphql.json`;
+
+  const fields: MetaobjectFieldInput[] = [
+    { key: "handle", value: input.handle || slugify(input.displayName) },
+    { key: "name", value: input.displayName },
+    { key: "bio", value: input.bio },
+  ];
+
+  const optionalMap: [string, string | undefined][] = [
+    ["instagram", input.instagram],
+    ["website", input.website],
+    ["location", input.location],
+    ["hero_image_url", input.heroImageUrl],
+    ["internal_stage", input.internalStage],
+  ];
+
+  optionalMap.forEach(([key, value]) => {
+    if (value) fields.push({ key, value });
+  });
+
+  const mutation = `
+    mutation UpsertArtist($type: String!, $handle: String!, $id: ID, $fields: [MetaobjectFieldInput!]!) {
+      result: ${input.metaobjectId ? "metaobjectUpdate(id: $id, metaobject: { fields: $fields })" : "metaobjectCreate(metaobject: { type: $type, handle: $handle, fields: $fields })"} {
+        metaobject {
+          id
+          handle
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `;
+
+  const variables: any = {
+    type: metaobjectType,
+    handle: fields.find((f) => f.key === "handle")?.value,
+    fields,
+  };
+  if (input.metaobjectId) variables.id = input.metaobjectId;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Shopify-Access-Token": token,
+    },
+    body: JSON.stringify({ query: mutation, variables }),
+    cache: "no-store",
+  });
+
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Shopify API error ${res.status}: ${text}`);
+  const json = JSON.parse(text) as any;
+  if (json.errors) throw new Error(`Shopify GraphQL errors: ${JSON.stringify(json.errors)}`);
+
+  const payload = json.data?.result;
+  if (!payload) throw new Error("Shopify metaobject upsert returned no result");
+  const userErrors = payload.userErrors ?? [];
+  if (userErrors.length) throw new Error(`Shopify metaobject upsert errors: ${JSON.stringify(userErrors)}`);
+
+  const metaobject = payload.metaobject;
+  if (!metaobject) throw new Error("Shopify metaobject upsert missing metaobject");
+  return { id: metaobject.id as string, handle: metaobject.handle as string };
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
+type DraftArtworkInput = {
+  title: string;
+  images: { src: string }[];
+  metafields: { namespace: string; key: string; type: string; value: string }[];
+  tags?: string[];
+};
+
+export async function createDraftArtworkProduct(input: DraftArtworkInput) {
+  const shop = mustEnv("SHOPIFY_SHOP_DOMAIN");
+  const token = mustEnv("SHOPIFY_ADMIN_ACCESS_TOKEN");
+  const version = process.env.SHOPIFY_API_VERSION || "2024-10";
+  const url = `https://${shop}/admin/api/${version}/graphql.json`;
+
+  const mutation = `
+    mutation CreateArtwork($input: ProductInput!) {
+      productCreate(input: $input) {
+        product { id handle status }
+        userErrors { field message }
+      }
+    }
+  `;
+
+  const variables = {
+    input: {
+      title: input.title,
+      status: "DRAFT",
+      images: input.images,
+      metafields: input.metafields,
+      tags: input.tags || [],
+    },
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Shopify-Access-Token": token,
+    },
+    body: JSON.stringify({ query: mutation, variables }),
+    cache: "no-store",
+  });
+
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Shopify API error ${res.status}: ${text}`);
+  const json = JSON.parse(text) as any;
+  if (json.errors) throw new Error(`Shopify GraphQL errors: ${JSON.stringify(json.errors)}`);
+
+  const payload = json.data?.productCreate;
+  if (!payload) throw new Error("Shopify productCreate returned no payload");
+  const userErrors = payload.userErrors ?? [];
+  if (userErrors.length) throw new Error(`Shopify productCreate errors: ${JSON.stringify(userErrors)}`);
+  const product = payload.product;
+  if (!product) throw new Error("Shopify productCreate missing product");
+  return { id: product.id as string, handle: product.handle as string, status: product.status as string };
+}
+
 export async function fetchProductsByCollectionId(
   collectionGid: string,
   first = 50,

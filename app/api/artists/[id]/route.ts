@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import { connectMongo } from "@/lib/mongodb";
-import { ArtistModel, updateArtistSchema } from "@/models/Artist";
+import { ArtistModel, artistStages, updateArtistSchema } from "@/models/Artist";
 
 function invalidIdResponse() {
   return NextResponse.json({ error: "Invalid artist id" }, { status: 400 });
@@ -31,6 +31,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const parsed = updateArtistSchema.safeParse(json);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    }
+
+    if (parsed.data.stage === "Under Contract") {
+      const displayName = parsed.data.publicProfile?.displayName?.trim();
+      const bio = parsed.data.publicProfile?.bio?.trim();
+      const errors: Record<string, string[]> = {};
+      if (!displayName) errors["publicProfile.displayName"] = ["Display name is required for Under Contract"];
+      if (!bio) errors["publicProfile.bio"] = ["Bio is required for Under Contract"];
+      if (Object.keys(errors).length > 0) {
+        return NextResponse.json({ error: { fieldErrors: errors } }, { status: 400 });
+      }
     }
 
     await connectMongo();

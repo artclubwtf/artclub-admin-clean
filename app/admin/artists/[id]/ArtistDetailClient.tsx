@@ -14,6 +14,21 @@ type Artist = {
   phone?: string;
   stage?: string;
   internalNotes?: string;
+  publicProfile?: {
+    displayName?: string;
+    bio?: string;
+    location?: string;
+    website?: string;
+    instagram?: string;
+    heroImageUrl?: string;
+  };
+  shopifySync?: {
+    metaobjectId?: string;
+    handle?: string;
+    lastSyncedAt?: string;
+    lastSyncStatus?: string;
+    lastSyncError?: string;
+  };
   createdAt?: string;
   updatedAt?: string;
 };
@@ -41,6 +56,35 @@ type PayoutDetails = {
   taxId?: string;
 };
 
+type MediaItem = {
+  _id: string;
+  artistId: string;
+  kind: string;
+  filename?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  s3Key: string;
+  url?: string;
+  createdAt?: string;
+};
+
+type Artwork = {
+  _id: string;
+  title: string;
+  saleType: string;
+  price?: number;
+  currency?: string;
+  editionSize?: number;
+  status?: string;
+  shopify?: {
+    productId?: string;
+    handle?: string;
+    lastPushedAt?: string;
+    lastPushError?: string;
+  };
+  images?: { mediaId: string; url?: string; filename?: string }[];
+};
+
 const stageOptions = ["Idea", "In Review", "Offer", "Under Contract"] as const;
 
 function parseErrorMessage(payload: any) {
@@ -63,6 +107,11 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [phone, setPhone] = useState("");
   const [stage, setStage] = useState<string>("Idea");
   const [internalNotes, setInternalNotes] = useState("");
+  const [publicDisplayName, setPublicDisplayName] = useState("");
+  const [publicBio, setPublicBio] = useState("");
+  const [publicLocation, setPublicLocation] = useState("");
+  const [publicWebsite, setPublicWebsite] = useState("");
+  const [publicInstagram, setPublicInstagram] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -86,6 +135,26 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [bankName, setBankName] = useState("");
   const [address, setAddress] = useState("");
   const [taxId, setTaxId] = useState("");
+  const [shopifySyncing, setShopifySyncing] = useState(false);
+  const [shopifyMessage, setShopifyMessage] = useState<string | null>(null);
+  const [shopifyError, setShopifyError] = useState<string | null>(null);
+  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const [mediaKind, setMediaKind] = useState("artwork");
+  const [mediaFiles, setMediaFiles] = useState<FileList | null>(null);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
+  const [artworks, setArtworks] = useState<Artwork[]>([]);
+  const [artworksLoading, setArtworksLoading] = useState(false);
+  const [artworksError, setArtworksError] = useState<string | null>(null);
+  const [artworkTitle, setArtworkTitle] = useState("");
+  const [artworkSaleType, setArtworkSaleType] = useState("print");
+  const [artworkPrice, setArtworkPrice] = useState("");
+  const [artworkEditionSize, setArtworkEditionSize] = useState("");
+  const [artworkDescription, setArtworkDescription] = useState("");
+  const [artworkSaving, setArtworkSaving] = useState(false);
+  const [artworkMessage, setArtworkMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -107,6 +176,11 @@ export default function ArtistDetailClient({ artistId }: Props) {
         setPhone(data.phone ?? "");
         setStage(data.stage ?? "Idea");
         setInternalNotes(data.internalNotes ?? "");
+        setPublicDisplayName(data.publicProfile?.displayName ?? "");
+        setPublicBio(data.publicProfile?.bio ?? "");
+        setPublicLocation(data.publicProfile?.location ?? "");
+        setPublicWebsite(data.publicProfile?.website ?? "");
+        setPublicInstagram(data.publicProfile?.instagram ?? "");
       } catch (err: any) {
         if (!active) return;
         setError(err?.message ?? "Failed to load artist");
@@ -174,8 +248,54 @@ export default function ArtistDetailClient({ artistId }: Props) {
       }
     };
 
+    const loadMedia = async () => {
+      setMediaLoading(true);
+      setMediaError(null);
+      try {
+        const res = await fetch(`/api/media?kunstlerId=${encodeURIComponent(artistId)}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null);
+          throw new Error(parseErrorMessage(payload));
+        }
+        const json = await res.json();
+        if (!active) return;
+        setMedia(Array.isArray(json.media) ? json.media : []);
+      } catch (err: any) {
+        if (!active) return;
+        setMediaError(err?.message ?? "Failed to load media");
+      } finally {
+        if (active) setMediaLoading(false);
+      }
+    };
+
+    const loadArtworks = async () => {
+      setArtworksLoading(true);
+      setArtworksError(null);
+      try {
+        const res = await fetch(`/api/artworks?artistId=${encodeURIComponent(artistId)}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null);
+          throw new Error(parseErrorMessage(payload));
+        }
+        const json = await res.json();
+        if (!active) return;
+        setArtworks(Array.isArray(json.artworks) ? json.artworks : []);
+      } catch (err: any) {
+        if (!active) return;
+        setArtworksError(err?.message ?? "Failed to load artworks");
+      } finally {
+        if (active) setArtworksLoading(false);
+      }
+    };
+
     loadContracts();
     loadPayout();
+    loadMedia();
+    loadArtworks();
     return () => {
       active = false;
     };
@@ -196,6 +316,13 @@ export default function ArtistDetailClient({ artistId }: Props) {
           phone: phone.trim() || undefined,
           stage,
           internalNotes: internalNotes.trim(),
+          publicProfile: {
+            displayName: publicDisplayName.trim() || undefined,
+            bio: publicBio.trim() || undefined,
+            location: publicLocation.trim() || undefined,
+            website: publicWebsite.trim() || undefined,
+            instagram: publicInstagram.trim() || undefined,
+          },
         }),
       });
 
@@ -286,6 +413,201 @@ export default function ArtistDetailClient({ artistId }: Props) {
       setPayoutError(err?.message ?? "Speichern fehlgeschlagen");
     } finally {
       setPayoutSaving(false);
+    }
+  };
+
+  const canSync =
+    stage === "Under Contract" && publicDisplayName.trim().length > 0 && publicBio.trim().length > 0;
+
+  const handleSyncShopify = async () => {
+    setShopifyError(null);
+    setShopifyMessage(null);
+    if (!canSync) {
+      setShopifyError("Display name und Bio sind erforderlich für den Sync.");
+      return;
+    }
+    setShopifySyncing(true);
+    try {
+      const res = await fetch(`/api/artists/${encodeURIComponent(artistId)}/shopify-sync`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.error || "Sync fehlgeschlagen");
+      }
+      const json = await res.json();
+      setArtist((prev) => (prev ? { ...prev, shopifySync: json.shopifySync } : prev));
+      setShopifyMessage("Shopify Sync erfolgreich");
+    } catch (err: any) {
+      setShopifyError(err?.message ?? "Sync fehlgeschlagen");
+    } finally {
+      setShopifySyncing(false);
+    }
+  };
+
+  const handleUploadMedia = async (e: FormEvent) => {
+    e.preventDefault();
+    setMediaError(null);
+    if (!mediaFiles || mediaFiles.length === 0) {
+      setMediaError("Bitte mindestens eine Datei auswählen.");
+      return;
+    }
+    setUploadingMedia(true);
+    try {
+      const formData = new FormData();
+      formData.append("kunstlerId", artistId);
+      formData.append("kind", mediaKind);
+      Array.from(mediaFiles).forEach((file) => formData.append("files", file));
+
+      const res = await fetch("/api/media", {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(parseErrorMessage(payload));
+      }
+      const json = await res.json();
+      setMedia((prev) => [...json.media, ...prev]);
+      setMediaFiles(null);
+    } catch (err: any) {
+      setMediaError(err?.message ?? "Upload failed");
+    } finally {
+      setUploadingMedia(false);
+    }
+  };
+
+  const handleDeleteMedia = async (id: string) => {
+    setMediaError(null);
+    try {
+      const res = await fetch(`/api/media/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(parseErrorMessage(payload));
+      }
+      setMedia((prev) => prev.filter((m) => m._id !== id));
+    } catch (err: any) {
+      setMediaError(err?.message ?? "Delete failed");
+    }
+  };
+
+  const handleSetHeroImage = async (item: MediaItem) => {
+    if (!item.url) {
+      setMediaError("Kein öffentliches URL verfügbar");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/artists/${encodeURIComponent(artistId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          publicProfile: {
+            displayName: publicDisplayName.trim() || undefined,
+            bio: publicBio.trim() || undefined,
+            location: publicLocation.trim() || undefined,
+            website: publicWebsite.trim() || undefined,
+            instagram: publicInstagram.trim() || undefined,
+            heroImageUrl: item.url,
+          },
+        }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(parseErrorMessage(payload));
+      }
+      const json = await res.json();
+      setArtist(json.artist);
+      setSaveMessage("Hero image gesetzt");
+    } catch (err: any) {
+      setError(err?.message ?? "Failed to set hero image");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleMediaSelection = (id: string) => {
+    setSelectedMediaIds((prev) =>
+      prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id],
+    );
+  };
+
+  const handleCreateArtwork = async (e: FormEvent) => {
+    e.preventDefault();
+    setArtworksError(null);
+    setArtworkMessage(null);
+    if (!artworkTitle.trim()) {
+      setArtworksError("Title required");
+      return;
+    }
+    if (selectedMediaIds.length === 0) {
+      setArtworksError("Bitte mindestens ein Bild auswählen.");
+      return;
+    }
+    if ((artworkSaleType === "print" || artworkSaleType === "both") && !artworkEditionSize.trim()) {
+      setArtworksError("Edition size erforderlich für Print/Both.");
+      return;
+    }
+    setArtworkSaving(true);
+    try {
+      const res = await fetch("/api/artworks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          artistId,
+          title: artworkTitle.trim(),
+          description: artworkDescription.trim() || undefined,
+          saleType: artworkSaleType,
+          price: artworkPrice ? Number(artworkPrice) : undefined,
+          currency: "EUR",
+          editionSize: artworkEditionSize ? Number(artworkEditionSize) : undefined,
+          mediaIds: selectedMediaIds,
+        }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(parseErrorMessage(payload));
+      }
+      const json = await res.json();
+      setArtworks((prev) => [json.artwork, ...prev]);
+      setArtworkMessage("Artwork gespeichert");
+      setArtworkTitle("");
+      setArtworkDescription("");
+      setArtworkPrice("");
+      setArtworkEditionSize("");
+      setSelectedMediaIds([]);
+    } catch (err: any) {
+      setArtworksError(err?.message ?? "Failed to create artwork");
+    } finally {
+      setArtworkSaving(false);
+    }
+  };
+
+  const handlePushArtwork = async (id: string) => {
+    setArtworksError(null);
+    try {
+      const res = await fetch(`/api/artworks/${encodeURIComponent(id)}/shopify-push`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(parseErrorMessage(payload));
+      }
+      const json = await res.json();
+      setArtworks((prev) =>
+        prev.map((a) =>
+          a._id === id
+            ? {
+                ...a,
+                status: "pushed",
+                shopify: { ...a.shopify, productId: json.product.id, handle: json.product.handle, lastPushedAt: new Date().toISOString(), lastPushError: undefined },
+              }
+            : a,
+        ),
+      );
+    } catch (err: any) {
+      setArtworksError(err?.message ?? "Push failed");
     }
   };
 
@@ -398,6 +720,291 @@ export default function ArtistDetailClient({ artistId }: Props) {
             className="inline-flex items-center rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
           >
             {saving ? "Saving..." : "Save changes"}
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-800">Media</h3>
+          {mediaLoading && <span className="text-xs text-slate-500">Loading...</span>}
+        </div>
+
+        <form className="space-y-2" onSubmit={handleUploadMedia}>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="space-y-1 text-sm font-medium text-slate-700">
+              Dateien
+              <input
+                type="file"
+                multiple
+                onChange={(e) => setMediaFiles(e.target.files)}
+                className="w-full text-sm"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium text-slate-700">
+              Kind
+              <select
+                value={mediaKind}
+                onChange={(e) => setMediaKind(e.target.value)}
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              >
+                <option value="artwork">Artwork</option>
+                <option value="social">Social</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+          </div>
+          {mediaError && <p className="text-sm text-red-600">{mediaError}</p>}
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={uploadingMedia}
+              className="inline-flex items-center rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            >
+              {uploadingMedia ? "Uploading..." : "Upload media"}
+            </button>
+          </div>
+        </form>
+
+        {!mediaLoading && !mediaError && media.length === 0 && (
+          <p className="text-sm text-slate-600">Keine Medien vorhanden.</p>
+        )}
+        {media.length > 0 && (
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {media.map((item) => {
+              const isImage = item.mimeType?.startsWith("image/");
+              return (
+                <li key={item._id} className="flex gap-3 rounded border border-slate-200 p-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={selectedMediaIds.includes(item._id)}
+                    onChange={() => toggleMediaSelection(item._id)}
+                    aria-label="Select media"
+                  />
+                  {isImage && item.url ? (
+                    <img src={item.url} alt={item.filename || item.s3Key} className="h-16 w-16 rounded object-cover" />
+                  ) : (
+                    <div className="flex h-16 w-16 items-center justify-center rounded border border-dashed border-slate-300 text-xs text-slate-500">
+                      {item.mimeType || "file"}
+                    </div>
+                  )}
+                  <div className="flex-1 space-y-1">
+                    <div className="font-medium text-sm">{item.filename || item.s3Key}</div>
+                    <div className="text-xs text-slate-500">
+                      {item.kind} {item.createdAt ? `• ${new Date(item.createdAt).toLocaleDateString()}` : ""}
+                    </div>
+                    {item.url && (
+                      <button
+                        type="button"
+                        onClick={() => handleSetHeroImage(item)}
+                        className="text-xs text-blue-600 underline"
+                      >
+                        Set as Hero Image
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteMedia(item._id)}
+                    className="text-xs text-red-600 underline"
+                  >
+                    Delete
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-800">Artworks</h3>
+          {artworksLoading && <span className="text-xs text-slate-500">Loading...</span>}
+        </div>
+
+        <form className="space-y-3 rounded border border-slate-200 p-3" onSubmit={handleCreateArtwork}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1 text-sm font-medium text-slate-700">
+              Title
+              <input
+                value={artworkTitle}
+                onChange={(e) => setArtworkTitle(e.target.value)}
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                required
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium text-slate-700">
+              Sale type
+              <select
+                value={artworkSaleType}
+                onChange={(e) => setArtworkSaleType(e.target.value)}
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              >
+                <option value="print">Print</option>
+                <option value="original">Original</option>
+                <option value="both">Both</option>
+              </select>
+            </label>
+            <label className="space-y-1 text-sm font-medium text-slate-700">
+              Price (optional)
+              <input
+                value={artworkPrice}
+                onChange={(e) => setArtworkPrice(e.target.value)}
+                type="number"
+                min="0"
+                step="0.01"
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              />
+            </label>
+            {(artworkSaleType === "print" || artworkSaleType === "both") && (
+              <label className="space-y-1 text-sm font-medium text-slate-700">
+                Edition size
+                <input
+                  value={artworkEditionSize}
+                  onChange={(e) => setArtworkEditionSize(e.target.value)}
+                  type="number"
+                  min="1"
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                />
+              </label>
+            )}
+          </div>
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Description (optional)
+            <textarea
+              value={artworkDescription}
+              onChange={(e) => setArtworkDescription(e.target.value)}
+              rows={3}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            />
+          </label>
+          {artworksError && <p className="text-sm text-red-600">{artworksError}</p>}
+          {artworkMessage && <p className="text-sm text-green-600">{artworkMessage}</p>}
+          <div className="flex items-center justify-between text-xs text-slate-500">
+            <span>{selectedMediaIds.length} Medien ausgewählt</span>
+            <button
+              type="submit"
+              disabled={artworkSaving}
+              className="inline-flex items-center rounded bg-black px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+            >
+              {artworkSaving ? "Saving..." : "Create Artwork"}
+            </button>
+          </div>
+        </form>
+
+        {!artworksLoading && artworks.length === 0 && (
+          <p className="text-sm text-slate-600">No artworks yet.</p>
+        )}
+        {artworks.length > 0 && (
+          <ul className="grid gap-3">
+            {artworks.map((artwork) => (
+              <li key={artwork._id} className="rounded border border-slate-200 p-3 space-y-1">
+                <div className="flex items-center justify-between">
+                  <div className="font-medium">{artwork.title}</div>
+                  <span className="text-xs text-slate-500">
+                    {artwork.saleType} {artwork.status ? `• ${artwork.status}` : ""}
+                  </span>
+                </div>
+                {artwork.editionSize && (
+                  <div className="text-xs text-slate-500">Edition: {artwork.editionSize}</div>
+                )}
+                {artwork.shopify?.productId ? (
+                  <div className="text-xs text-green-600">Shopify draft: {artwork.shopify.handle || artwork.shopify.productId}</div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handlePushArtwork(artwork._id)}
+                    className="text-xs text-blue-600 underline"
+                  >
+                    Create Shopify Draft Product
+                  </button>
+                )}
+                {artwork.shopify?.lastPushError && (
+                  <div className="text-xs text-red-600">Last push error: {artwork.shopify.lastPushError}</div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-800">Public Profile (required for Under Contract)</h3>
+          {artist.shopifySync?.lastSyncStatus && (
+            <span className="text-xs text-slate-500">
+              Status: {artist.shopifySync.lastSyncStatus}
+              {artist.shopifySync.lastSyncedAt && ` • ${new Date(artist.shopifySync.lastSyncedAt).toLocaleString()}`}
+            </span>
+          )}
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Display name {stage === "Under Contract" && <span className="text-red-600">*</span>}
+            <input
+              value={publicDisplayName}
+              onChange={(e) => setPublicDisplayName(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="Public name"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Location
+            <input
+              value={publicLocation}
+              onChange={(e) => setPublicLocation(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="City, Country"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Website
+            <input
+              value={publicWebsite}
+              onChange={(e) => setPublicWebsite(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="https://"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Instagram
+            <input
+              value={publicInstagram}
+              onChange={(e) => setPublicInstagram(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="@handle"
+            />
+          </label>
+        </div>
+
+        <label className="space-y-1 text-sm font-medium text-slate-700">
+          Bio {stage === "Under Contract" && <span className="text-red-600">*</span>}
+          <textarea
+            value={publicBio}
+            onChange={(e) => setPublicBio(e.target.value)}
+            rows={4}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            placeholder="Short bio"
+          />
+        </label>
+
+        {shopifyError && <p className="text-sm text-red-600">{shopifyError}</p>}
+        {shopifyMessage && <p className="text-sm text-green-600">{shopifyMessage}</p>}
+        {artist.shopifySync?.lastSyncError && (
+          <p className="text-sm text-red-600">Last error: {artist.shopifySync.lastSyncError}</p>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={handleSyncShopify}
+            disabled={shopifySyncing || !canSync}
+            className="inline-flex items-center rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+          >
+            {shopifySyncing ? "Syncing..." : "Sync to Shopify"}
           </button>
         </div>
       </div>
