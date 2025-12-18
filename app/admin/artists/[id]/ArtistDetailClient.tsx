@@ -105,6 +105,7 @@ type FileUploadStatus = {
 };
 
 const stageOptions = ["Idea", "In Review", "Offer", "Under Contract"] as const;
+type TabKey = "overview" | "media" | "artworks" | "publicProfile" | "contracts" | "payout";
 
 function parseErrorMessage(payload: any) {
   if (!payload) return "Unexpected error";
@@ -126,6 +127,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [phone, setPhone] = useState("");
   const [stage, setStage] = useState<string>("Idea");
   const [advancedSectionsEnabled, setAdvancedSectionsEnabled] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [internalNotes, setInternalNotes] = useState("");
   const [publicName, setPublicName] = useState("");
   const [publicInstagram, setPublicInstagram] = useState("");
@@ -669,6 +671,23 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const isUnderContract = stage === "Under Contract";
   const showAdvancedSections = isUnderContract || advancedSectionsEnabled;
   const canSync = isUnderContract && publicName.trim().length > 0 && publicText1.trim().length > 0;
+  const hasPublicProfileRequired = publicName.trim().length > 0 && publicText1.trim().length > 0;
+  const lastShopifyStatus = artist?.shopifySync?.lastSyncStatus;
+  const lastShopifySyncedAt = artist?.shopifySync?.lastSyncedAt;
+  const lastShopifyError = artist?.shopifySync?.lastSyncError;
+  const overviewStatusChip = name.trim() ? "Basics added" : "Missing name";
+  const mediaStatusChip = mediaLoading ? "Loading..." : media.length ? `${media.length} file${media.length === 1 ? "" : "s"}` : "No files";
+  const artworksStatusChip = artworksLoading ? "Loading..." : artworks.length ? `${artworks.length} artwork${artworks.length === 1 ? "" : "s"}` : "No artworks";
+  const publicProfileStatusChip = hasPublicProfileRequired ? "Ready" : "Missing required fields";
+  const contractsStatusChip = contractsLoading ? "Loading..." : contracts.length ? `${contracts.length} file${contracts.length === 1 ? "" : "s"}` : "No files";
+  const payoutStatusChip = payoutLoading ? "Loading..." : [accountHolder, iban, bic, bankName, address, taxId].some((value) => value.trim()) ? "Draft" : "Missing";
+
+  useEffect(() => {
+    const advancedTabs: TabKey[] = ["publicProfile", "contracts", "payout"];
+    if (!showAdvancedSections && advancedTabs.includes(activeTab)) {
+      setActiveTab("overview");
+    }
+  }, [activeTab, showAdvancedSections]);
 
   const handleSyncShopify = async () => {
     setShopifyError(null);
@@ -1072,45 +1091,9 @@ export default function ArtistDetailClient({ artistId }: Props) {
     </>
   );
 
-  if (loading) {
-    return <p className="text-sm text-slate-600">Loading artist...</p>;
-  }
-
-  if (error) {
-    return (
-      <div className="space-y-3">
-        <p className="text-sm text-red-600">Error: {error}</p>
-        <Link href="/admin/artists" className="text-sm text-blue-600 underline">
-          Back to artists
-        </Link>
-      </div>
-    );
-  }
-
-  if (!artist) {
-    return (
-      <div className="space-y-3">
-        <p className="text-sm text-slate-600">Artist not found.</p>
-        <Link href="/admin/artists" className="text-sm text-blue-600 underline">
-          Back to artists
-        </Link>
-      </div>
-    );
-  }
-
-  return (
-    <section className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-xs text-slate-500">ID</div>
-          <div className="font-mono text-sm text-slate-700 break-all">{artist._id}</div>
-        </div>
-        <Link href="/admin/artists" className="text-sm text-blue-600 underline">
-          Back to artists
-        </Link>
-      </div>
-
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-6">
+  const overviewPanel = (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-1 text-sm font-medium text-slate-700">
             Name
@@ -1142,37 +1125,10 @@ export default function ArtistDetailClient({ artistId }: Props) {
               placeholder="+49 ..."
             />
           </label>
-
-          <label className="space-y-1 text-sm font-medium text-slate-700">
-            Stage
-            <select
-              value={stage}
-              onChange={(e) => setStage(e.target.value)}
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            >
-              {stageOptions.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-            {!isUnderContract && (
-              <div className="space-y-1 text-xs font-normal text-slate-600">
-                <p>Only internal fields are shown. Switch to 'Under Contract' to unlock contracts, payout and Shopify sync.</p>
-                <label className="inline-flex items-center gap-2 text-xs font-normal text-slate-700">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300 text-black focus:ring-black"
-                    checked={advancedSectionsEnabled}
-                    onChange={(e) => setAdvancedSectionsEnabled(e.target.checked)}
-                  />
-                  Advanced sections
-                </label>
-              </div>
-            )}
-          </label>
         </div>
+      </div>
 
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <label className="space-y-1 text-sm font-medium text-slate-700">
           Internal notes
           <textarea
@@ -1183,407 +1139,556 @@ export default function ArtistDetailClient({ artistId }: Props) {
             placeholder="Notes"
           />
         </label>
+      </div>
+    </div>
+  );
 
-        {error && <p className="text-sm text-red-600">Error: {error}</p>}
-        {saveMessage && <p className="text-sm text-green-600">{saveMessage}</p>}
+  const mediaPanel = (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+      {mediaHeader}
+      <div className="space-y-4">{mediaContent}</div>
+    </div>
+  );
+
+  const artworksPanel = (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+      {artworksHeader}
+      <div className="space-y-4">{artworksContent}</div>
+    </div>
+  );
+
+  const publicProfilePanel = (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-slate-800">Public Profile (required for Under Contract)</h3>
+        {lastShopifyStatus && (
+          <span className="text-xs text-slate-500">
+            Status: {lastShopifyStatus}
+            {lastShopifySyncedAt && ` • ${new Date(lastShopifySyncedAt).toLocaleString()}`}
+          </span>
+        )}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="space-y-1 text-sm font-medium text-slate-700">
+          Name {stage === "Under Contract" && <span className="text-red-600">*</span>}
+          <input
+            value={publicName}
+            onChange={(e) => setPublicName(e.target.value)}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            placeholder="Public name"
+          />
+        </label>
+        <label className="space-y-1 text-sm font-medium text-slate-700">
+          Instagram (URL)
+          <input
+            type="url"
+            value={publicInstagram}
+            onChange={(e) => setPublicInstagram(e.target.value)}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            placeholder="https://instagram.com/..."
+          />
+        </label>
+        <label className="space-y-1 text-sm font-medium text-slate-700">
+          Quote
+          <input
+            value={publicQuote}
+            onChange={(e) => setPublicQuote(e.target.value)}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            placeholder="Kurz-Zitat"
+          />
+        </label>
+        <label className="space-y-1 text-sm font-medium text-slate-700">
+          Kategorie (Shopify Collection, optional)
+          <div className="space-y-2 rounded border border-slate-200 p-3">
+            <input
+              type="search"
+              value={collectionSearch}
+              onChange={(e) => setCollectionSearch(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="Kollektionen suchen..."
+            />
+            <select
+              value={publicKategorie}
+              onChange={(e) => handleSelectCollection(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            >
+              <option value="">Keine Kategorie</option>
+              {collectionResults.map((collection) => (
+                <option key={collection.id} value={collection.id}>
+                  {collection.title}
+                </option>
+              ))}
+            </select>
+            <div className="flex items-center justify-between text-xs text-slate-600">
+              <span className="break-all">Auswahl: {selectedCollectionLabel}</span>
+              {publicKategorie && (
+                <button
+                  type="button"
+                  onClick={() => handleSelectCollection("")}
+                  className="text-blue-600 underline"
+                >
+                  Entfernen
+                </button>
+              )}
+            </div>
+            {collectionLoading && <p className="text-xs text-slate-500">Lade Collections...</p>}
+            {collectionError && <p className="text-xs text-red-600">{collectionError}</p>}
+            {!collectionLoading && !collectionResults.length && !collectionError && (
+              <p className="text-xs text-slate-500">Keine Collections gefunden.</p>
+            )}
+          </div>
+        </label>
+      </div>
+
+      <label className="space-y-1 text-sm font-medium text-slate-700">
+        Einleitung 1
+        <textarea
+          value={publicEinleitung1}
+          onChange={(e) => setPublicEinleitung1(e.target.value)}
+          rows={3}
+          className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+          placeholder="Intro text"
+        />
+      </label>
+
+      <label className="space-y-1 text-sm font-medium text-slate-700">
+        Text 1 {stage === "Under Contract" && <span className="text-red-600">*</span>}
+        <textarea
+          value={publicText1}
+          onChange={(e) => setPublicText1(e.target.value)}
+          rows={5}
+          className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+          placeholder="Main text"
+        />
+      </label>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        {renderShopifyFileField(
+          "bilder",
+          "Titelbild (Shopify File ID / GID)",
+          publicBilder,
+          setPublicBilder,
+        )}
+        {renderShopifyFileField(
+          "bild_1",
+          "Bild 1 (Shopify File ID / GID)",
+          publicBild1,
+          setPublicBild1,
+        )}
+        {renderShopifyFileField(
+          "bild_2",
+          "Bild 2 (Shopify File ID / GID)",
+          publicBild2,
+          setPublicBild2,
+        )}
+        {renderShopifyFileField(
+          "bild_3",
+          "Bild 3 (Shopify File ID / GID)",
+          publicBild3,
+          setPublicBild3,
+        )}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="space-y-1 text-sm font-medium text-slate-700">
+          Location (internal only, not sent to Shopify)
+          <input
+            value={publicLocation}
+            onChange={(e) => setPublicLocation(e.target.value)}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            placeholder="City, Country"
+          />
+        </label>
+        <label className="space-y-1 text-sm font-medium text-slate-700">
+          Website (internal only)
+          <input
+            value={publicWebsite}
+            onChange={(e) => setPublicWebsite(e.target.value)}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            placeholder="https://"
+          />
+        </label>
+      </div>
+
+      {shopifyError && <p className="text-sm text-red-600">{shopifyError}</p>}
+      {shopifyMessage && <p className="text-sm text-green-600">{shopifyMessage}</p>}
+      {lastShopifyError && <p className="text-sm text-red-600">Last error: {lastShopifyError}</p>}
+
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={handleSyncShopify}
+          disabled={shopifySyncing || !canSync}
+          className="inline-flex items-center rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+        >
+          {shopifySyncing ? "Syncing..." : "Sync to Shopify"}
+        </button>
+      </div>
+    </div>
+  );
+
+  const contractsPanel = (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-slate-800">Contracts</h3>
+        {contractsLoading && <span className="text-xs text-slate-500">Loading...</span>}
+      </div>
+
+      <form className="space-y-2" onSubmit={handleUploadContract}>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Vertrag (PDF)
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={(e) => setContractFile(e.target.files?.[0] || null)}
+              className="w-full text-sm"
+            />
+            <p className="text-xs text-slate-500">
+              Nur PDF, max. 20 MB.{" "}
+              {contractFile ? (
+                <span className="text-slate-700">
+                  Ausgewählt: {contractFile.name} ({Math.round(contractFile.size / 1024)} KB)
+                </span>
+              ) : (
+                "Keine Datei gewählt."
+              )}
+            </p>
+          </label>
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Vertragstyp
+            <select
+              value={contractType}
+              onChange={(e) => setContractType(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            >
+              <option value="artist_contract">Artist Contract</option>
+              <option value="consignment">Consignment</option>
+              <option value="nda">NDA</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+        </div>
+        <label className="space-y-1 text-sm font-medium text-slate-700">
+          Signed at (optional)
+          <input
+            type="date"
+            value={contractSignedAt}
+            onChange={(e) => setContractSignedAt(e.target.value)}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+          />
+        </label>
+
+        {uploadContractError && <p className="text-sm text-red-600">{uploadContractError}</p>}
+        {uploadContractMessage && <p className="text-sm text-green-600">{uploadContractMessage}</p>}
 
         <div className="flex justify-end">
           <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
+            type="submit"
+            disabled={uploadingContract || !contractFile}
             className="inline-flex items-center rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
           >
-            {saving ? "Saving..." : "Save changes"}
+            {uploadingContract ? "Uploading..." : "Upload contract"}
           </button>
         </div>
-      </div>
+      </form>
 
-      {isUnderContract ? (
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
-          {mediaHeader}
-          <div className="space-y-4">{mediaContent}</div>
-        </div>
-      ) : (
-        <details className="rounded-lg border border-slate-200 bg-white shadow-sm">
-          <summary className="flex cursor-pointer items-center justify-between px-4 py-3">
-            {mediaHeader}
-          </summary>
-          <div className="space-y-4 border-t border-slate-200 p-4">{mediaContent}</div>
-        </details>
+      {contractsError && <p className="text-sm text-red-600">Fehler: {contractsError}</p>}
+      {!contractsLoading && !contractsError && contracts.length === 0 && (
+        <p className="text-sm text-slate-600">Keine Verträge vorhanden.</p>
       )}
-
-      {isUnderContract ? (
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
-          {artworksHeader}
-          <div className="space-y-4">{artworksContent}</div>
-        </div>
-      ) : (
-        <details className="rounded-lg border border-slate-200 bg-white shadow-sm">
-          <summary className="flex cursor-pointer items-center justify-between px-4 py-3">
-            {artworksHeader}
-          </summary>
-          <div className="space-y-4 border-t border-slate-200 p-4">{artworksContent}</div>
-        </details>
-      )}
-
-      {showAdvancedSections && (
-        <>
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-slate-800">Public Profile (required for Under Contract)</h3>
-              {artist.shopifySync?.lastSyncStatus && (
-                <span className="text-xs text-slate-500">
-                  Status: {artist.shopifySync.lastSyncStatus}
-                  {artist.shopifySync.lastSyncedAt && ` • ${new Date(artist.shopifySync.lastSyncedAt).toLocaleString()}`}
-                </span>
-              )}
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="space-y-1 text-sm font-medium text-slate-700">
-                Name {stage === "Under Contract" && <span className="text-red-600">*</span>}
-                <input
-                  value={publicName}
-                  onChange={(e) => setPublicName(e.target.value)}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  placeholder="Public name"
-                />
-              </label>
-              <label className="space-y-1 text-sm font-medium text-slate-700">
-                Instagram (URL)
-                <input
-                  type="url"
-                  value={publicInstagram}
-                  onChange={(e) => setPublicInstagram(e.target.value)}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  placeholder="https://instagram.com/..."
-                />
-              </label>
-              <label className="space-y-1 text-sm font-medium text-slate-700">
-                Quote
-                <input
-                  value={publicQuote}
-                  onChange={(e) => setPublicQuote(e.target.value)}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  placeholder="Kurz-Zitat"
-                />
-              </label>
-              <label className="space-y-1 text-sm font-medium text-slate-700">
-                Kategorie (Shopify Collection, optional)
-                <div className="space-y-2 rounded border border-slate-200 p-3">
-                  <input
-                    type="search"
-                    value={collectionSearch}
-                    onChange={(e) => setCollectionSearch(e.target.value)}
-                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                    placeholder="Kollektionen suchen..."
-                  />
-                  <select
-                    value={publicKategorie}
-                    onChange={(e) => handleSelectCollection(e.target.value)}
-                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  >
-                    <option value="">Keine Kategorie</option>
-                    {collectionResults.map((collection) => (
-                      <option key={collection.id} value={collection.id}>
-                        {collection.title}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="flex items-center justify-between text-xs text-slate-600">
-                    <span className="break-all">Auswahl: {selectedCollectionLabel}</span>
-                    {publicKategorie && (
-                      <button
-                        type="button"
-                        onClick={() => handleSelectCollection("")}
-                        className="text-blue-600 underline"
-                      >
-                        Entfernen
-                      </button>
-                    )}
-                  </div>
-                  {collectionLoading && <p className="text-xs text-slate-500">Lade Collections...</p>}
-                  {collectionError && <p className="text-xs text-red-600">{collectionError}</p>}
-                  {!collectionLoading && !collectionResults.length && !collectionError && (
-                    <p className="text-xs text-slate-500">Keine Collections gefunden.</p>
+      {contracts.length > 0 && (
+        <ul className="grid gap-3">
+          {contracts.map((contract) => (
+            <li key={contract._id || contract.s3Key} className="rounded border border-slate-200 p-3">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <div className="font-medium">{contract.filename || "Contract"}</div>
+                  <div className="text-xs text-slate-500">Typ: {contract.contractType}</div>
+                  {contract.createdAt && (
+                    <div className="text-xs text-slate-500">
+                      Erstellt: {new Date(contract.createdAt).toLocaleDateString()}
+                    </div>
                   )}
                 </div>
+                {contract.s3Url ? (
+                  <a
+                    href={contract.s3Url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-blue-600 underline"
+                  >
+                    Download
+                  </a>
+                ) : (
+                  <span className="text-xs text-slate-500 break-all">{contract.s3Key}</span>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+
+  const payoutPanel = (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-slate-800">Payout</h3>
+        {payoutLoading && <span className="text-xs text-slate-500">Loading...</span>}
+      </div>
+      {payoutError && <p className="text-sm text-red-600">Fehler: {payoutError}</p>}
+      <form className="space-y-3" onSubmit={handleSavePayout}>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Account holder
+            <input
+              value={accountHolder}
+              onChange={(e) => setAccountHolder(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="Name"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            IBAN
+            <input
+              value={iban}
+              onChange={(e) => setIban(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="IBAN"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            BIC
+            <input
+              value={bic}
+              onChange={(e) => setBic(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="BIC"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Bank name
+            <input
+              value={bankName}
+              onChange={(e) => setBankName(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="Bank"
+            />
+          </label>
+        </div>
+
+        <label className="space-y-1 text-sm font-medium text-slate-700">
+          Address
+          <textarea
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            rows={2}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            placeholder="Address"
+          />
+        </label>
+
+        <label className="space-y-1 text-sm font-medium text-slate-700">
+          Tax ID
+          <input
+            value={taxId}
+            onChange={(e) => setTaxId(e.target.value)}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            placeholder="Tax ID"
+          />
+        </label>
+
+        {payoutSaveMessage && <p className="text-sm text-green-600">{payoutSaveMessage}</p>}
+
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={payoutSaving}
+            className="inline-flex items-center rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+          >
+            {payoutSaving ? "Saving..." : "Save payout"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+
+  const tabPanels: Record<TabKey, JSX.Element> = {
+    overview: overviewPanel,
+    media: mediaPanel,
+    artworks: artworksPanel,
+    publicProfile: publicProfilePanel,
+    contracts: contractsPanel,
+    payout: payoutPanel,
+  };
+
+  const tabs: Array<{ key: TabKey; label: string; chip?: string }> = [
+    { key: "overview", label: "Overview", chip: overviewStatusChip },
+    { key: "media", label: "Media", chip: mediaStatusChip },
+    { key: "artworks", label: "Artworks", chip: artworksStatusChip },
+    ...(showAdvancedSections
+      ? [
+          { key: "publicProfile" as const, label: "Public Profile", chip: publicProfileStatusChip },
+          { key: "contracts" as const, label: "Contracts", chip: contractsStatusChip },
+          { key: "payout" as const, label: "Payout", chip: payoutStatusChip },
+        ]
+      : []),
+  ];
+
+  if (loading) {
+    return <p className="text-sm text-slate-600">Loading artist...</p>;
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-red-600">Error: {error}</p>
+        <Link href="/admin/artists" className="text-sm text-blue-600 underline">
+          Back to artists
+        </Link>
+      </div>
+    );
+  }
+
+  if (!artist) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-slate-600">Artist not found.</p>
+        <Link href="/admin/artists" className="text-sm text-blue-600 underline">
+          Back to artists
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <section className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-xs text-slate-500">ID</div>
+          <div className="break-all font-mono text-sm text-slate-700">{artist._id}</div>
+        </div>
+        <Link href="/admin/artists" className="text-sm text-blue-600 underline">
+          Back to artists
+        </Link>
+      </div>
+
+      <div className="sticky top-0 z-20 -mx-4 sm:-mx-6">
+        <div className="mx-4 sm:mx-6 rounded-b-lg border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                Stage
+                <select
+                  value={stage}
+                  onChange={(e) => setStage(e.target.value)}
+                  className="rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                >
+                  {stageOptions.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
               </label>
-            </div>
-
-            <label className="space-y-1 text-sm font-medium text-slate-700">
-              Einleitung 1
-              <textarea
-                value={publicEinleitung1}
-                onChange={(e) => setPublicEinleitung1(e.target.value)}
-                rows={3}
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                placeholder="Intro text"
-              />
-            </label>
-
-            <label className="space-y-1 text-sm font-medium text-slate-700">
-              Text 1 {stage === "Under Contract" && <span className="text-red-600">*</span>}
-              <textarea
-                value={publicText1}
-                onChange={(e) => setPublicText1(e.target.value)}
-                rows={5}
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                placeholder="Main text"
-              />
-            </label>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              {renderShopifyFileField(
-                "bilder",
-                "Titelbild (Shopify File ID / GID)",
-                publicBilder,
-                setPublicBilder,
-              )}
-              {renderShopifyFileField(
-                "bild_1",
-                "Bild 1 (Shopify File ID / GID)",
-                publicBild1,
-                setPublicBild1,
-              )}
-              {renderShopifyFileField(
-                "bild_2",
-                "Bild 2 (Shopify File ID / GID)",
-                publicBild2,
-                setPublicBild2,
-              )}
-              {renderShopifyFileField(
-                "bild_3",
-                "Bild 3 (Shopify File ID / GID)",
-                publicBild3,
-                setPublicBild3,
+              {!isUnderContract && (
+                <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 text-black focus:ring-black"
+                    checked={advancedSectionsEnabled}
+                    onChange={(e) => setAdvancedSectionsEnabled(e.target.checked)}
+                  />
+                  Advanced sections
+                </label>
               )}
             </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="space-y-1 text-sm font-medium text-slate-700">
-                Location (internal only, not sent to Shopify)
-                <input
-                  value={publicLocation}
-                  onChange={(e) => setPublicLocation(e.target.value)}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  placeholder="City, Country"
-                />
-              </label>
-              <label className="space-y-1 text-sm font-medium text-slate-700">
-                Website (internal only)
-                <input
-                  value={publicWebsite}
-                  onChange={(e) => setPublicWebsite(e.target.value)}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  placeholder="https://"
-                />
-              </label>
-            </div>
-
-            {shopifyError && <p className="text-sm text-red-600">{shopifyError}</p>}
-            {shopifyMessage && <p className="text-sm text-green-600">{shopifyMessage}</p>}
-            {artist.shopifySync?.lastSyncError && (
-              <p className="text-sm text-red-600">Last error: {artist.shopifySync.lastSyncError}</p>
-            )}
-
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {isUnderContract && (
+                <button
+                  type="button"
+                  onClick={handleSyncShopify}
+                  disabled={shopifySyncing || !canSync}
+                  className="inline-flex items-center rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                >
+                  {shopifySyncing ? "Syncing..." : "Sync to Shopify"}
+                </button>
+              )}
               <button
                 type="button"
-                onClick={handleSyncShopify}
-                disabled={shopifySyncing || !canSync}
-                className="inline-flex items-center rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                onClick={handleSave}
+                disabled={saving}
+                className="inline-flex items-center rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 shadow-sm transition hover:border-slate-400 disabled:opacity-60"
               >
-                {shopifySyncing ? "Syncing..." : "Sync to Shopify"}
+                {saving ? "Saving..." : "Save"}
               </button>
             </div>
           </div>
-
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-slate-800">Contracts</h3>
-              {contractsLoading && <span className="text-xs text-slate-500">Loading...</span>}
-            </div>
-
-            <form className="space-y-2" onSubmit={handleUploadContract}>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <label className="space-y-1 text-sm font-medium text-slate-700">
-                  Vertrag (PDF)
-                  <input
-                    type="file"
-                    accept="application/pdf"
-                    onChange={(e) => setContractFile(e.target.files?.[0] || null)}
-                    className="w-full text-sm"
-                  />
-                  <p className="text-xs text-slate-500">
-                    Nur PDF, max. 20 MB.{" "}
-                    {contractFile ? (
-                      <span className="text-slate-700">
-                        Ausgewählt: {contractFile.name} ({Math.round(contractFile.size / 1024)} KB)
-                      </span>
-                    ) : (
-                      "Keine Datei gewählt."
-                    )}
-                  </p>
-                </label>
-                <label className="space-y-1 text-sm font-medium text-slate-700">
-                  Vertragstyp
-                  <select
-                    value={contractType}
-                    onChange={(e) => setContractType(e.target.value)}
-                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  >
-                    <option value="artist_contract">Artist Contract</option>
-                    <option value="consignment">Consignment</option>
-                    <option value="nda">NDA</option>
-                    <option value="other">Other</option>
-                  </select>
-                </label>
-              </div>
-              <label className="space-y-1 text-sm font-medium text-slate-700">
-                Signed at (optional)
-                <input
-                  type="date"
-                  value={contractSignedAt}
-                  onChange={(e) => setContractSignedAt(e.target.value)}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                />
-              </label>
-
-              {uploadContractError && <p className="text-sm text-red-600">{uploadContractError}</p>}
-              {uploadContractMessage && <p className="text-sm text-green-600">{uploadContractMessage}</p>}
-
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={uploadingContract || !contractFile}
-                  className="inline-flex items-center rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-                >
-                  {uploadingContract ? "Uploading..." : "Upload contract"}
-                </button>
-              </div>
-            </form>
-
-            {contractsError && <p className="text-sm text-red-600">Fehler: {contractsError}</p>}
-            {!contractsLoading && !contractsError && contracts.length === 0 && (
-              <p className="text-sm text-slate-600">Keine Verträge vorhanden.</p>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-600">
+            {lastShopifyStatus && (
+              <span>
+                Shopify: {lastShopifyStatus}
+                {lastShopifySyncedAt && ` • ${new Date(lastShopifySyncedAt).toLocaleString()}`}
+              </span>
             )}
-            {contracts.length > 0 && (
-              <ul className="grid gap-3">
-                {contracts.map((contract) => (
-                  <li key={contract._id || contract.s3Key} className="rounded border border-slate-200 p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <div className="font-medium">{contract.filename || "Contract"}</div>
-                        <div className="text-xs text-slate-500">Typ: {contract.contractType}</div>
-                        {contract.createdAt && (
-                          <div className="text-xs text-slate-500">
-                            Erstellt: {new Date(contract.createdAt).toLocaleDateString()}
-                          </div>
-                        )}
-                      </div>
-                      {contract.s3Url ? (
-                        <a
-                          href={contract.s3Url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs text-blue-600 underline"
-                        >
-                          Download
-                        </a>
-                      ) : (
-                        <span className="text-xs text-slate-500 break-all">{contract.s3Key}</span>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
+            {saveMessage && (
+              <span className="rounded-full bg-green-50 px-2 py-1 text-[11px] font-semibold text-green-700">
+                {saveMessage}
+              </span>
+            )}
+            {shopifyMessage && (
+              <span className="rounded-full bg-green-50 px-2 py-1 text-[11px] font-semibold text-green-700">
+                {shopifyMessage}
+              </span>
+            )}
+            {shopifyError && (
+              <span className="rounded-full bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700">
+                {shopifyError}
+              </span>
             )}
           </div>
+        </div>
+      </div>
 
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-slate-800">Payout</h3>
-              {payoutLoading && <span className="text-xs text-slate-500">Loading...</span>}
-            </div>
-            {payoutError && <p className="text-sm text-red-600">Fehler: {payoutError}</p>}
-            <form className="space-y-3" onSubmit={handleSavePayout}>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="space-y-1 text-sm font-medium text-slate-700">
-                  Account holder
-                  <input
-                    value={accountHolder}
-                    onChange={(e) => setAccountHolder(e.target.value)}
-                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                    placeholder="Name"
-                  />
-                </label>
-                <label className="space-y-1 text-sm font-medium text-slate-700">
-                  IBAN
-                  <input
-                    value={iban}
-                    onChange={(e) => setIban(e.target.value)}
-                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                    placeholder="IBAN"
-                  />
-                </label>
-                <label className="space-y-1 text-sm font-medium text-slate-700">
-                  BIC
-                  <input
-                    value={bic}
-                    onChange={(e) => setBic(e.target.value)}
-                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                    placeholder="BIC"
-                  />
-                </label>
-                <label className="space-y-1 text-sm font-medium text-slate-700">
-                  Bank name
-                  <input
-                    value={bankName}
-                    onChange={(e) => setBankName(e.target.value)}
-                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                    placeholder="Bank"
-                  />
-                </label>
-              </div>
-
-              <label className="space-y-1 text-sm font-medium text-slate-700">
-                Address
-                <textarea
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  rows={2}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  placeholder="Address"
-                />
-              </label>
-
-              <label className="space-y-1 text-sm font-medium text-slate-700">
-                Tax ID
-                <input
-                  value={taxId}
-                  onChange={(e) => setTaxId(e.target.value)}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  placeholder="Tax ID"
-                />
-              </label>
-
-              {payoutSaveMessage && <p className="text-sm text-green-600">{payoutSaveMessage}</p>}
-
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={payoutSaving}
-                  className="inline-flex items-center rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-                >
-                  {payoutSaving ? "Saving..." : "Save payout"}
-                </button>
-              </div>
-            </form>
+      {!isUnderContract && (
+        <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex flex-col gap-2 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
+            <p>Only internal fields are shown. Switch to &quot;Under Contract&quot; to unlock contracts, payout and Shopify sync.</p>
+            <p className="text-xs text-slate-500">You can also temporarily enable advanced sections via the toggle above.</p>
           </div>
-        </>
+        </div>
       )}
+
+      <nav className="flex flex-wrap items-center gap-2">
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+                isActive ? "border-slate-900 bg-slate-900 text-white shadow-sm" : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+              }`}
+            >
+              <span>{tab.label}</span>
+              {tab.chip && (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                    isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  {tab.chip}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="space-y-4">{tabPanels[activeTab]}</div>
     </section>
   );
 }
