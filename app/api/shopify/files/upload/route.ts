@@ -135,7 +135,7 @@ async function finalizeFileUpload(staged: StagedUploadTarget, file: File, filena
     files: [
       {
         originalSource: staged.resourceUrl,
-        contentType: file.type || "image/*",
+        contentType: "IMAGE",
         filename,
       },
     ],
