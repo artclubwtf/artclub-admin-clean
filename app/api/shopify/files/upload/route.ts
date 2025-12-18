@@ -122,8 +122,6 @@ async function finalizeFileUpload(staged: StagedUploadTarget, file: File, filena
       fileCreate(files: $files) {
         files {
           id
-          filename
-          url
           preview {
             image { url }
           }
@@ -157,8 +155,8 @@ async function finalizeFileUpload(staged: StagedUploadTarget, file: File, filena
 
   return {
     id: created.id as string,
-    url: created.url || created.preview?.image?.url || null,
-    filename: created.filename || filename,
+    url: created.preview?.image?.url || null,
+    filename,
   };
 }
 
