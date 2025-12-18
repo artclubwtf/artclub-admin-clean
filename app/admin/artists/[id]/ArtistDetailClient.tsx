@@ -94,6 +94,8 @@ type Artwork = {
   images?: { mediaId: string; url?: string; filename?: string }[];
 };
 
+type ShopifyCollection = { id: string; title: string };
+
 const stageOptions = ["Idea", "In Review", "Offer", "Under Contract"] as const;
 
 function parseErrorMessage(payload: any) {
@@ -129,6 +131,11 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [publicBild3, setPublicBild3] = useState("");
   const [publicLocation, setPublicLocation] = useState("");
   const [publicWebsite, setPublicWebsite] = useState("");
+  const [collectionSearch, setCollectionSearch] = useState("");
+  const [collectionResults, setCollectionResults] = useState<ShopifyCollection[]>([]);
+  const [collectionLoading, setCollectionLoading] = useState(false);
+  const [collectionError, setCollectionError] = useState<string | null>(null);
+  const [selectedCollectionTitle, setSelectedCollectionTitle] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -226,6 +233,8 @@ export default function ArtistDetailClient({ artistId }: Props) {
         setPublicBild3(data.publicProfile?.bild_3 ?? "");
         setPublicLocation(data.publicProfile?.location ?? "");
         setPublicWebsite(data.publicProfile?.website ?? "");
+        setSelectedCollectionTitle(null);
+        setCollectionSearch("");
       } catch (err: any) {
         if (!active) return;
         setError(err?.message ?? "Failed to load artist");
@@ -352,6 +361,62 @@ export default function ArtistDetailClient({ artistId }: Props) {
     }
   }, [stage]);
 
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(async () => {
+      setCollectionLoading(true);
+      setCollectionError(null);
+      try {
+        const search = collectionSearch.trim();
+        const res = await fetch(`/api/shopify/collections${search ? `?q=${encodeURIComponent(search)}` : ""}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null);
+          throw new Error(parseErrorMessage(payload));
+        }
+        const json = await res.json();
+        if (!active) return;
+        const list: ShopifyCollection[] = Array.isArray(json.collections) ? json.collections : [];
+        const merged = [...list];
+        if (publicKategorie) {
+          const exists = merged.some((c) => c.id === publicKategorie);
+          if (!exists) {
+            merged.unshift({
+              id: publicKategorie,
+              title: selectedCollectionTitle || publicKategorie,
+            });
+          }
+        }
+        setCollectionResults(merged);
+      } catch (err: any) {
+        if (!active || err?.name === "AbortError") return;
+        setCollectionError(err?.message ?? "Failed to load collections");
+      } finally {
+        if (active) setCollectionLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      active = false;
+      controller.abort();
+      clearTimeout(timeout);
+    };
+  }, [collectionSearch, publicKategorie, selectedCollectionTitle]);
+
+  const handleSelectCollection = (id: string) => {
+    if (!id) {
+      setPublicKategorie("");
+      setSelectedCollectionTitle(null);
+      return;
+    }
+    const selected = collectionResults.find((c) => c.id === id);
+    setPublicKategorie(id);
+    setSelectedCollectionTitle(selected?.title ?? null);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setSaveMessage(null);
@@ -460,6 +525,10 @@ export default function ArtistDetailClient({ artistId }: Props) {
       setPayoutSaving(false);
     }
   };
+
+  const selectedCollectionLabel = publicKategorie
+    ? selectedCollectionTitle || publicKategorie
+    : "Keine Kategorie ausgewählt";
 
   const isUnderContract = stage === "Under Contract";
   const showAdvancedSections = isUnderContract || advancedSectionsEnabled;
@@ -1062,13 +1131,45 @@ export default function ArtistDetailClient({ artistId }: Props) {
                 />
               </label>
               <label className="space-y-1 text-sm font-medium text-slate-700">
-                Kategorie (Collection GID, optional)
-                <input
-                  value={publicKategorie}
-                  onChange={(e) => setPublicKategorie(e.target.value)}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  placeholder="gid://shopify/Collection/..."
-                />
+                Kategorie (Shopify Collection, optional)
+                <div className="space-y-2 rounded border border-slate-200 p-3">
+                  <input
+                    type="search"
+                    value={collectionSearch}
+                    onChange={(e) => setCollectionSearch(e.target.value)}
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    placeholder="Kollektionen suchen..."
+                  />
+                  <select
+                    value={publicKategorie}
+                    onChange={(e) => handleSelectCollection(e.target.value)}
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  >
+                    <option value="">Keine Kategorie</option>
+                    {collectionResults.map((collection) => (
+                      <option key={collection.id} value={collection.id}>
+                        {collection.title}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex items-center justify-between text-xs text-slate-600">
+                    <span className="break-all">Auswahl: {selectedCollectionLabel}</span>
+                    {publicKategorie && (
+                      <button
+                        type="button"
+                        onClick={() => handleSelectCollection("")}
+                        className="text-blue-600 underline"
+                      >
+                        Entfernen
+                      </button>
+                    )}
+                  </div>
+                  {collectionLoading && <p className="text-xs text-slate-500">Lade Collections...</p>}
+                  {collectionError && <p className="text-xs text-red-600">{collectionError}</p>}
+                  {!collectionLoading && !collectionResults.length && !collectionError && (
+                    <p className="text-xs text-slate-500">Keine Collections gefunden.</p>
+                  )}
+                </div>
               </label>
             </div>
 
