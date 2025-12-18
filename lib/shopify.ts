@@ -297,27 +297,27 @@ export async function upsertArtistMetaobject(input: UpsertArtistMetaobjectInput)
     if (value) fields.push({ key, value });
   });
 
-  const mutation = `
-    mutation UpsertArtist($type: String!, $handle: String!, $id: ID, $fields: [MetaobjectFieldInput!]!) {
-      result: ${input.metaobjectId ? "metaobjectUpdate(id: $id, metaobject: { fields: $fields })" : "metaobjectCreate(metaobject: { type: $type, handle: $handle, fields: $fields })"} {
-        metaobject {
-          id
-          handle
-        }
-        userErrors {
-          field
-          message
+  const mutation = input.metaobjectId
+    ? `
+      mutation UpdateArtist($id: ID!, $fields: [MetaobjectFieldInput!]!) {
+        result: metaobjectUpdate(id: $id, metaobject: { fields: $fields }) {
+          metaobject { id handle }
+          userErrors { field message }
         }
       }
-    }
-  `;
+    `
+    : `
+      mutation CreateArtist($type: String!, $handle: String!, $fields: [MetaobjectFieldInput!]!) {
+        result: metaobjectCreate(metaobject: { type: $type, handle: $handle, fields: $fields }) {
+          metaobject { id handle }
+          userErrors { field message }
+        }
+      }
+    `;
 
-  const variables: any = {
-    type: metaobjectType,
-    handle: fields.find((f) => f.key === "handle")?.value,
-    fields,
-  };
-  if (input.metaobjectId) variables.id = input.metaobjectId;
+  const variables: any = input.metaobjectId
+    ? { id: input.metaobjectId, fields }
+    : { type: metaobjectType, handle: fields.find((f) => f.key === "handle")?.value, fields };
 
   const res = await fetch(url, {
     method: "POST",
