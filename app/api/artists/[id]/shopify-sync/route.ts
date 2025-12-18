@@ -4,6 +4,17 @@ import { connectMongo } from "@/lib/mongodb";
 import { ArtistModel } from "@/models/Artist";
 import { buildArtistMetaobjectFieldsFromForm, upsertArtistMetaobject } from "@/lib/shopify";
 
+function normalizeUrl(value?: string | null): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  // Accept already-qualified schemes (http/https/mailto/etc.) as-is.
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) return trimmed;
+  // Turn @handle into a full Instagram URL to satisfy Shopify's URL validation.
+  if (trimmed.startsWith("@")) return `https://instagram.com/${trimmed.slice(1)}`;
+  return `https://${trimmed}`;
+}
+
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -27,7 +38,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
 
     const fields = {
       name,
-      instagram: profile.instagram?.trim() || null,
+      instagram: normalizeUrl(profile.instagram),
       quote: profile.quote?.trim() || null,
       einleitung_1: profile.einleitung_1?.trim() || null,
       text_1: text1,
