@@ -414,8 +414,6 @@ export async function upsertArtistMetaobject(input: UpsertArtistMetaobjectInput)
     handle: { type: SHOPIFY_METAOBJECT_TYPE_KUENSTLER, handle: derivedHandle },
     metaobject: {
       id: input.metaobjectId,
-      type: SHOPIFY_METAOBJECT_TYPE_KUENSTLER,
-      handle: derivedHandle,
       fields,
     },
   };
