@@ -10,6 +10,7 @@ type ShopifyProductNode = {
   status?: string | null;
   featuredImage?: { url?: string | null } | null;
   priceRangeV2?: { minVariantPrice?: MoneyNode | null } | null;
+  artistMetaobject?: { value?: string | null; reference?: { id?: string | null } | null } | null;
   metafieldWidth?: { value?: string | null } | null;
   metafieldHeight?: { value?: string | null } | null;
   metafieldKurzbeschreibung?: { value?: string | null } | null;
@@ -73,6 +74,10 @@ export async function GET(req: Request) {
               priceRangeV2 {
                 minVariantPrice { amount currencyCode }
               }
+              artistMetaobject: metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.artistMetaobject}") {
+                value
+                reference { ... on Metaobject { id } }
+              }
               metafieldWidth: metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.width}") {
                 value
               }
@@ -113,14 +118,17 @@ export async function GET(req: Request) {
     }
 
     const edges: { node: ShopifyProductNode }[] = json.data?.products?.edges ?? [];
-    const products = edges.map(({ node }) => {
+    const products = edges.flatMap(({ node }) => {
+      const artistMetaobjectValue = node.artistMetaobject?.reference?.id ?? node.artistMetaobject?.value ?? null;
+      if (!artistMetaobjectValue || artistMetaobjectValue !== artistMetaobjectGid) return [];
+
       const firstVariantPriceNode = node?.priceRangeV2?.minVariantPrice;
       const firstVariantPrice =
         firstVariantPriceNode && firstVariantPriceNode.amount
           ? `${firstVariantPriceNode.amount} ${firstVariantPriceNode.currencyCode || ""}`.trim()
           : null;
 
-      return {
+      return [{
         id: node.id,
         title: node.title,
         handle: node.handle,
@@ -131,7 +139,7 @@ export async function GET(req: Request) {
         heightCm: parseDecimal(node.metafieldHeight?.value),
         kurzbeschreibung: node.metafieldKurzbeschreibung?.value ?? null,
         shopifyAdminUrl: buildShopifyAdminProductUrl(shop, node.id),
-      };
+      }];
     });
 
     return NextResponse.json({ products }, { status: 200 });
