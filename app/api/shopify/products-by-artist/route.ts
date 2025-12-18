@@ -10,7 +10,6 @@ type ShopifyProductNode = {
   status?: string | null;
   featuredImage?: { url?: string | null } | null;
   priceRangeV2?: { minVariantPrice?: MoneyNode | null } | null;
-  variants?: { edges?: Array<{ node?: { priceSet?: { shopMoney?: MoneyNode | null } | null } }> } | null;
   metafieldWidth?: { value?: string | null } | null;
   metafieldHeight?: { value?: string | null } | null;
   metafieldKurzbeschreibung?: { value?: string | null } | null;
@@ -74,15 +73,6 @@ export async function GET(req: Request) {
               priceRangeV2 {
                 minVariantPrice { amount currencyCode }
               }
-              variants(first: 1) {
-                edges {
-                  node {
-                    priceSet {
-                      shopMoney { amount currencyCode }
-                    }
-                  }
-                }
-              }
               metafieldWidth: metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.width}") {
                 value
               }
@@ -124,8 +114,7 @@ export async function GET(req: Request) {
 
     const edges: { node: ShopifyProductNode }[] = json.data?.products?.edges ?? [];
     const products = edges.map(({ node }) => {
-      const firstVariantPriceNode =
-        node?.priceRangeV2?.minVariantPrice ?? node?.variants?.edges?.[0]?.node?.priceSet?.shopMoney;
+      const firstVariantPriceNode = node?.priceRangeV2?.minVariantPrice;
       const firstVariantPrice =
         firstVariantPriceNode && firstVariantPriceNode.amount
           ? `${firstVariantPriceNode.amount} ${firstVariantPriceNode.currencyCode || ""}`.trim()
