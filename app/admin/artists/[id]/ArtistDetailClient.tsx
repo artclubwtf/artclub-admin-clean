@@ -190,6 +190,8 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [shopifyProducts, setShopifyProducts] = useState<ShopifyProduct[]>([]);
   const [shopifyProductsLoading, setShopifyProductsLoading] = useState(false);
   const [shopifyProductsError, setShopifyProductsError] = useState<string | null>(null);
+  const artistRecordId = artist?._id;
+  const artistShopifyMetaobjectId = artist?.shopifySync?.metaobjectId;
 
   const buildPublicProfilePayload = (
     overrides: Partial<NonNullable<Artist["publicProfile"]>> = {},
@@ -669,8 +671,6 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const selectedCollectionLabel = publicKategorie
     ? selectedCollectionTitle || publicKategorie
     : "Keine Kategorie ausgewählt";
-  const artistRecordId = artist?._id;
-  const artistShopifyMetaobjectId = artist?.shopifySync?.metaobjectId;
 
   const formatStage = (value: Stage) => (value === "Offer" ? "Offer (Angebot)" : value);
   const stageOrder = stageOptions;
