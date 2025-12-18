@@ -78,21 +78,17 @@ type MediaItem = {
   createdAt?: string;
 };
 
-type Artwork = {
-  _id: string;
+type ShopifyProduct = {
+  id: string;
   title: string;
-  saleType: string;
-  price?: number;
-  currency?: string;
-  editionSize?: number;
-  status?: string;
-  shopify?: {
-    productId?: string;
-    handle?: string;
-    lastPushedAt?: string;
-    lastPushError?: string;
-  };
-  images?: { mediaId: string; url?: string; filename?: string }[];
+  handle: string;
+  status?: string | null;
+  firstVariantPrice: string | null;
+  imageUrl: string | null;
+  breiteCm: number | null;
+  heightCm: number | null;
+  kurzbeschreibung: string | null;
+  shopifyAdminUrl: string | null;
 };
 
 type ShopifyCollection = { id: string; title: string };
@@ -191,17 +187,9 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [mediaKind, setMediaKind] = useState("artwork");
   const [mediaFiles, setMediaFiles] = useState<FileList | null>(null);
   const [uploadingMedia, setUploadingMedia] = useState(false);
-  const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
-  const [artworks, setArtworks] = useState<Artwork[]>([]);
-  const [artworksLoading, setArtworksLoading] = useState(false);
-  const [artworksError, setArtworksError] = useState<string | null>(null);
-  const [artworkTitle, setArtworkTitle] = useState("");
-  const [artworkSaleType, setArtworkSaleType] = useState("print");
-  const [artworkPrice, setArtworkPrice] = useState("");
-  const [artworkEditionSize, setArtworkEditionSize] = useState("");
-  const [artworkDescription, setArtworkDescription] = useState("");
-  const [artworkSaving, setArtworkSaving] = useState(false);
-  const [artworkMessage, setArtworkMessage] = useState<string | null>(null);
+  const [shopifyProducts, setShopifyProducts] = useState<ShopifyProduct[]>([]);
+  const [shopifyProductsLoading, setShopifyProductsLoading] = useState(false);
+  const [shopifyProductsError, setShopifyProductsError] = useState<string | null>(null);
 
   const buildPublicProfilePayload = (
     overrides: Partial<NonNullable<Artist["publicProfile"]>> = {},
@@ -387,6 +375,47 @@ export default function ArtistDetailClient({ artistId }: Props) {
 
   useEffect(() => {
     let active = true;
+    const metaobjectId = artistRecordId === artistId ? artistShopifyMetaobjectId : undefined;
+    if (!artistRecordId || artistRecordId !== artistId || !metaobjectId) {
+      setShopifyProducts([]);
+      setShopifyProductsError(null);
+      setShopifyProductsLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    const loadProducts = async () => {
+      setShopifyProductsLoading(true);
+      setShopifyProductsError(null);
+      try {
+        const res = await fetch(
+          `/api/shopify/products-by-artist?artistMetaobjectGid=${encodeURIComponent(metaobjectId)}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null);
+          throw new Error(parseErrorMessage(payload));
+        }
+        const json = await res.json();
+        if (!active) return;
+        setShopifyProducts(Array.isArray(json.products) ? json.products : []);
+      } catch (err: any) {
+        if (!active) return;
+        setShopifyProductsError(err?.message ?? "Failed to load artworks from Shopify");
+      } finally {
+        if (active) setShopifyProductsLoading(false);
+      }
+    };
+
+    loadProducts();
+    return () => {
+      active = false;
+    };
+  }, [artistId, artistRecordId, artistShopifyMetaobjectId]);
+
+  useEffect(() => {
+    let active = true;
     const loadContracts = async () => {
       setContractsLoading(true);
       setContractsError(null);
@@ -460,32 +489,9 @@ export default function ArtistDetailClient({ artistId }: Props) {
       }
     };
 
-    const loadArtworks = async () => {
-      setArtworksLoading(true);
-      setArtworksError(null);
-      try {
-        const res = await fetch(`/api/artworks?artistId=${encodeURIComponent(artistId)}`, {
-          cache: "no-store",
-        });
-        if (!res.ok) {
-          const payload = await res.json().catch(() => null);
-          throw new Error(parseErrorMessage(payload));
-        }
-        const json = await res.json();
-        if (!active) return;
-        setArtworks(Array.isArray(json.artworks) ? json.artworks : []);
-      } catch (err: any) {
-        if (!active) return;
-        setArtworksError(err?.message ?? "Failed to load artworks");
-      } finally {
-        if (active) setArtworksLoading(false);
-      }
-    };
-
     loadContracts();
     loadPayout();
     loadMedia();
-    loadArtworks();
     return () => {
       active = false;
     };
@@ -663,6 +669,8 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const selectedCollectionLabel = publicKategorie
     ? selectedCollectionTitle || publicKategorie
     : "Keine Kategorie ausgewählt";
+  const artistRecordId = artist?._id;
+  const artistShopifyMetaobjectId = artist?.shopifySync?.metaobjectId;
 
   const formatStage = (value: Stage) => (value === "Offer" ? "Offer (Angebot)" : value);
   const stageOrder = stageOptions;
@@ -682,7 +690,8 @@ export default function ArtistDetailClient({ artistId }: Props) {
     payout: { enabled: canViewPayout, reason: "Available from Under Contract" },
   };
   const hasMedia = media.length > 0;
-  const hasArtworkProgress = artworks.length > 0 || selectedMediaIds.length > 0;
+  const hasShopifyLink = Boolean(artist?.shopifySync?.metaobjectId);
+  const hasShopifyArtworks = shopifyProducts.length > 0;
   const hasPublicImage = [publicBilder, publicBild1, publicBild2, publicBild3].some((value) => value && value.trim().length > 0);
   const hasPublicProfileRequired = publicName.trim().length > 0 && publicText1.trim().length > 0 && hasPublicImage;
   const hasContract = contracts.length > 0;
@@ -693,7 +702,15 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const lastShopifyError = artist?.shopifySync?.lastSyncError;
   const overviewStatusChip = name.trim() ? "Basics added" : "Missing name";
   const mediaStatusChip = mediaLoading ? "Loading..." : canViewMedia ? (hasMedia ? "OK" : "Missing") : "Locked";
-  const artworksStatusChip = artworksLoading ? "Loading..." : canViewArtworks ? (hasArtworkProgress ? "OK" : "Missing") : "Locked";
+  const artworksStatusChip = shopifyProductsLoading
+    ? "Loading..."
+    : canViewArtworks
+      ? hasShopifyLink
+        ? hasShopifyArtworks
+          ? "OK"
+          : "Missing"
+        : "Needs Shopify link"
+      : "Locked";
   const publicProfileStatusChip = isUnderContract ? (hasPublicProfileRequired ? "OK" : "Missing") : "Not required";
   const contractsStatusChip = contractsLoading
     ? "Loading..."
@@ -723,7 +740,17 @@ export default function ArtistDetailClient({ artistId }: Props) {
   };
   const statusBadges = [
     { label: "Media", text: mediaStatusChip, tone: badgeTone(canViewMedia ? (hasMedia ? "ready" : "missing") : "locked") },
-    { label: "Artworks", text: artworksStatusChip, tone: badgeTone(canViewArtworks ? (hasArtworkProgress ? "ready" : "missing") : "locked") },
+    {
+      label: "Artworks",
+      text: artworksStatusChip,
+      tone: badgeTone(
+        canViewArtworks
+          ? hasShopifyLink && hasShopifyArtworks
+            ? "ready"
+            : "missing"
+          : "locked",
+      ),
+    },
     { label: "Contracts", text: contractsStatusChip, tone: badgeTone(canViewContracts ? (hasContract ? "ready" : "missing") : "locked") },
     {
       label: "Public profile",
@@ -744,7 +771,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
     requiredStage: string;
   }> = [
     { key: "media", label: "Add media", done: hasMedia, requiredStage: "In Review" },
-    { key: "artworks", label: "Create artworks", done: hasArtworkProgress, requiredStage: "In Review" },
+    { key: "artworks", label: "Review Shopify artworks", done: hasShopifyArtworks, requiredStage: "In Review" },
     { key: "contracts", label: "Upload contract", done: hasContract, requiredStage: "Offer/Angebot" },
     { key: "publicProfile", label: "Complete public profile", done: hasPublicProfileRequired, requiredStage: "Under Contract" },
     { key: "payout", label: "Add payout details", done: hasPayoutRequired, requiredStage: "Under Contract" },
@@ -879,90 +906,6 @@ export default function ArtistDetailClient({ artistId }: Props) {
     }
   };
 
-  const toggleMediaSelection = (id: string) => {
-    setSelectedMediaIds((prev) =>
-      prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id],
-    );
-  };
-
-  const handleCreateArtwork = async (e: FormEvent) => {
-    e.preventDefault();
-    setArtworksError(null);
-    setArtworkMessage(null);
-    if (!artworkTitle.trim()) {
-      setArtworksError("Title required");
-      return;
-    }
-    if (selectedMediaIds.length === 0) {
-      setArtworksError("Bitte mindestens ein Bild auswählen.");
-      return;
-    }
-    if ((artworkSaleType === "print" || artworkSaleType === "both") && !artworkEditionSize.trim()) {
-      setArtworksError("Edition size erforderlich für Print/Both.");
-      return;
-    }
-    setArtworkSaving(true);
-    try {
-      const res = await fetch("/api/artworks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          artistId,
-          title: artworkTitle.trim(),
-          description: artworkDescription.trim() || undefined,
-          saleType: artworkSaleType,
-          price: artworkPrice ? Number(artworkPrice) : undefined,
-          currency: "EUR",
-          editionSize: artworkEditionSize ? Number(artworkEditionSize) : undefined,
-          mediaIds: selectedMediaIds,
-        }),
-      });
-      if (!res.ok) {
-        const payload = await res.json().catch(() => null);
-        throw new Error(parseErrorMessage(payload));
-      }
-      const json = await res.json();
-      setArtworks((prev) => [json.artwork, ...prev]);
-      setArtworkMessage("Artwork gespeichert");
-      setArtworkTitle("");
-      setArtworkDescription("");
-      setArtworkPrice("");
-      setArtworkEditionSize("");
-      setSelectedMediaIds([]);
-    } catch (err: any) {
-      setArtworksError(err?.message ?? "Failed to create artwork");
-    } finally {
-      setArtworkSaving(false);
-    }
-  };
-
-  const handlePushArtwork = async (id: string) => {
-    setArtworksError(null);
-    try {
-      const res = await fetch(`/api/artworks/${encodeURIComponent(id)}/shopify-push`, {
-        method: "POST",
-      });
-      if (!res.ok) {
-        const payload = await res.json().catch(() => null);
-        throw new Error(parseErrorMessage(payload));
-      }
-      const json = await res.json();
-      setArtworks((prev) =>
-        prev.map((a) =>
-          a._id === id
-            ? {
-                ...a,
-                status: "pushed",
-                shopify: { ...a.shopify, productId: json.product.id, handle: json.product.handle, lastPushedAt: new Date().toISOString(), lastPushError: undefined },
-              }
-            : a,
-        ),
-      );
-    } catch (err: any) {
-      setArtworksError(err?.message ?? "Push failed");
-    }
-  };
-
   const mediaHeader = (
     <div className="flex items-center justify-between">
       <h3 className="text-lg font-semibold text-slate-800">Media</h3>
@@ -1017,13 +960,6 @@ export default function ArtistDetailClient({ artistId }: Props) {
             const isImage = item.mimeType?.startsWith("image/");
             return (
               <li key={item._id} className="flex gap-3 rounded border border-slate-200 p-3">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={selectedMediaIds.includes(item._id)}
-                  onChange={() => toggleMediaSelection(item._id)}
-                  aria-label="Select media"
-                />
                 {isImage && item.url ? (
                   <img src={item.url} alt={item.filename || item.s3Key} className="h-16 w-16 rounded object-cover" />
                 ) : (
@@ -1036,23 +972,25 @@ export default function ArtistDetailClient({ artistId }: Props) {
                   <div className="text-xs text-slate-500">
                     {item.kind} {item.createdAt ? `• ${new Date(item.createdAt).toLocaleDateString()}` : ""}
                   </div>
-                  {item.url && (
+                  <div className="flex flex-wrap gap-2">
+                    {item.url && (
+                      <button
+                        type="button"
+                        onClick={() => handleSetHeroImage(item)}
+                        className="text-xs text-blue-600 underline"
+                      >
+                        Set as Hero Image
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => handleSetHeroImage(item)}
-                      className="text-xs text-blue-600 underline"
+                      onClick={() => handleDeleteMedia(item._id)}
+                      className="text-xs text-red-600 underline"
                     >
-                      Set as Hero Image
+                      Delete
                     </button>
-                  )}
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteMedia(item._id)}
-                  className="text-xs text-red-600 underline"
-                >
-                  Delete
-                </button>
               </li>
             );
           })}
@@ -1063,118 +1001,78 @@ export default function ArtistDetailClient({ artistId }: Props) {
 
   const artworksHeader = (
     <div className="flex items-center justify-between">
-      <h3 className="text-lg font-semibold text-slate-800">Artworks</h3>
-      {artworksLoading && <span className="text-xs text-slate-500">Loading...</span>}
+      <h3 className="text-lg font-semibold text-slate-800">Artworks (Shopify)</h3>
+      {shopifyProductsLoading && <span className="text-xs text-slate-500">Loading...</span>}
     </div>
   );
 
   const artworksContent = (
-    <>
-      <form className="space-y-3 rounded border border-slate-200 p-3" onSubmit={handleCreateArtwork}>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="space-y-1 text-sm font-medium text-slate-700">
-            Title
-            <input
-              value={artworkTitle}
-              onChange={(e) => setArtworkTitle(e.target.value)}
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-              required
-            />
-          </label>
-          <label className="space-y-1 text-sm font-medium text-slate-700">
-            Sale type
-            <select
-              value={artworkSaleType}
-              onChange={(e) => setArtworkSaleType(e.target.value)}
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            >
-              <option value="print">Print</option>
-              <option value="original">Original</option>
-              <option value="both">Both</option>
-            </select>
-          </label>
-          <label className="space-y-1 text-sm font-medium text-slate-700">
-            Price (optional)
-            <input
-              value={artworkPrice}
-              onChange={(e) => setArtworkPrice(e.target.value)}
-              type="number"
-              min="0"
-              step="0.01"
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            />
-          </label>
-          {(artworkSaleType === "print" || artworkSaleType === "both") && (
-            <label className="space-y-1 text-sm font-medium text-slate-700">
-              Edition size
-              <input
-                value={artworkEditionSize}
-                onChange={(e) => setArtworkEditionSize(e.target.value)}
-                type="number"
-                min="1"
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-              />
-            </label>
-          )}
-        </div>
-        <label className="space-y-1 text-sm font-medium text-slate-700">
-          Description (optional)
-          <textarea
-            value={artworkDescription}
-            onChange={(e) => setArtworkDescription(e.target.value)}
-            rows={3}
-            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-          />
-        </label>
-        {artworksError && <p className="text-sm text-red-600">{artworksError}</p>}
-        {artworkMessage && <p className="text-sm text-green-600">{artworkMessage}</p>}
-        <div className="flex items-center justify-between text-xs text-slate-500">
-          <span>{selectedMediaIds.length} Medien ausgewählt</span>
-          <button
-            type="submit"
-            disabled={artworkSaving}
-            className="inline-flex items-center rounded bg-black px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
-          >
-            {artworkSaving ? "Saving..." : "Create Artwork"}
-          </button>
-        </div>
-      </form>
+    <div className="space-y-3">
+      {!artist?.shopifySync?.metaobjectId && (
+        <p className="text-sm text-slate-600">No Shopify artist linked yet. Sync to Shopify first.</p>
+      )}
 
-      {!artworksLoading && artworks.length === 0 && (
-        <p className="text-sm text-slate-600">No artworks yet.</p>
+      {artist?.shopifySync?.metaobjectId && (
+        <>
+          {shopifyProductsError && <p className="text-sm text-red-600">{shopifyProductsError}</p>}
+          {!shopifyProductsLoading && shopifyProducts.length === 0 && !shopifyProductsError && (
+            <p className="text-sm text-slate-600">No Shopify products found for this artist.</p>
+          )}
+          {shopifyProducts.length > 0 && (
+            <ul className="grid gap-3">
+              {shopifyProducts.map((product) => {
+                const hasDimensions = product.breiteCm !== null || product.heightCm !== null;
+                const dimensions = hasDimensions ? `${product.breiteCm ?? "?"} × ${product.heightCm ?? "?"} cm` : null;
+                return (
+                  <li key={product.id} className="flex gap-3 rounded border border-slate-200 p-3">
+                    {product.imageUrl ? (
+                      <img src={product.imageUrl} alt={product.title} className="h-16 w-16 rounded object-cover" />
+                    ) : (
+                      <div className="flex h-16 w-16 items-center justify-center rounded border border-dashed border-slate-300 text-xs text-slate-500">
+                        No image
+                      </div>
+                    )}
+                    <div className="flex-1 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="font-medium text-slate-900">{product.title}</div>
+                        <span className="text-xs text-slate-500">@{product.handle}</span>
+                        {product.status && (
+                          <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold uppercase text-slate-700">
+                            {product.status}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm text-slate-700">
+                        <span className="text-xs uppercase text-slate-500">Price:</span> {product.firstVariantPrice || "—"}
+                      </div>
+                      {dimensions && <div className="text-sm text-slate-700">Size: {dimensions}</div>}
+                      {product.kurzbeschreibung && (
+                        <p
+                          className="text-sm text-slate-600"
+                          style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+                        >
+                          {product.kurzbeschreibung}
+                        </p>
+                      )}
+                      {product.shopifyAdminUrl && (
+                        <a
+                          href={product.shopifyAdminUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-blue-600 underline"
+                        >
+                          Open in Shopify
+                        </a>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
       )}
-      {artworks.length > 0 && (
-        <ul className="grid gap-3">
-          {artworks.map((artwork) => (
-            <li key={artwork._id} className="rounded border border-slate-200 p-3 space-y-1">
-              <div className="flex items-center justify-between">
-                <div className="font-medium">{artwork.title}</div>
-                <span className="text-xs text-slate-500">
-                  {artwork.saleType} {artwork.status ? `• ${artwork.status}` : ""}
-                </span>
-              </div>
-              {artwork.editionSize && (
-                <div className="text-xs text-slate-500">Edition: {artwork.editionSize}</div>
-              )}
-              {artwork.shopify?.productId ? (
-                <div className="text-xs text-green-600">Shopify draft: {artwork.shopify.handle || artwork.shopify.productId}</div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handlePushArtwork(artwork._id)}
-                  className="text-xs text-blue-600 underline"
-                >
-                  Create Shopify Draft Product
-                </button>
-              )}
-              {artwork.shopify?.lastPushError && (
-                <div className="text-xs text-red-600">Last push error: {artwork.shopify.lastPushError}</div>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </>
+    </div>
   );
 
   const overviewPanel = (
