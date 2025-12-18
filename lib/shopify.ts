@@ -15,7 +15,7 @@ type ShopifyMetaobjectNode = {
   fields: ShopifyMetaobjectField[];
 };
 
-export const SHOPIFY_METAOBJECT_TYPE_KUENSTLER = "kuenstler" as const;
+export const SHOPIFY_METAOBJECT_TYPE_KUENSTLER = "kunstler" as const;
 
 export const KUENSTLER_FIELD_KEYS = {
   bilder: "bilder",
