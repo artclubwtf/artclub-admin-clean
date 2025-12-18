@@ -7,7 +7,7 @@ type ShopifyProductNode = {
   handle: string;
   status?: string | null;
   featuredImage?: { url?: string | null } | null;
-  variants?: { edges?: Array<{ node?: { price?: { amount: string; currencyCode: string } | null } }> } | null;
+  variants?: { edges?: Array<{ node?: { price?: { amount: string; currencyCode: string } | null; priceSet?: { shopMoney?: { amount?: string | null; currencyCode?: string | null } | null } | null } }> } | null;
   metafieldWidth?: { value?: string | null } | null;
   metafieldHeight?: { value?: string | null } | null;
   metafieldKurzbeschreibung?: { value?: string | null } | null;
