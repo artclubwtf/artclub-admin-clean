@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactElement } from "react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
@@ -1515,7 +1516,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
     </div>
   );
 
-  const tabPanels: Record<TabKey, JSX.Element> = {
+  const tabPanels: Record<TabKey, ReactElement> = {
     overview: overviewPanel,
     media: mediaPanel,
     artworks: artworksPanel,
