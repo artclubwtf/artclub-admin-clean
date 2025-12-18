@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 type Props = {
@@ -96,6 +96,14 @@ type Artwork = {
 
 type ShopifyCollection = { id: string; title: string };
 
+type ShopifyFileFieldKey = "bilder" | "bild_1" | "bild_2" | "bild_3";
+type FileUploadStatus = {
+  uploading: boolean;
+  filename: string | null;
+  error: string | null;
+  success: string | null;
+};
+
 const stageOptions = ["Idea", "In Review", "Offer", "Under Contract"] as const;
 
 function parseErrorMessage(payload: any) {
@@ -131,6 +139,18 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [publicBild3, setPublicBild3] = useState("");
   const [publicLocation, setPublicLocation] = useState("");
   const [publicWebsite, setPublicWebsite] = useState("");
+  const [fileUploads, setFileUploads] = useState<Record<ShopifyFileFieldKey, FileUploadStatus>>({
+    bilder: { uploading: false, filename: null, error: null, success: null },
+    bild_1: { uploading: false, filename: null, error: null, success: null },
+    bild_2: { uploading: false, filename: null, error: null, success: null },
+    bild_3: { uploading: false, filename: null, error: null, success: null },
+  });
+  const fileInputRefs = {
+    bilder: useRef<HTMLInputElement | null>(null),
+    bild_1: useRef<HTMLInputElement | null>(null),
+    bild_2: useRef<HTMLInputElement | null>(null),
+    bild_3: useRef<HTMLInputElement | null>(null),
+  };
   const [collectionSearch, setCollectionSearch] = useState("");
   const [collectionResults, setCollectionResults] = useState<ShopifyCollection[]>([]);
   const [collectionLoading, setCollectionLoading] = useState(false);
@@ -200,6 +220,118 @@ export default function ArtistDetailClient({ artistId }: Props) {
     heroImageUrl: artist?.publicProfile?.heroImageUrl,
     ...overrides,
   });
+
+  const updateFileUploadState = (key: ShopifyFileFieldKey, patch: Partial<FileUploadStatus>) => {
+    setFileUploads((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+  };
+
+  const setPublicImageGid = (key: ShopifyFileFieldKey, gid: string) => {
+    switch (key) {
+      case "bilder":
+        setPublicBilder(gid);
+        break;
+      case "bild_1":
+        setPublicBild1(gid);
+        break;
+      case "bild_2":
+        setPublicBild2(gid);
+        break;
+      case "bild_3":
+        setPublicBild3(gid);
+        break;
+      default:
+        break;
+    }
+  };
+
+  const triggerFilePicker = (key: ShopifyFileFieldKey) => {
+    const ref = fileInputRefs[key];
+    ref?.current?.click();
+  };
+
+  const handleShopifyFileUpload = async (key: ShopifyFileFieldKey, files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+
+    updateFileUploadState(key, { uploading: true, filename: file.name, error: null, success: null });
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/shopify/files/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(parseErrorMessage(payload));
+      }
+      const gid = payload?.fileIdGid as string | undefined;
+      if (gid) {
+        setPublicImageGid(key, gid);
+      }
+      updateFileUploadState(key, {
+        uploading: false,
+        success: payload?.filename ? `Hochgeladen: ${payload.filename}` : "Upload erfolgreich",
+        error: null,
+      });
+    } catch (err: any) {
+      updateFileUploadState(key, {
+        uploading: false,
+        error: err?.message || "Upload fehlgeschlagen",
+        success: null,
+      });
+    } finally {
+      const ref = fileInputRefs[key];
+      if (ref?.current) {
+        ref.current.value = "";
+      }
+    }
+  };
+
+  const renderShopifyFileField = (
+    key: ShopifyFileFieldKey,
+    label: string,
+    value: string,
+    onChange: (next: string) => void,
+  ) => {
+    const upload = fileUploads[key];
+    return (
+      <label className="space-y-1 text-sm font-medium text-slate-700">
+        {label}
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+          placeholder="gid://shopify/File/..."
+        />
+        <div className="flex flex-wrap items-center gap-2 text-xs font-normal text-slate-700">
+          <input
+            ref={fileInputRefs[key]}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => handleShopifyFileUpload(key, e.target.files)}
+          />
+          <button
+            type="button"
+            onClick={() => triggerFilePicker(key)}
+            disabled={upload?.uploading}
+            className="inline-flex items-center rounded border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {upload?.uploading ? "Uploading..." : "Upload to Shopify"}
+          </button>
+          {upload?.filename && upload.uploading && <span className="text-slate-600">Lade {upload.filename}...</span>}
+          {upload?.filename && !upload.uploading && !upload.error && (
+            <span className="text-slate-600">Datei: {upload.filename}</span>
+          )}
+          {upload?.success && <span className="text-green-600">{upload.success}</span>}
+          {upload?.error && <span className="text-red-600">{upload.error}</span>}
+        </div>
+      </label>
+    );
+  };
 
   useEffect(() => {
     let active = true;
@@ -1203,42 +1335,30 @@ export default function ArtistDetailClient({ artistId }: Props) {
             </label>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="space-y-1 text-sm font-medium text-slate-700">
-                Titelbild (Shopify File ID / GID)
-                <input
-                  value={publicBilder}
-                  onChange={(e) => setPublicBilder(e.target.value)}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  placeholder="gid://shopify/File/..."
-                />
-              </label>
-              <label className="space-y-1 text-sm font-medium text-slate-700">
-                Bild 1 (Shopify File ID / GID)
-                <input
-                  value={publicBild1}
-                  onChange={(e) => setPublicBild1(e.target.value)}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  placeholder="gid://shopify/File/..."
-                />
-              </label>
-              <label className="space-y-1 text-sm font-medium text-slate-700">
-                Bild 2 (Shopify File ID / GID)
-                <input
-                  value={publicBild2}
-                  onChange={(e) => setPublicBild2(e.target.value)}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  placeholder="gid://shopify/File/..."
-                />
-              </label>
-              <label className="space-y-1 text-sm font-medium text-slate-700">
-                Bild 3 (Shopify File ID / GID)
-                <input
-                  value={publicBild3}
-                  onChange={(e) => setPublicBild3(e.target.value)}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  placeholder="gid://shopify/File/..."
-                />
-              </label>
+              {renderShopifyFileField(
+                "bilder",
+                "Titelbild (Shopify File ID / GID)",
+                publicBilder,
+                setPublicBilder,
+              )}
+              {renderShopifyFileField(
+                "bild_1",
+                "Bild 1 (Shopify File ID / GID)",
+                publicBild1,
+                setPublicBild1,
+              )}
+              {renderShopifyFileField(
+                "bild_2",
+                "Bild 2 (Shopify File ID / GID)",
+                publicBild2,
+                setPublicBild2,
+              )}
+              {renderShopifyFileField(
+                "bild_3",
+                "Bild 3 (Shopify File ID / GID)",
+                publicBild3,
+                setPublicBild3,
+              )}
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
