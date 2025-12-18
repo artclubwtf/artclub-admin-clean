@@ -464,6 +464,16 @@ export default function ArtistDetailClient({ artistId }: Props) {
                 onChange={(e) => setContractFile(e.target.files?.[0] || null)}
                 className="w-full text-sm"
               />
+              <p className="text-xs text-slate-500">
+                Nur PDF, max. 20 MB.{" "}
+                {contractFile ? (
+                  <span className="text-slate-700">
+                    Ausgewählt: {contractFile.name} ({Math.round(contractFile.size / 1024)} KB)
+                  </span>
+                ) : (
+                  "Keine Datei gewählt."
+                )}
+              </p>
             </label>
             <label className="space-y-1 text-sm font-medium text-slate-700">
               Vertragstyp
@@ -495,7 +505,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
           <div className="flex justify-end">
             <button
               type="submit"
-              disabled={uploadingContract}
+              disabled={uploadingContract || !contractFile}
               className="inline-flex items-center rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
               {uploadingContract ? "Uploading..." : "Upload contract"}
