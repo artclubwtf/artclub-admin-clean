@@ -55,7 +55,8 @@ export async function GET(req: Request) {
     const url = `https://${shop}/admin/api/${version}/graphql.json`;
 
     const escapedMetaobjectId = artistMetaobjectGid.replace(/'/g, "\\'");
-    const searchQuery = `metafield:'${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}.${PRODUCT_METAFIELD_KEYS.artistMetaobject}'='${escapedMetaobjectId}'`;
+    // Shopify product search expects the metafield query in the format metafield:'namespace.key:value'
+    const searchQuery = `metafield:'${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}.${PRODUCT_METAFIELD_KEYS.artistMetaobject}:${escapedMetaobjectId}'`;
 
     const query = `
       query ProductsByArtist($first: Int!, $query: String!) {
@@ -109,7 +110,8 @@ export async function GET(req: Request) {
       errors?: unknown;
     };
     if (json.errors) {
-      return NextResponse.json({ error: "Shopify GraphQL errors", details: json.errors }, { status: 500 });
+      const details = Array.isArray(json.errors) ? json.errors.map((e) => e.message || e).join("; ") : "Shopify GraphQL errors";
+      return NextResponse.json({ error: details, details: json.errors }, { status: 500 });
     }
 
     const edges: { node: ShopifyProductNode }[] = json.data?.products?.edges ?? [];
