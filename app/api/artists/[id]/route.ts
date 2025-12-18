@@ -34,11 +34,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     if (parsed.data.stage === "Under Contract") {
-      const displayName = parsed.data.publicProfile?.displayName?.trim();
-      const bio = parsed.data.publicProfile?.bio?.trim();
+      const profile = parsed.data.publicProfile || {};
+      const name = profile.name?.trim() || profile.displayName?.trim();
+      const text1 = profile.text_1?.trim() || profile.bio?.trim();
       const errors: Record<string, string[]> = {};
-      if (!displayName) errors["publicProfile.displayName"] = ["Display name is required for Under Contract"];
-      if (!bio) errors["publicProfile.bio"] = ["Bio is required for Under Contract"];
+      if (!name) errors["publicProfile.name"] = ["Name is required for Under Contract"];
+      if (!text1) errors["publicProfile.text_1"] = ["text_1 is required for Under Contract"];
       if (Object.keys(errors).length > 0) {
         return NextResponse.json({ error: { fieldErrors: errors } }, { status: 400 });
       }

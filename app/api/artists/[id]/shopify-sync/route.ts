@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import { connectMongo } from "@/lib/mongodb";
 import { ArtistModel } from "@/models/Artist";
-import { upsertArtistMetaobject } from "@/lib/shopify";
+import { buildArtistMetaobjectFieldsFromForm, upsertArtistMetaobject } from "@/lib/shopify";
 
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -15,25 +15,38 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
     const artist = await ArtistModel.findById(id);
     if (!artist) return NextResponse.json({ error: "Artist not found" }, { status: 404 });
 
-    const displayName = artist.publicProfile?.displayName?.trim();
-    const bio = artist.publicProfile?.bio?.trim();
-    if (!displayName || !bio) {
+    const profile = artist.publicProfile || {};
+    const name = profile.name?.trim() || profile.displayName?.trim();
+    const text1 = profile.text_1?.trim() || profile.bio?.trim();
+    if (!name || !text1) {
       return NextResponse.json(
-        { error: { fieldErrors: { publicProfile: ["displayName and bio required for sync"] } } },
+        { error: { fieldErrors: { publicProfile: ["name and text_1 are required for sync"] } } },
         { status: 400 },
       );
+    }
+
+    const fields = {
+      name,
+      instagram: profile.instagram?.trim() || null,
+      quote: profile.quote?.trim() || null,
+      einleitung_1: profile.einleitung_1?.trim() || null,
+      text_1: text1,
+      kategorie: profile.kategorie?.trim() || null,
+      bilder: profile.bilder?.trim() || null,
+      bild_1: profile.bild_1?.trim() || null,
+      bild_2: profile.bild_2?.trim() || null,
+      bild_3: profile.bild_3?.trim() || null,
+    };
+
+    const metaobjectFields = buildArtistMetaobjectFieldsFromForm(fields);
+    if (metaobjectFields.length === 0) {
+      return NextResponse.json({ error: "No Shopify fields to sync" }, { status: 400 });
     }
 
     const result = await upsertArtistMetaobject({
       metaobjectId: artist.shopifySync?.metaobjectId || undefined,
       handle: artist.shopifySync?.handle || undefined,
-      displayName,
-      bio,
-      instagram: artist.publicProfile?.instagram || undefined,
-      website: artist.publicProfile?.website || undefined,
-      location: artist.publicProfile?.location || undefined,
-      heroImageUrl: artist.publicProfile?.heroImageUrl || undefined,
-      internalStage: artist.stage,
+      fields,
     });
 
     artist.shopifySync = {

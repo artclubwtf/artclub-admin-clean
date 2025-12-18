@@ -2,6 +2,11 @@ type ShopifyProduct = { id: string; title: string };
 type ShopifyProductWithImage = ShopifyProduct & {
   handle: string;
   featuredImage: string | null;
+  artistMetaobject?: ShopifyKuenstler | null;
+  legacyArtistUrl?: string | null;
+  kurzbeschreibung?: string | null;
+  widthCm?: string | null;
+  heightCm?: string | null;
 };
 type ShopifyMetaobjectField = { key: string; value: string | null };
 type ShopifyMetaobjectNode = {
@@ -9,22 +14,52 @@ type ShopifyMetaobjectNode = {
   handle: string;
   fields: ShopifyMetaobjectField[];
 };
+
+export const SHOPIFY_METAOBJECT_TYPE_KUENSTLER = "kuenstler" as const;
+
+export const KUENSTLER_FIELD_KEYS = {
+  bilder: "bilder",
+  bild_1: "bild_1",
+  bild_2: "bild_2",
+  bild_3: "bild_3",
+  instagram: "instagram",
+  name: "name",
+  quote: "quote",
+  einleitung_1: "einleitung_1",
+  text_1: "text_1",
+  kategorie: "kategorie",
+} as const;
+
+export const SHOPIFY_PRODUCT_NAMESPACE_CUSTOM = "custom";
+export const PRODUCT_METAFIELD_KEYS = {
+  artistMetaobject: "kunstler",
+  artistLegacyUrl: "kuenstler",
+  kurzbeschreibung: "kurzbeschreibung",
+  height: "height",
+  width: "breite_cm_",
+  views: "views",
+} as const;
+
+type ShopifyKuenstlerFields = {
+  [KUENSTLER_FIELD_KEYS.name]: string | null;
+  [KUENSTLER_FIELD_KEYS.instagram]: string | null;
+  [KUENSTLER_FIELD_KEYS.quote]: string | null;
+  [KUENSTLER_FIELD_KEYS.einleitung_1]: string | null;
+  [KUENSTLER_FIELD_KEYS.text_1]: string | null;
+  [KUENSTLER_FIELD_KEYS.bilder]: string | null;
+  [KUENSTLER_FIELD_KEYS.bild_1]: string | null;
+  [KUENSTLER_FIELD_KEYS.bild_2]: string | null;
+  [KUENSTLER_FIELD_KEYS.bild_3]: string | null;
+  [KUENSTLER_FIELD_KEYS.kategorie]: string | null;
+};
+
 export type ShopifyKuenstler = ShopifyKuenstlerFields & {
   id: string;
   handle: string;
 };
-type ShopifyKuenstlerFields = {
-  name: string | null;
-  instagram: string | null;
-  quote: string | null;
-  einleitung_1: string | null;
-  text_1: string | null;
-  bilder: string | null;
-  bild_1: string | null;
-  bild_2: string | null;
-  bild_3: string | null;
-  kategorie: string | null;
-};
+
+type MetaobjectFieldInput = { key: string; value: string };
+export type ShopifyProductMetafieldInput = { namespace: string; key: string; type: string; value: string };
 
 function mustEnv(name: string): string {
   const v = process.env[name];
@@ -33,25 +68,113 @@ function mustEnv(name: string): string {
 }
 
 const emptyKuenstlerFields: ShopifyKuenstlerFields = {
-  name: null,
-  instagram: null,
-  quote: null,
-  einleitung_1: null,
-  text_1: null,
-  bilder: null,
-  bild_1: null,
-  bild_2: null,
-  bild_3: null,
-  kategorie: null,
+  [KUENSTLER_FIELD_KEYS.name]: null,
+  [KUENSTLER_FIELD_KEYS.instagram]: null,
+  [KUENSTLER_FIELD_KEYS.quote]: null,
+  [KUENSTLER_FIELD_KEYS.einleitung_1]: null,
+  [KUENSTLER_FIELD_KEYS.text_1]: null,
+  [KUENSTLER_FIELD_KEYS.bilder]: null,
+  [KUENSTLER_FIELD_KEYS.bild_1]: null,
+  [KUENSTLER_FIELD_KEYS.bild_2]: null,
+  [KUENSTLER_FIELD_KEYS.bild_3]: null,
+  [KUENSTLER_FIELD_KEYS.kategorie]: null,
 };
 
 function mapKuenstlerFields(fields: ShopifyMetaobjectField[]): ShopifyKuenstlerFields {
   return fields.reduce((acc, field) => {
     if (field.key in acc) {
-      acc[field.key as keyof ShopifyKuenstlerFields] = field.value;
+      acc[field.key as keyof ShopifyKuenstlerFields] = field.value || null;
     }
     return acc;
   }, { ...emptyKuenstlerFields });
+}
+
+export function buildArtistMetaobjectFieldsFromForm(input: Partial<ShopifyKuenstlerFields>): MetaobjectFieldInput[] {
+  return (Object.keys(KUENSTLER_FIELD_KEYS) as (keyof typeof KUENSTLER_FIELD_KEYS)[])
+    .map((key) => {
+      const value = input[KUENSTLER_FIELD_KEYS[key]];
+      if (value === undefined || value === null) return null;
+      const trimmed = String(value).trim();
+      if (!trimmed) return null;
+      return { key: KUENSTLER_FIELD_KEYS[key], value: trimmed };
+    })
+    .filter(Boolean) as MetaobjectFieldInput[];
+}
+
+type ProductMetafieldBuilderInput = {
+  artistMetaobjectId?: string;
+  legacyArtistUrl?: string;
+  widthCm?: number | string | null;
+  heightCm?: number | string | null;
+  kurzbeschreibung?: string | null;
+  views?: number | string | null;
+  additional?: ShopifyProductMetafieldInput[];
+};
+
+export function buildProductMetafieldsForArtwork(input: ProductMetafieldBuilderInput): ShopifyProductMetafieldInput[] {
+  const metafields: ShopifyProductMetafieldInput[] = [];
+
+  if (input.artistMetaobjectId) {
+    metafields.push({
+      namespace: SHOPIFY_PRODUCT_NAMESPACE_CUSTOM,
+      key: PRODUCT_METAFIELD_KEYS.artistMetaobject,
+      type: "metaobject_reference",
+      value: input.artistMetaobjectId,
+    });
+  }
+
+  if (!input.artistMetaobjectId && input.legacyArtistUrl) {
+    metafields.push({
+      namespace: SHOPIFY_PRODUCT_NAMESPACE_CUSTOM,
+      key: PRODUCT_METAFIELD_KEYS.artistLegacyUrl,
+      type: "url",
+      value: input.legacyArtistUrl,
+    });
+  }
+
+  const width = input.widthCm;
+  if (width !== undefined && width !== null && `${width}`.trim() !== "") {
+    metafields.push({
+      namespace: SHOPIFY_PRODUCT_NAMESPACE_CUSTOM,
+      key: PRODUCT_METAFIELD_KEYS.width,
+      type: "number_decimal",
+      value: String(width),
+    });
+  }
+
+  const height = input.heightCm;
+  if (height !== undefined && height !== null && `${height}`.trim() !== "") {
+    metafields.push({
+      namespace: SHOPIFY_PRODUCT_NAMESPACE_CUSTOM,
+      key: PRODUCT_METAFIELD_KEYS.height,
+      type: "number_decimal",
+      value: String(height),
+    });
+  }
+
+  if (input.kurzbeschreibung && input.kurzbeschreibung.trim()) {
+    metafields.push({
+      namespace: SHOPIFY_PRODUCT_NAMESPACE_CUSTOM,
+      key: PRODUCT_METAFIELD_KEYS.kurzbeschreibung,
+      type: "multi_line_text_field",
+      value: input.kurzbeschreibung.trim(),
+    });
+  }
+
+  if (input.views !== undefined && input.views !== null && `${input.views}`.trim() !== "") {
+    metafields.push({
+      namespace: SHOPIFY_PRODUCT_NAMESPACE_CUSTOM,
+      key: PRODUCT_METAFIELD_KEYS.views,
+      type: "number_integer",
+      value: String(input.views),
+    });
+  }
+
+  if (input.additional?.length) {
+    metafields.push(...input.additional);
+  }
+
+  return metafields;
 }
 
 export async function fetchProducts(limit = 20): Promise<ShopifyProduct[]> {
@@ -104,7 +227,7 @@ export async function fetchKuenstler(first = 50): Promise<ShopifyKuenstler[]> {
 
   const query = `
     query Kuenstler($first: Int!) {
-      metaobjects(type: "kunstler", first: $first) {
+      metaobjects(type: "${SHOPIFY_METAOBJECT_TYPE_KUENSTLER}", first: $first) {
         edges {
           node {
             id
@@ -188,9 +311,7 @@ export async function fetchKuenstlerById(id: string): Promise<ShopifyKuenstler |
   };
 }
 
-type KuenstlerUpdatePatch = Partial<
-  Pick<ShopifyKuenstlerFields, "name" | "instagram" | "quote" | "einleitung_1" | "text_1">
->;
+type KuenstlerUpdatePatch = Partial<ShopifyKuenstlerFields>;
 
 export async function updateKuenstler(id: string, patch: KuenstlerUpdatePatch): Promise<ShopifyKuenstler> {
   const shop = mustEnv("SHOPIFY_SHOP_DOMAIN");
@@ -258,66 +379,46 @@ export async function updateKuenstler(id: string, patch: KuenstlerUpdatePatch): 
   };
 }
 
-type MetaobjectFieldInput = { key: string; value: string };
-
 type UpsertArtistMetaobjectInput = {
   metaobjectId?: string;
   handle?: string;
-  displayName: string;
-  bio: string;
-  instagram?: string;
-  website?: string;
-  location?: string;
-  heroImageUrl?: string;
-  internalStage?: string;
+  fields: Partial<ShopifyKuenstlerFields>;
 };
 
 export async function upsertArtistMetaobject(input: UpsertArtistMetaobjectInput) {
   const shop = mustEnv("SHOPIFY_SHOP_DOMAIN");
   const token = mustEnv("SHOPIFY_ADMIN_ACCESS_TOKEN");
   const version = process.env.SHOPIFY_API_VERSION || "2024-10";
-  const metaobjectType = process.env.SHOPIFY_ARTIST_METAOBJECT_TYPE || "artist";
   const url = `https://${shop}/admin/api/${version}/graphql.json`;
 
-  const fields: MetaobjectFieldInput[] = [
-    { key: "handle", value: input.handle || slugify(input.displayName) },
-    { key: "name", value: input.displayName },
-    { key: "bio", value: input.bio },
-  ];
+  const derivedHandle = input.handle || slugify(input.fields.name ?? "");
+  if (!derivedHandle) {
+    throw new Error("Artist handle requires a name");
+  }
 
-  const optionalMap: [string, string | undefined][] = [
-    ["instagram", input.instagram],
-    ["website", input.website],
-    ["location", input.location],
-    ["hero_image_url", input.heroImageUrl],
-    ["internal_stage", input.internalStage],
-  ];
+  const fields = buildArtistMetaobjectFieldsFromForm(input.fields);
+  if (fields.length === 0) {
+    throw new Error("At least one metaobject field is required");
+  }
 
-  optionalMap.forEach(([key, value]) => {
-    if (value) fields.push({ key, value });
-  });
-
-  const mutation = input.metaobjectId
-    ? `
-      mutation UpdateArtist($id: ID!, $fields: [MetaobjectFieldInput!]!) {
-        result: metaobjectUpdate(id: $id, metaobject: { fields: $fields }) {
-          metaobject { id handle }
-          userErrors { field message }
-        }
+  const mutation = `
+    mutation UpsertArtist($handle: MetaobjectHandleInput!, $metaobject: MetaobjectUpsertInput!) {
+      metaobjectUpsert(handle: $handle, metaobject: $metaobject) {
+        metaobject { id handle }
+        userErrors { field message }
       }
-    `
-    : `
-      mutation CreateArtist($type: String!, $handle: String!, $fields: [MetaobjectFieldInput!]!) {
-        result: metaobjectCreate(metaobject: { type: $type, handle: $handle, fields: $fields }) {
-          metaobject { id handle }
-          userErrors { field message }
-        }
-      }
-    `;
+    }
+  `;
 
-  const variables: any = input.metaobjectId
-    ? { id: input.metaobjectId, fields }
-    : { type: metaobjectType, handle: fields.find((f) => f.key === "handle")?.value, fields };
+  const variables = {
+    handle: { type: SHOPIFY_METAOBJECT_TYPE_KUENSTLER, handle: derivedHandle },
+    metaobject: {
+      id: input.metaobjectId,
+      type: SHOPIFY_METAOBJECT_TYPE_KUENSTLER,
+      handle: derivedHandle,
+      fields,
+    },
+  };
 
   const res = await fetch(url, {
     method: "POST",
@@ -334,7 +435,7 @@ export async function upsertArtistMetaobject(input: UpsertArtistMetaobjectInput)
   const json = JSON.parse(text) as any;
   if (json.errors) throw new Error(`Shopify GraphQL errors: ${JSON.stringify(json.errors)}`);
 
-  const payload = json.data?.result;
+  const payload = json.data?.metaobjectUpsert;
   if (!payload) throw new Error("Shopify metaobject upsert returned no result");
   const userErrors = payload.userErrors ?? [];
   if (userErrors.length) throw new Error(`Shopify metaobject upsert errors: ${JSON.stringify(userErrors)}`);
@@ -356,7 +457,7 @@ function slugify(value: string) {
 type DraftArtworkInput = {
   title: string;
   images: { src: string }[];
-  metafields: { namespace: string; key: string; type: string; value: string }[];
+  metafields: ShopifyProductMetafieldInput[];
   tags?: string[];
 };
 
@@ -431,6 +532,30 @@ export async function fetchProductsByCollectionId(
               featuredImage {
                 url
               }
+              metafieldKunstler: metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.artistMetaobject}") {
+                reference {
+                  ... on Metaobject {
+                    id
+                    handle
+                    fields {
+                      key
+                      value
+                    }
+                  }
+                }
+              }
+              metafieldLegacyKuenstler: metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.artistLegacyUrl}") {
+                value
+              }
+              metafieldKurzbeschreibung: metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.kurzbeschreibung}") {
+                value
+              }
+              metafieldWidth: metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.width}") {
+                value
+              }
+              metafieldHeight: metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.height}") {
+                value
+              }
             }
           }
         }
@@ -455,10 +580,26 @@ export async function fetchProductsByCollectionId(
   if (json.errors) throw new Error(`Shopify GraphQL errors: ${JSON.stringify(json.errors)}`);
 
   const edges: { node: any }[] = json.data?.collection?.products?.edges ?? [];
-  return edges.map(({ node }) => ({
-    id: node.id,
-    title: node.title,
-    handle: node.handle,
-    featuredImage: node.featuredImage?.url ?? null,
-  }));
+  return edges.map(({ node }) => {
+    const artistNode = node.metafieldKunstler?.reference;
+    const artistMetaobject = artistNode
+      ? {
+          id: artistNode.id,
+          handle: artistNode.handle,
+          ...mapKuenstlerFields(artistNode.fields || []),
+        }
+      : null;
+
+    return {
+      id: node.id,
+      title: node.title,
+      handle: node.handle,
+      featuredImage: node.featuredImage?.url ?? null,
+      artistMetaobject,
+      legacyArtistUrl: node.metafieldLegacyKuenstler?.value ?? null,
+      kurzbeschreibung: node.metafieldKurzbeschreibung?.value ?? null,
+      widthCm: node.metafieldWidth?.value ?? null,
+      heightCm: node.metafieldHeight?.value ?? null,
+    };
+  });
 }

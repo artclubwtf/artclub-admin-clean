@@ -15,7 +15,16 @@ type Artist = {
   stage?: string;
   internalNotes?: string;
   publicProfile?: {
+    name?: string;
     displayName?: string;
+    quote?: string;
+    einleitung_1?: string;
+    text_1?: string;
+    kategorie?: string;
+    bilder?: string;
+    bild_1?: string;
+    bild_2?: string;
+    bild_3?: string;
     bio?: string;
     location?: string;
     website?: string;
@@ -107,11 +116,18 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [phone, setPhone] = useState("");
   const [stage, setStage] = useState<string>("Idea");
   const [internalNotes, setInternalNotes] = useState("");
-  const [publicDisplayName, setPublicDisplayName] = useState("");
-  const [publicBio, setPublicBio] = useState("");
+  const [publicName, setPublicName] = useState("");
+  const [publicInstagram, setPublicInstagram] = useState("");
+  const [publicQuote, setPublicQuote] = useState("");
+  const [publicEinleitung1, setPublicEinleitung1] = useState("");
+  const [publicText1, setPublicText1] = useState("");
+  const [publicKategorie, setPublicKategorie] = useState("");
+  const [publicBilder, setPublicBilder] = useState("");
+  const [publicBild1, setPublicBild1] = useState("");
+  const [publicBild2, setPublicBild2] = useState("");
+  const [publicBild3, setPublicBild3] = useState("");
   const [publicLocation, setPublicLocation] = useState("");
   const [publicWebsite, setPublicWebsite] = useState("");
-  const [publicInstagram, setPublicInstagram] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -156,6 +172,27 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [artworkSaving, setArtworkSaving] = useState(false);
   const [artworkMessage, setArtworkMessage] = useState<string | null>(null);
 
+  const buildPublicProfilePayload = (
+    overrides: Partial<NonNullable<Artist["publicProfile"]>> = {},
+  ): Partial<Artist["publicProfile"]> => ({
+    name: publicName.trim() || undefined,
+    displayName: publicName.trim() || undefined,
+    instagram: publicInstagram.trim() || undefined,
+    quote: publicQuote.trim() || undefined,
+    einleitung_1: publicEinleitung1.trim() || undefined,
+    text_1: publicText1.trim() || undefined,
+    bio: publicText1.trim() || undefined,
+    kategorie: publicKategorie.trim() || undefined,
+    bilder: publicBilder.trim() || undefined,
+    bild_1: publicBild1.trim() || undefined,
+    bild_2: publicBild2.trim() || undefined,
+    bild_3: publicBild3.trim() || undefined,
+    location: publicLocation.trim() || undefined,
+    website: publicWebsite.trim() || undefined,
+    heroImageUrl: artist?.publicProfile?.heroImageUrl,
+    ...overrides,
+  });
+
   useEffect(() => {
     let active = true;
     const load = async () => {
@@ -176,11 +213,18 @@ export default function ArtistDetailClient({ artistId }: Props) {
         setPhone(data.phone ?? "");
         setStage(data.stage ?? "Idea");
         setInternalNotes(data.internalNotes ?? "");
-        setPublicDisplayName(data.publicProfile?.displayName ?? "");
-        setPublicBio(data.publicProfile?.bio ?? "");
+        setPublicName(data.publicProfile?.name ?? data.publicProfile?.displayName ?? "");
+        setPublicInstagram(data.publicProfile?.instagram ?? "");
+        setPublicQuote(data.publicProfile?.quote ?? "");
+        setPublicEinleitung1(data.publicProfile?.einleitung_1 ?? "");
+        setPublicText1(data.publicProfile?.text_1 ?? data.publicProfile?.bio ?? "");
+        setPublicKategorie(data.publicProfile?.kategorie ?? "");
+        setPublicBilder(data.publicProfile?.bilder ?? "");
+        setPublicBild1(data.publicProfile?.bild_1 ?? "");
+        setPublicBild2(data.publicProfile?.bild_2 ?? "");
+        setPublicBild3(data.publicProfile?.bild_3 ?? "");
         setPublicLocation(data.publicProfile?.location ?? "");
         setPublicWebsite(data.publicProfile?.website ?? "");
-        setPublicInstagram(data.publicProfile?.instagram ?? "");
       } catch (err: any) {
         if (!active) return;
         setError(err?.message ?? "Failed to load artist");
@@ -316,13 +360,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
           phone: phone.trim() || undefined,
           stage,
           internalNotes: internalNotes.trim(),
-          publicProfile: {
-            displayName: publicDisplayName.trim() || undefined,
-            bio: publicBio.trim() || undefined,
-            location: publicLocation.trim() || undefined,
-            website: publicWebsite.trim() || undefined,
-            instagram: publicInstagram.trim() || undefined,
-          },
+          publicProfile: buildPublicProfilePayload(),
         }),
       });
 
@@ -416,14 +454,13 @@ export default function ArtistDetailClient({ artistId }: Props) {
     }
   };
 
-  const canSync =
-    stage === "Under Contract" && publicDisplayName.trim().length > 0 && publicBio.trim().length > 0;
+  const canSync = stage === "Under Contract" && publicName.trim().length > 0 && publicText1.trim().length > 0;
 
   const handleSyncShopify = async () => {
     setShopifyError(null);
     setShopifyMessage(null);
     if (!canSync) {
-      setShopifyError("Display name und Bio sind erforderlich für den Sync.");
+      setShopifyError("Name und text_1 sind erforderlich für den Sync.");
       return;
     }
     setShopifySyncing(true);
@@ -503,14 +540,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          publicProfile: {
-            displayName: publicDisplayName.trim() || undefined,
-            bio: publicBio.trim() || undefined,
-            location: publicLocation.trim() || undefined,
-            website: publicWebsite.trim() || undefined,
-            instagram: publicInstagram.trim() || undefined,
-            heroImageUrl: item.url,
-          },
+          publicProfile: buildPublicProfilePayload({ heroImageUrl: item.url }),
         }),
       });
       if (!res.ok) {
@@ -943,16 +973,108 @@ export default function ArtistDetailClient({ artistId }: Props) {
 
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="space-y-1 text-sm font-medium text-slate-700">
-            Display name {stage === "Under Contract" && <span className="text-red-600">*</span>}
+            Name {stage === "Under Contract" && <span className="text-red-600">*</span>}
             <input
-              value={publicDisplayName}
-              onChange={(e) => setPublicDisplayName(e.target.value)}
+              value={publicName}
+              onChange={(e) => setPublicName(e.target.value)}
               className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
               placeholder="Public name"
             />
           </label>
           <label className="space-y-1 text-sm font-medium text-slate-700">
-            Location
+            Instagram (URL)
+            <input
+              type="url"
+              value={publicInstagram}
+              onChange={(e) => setPublicInstagram(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="https://instagram.com/..."
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Quote
+            <input
+              value={publicQuote}
+              onChange={(e) => setPublicQuote(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="Kurz-Zitat"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Kategorie (Collection GID, optional)
+            <input
+              value={publicKategorie}
+              onChange={(e) => setPublicKategorie(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="gid://shopify/Collection/..."
+            />
+          </label>
+        </div>
+
+        <label className="space-y-1 text-sm font-medium text-slate-700">
+          Einleitung 1
+          <textarea
+            value={publicEinleitung1}
+            onChange={(e) => setPublicEinleitung1(e.target.value)}
+            rows={3}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            placeholder="Intro text"
+          />
+        </label>
+
+        <label className="space-y-1 text-sm font-medium text-slate-700">
+          Text 1 {stage === "Under Contract" && <span className="text-red-600">*</span>}
+          <textarea
+            value={publicText1}
+            onChange={(e) => setPublicText1(e.target.value)}
+            rows={5}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            placeholder="Main text"
+          />
+        </label>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Titelbild (Shopify File ID / GID)
+            <input
+              value={publicBilder}
+              onChange={(e) => setPublicBilder(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="gid://shopify/File/..."
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Bild 1 (Shopify File ID / GID)
+            <input
+              value={publicBild1}
+              onChange={(e) => setPublicBild1(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="gid://shopify/File/..."
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Bild 2 (Shopify File ID / GID)
+            <input
+              value={publicBild2}
+              onChange={(e) => setPublicBild2(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="gid://shopify/File/..."
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Bild 3 (Shopify File ID / GID)
+            <input
+              value={publicBild3}
+              onChange={(e) => setPublicBild3(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="gid://shopify/File/..."
+            />
+          </label>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Location (internal only, not sent to Shopify)
             <input
               value={publicLocation}
               onChange={(e) => setPublicLocation(e.target.value)}
@@ -961,7 +1083,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
             />
           </label>
           <label className="space-y-1 text-sm font-medium text-slate-700">
-            Website
+            Website (internal only)
             <input
               value={publicWebsite}
               onChange={(e) => setPublicWebsite(e.target.value)}
@@ -969,27 +1091,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
               placeholder="https://"
             />
           </label>
-          <label className="space-y-1 text-sm font-medium text-slate-700">
-            Instagram
-            <input
-              value={publicInstagram}
-              onChange={(e) => setPublicInstagram(e.target.value)}
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-              placeholder="@handle"
-            />
-          </label>
         </div>
-
-        <label className="space-y-1 text-sm font-medium text-slate-700">
-          Bio {stage === "Under Contract" && <span className="text-red-600">*</span>}
-          <textarea
-            value={publicBio}
-            onChange={(e) => setPublicBio(e.target.value)}
-            rows={4}
-            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            placeholder="Short bio"
-          />
-        </label>
 
         {shopifyError && <p className="text-sm text-red-600">{shopifyError}</p>}
         {shopifyMessage && <p className="text-sm text-green-600">{shopifyMessage}</p>}

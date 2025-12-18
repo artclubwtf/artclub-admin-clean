@@ -3,7 +3,12 @@ import { Types } from "mongoose";
 import { connectMongo } from "@/lib/mongodb";
 import { ArtworkModel } from "@/models/Artwork";
 import { ArtistModel } from "@/models/Artist";
-import { createDraftArtworkProduct } from "@/lib/shopify";
+import {
+  SHOPIFY_PRODUCT_NAMESPACE_CUSTOM,
+  buildProductMetafieldsForArtwork,
+  createDraftArtworkProduct,
+  type ShopifyProductMetafieldInput,
+} from "@/lib/shopify";
 
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -16,7 +21,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
 
     const artist = await ArtistModel.findById(artwork.artistId).lean();
     if (!artist) return NextResponse.json({ error: "Artist not found" }, { status: 404 });
-    if (!artist.shopifySync?.handle && !artist.shopifySync?.metaobjectId) {
+    if (!artist.shopifySync?.metaobjectId) {
       return NextResponse.json({ error: "Artist is not synced to Shopify" }, { status: 400 });
     }
 
@@ -25,26 +30,27 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
       return NextResponse.json({ error: "Artwork needs public image URLs" }, { status: 400 });
     }
 
-    const metafields = [
-      { namespace: "custom", key: "artist_handle", type: "single_line_text_field", value: artist.shopifySync?.handle || "" },
-      { namespace: "custom", key: "sale_type", type: "single_line_text_field", value: artwork.saleType },
+    const additionalMetafields: ShopifyProductMetafieldInput[] = [
+      {
+        namespace: SHOPIFY_PRODUCT_NAMESPACE_CUSTOM,
+        key: "sale_type",
+        type: "single_line_text_field",
+        value: artwork.saleType,
+      },
     ];
     if (artwork.editionSize) {
-      metafields.push({
-        namespace: "custom",
+      additionalMetafields.push({
+        namespace: SHOPIFY_PRODUCT_NAMESPACE_CUSTOM,
         key: "edition_size",
         type: "number_integer",
         value: artwork.editionSize.toString(),
       });
     }
-    if (artist.shopifySync?.metaobjectId) {
-      metafields.push({
-        namespace: "custom",
-        key: "artist_metaobject_id",
-        type: "single_line_text_field",
-        value: artist.shopifySync.metaobjectId,
-      });
-    }
+    const metafields = buildProductMetafieldsForArtwork({
+      artistMetaobjectId: artist.shopifySync.metaobjectId,
+      kurzbeschreibung: artwork.description || null,
+      additional: additionalMetafields,
+    });
 
     const tags = ["artwork"];
     if (artist.shopifySync?.handle) tags.push(`artist:${artist.shopifySync.handle}`);
