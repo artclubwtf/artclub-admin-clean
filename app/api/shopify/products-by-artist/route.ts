@@ -71,7 +71,9 @@ export async function GET(req: Request) {
               variants(first: 1) {
                 edges {
                   node {
-                    price { amount currencyCode }
+                    priceSet {
+                      shopMoney { amount currencyCode }
+                    }
                   }
                 }
               }
@@ -116,10 +118,11 @@ export async function GET(req: Request) {
 
     const edges: { node: ShopifyProductNode }[] = json.data?.products?.edges ?? [];
     const products = edges.map(({ node }) => {
-      const firstVariantPriceNode = node?.variants?.edges?.[0]?.node?.price;
-      const firstVariantPrice = firstVariantPriceNode
-        ? `${firstVariantPriceNode.amount} ${firstVariantPriceNode.currencyCode}`.trim()
-        : null;
+      const firstVariantPriceNode = node?.variants?.edges?.[0]?.node?.priceSet?.shopMoney;
+      const firstVariantPrice =
+        firstVariantPriceNode && firstVariantPriceNode.amount
+          ? `${firstVariantPriceNode.amount} ${firstVariantPriceNode.currencyCode || ""}`.trim()
+          : null;
 
       return {
         id: node.id,
