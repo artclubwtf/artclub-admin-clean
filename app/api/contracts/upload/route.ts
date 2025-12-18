@@ -50,7 +50,13 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const contentType = file.type || "application/pdf";
 
-    await uploadToS3(key, buffer, contentType);
+    await uploadToS3({
+      bucket: process.env.S3_BUCKET!,
+      key,
+      body: buffer,
+      contentType,
+    });
+
 
     const s3PublicBase = process.env.S3_PUBLIC_BASE_URL;
     const s3Url = s3PublicBase ? `${s3PublicBase.replace(/\/$/, "")}/${key}` : undefined;
