@@ -3211,7 +3211,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
 
   return (
     <>
-      <section className="ac-shell space-y-6">
+      <section className="page space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-xs text-slate-500">ID</div>
@@ -3319,7 +3319,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
           </div>
         )}
 
-        <nav className="flex flex-wrap items-center gap-2">
+        <nav className="segmented">
           {tabs.map((tab) => {
             const availability = tabAvailability[tab.key];
             const disabled = !availability.enabled;
@@ -3331,11 +3331,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
                 onClick={() => setActiveTab(tab.key)}
                 disabled={disabled}
                 title={disabled ? availability.reason : undefined}
-                className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                  isActive
-                    ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                }`}
+                className={`flex items-center gap-2 ${isActive ? "active" : ""} disabled:cursor-not-allowed disabled:opacity-60`}
               >
                 <span>{tab.label}</span>
                 {tab.chip && (

@@ -157,25 +157,20 @@ export default function ArtistsPageClient() {
   };
 
   return (
-    <section className="space-y-4">
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="page space-y-6">
+      <div className="card">
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-            Search
+          <label className="field">
+            <span>Search</span>
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search by name, email, phone"
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
             />
           </label>
-          <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-            Stage
-            <select
-              value={stageFilter}
-              onChange={(e) => setStageFilter(e.target.value)}
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            >
+          <label className="field">
+            <span>Stage</span>
+            <select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)}>
               <option value="">All</option>
               {stages.map((s) => (
                 <option key={s} value={s}>
@@ -187,14 +182,10 @@ export default function ArtistsPageClient() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center justify-between">
+      <div className="card">
+        <div className="cardHeader">
           <h2 className="text-lg font-semibold">Artists</h2>
-          {loading ? (
-            <span className="text-xs text-slate-500">Loading...</span>
-          ) : (
-            <span className="text-xs text-slate-500">{filteredCount} total</span>
-          )}
+          {loading ? <span className="text-xs text-slate-500">Loading...</span> : <span className="text-xs text-slate-500">{filteredCount} total</span>}
         </div>
 
         {error && <p className="mt-2 text-sm text-red-600">Error: {error}</p>}
@@ -205,7 +196,11 @@ export default function ArtistsPageClient() {
 
         <ul className="mt-4 grid gap-3">
           {mergedArtists.map((artist) => (
-            <li key={artist.source === "db" ? artist._id : artist.metaobjectId} className="rounded border border-slate-200 px-4 py-3 hover:border-slate-300">
+            <li
+              key={artist.source === "db" ? artist._id : artist.metaobjectId}
+              className="card transition hover:-translate-y-[1px]"
+              style={{ padding: "14px" }}
+            >
               {artist.source === "db" ? (
                 <Link href={`/admin/artists/${artist._id}`} className="block space-y-1">
                   <div className="flex items-center justify-between gap-3">
@@ -233,7 +228,7 @@ export default function ArtistsPageClient() {
                     type="button"
                     onClick={() => handleImport(artist.metaobjectId)}
                     disabled={importingId === artist.metaobjectId}
-                    className="inline-flex items-center justify-center rounded border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="btnPrimary disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {importingId === artist.metaobjectId ? "Importing..." : "Import"}
                   </button>
