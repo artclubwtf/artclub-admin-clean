@@ -114,8 +114,8 @@ async function uploadToShopifyStagedTarget(staged: StagedUploadTarget, buffer: B
   for (const param of staged.parameters || []) {
     form.append(param.name, param.value);
   }
-  const uint8 = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-  form.append("file", new Blob([uint8], { type: mimeType || "application/octet-stream" }), filename);
+  const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+  form.append("file", new Blob([arrayBuffer], { type: mimeType || "application/octet-stream" }), filename);
 
   const uploadRes = await fetch(staged.url, {
     method: "POST",
