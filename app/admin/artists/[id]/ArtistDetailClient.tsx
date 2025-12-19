@@ -94,6 +94,26 @@ type ShopifyProduct = {
 type ShopifyCollection = { id: string; title: string };
 type ArtworkSaleMode = "PRINT_ONLY" | "ORIGINAL_ONLY" | "ORIGINAL_AND_PRINTS";
 type ArtworkFieldErrors = Record<string, string>;
+type BulkTitleStrategy = "filename" | "prefix";
+type BulkDefaults = {
+  mode: ArtworkSaleMode;
+  titlePrefix: string;
+  titleStrategy: BulkTitleStrategy;
+  widthCm: string;
+  heightCm: string;
+  shortDescription: string;
+};
+type BulkCreateResult = {
+  ok: boolean;
+  mediaId: string;
+  mediaFilename: string;
+  title: string;
+  productGid?: string | null;
+  productId?: string | null;
+  handle?: string | null;
+  adminUrl?: string | null;
+  error?: string | null;
+};
 
 type ShopifyFileFieldKey = "bilder" | "bild_1" | "bild_2" | "bild_3";
 type FileUploadStatus = {
@@ -116,6 +136,13 @@ function parseErrorMessage(payload: any) {
   }
   return "Unexpected error";
 }
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const parseProductIdFromGid = (gid?: string | null) => {
+  if (!gid) return null;
+  const parts = gid.split("/");
+  return parts[parts.length - 1] || gid;
+};
 
 async function fetchShopifyProductsForMetaobject(metaobjectId: string) {
   const res = await fetch(`/api/shopify/products-by-artist?artistMetaobjectGid=${encodeURIComponent(metaobjectId)}`, {
@@ -222,6 +249,21 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const artworkUploadInputRef = useRef<HTMLInputElement | null>(null);
   const [previewMedia, setPreviewMedia] = useState<MediaItem | null>(null);
   const [draggingArtworkUpload, setDraggingArtworkUpload] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
+  const [bulkResults, setBulkResults] = useState<BulkCreateResult[]>([]);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkDefaults, setBulkDefaults] = useState<BulkDefaults>({
+    mode: "PRINT_ONLY",
+    titlePrefix: "",
+    titleStrategy: "filename",
+    widthCm: "",
+    heightCm: "",
+    shortDescription: "",
+  });
+  const bulkCancelRef = useRef(false);
+  const bulkAbortController = useRef<AbortController | null>(null);
   const artistRecordId = artist?._id;
   const artistShopifyMetaobjectId = artist?.shopifySync?.metaobjectId;
 
@@ -772,6 +814,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
   };
   const hasMedia = media.length > 0;
   const artworkMedia = media.filter((item) => item.kind?.toLowerCase() === "artwork");
+  const selectedArtworkMedia = artworkMedia.filter((item) => selectedArtworkMediaIds.includes(item._id));
   const hasArtworkMedia = artworkMedia.length > 0;
   const hasShopifyLink = Boolean(artist?.shopifySync?.metaobjectId);
   const hasShopifyArtworks = shopifyProducts.length > 0;
@@ -1091,6 +1134,165 @@ export default function ArtistDetailClient({ artistId }: Props) {
     setSelectedArtworkMediaIds([]);
   };
 
+  const selectFailedBulkItems = () => {
+    const failedIds = bulkResults.filter((item) => !item.ok).map((item) => item.mediaId);
+    if (failedIds.length) {
+      setSelectedArtworkMediaIds(failedIds);
+    }
+  };
+
+  const deriveBulkTitle = (item: MediaItem) => {
+    const baseName = (item.filename || item.s3Key || "Artwork").replace(/\.[^/.]+$/, "");
+    const fallback = baseName.trim() || "Artwork";
+    if (bulkDefaults.titleStrategy === "prefix") {
+      const prefix = bulkDefaults.titlePrefix.trim();
+      return `${prefix ? `${prefix} ` : ""}${fallback}`.trim();
+    }
+    return fallback;
+  };
+
+  const handleCancelBulk = () => {
+    bulkCancelRef.current = true;
+    bulkAbortController.current?.abort();
+  };
+
+  const handleStartBulkCreate = async () => {
+    setBulkError(null);
+    if (!artistShopifyMetaobjectId) {
+      setBulkError("Artist is not linked to Shopify.");
+      return;
+    }
+
+    const itemsToCreate = [...selectedArtworkMedia];
+    if (itemsToCreate.length === 0) {
+      setBulkError("Select at least one artwork media.");
+      return;
+    }
+
+    const widthRaw = bulkDefaults.widthCm.trim();
+    const heightRaw = bulkDefaults.heightCm.trim();
+    if (widthRaw && Number.isNaN(Number(widthRaw))) {
+      setBulkError("Width must be a number.");
+      return;
+    }
+    if (heightRaw && Number.isNaN(Number(heightRaw))) {
+      setBulkError("Height must be a number.");
+      return;
+    }
+
+    const widthParsed = widthRaw ? Number(widthRaw) : null;
+    const heightParsed = heightRaw ? Number(heightRaw) : null;
+    const kurzbeschreibung = bulkDefaults.shortDescription.trim() || null;
+    const modeToSend: ArtworkSaleMode = bulkDefaults.mode === "PRINT_ONLY" ? "PRINT_ONLY" : "ORIGINAL_AND_PRINTS";
+
+    const controller = new AbortController();
+    bulkAbortController.current = controller;
+    bulkCancelRef.current = false;
+    setBulkRunning(true);
+    setBulkProgress({ done: 0, total: itemsToCreate.length });
+    setBulkResults([]);
+
+    const runResults: BulkCreateResult[] = [];
+
+    for (let index = 0; index < itemsToCreate.length; index += 1) {
+      const mediaItem = itemsToCreate[index];
+      if (bulkCancelRef.current) break;
+      const derivedTitle = deriveBulkTitle(mediaItem);
+      let result: BulkCreateResult | null = null;
+      try {
+        const res = await fetch("/api/shopify/artworks/create", {
+          method: "POST",
+          signal: controller.signal,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            artistId,
+            artistMetaobjectGid: artistShopifyMetaobjectId,
+            title: derivedTitle,
+            saleMode: modeToSend,
+            price: modeToSend === "PRINT_ONLY" ? null : "0",
+            editionSize: null,
+            kurzbeschreibung,
+            widthCm: widthParsed,
+            heightCm: heightParsed,
+            description: null,
+            mediaIds: [mediaItem._id],
+          }),
+        });
+
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null);
+          const message = parseErrorMessage(payload) || `Request failed (${res.status})`;
+          throw new Error(message);
+        }
+
+        const payload = (await res.json().catch(() => ({}))) as any;
+        const productGid = (payload?.productGid as string | undefined) || null;
+        const productId = parseProductIdFromGid(productGid);
+        const handle = (payload?.handle as string | undefined) || null;
+        const createdTitle = (payload?.title as string | undefined) || derivedTitle;
+
+        result = {
+          ok: true,
+          mediaId: mediaItem._id,
+          mediaFilename: mediaItem.filename || mediaItem.s3Key,
+          title: createdTitle,
+          productGid,
+          productId,
+          handle,
+          adminUrl: null,
+        };
+      } catch (err: any) {
+        if (err?.name === "AbortError") {
+          break;
+        }
+        result = {
+          ok: false,
+          mediaId: mediaItem._id,
+          mediaFilename: mediaItem.filename || mediaItem.s3Key,
+          title: derivedTitle,
+          error: err?.message || "Failed to create draft",
+        };
+      }
+
+      if (result) {
+        runResults.push(result);
+        setBulkResults([...runResults]);
+        setBulkProgress({ done: runResults.length, total: itemsToCreate.length });
+      }
+
+      if (bulkCancelRef.current) {
+        break;
+      }
+
+      if (index < itemsToCreate.length - 1) {
+        await sleep(600);
+      }
+    }
+
+    setBulkProgress({ done: runResults.length, total: itemsToCreate.length });
+    bulkAbortController.current = null;
+    setBulkRunning(false);
+
+    if (runResults.some((item) => item.ok)) {
+      const products = await refreshShopifyProducts();
+      const mapped = runResults.map((item) => {
+        if (!item.ok) return item;
+        const targetId = item.productId || parseProductIdFromGid(item.productGid);
+        const match = products.find((product) => {
+          const productId = parseProductIdFromGid(product.id);
+          return (targetId && productId === targetId) || (item.handle && product.handle === item.handle);
+        });
+        return {
+          ...item,
+          adminUrl: match?.shopifyAdminUrl || item.adminUrl || null,
+          productId: item.productId || targetId || parseProductIdFromGid(match?.id) || null,
+          title: item.title || match?.title || item.mediaFilename,
+        };
+      });
+      setBulkResults(mapped);
+    }
+  };
+
   const validateArtworkForm = () => {
     const errors: ArtworkFieldErrors = {};
     if (selectedArtworkMediaIds.length === 0) {
@@ -1381,6 +1583,34 @@ export default function ArtistDetailClient({ artistId }: Props) {
             </div>
             {artworkFieldErrors.mediaIds && <p className="text-xs text-red-600">{artworkFieldErrors.mediaIds}</p>}
             {mediaError && <p className="text-sm text-red-600">{mediaError}</p>}
+            {selectedArtworkMediaIds.length > 0 && (
+              <div className="sticky top-0 z-10 mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur">
+                <div className="text-sm font-semibold text-slate-900">
+                  Actions for {selectedArtworkMediaIds.length} selected
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleCreateArtwork()}
+                    disabled={artworkSubmitting}
+                    className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-sm transition hover:border-slate-400 disabled:opacity-60"
+                  >
+                    Create 1 draft
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkError(null);
+                      setBulkProgress((prev) => ({ ...prev, total: selectedArtworkMediaIds.length }));
+                      setBulkOpen(true);
+                    }}
+                    className="inline-flex items-center rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                  >
+                    Bulk create drafts ({selectedArtworkMediaIds.length})
+                  </button>
+                </div>
+              </div>
+            )}
 
             {mediaLoading ? (
               <p className="text-sm text-slate-600">Loading media...</p>
@@ -2188,6 +2418,283 @@ export default function ArtistDetailClient({ artistId }: Props) {
     { key: "contracts", label: "Contracts", chip: contractsStatusChip },
     { key: "payout", label: "Payout", chip: payoutStatusChip },
   ];
+  const bulkTotal = bulkProgress.total || selectedArtworkMedia.length;
+  const bulkProgressPercent = bulkTotal ? Math.min(100, Math.round((bulkProgress.done / bulkTotal) * 100)) : 0;
+  const bulkSuccessCount = bulkResults.filter((item) => item.ok).length;
+  const bulkFailureCount = bulkResults.filter((item) => !item.ok).length;
+
+  const bulkModal = !bulkOpen ? null : (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4">
+      <div className="w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <div className="space-y-0.5">
+            <div className="text-sm font-semibold text-slate-900">Bulk create Shopify drafts</div>
+            <div className="text-xs text-slate-600">
+              {selectedArtworkMedia.length} media selected • sequential with 600ms delay
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {bulkRunning && (
+              <button
+                type="button"
+                onClick={handleCancelBulk}
+                className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-800 hover:border-slate-400"
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setBulkOpen(false)}
+              disabled={bulkRunning}
+              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300 disabled:opacity-60"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+        <div className="max-h-[80vh] overflow-auto p-4 space-y-4">
+          {!artistShopifyMetaobjectId && (
+            <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Link the artist to Shopify before creating drafts.
+            </div>
+          )}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1 text-sm font-medium text-slate-700">
+              Create mode
+              <select
+                value={bulkDefaults.mode}
+                onChange={(e) => setBulkDefaults((prev) => ({ ...prev, mode: e.target.value as ArtworkSaleMode }))}
+                disabled={bulkRunning}
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+              >
+                {saleModeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-500">
+                One draft product per media. Original mode tags with \"original\" and uses a placeholder price of 0 on the draft.
+              </p>
+            </label>
+
+            <div className="space-y-1 text-sm font-medium text-slate-700">
+              <div className="space-y-1">
+                <span>Title strategy</span>
+                <select
+                  value={bulkDefaults.titleStrategy}
+                  onChange={(e) => setBulkDefaults((prev) => ({ ...prev, titleStrategy: e.target.value as BulkTitleStrategy }))}
+                  disabled={bulkRunning}
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                >
+                  <option value="filename">Use filename</option>
+                  <option value="prefix">Prefix + filename</option>
+                </select>
+              </div>
+              {bulkDefaults.titleStrategy === "prefix" && (
+                <input
+                  value={bulkDefaults.titlePrefix}
+                  onChange={(e) => setBulkDefaults((prev) => ({ ...prev, titlePrefix: e.target.value }))}
+                  disabled={bulkRunning}
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                  placeholder="Prefix (optional)"
+                />
+              )}
+              <p className="text-xs font-normal text-slate-500">
+                Titles derive from media filenames; prefix adds a shared intro.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="space-y-1 text-sm font-medium text-slate-700">
+              Width (cm)
+              <input
+                type="number"
+                step="0.01"
+                value={bulkDefaults.widthCm}
+                onChange={(e) => setBulkDefaults((prev) => ({ ...prev, widthCm: e.target.value }))}
+                disabled={bulkRunning}
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                placeholder="e.g. 50"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium text-slate-700">
+              Height (cm)
+              <input
+                type="number"
+                step="0.01"
+                value={bulkDefaults.heightCm}
+                onChange={(e) => setBulkDefaults((prev) => ({ ...prev, heightCm: e.target.value }))}
+                disabled={bulkRunning}
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                placeholder="e.g. 70"
+              />
+            </label>
+            <label className="sm:col-span-3 space-y-1 text-sm font-medium text-slate-700">
+              Short description
+              <textarea
+                value={bulkDefaults.shortDescription}
+                onChange={(e) => setBulkDefaults((prev) => ({ ...prev, shortDescription: e.target.value }))}
+                disabled={bulkRunning}
+                rows={2}
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                placeholder="kurzbeschreibung (optional)"
+              />
+              <p className="text-xs font-normal text-slate-500">Left empty fields stay empty on the created drafts.</p>
+            </label>
+          </div>
+
+          {bulkError && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{bulkError}</div>}
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-xs text-slate-600">
+              Uses /api/shopify/artworks/create per media and continues on errors. Cancel stops the remaining calls.
+            </div>
+            <div className="flex items-center gap-2">
+              {bulkRunning && (
+                <button
+                  type="button"
+                  onClick={handleCancelBulk}
+                  className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-sm hover:border-slate-400"
+                >
+                  Cancel run
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleStartBulkCreate}
+                disabled={bulkRunning || !selectedArtworkMedia.length || !artistShopifyMetaobjectId}
+                className="inline-flex items-center rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50"
+              >
+                {bulkRunning ? "Running..." : `Start bulk create (${selectedArtworkMedia.length})`}
+              </button>
+            </div>
+          </div>
+
+          {(bulkRunning || bulkResults.length > 0) && (
+            <div className="space-y-2 rounded border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-center justify-between text-sm font-semibold text-slate-900">
+                <span>Progress</span>
+                <span>
+                  Created {bulkProgress.done} / {bulkTotal || 0}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                <div className="h-full bg-slate-900 transition-all" style={{ width: `${bulkProgressPercent}%` }} />
+              </div>
+            </div>
+          )}
+
+          {selectedArtworkMedia.length > 0 && (
+            <div className="rounded border border-slate-200 bg-white p-3">
+              <div className="flex items-center justify-between text-sm font-semibold text-slate-900">
+                <span>Will create for</span>
+                <span className="text-xs text-slate-600">{selectedArtworkMedia.length} media</span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-700">
+                {selectedArtworkMedia.slice(0, 8).map((item) => (
+                  <span key={item._id} className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">
+                    {item.filename || item.s3Key}
+                  </span>
+                ))}
+                {selectedArtworkMedia.length > 8 && (
+                  <span className="text-xs text-slate-600">+ {selectedArtworkMedia.length - 8} more</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {bulkResults.length > 0 && (
+            <div className="space-y-2 rounded border border-slate-200 bg-slate-50 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm font-semibold text-slate-900">
+                  Results: {bulkSuccessCount} ok / {bulkResults.length} total
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  {bulkFailureCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={selectFailedBulkItems}
+                      className="rounded border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-800 shadow-sm hover:border-slate-400"
+                    >
+                      Select failed ({bulkFailureCount})
+                    </button>
+                  )}
+                  {!bulkRunning && (
+                    <button
+                      type="button"
+                      onClick={() => setBulkResults([])}
+                      className="rounded border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-800 shadow-sm hover:border-slate-400"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+              <ul className="max-h-64 space-y-2 overflow-auto pr-1">
+                {bulkResults.map((result, idx) => (
+                  <li
+                    key={`${result.mediaId}-${result.productId || result.handle || idx}`}
+                    className={`rounded border px-3 py-2 ${
+                      result.ok ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
+                    }`}
+                  >
+                    {result.ok ? (
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 text-sm font-semibold text-green-800">
+                            <span role="img" aria-label="success">
+                              ✅
+                            </span>
+                            <span className="truncate">{result.title}</span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+                            {result.adminUrl && (
+                              <a
+                                href={result.adminUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-green-800 underline"
+                              >
+                                Open in Shopify
+                              </a>
+                            )}
+                            {result.productId && (
+                              <button
+                                type="button"
+                                onClick={() => navigator.clipboard?.writeText(result.productId || "").catch(() => {})}
+                                className="rounded border border-green-300 bg-white px-2 py-1 text-[11px] font-semibold text-green-800 shadow-sm hover:border-green-400"
+                              >
+                                Copy productId
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-xs text-green-800">Media: {result.mediaFilename}</div>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-red-800">
+                          <span role="img" aria-label="error">
+                            ❌
+                          </span>
+                          <span>{result.mediaFilename}</span>
+                        </div>
+                        <div className="text-xs text-red-800">{result.error || "Failed to create draft"}</div>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   const previewModal = !previewMedia ? null : (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4">
@@ -2412,6 +2919,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
           )}
         </div>
       </section>
+      {bulkModal}
       {previewModal}
     </>
   );
