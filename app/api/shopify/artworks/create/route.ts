@@ -524,6 +524,13 @@ export async function POST(req: Request) {
       recordAutomationError("tagsWorker", err);
     }
 
+    // Update tag first so downstream automation sees it
+    try {
+      await addAiReadyTag(product.id, baseTags);
+    } catch (err) {
+      recordAutomationError("tagUpdate", err);
+    }
+
     if (workerConfig) {
       try {
         const productsWorkerUrl = mustEnv("AI_WORKER_PRODUCTS_URL");
@@ -533,11 +540,8 @@ export async function POST(req: Request) {
       }
     }
 
-    try {
-      await addAiReadyTag(product.id, baseTags);
-    } catch (err) {
-      recordAutomationError("tagUpdate", err);
-    }
+    // Wait before triggering the second automation to allow the first to finish
+    await waitMs(60_000);
 
     if (workerConfig) {
       try {
