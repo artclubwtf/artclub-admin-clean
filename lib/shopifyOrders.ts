@@ -81,8 +81,8 @@ export async function fetchShopifyOrders(params: {
             name
             createdAt
             processedAt
-            financialStatus
-            fulfillmentStatus
+            displayFinancialStatus
+            displayFulfillmentStatus
             currentTotalPriceSet { shopMoney { amount currencyCode } }
             lineItems(first: 100) {
               edges {
@@ -147,7 +147,7 @@ export async function fetchShopifyOrders(params: {
   const edges = json.data?.orders?.edges ?? [];
   const pageInfo = json.data?.orders?.pageInfo ?? { hasNextPage: false, endCursor: null };
 
-  const orders: ShopifyOrder[] = edges.map(({ node }) => {
+    const orders: ShopifyOrder[] = edges.map(({ node }) => {
     const total = parseMoney(node?.currentTotalPriceSet);
     const currency = total.currencyCode || "EUR";
 
@@ -179,8 +179,8 @@ export async function fetchShopifyOrders(params: {
       name: node?.name ?? "",
       createdAt: node?.createdAt ?? null,
       processedAt: node?.processedAt ?? null,
-      financialStatus: node?.financialStatus ?? null,
-      fulfillmentStatus: node?.fulfillmentStatus ?? null,
+      financialStatus: node?.displayFinancialStatus ?? null,
+      fulfillmentStatus: node?.displayFulfillmentStatus ?? null,
       currency,
       totalGross: total.amount ?? 0,
       lineItems,
