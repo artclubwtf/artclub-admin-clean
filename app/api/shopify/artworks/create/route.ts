@@ -30,10 +30,11 @@ type AiWorkerConfig = {
   key: string;
 };
 
+type AiAutomationStepStatus = "pending" | "ok" | "error";
 type AiAutomationStatus = {
-  productsWorker: "ok" | "error";
-  tagsWorker: "ok" | "error";
-  tagUpdate: "ok" | "error";
+  productsWorker: AiAutomationStepStatus;
+  tagsWorker: AiAutomationStepStatus;
+  tagUpdate: AiAutomationStepStatus;
   errors?: string[];
 };
 
@@ -522,62 +523,70 @@ export async function POST(req: Request) {
 
     const mediaResult = await attachMedia(product.id, stagedResources);
 
-    // Allow Shopify to settle before kicking off automation
-    await waitMs(60_000);
-
-    const aiAutomationErrors: string[] = [];
     const aiAutomation: AiAutomationStatus = {
-      productsWorker: "ok",
-      tagsWorker: "ok",
-      tagUpdate: "ok",
-    };
-    const recordAutomationError = (key: keyof Omit<AiAutomationStatus, "errors">, err: unknown) => {
-      aiAutomation[key] = "error";
-      const message = err instanceof Error ? err.message : "Unknown automation error";
-      if (!aiAutomationErrors.includes(message)) {
-        aiAutomationErrors.push(message);
-      }
+      productsWorker: "pending",
+      tagsWorker: "pending",
+      tagUpdate: "pending",
     };
 
-    let workerConfig: AiWorkerConfig | null = null;
-    try {
-      workerConfig = resolveAiWorkerConfig();
-    } catch (err) {
-      recordAutomationError("productsWorker", err);
-      recordAutomationError("tagsWorker", err);
-    }
+    // Fire-and-forget automation so API response returns quickly
+    (async () => {
+      const automationErrors: string[] = [];
+      const recordAutomationError = (key: keyof Omit<AiAutomationStatus, "errors">, err: unknown) => {
+        aiAutomation[key] = "error";
+        const message = err instanceof Error ? err.message : "Unknown automation error";
+        if (!automationErrors.includes(message)) {
+          automationErrors.push(message);
+        }
+      };
 
-    // Update tag first so downstream automation sees it
-    try {
-      await addAiReadyTag(product.id, baseTags);
-    } catch (err) {
-      recordAutomationError("tagUpdate", err);
-    }
-
-    if (workerConfig) {
+      let workerConfig: AiWorkerConfig | null = null;
       try {
-        const productsWorkerUrl = mustEnv("AI_WORKER_PRODUCTS_URL");
-        await triggerWorker(productsWorkerUrl, workerConfig);
+        workerConfig = resolveAiWorkerConfig();
       } catch (err) {
         recordAutomationError("productsWorker", err);
-      }
-    }
-
-    // Wait before triggering the second automation to allow the first to finish
-    await waitMs(60_000);
-
-    if (workerConfig) {
-      try {
-        const tagsWorkerUrl = mustEnv("AI_WORKER_TAGS_URL");
-        await triggerWorker(tagsWorkerUrl, workerConfig);
-      } catch (err) {
         recordAutomationError("tagsWorker", err);
       }
-    }
 
-    if (aiAutomationErrors.length) {
-      aiAutomation.errors = aiAutomationErrors;
-    }
+      // allow Shopify to settle
+      await waitMs(60_000);
+
+      try {
+        await addAiReadyTag(product.id, baseTags);
+        aiAutomation.tagUpdate = "ok";
+      } catch (err) {
+        recordAutomationError("tagUpdate", err);
+      }
+
+      if (workerConfig) {
+        try {
+          const productsWorkerUrl = mustEnv("AI_WORKER_PRODUCTS_URL");
+          await triggerWorker(productsWorkerUrl, workerConfig);
+          aiAutomation.productsWorker = "ok";
+        } catch (err) {
+          recordAutomationError("productsWorker", err);
+        }
+      }
+
+      // wait before second automation
+      await waitMs(60_000);
+
+      if (workerConfig) {
+        try {
+          const tagsWorkerUrl = mustEnv("AI_WORKER_TAGS_URL");
+          await triggerWorker(tagsWorkerUrl, workerConfig);
+          aiAutomation.tagsWorker = "ok";
+        } catch (err) {
+          recordAutomationError("tagsWorker", err);
+        }
+      }
+
+      if (automationErrors.length) {
+        aiAutomation.errors = automationErrors;
+      }
+    })().catch((err) => {
+      console.error("Background AI automation failed", err);
+    });
 
     return NextResponse.json(
       {
