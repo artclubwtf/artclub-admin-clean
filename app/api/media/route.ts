@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import { connectMongo } from "@/lib/mongodb";
 import { MediaModel, mediaKinds } from "@/models/Media";
-import { uploadToS3 } from "@/lib/s3";
+import { getS3ObjectUrl, uploadToS3 } from "@/lib/s3";
 
 const MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB per file
 
@@ -21,10 +21,23 @@ export async function GET(req: Request) {
     }
 
     await connectMongo();
-    const media = await MediaModel.find({ artistId: new Types.ObjectId(kunstlerId) })
+    const mediaDocs = await MediaModel.find({ artistId: new Types.ObjectId(kunstlerId) })
       .sort({ createdAt: -1 })
       .lean();
-    return NextResponse.json({ media }, { status: 200 });
+
+    const mediaWithUrls = await Promise.all(
+      mediaDocs.map(async (doc) => {
+        if (doc.url) return doc;
+        try {
+          const signedUrl = await getS3ObjectUrl(doc.s3Key);
+          return { ...doc, url: signedUrl };
+        } catch {
+          return doc;
+        }
+      }),
+    );
+
+    return NextResponse.json({ media: mediaWithUrls }, { status: 200 });
   } catch (err) {
     console.error("Failed to list media", err);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
