@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactElement } from "react";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 type Props = {
@@ -204,8 +204,6 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [shopifyProducts, setShopifyProducts] = useState<ShopifyProduct[]>([]);
   const [shopifyProductsLoading, setShopifyProductsLoading] = useState(false);
   const [shopifyProductsError, setShopifyProductsError] = useState<string | null>(null);
-  const [artworkModalOpen, setArtworkModalOpen] = useState(false);
-  const [artworkStep, setArtworkStep] = useState<1 | 2>(1);
   const [selectedArtworkMediaIds, setSelectedArtworkMediaIds] = useState<string[]>([]);
   const [artworkTitle, setArtworkTitle] = useState("");
   const [artworkSaleMode, setArtworkSaleMode] = useState<ArtworkSaleMode>("PRINT_ONLY");
@@ -219,15 +217,20 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [artworkFormError, setArtworkFormError] = useState<string | null>(null);
   const [artworkFieldErrors, setArtworkFieldErrors] = useState<ArtworkFieldErrors>({});
   const [artworkSuccess, setArtworkSuccess] = useState<string | null>(null);
+  const [artworkSuccessAdminUrl, setArtworkSuccessAdminUrl] = useState<string | null>(null);
+  const [artworkGalleryUploading, setArtworkGalleryUploading] = useState(false);
+  const artworkUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const [previewMedia, setPreviewMedia] = useState<MediaItem | null>(null);
+  const [draggingArtworkUpload, setDraggingArtworkUpload] = useState(false);
   const artistRecordId = artist?._id;
   const artistShopifyMetaobjectId = artist?.shopifySync?.metaobjectId;
 
-  const refreshShopifyProducts = async () => {
+  const refreshShopifyProducts = async (): Promise<ShopifyProduct[]> => {
     const metaobjectId = artistRecordId === artistId ? artistShopifyMetaobjectId : undefined;
     if (!metaobjectId) {
       setShopifyProducts([]);
       setShopifyProductsError(null);
-      return;
+      return [];
     }
 
     setShopifyProductsLoading(true);
@@ -235,12 +238,41 @@ export default function ArtistDetailClient({ artistId }: Props) {
     try {
       const products = await fetchShopifyProductsForMetaobject(metaobjectId);
       setShopifyProducts(products);
+      return products;
     } catch (err: any) {
       setShopifyProductsError(err?.message ?? "Failed to load artworks from Shopify");
+      return [];
     } finally {
       setShopifyProductsLoading(false);
     }
   };
+
+  const fetchMediaList = useCallback(async (): Promise<MediaItem[]> => {
+    const res = await fetch(`/api/media?kunstlerId=${encodeURIComponent(artistId)}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      const payload = await res.json().catch(() => null);
+      throw new Error(parseErrorMessage(payload));
+    }
+    const json = await res.json();
+    return Array.isArray(json.media) ? json.media : [];
+  }, [artistId]);
+
+  const refreshMediaList = useCallback(async () => {
+    setMediaLoading(true);
+    setMediaError(null);
+    try {
+      const list = await fetchMediaList();
+      setMedia(list);
+      return list;
+    } catch (err: any) {
+      setMediaError(err?.message ?? "Failed to load media");
+      return [];
+    } finally {
+      setMediaLoading(false);
+    }
+  }, [fetchMediaList]);
 
   const buildPublicProfilePayload = (
     overrides: Partial<NonNullable<Artist["publicProfile"]>> = {},
@@ -378,7 +410,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
   useEffect(() => {
     let active = true;
     setArtworkSuccess(null);
-    setArtworkModalOpen(false);
+    setArtworkSuccessAdminUrl(null);
     setSelectedArtworkMediaIds([]);
     setArtworkTitle("");
     setArtworkSaleMode("PRINT_ONLY");
@@ -390,7 +422,8 @@ export default function ArtistDetailClient({ artistId }: Props) {
     setArtworkDescription("");
     setArtworkFieldErrors({});
     setArtworkFormError(null);
-    setArtworkStep(1);
+    setPreviewMedia(null);
+    setDraggingArtworkUpload(false);
     const load = async () => {
       setLoading(true);
       setError(null);
@@ -528,16 +561,9 @@ export default function ArtistDetailClient({ artistId }: Props) {
       setMediaLoading(true);
       setMediaError(null);
       try {
-        const res = await fetch(`/api/media?kunstlerId=${encodeURIComponent(artistId)}`, {
-          cache: "no-store",
-        });
-        if (!res.ok) {
-          const payload = await res.json().catch(() => null);
-          throw new Error(parseErrorMessage(payload));
-        }
-        const json = await res.json();
+        const list = await fetchMediaList();
         if (!active) return;
-        setMedia(Array.isArray(json.media) ? json.media : []);
+        setMedia(list);
       } catch (err: any) {
         if (!active) return;
         setMediaError(err?.message ?? "Failed to load media");
@@ -552,7 +578,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
     return () => {
       active = false;
     };
-  }, [artistId]);
+  }, [artistId, fetchMediaList]);
 
   useEffect(() => {
     let active = true;
@@ -821,9 +847,16 @@ export default function ArtistDetailClient({ artistId }: Props) {
     },
   ];
   const saleModeOptions: Array<{ value: ArtworkSaleMode; label: string; helper: string }> = [
-    { value: "PRINT_ONLY", label: "Print-only", helper: "Prints only. Leave price blank." },
-    { value: "ORIGINAL_ONLY", label: "Original only", helper: "Price required. No original tag." },
-    { value: "ORIGINAL_AND_PRINTS", label: "Original + Prints", helper: "Price required. Adds \"original\" tag." },
+    {
+      value: "PRINT_ONLY",
+      label: "Print only",
+      helper: "No original tag. Leave price empty to keep prints-only automation.",
+    },
+    {
+      value: "ORIGINAL_AND_PRINTS",
+      label: "Original (+ prints)",
+      helper: "Requires price and applies the \"original\" tag.",
+    },
   ];
   const goToTab = (tab: TabKey) => setActiveTab(tab);
   const checklistItems: Array<{
@@ -925,6 +958,55 @@ export default function ArtistDetailClient({ artistId }: Props) {
     }
   };
 
+  const handleUploadArtworkMedia = async (files: FileList | null) => {
+    if (!files || files.length === 0 || artworkGalleryUploading) return;
+    setMediaError(null);
+    setArtworkSuccess(null);
+    setArtworkSuccessAdminUrl(null);
+    setArtworkGalleryUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("kunstlerId", artistId);
+      formData.append("kind", "artwork");
+      Array.from(files).forEach((file) => formData.append("files", file));
+
+      const res = await fetch("/api/media", {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(parseErrorMessage(payload));
+      }
+      const json = await res.json();
+      const uploaded: MediaItem[] = Array.isArray(json.media) ? json.media : [];
+      const uploadedIds = uploaded.map((item) => item._id).filter(Boolean) as string[];
+      if (uploaded.length) {
+        setMedia((prev) => [...uploaded, ...prev]);
+      }
+      if (uploadedIds.length) {
+        setSelectedArtworkMediaIds((prev) => {
+          const next = new Set(prev);
+          uploadedIds.forEach((id) => next.add(id));
+          return Array.from(next);
+        });
+        setArtworkFieldErrors((prev) => {
+          const next = { ...prev };
+          delete next.mediaIds;
+          return next;
+        });
+      }
+      await refreshMediaList();
+    } catch (err: any) {
+      setMediaError(err?.message ?? "Upload failed");
+    } finally {
+      setArtworkGalleryUploading(false);
+      if (artworkUploadInputRef.current) {
+        artworkUploadInputRef.current.value = "";
+      }
+    }
+  };
+
   const handleDeleteMedia = async (id: string) => {
     setMediaError(null);
     try {
@@ -934,6 +1016,10 @@ export default function ArtistDetailClient({ artistId }: Props) {
         throw new Error(parseErrorMessage(payload));
       }
       setMedia((prev) => prev.filter((m) => m._id !== id));
+      setSelectedArtworkMediaIds((prev) => prev.filter((mId) => mId !== id));
+      if (previewMedia?._id === id) {
+        setPreviewMedia(null);
+      }
     } catch (err: any) {
       setMediaError(err?.message ?? "Delete failed");
     }
@@ -980,19 +1066,6 @@ export default function ArtistDetailClient({ artistId }: Props) {
     setArtworkDescription("");
     setArtworkFieldErrors({});
     setArtworkFormError(null);
-    setArtworkStep(1);
-  };
-
-  const openArtworkModal = () => {
-    resetArtworkForm();
-    setArtworkModalOpen(true);
-  };
-
-  const closeArtworkModal = () => {
-    setArtworkModalOpen(false);
-    setArtworkSubmitting(false);
-    setArtworkFormError(null);
-    setArtworkFieldErrors({});
   };
 
   const toggleArtworkMediaSelection = (id: string) => {
@@ -1002,6 +1075,20 @@ export default function ArtistDetailClient({ artistId }: Props) {
       delete next.mediaIds;
       return next;
     });
+  };
+
+  const selectAllArtworkMedia = () => {
+    const allIds = artworkMedia.map((item) => item._id);
+    setSelectedArtworkMediaIds(allIds);
+    setArtworkFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.mediaIds;
+      return next;
+    });
+  };
+
+  const clearArtworkSelection = () => {
+    setSelectedArtworkMediaIds([]);
   };
 
   const validateArtworkForm = () => {
@@ -1017,8 +1104,13 @@ export default function ArtistDetailClient({ artistId }: Props) {
     if (priceRequired && !priceValue) {
       errors.price = "Price is required for this sale mode.";
     }
-    if (priceValue && Number.isNaN(Number(priceValue))) {
-      errors.price = "Price must be a number.";
+    if (priceValue) {
+      const parsedPrice = Number(priceValue);
+      if (Number.isNaN(parsedPrice)) {
+        errors.price = "Price must be a number.";
+      } else if (parsedPrice <= 0) {
+        errors.price = "Price must be greater than 0.";
+      }
     }
     if (artworkEditionSize.trim() && Number.isNaN(Number(artworkEditionSize.trim()))) {
       errors.editionSize = "Edition size must be a number.";
@@ -1034,22 +1126,20 @@ export default function ArtistDetailClient({ artistId }: Props) {
 
   const handleCreateArtwork = async () => {
     setArtworkFormError(null);
+    setArtworkSuccess(null);
+    setArtworkSuccessAdminUrl(null);
     const errors = validateArtworkForm();
     setArtworkFieldErrors(errors);
-    if (Object.keys(errors).length) {
-      if (errors.mediaIds) {
-        setArtworkStep(1);
-      } else {
-        setArtworkStep(2);
-      }
-      return;
-    }
+    if (Object.keys(errors).length) return;
     if (!artistShopifyMetaobjectId) {
       setArtworkFormError("Artist is not linked to Shopify.");
       return;
     }
 
     setArtworkSubmitting(true);
+    const saleModeToSend: ArtworkSaleMode = artworkSaleMode === "PRINT_ONLY" ? "PRINT_ONLY" : "ORIGINAL_AND_PRINTS";
+    const priceValue = artworkPrice.trim();
+    const priceToSend = saleModeToSend === "PRINT_ONLY" ? (priceValue ? priceValue : null) : priceValue;
     try {
       const res = await fetch("/api/shopify/artworks/create", {
         method: "POST",
@@ -1058,8 +1148,8 @@ export default function ArtistDetailClient({ artistId }: Props) {
           artistId,
           artistMetaobjectGid: artistShopifyMetaobjectId,
           title: artworkTitle.trim(),
-          saleMode: artworkSaleMode,
-          price: artworkSaleMode === "PRINT_ONLY" ? null : artworkPrice.trim() || null,
+          saleMode: saleModeToSend,
+          price: priceToSend,
           editionSize: artworkEditionSize.trim() || null,
           kurzbeschreibung: artworkKurzbeschreibung.trim() || null,
           widthCm: artworkWidthCm.trim() ? Number(artworkWidthCm.trim()) : null,
@@ -1073,16 +1163,17 @@ export default function ArtistDetailClient({ artistId }: Props) {
         const payload = await res.json().catch(() => null);
         if (payload?.fieldErrors) {
           setArtworkFieldErrors(payload.fieldErrors);
-          if (payload.fieldErrors.mediaIds) setArtworkStep(1);
         }
         throw new Error(parseErrorMessage(payload));
       }
 
-      await res.json();
+      const payload = await res.json().catch(() => ({}));
+      const createdHandle = payload?.handle as string | undefined;
       setArtworkSuccess("Artwork created in Shopify.");
-      closeArtworkModal();
-      await refreshShopifyProducts();
       resetArtworkForm();
+      const products = await refreshShopifyProducts();
+      const createdProduct = createdHandle ? products.find((product) => product.handle === createdHandle) : undefined;
+      setArtworkSuccessAdminUrl(createdProduct?.shopifyAdminUrl || null);
     } catch (err: any) {
       setArtworkFormError(err?.message ?? "Failed to create artwork");
     } finally {
@@ -1186,93 +1277,431 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const artworksHeader = (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h3 className="text-lg font-semibold text-slate-800">Artworks (Shopify)</h3>
-        <p className="text-xs text-slate-500">Create artworks directly in Shopify. Images come from existing media.</p>
+        <h3 className="text-lg font-semibold text-slate-800">Artworks</h3>
+        <p className="text-xs text-slate-500">
+          Upload artwork images inline, preview, select, and create Shopify draft products without leaving this tab.
+        </p>
       </div>
-      <div className="flex items-center gap-3">
-        {shopifyProductsLoading && <span className="text-xs text-slate-500">Loading...</span>}
-        <button
-          type="button"
-          onClick={openArtworkModal}
-          disabled={!artist?.shopifySync?.metaobjectId}
-          className="inline-flex items-center rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50"
-          title={!artist?.shopifySync?.metaobjectId ? "Link artist to Shopify first" : undefined}
-        >
-          New artwork
-        </button>
-      </div>
+      {shopifyProductsLoading && <span className="text-xs text-slate-500">Loading Shopify...</span>}
     </div>
   );
 
+  const artworkPriceValue = artworkPrice.trim();
+  const artworkPriceRequired = artworkSaleMode !== "PRINT_ONLY";
+  const artworkPriceInvalid = artworkPriceValue ? Number.isNaN(Number(artworkPriceValue)) || Number(artworkPriceValue) <= 0 : false;
+  const isCreateArtworkDisabled =
+    artworkSubmitting ||
+    !artworkTitle.trim() ||
+    selectedArtworkMediaIds.length === 0 ||
+    (artworkPriceRequired && (!artworkPriceValue || artworkPriceInvalid));
+
   const artworksContent = (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {!artist?.shopifySync?.metaobjectId && (
         <p className="text-sm text-slate-600">No Shopify artist linked yet. Sync to Shopify first.</p>
       )}
 
       {artist?.shopifySync?.metaobjectId && (
-        <>
-          {artworkSuccess && (
-            <div className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{artworkSuccess}</div>
-          )}
-          {shopifyProductsError && <p className="text-sm text-red-600">{shopifyProductsError}</p>}
-          {!shopifyProductsLoading && shopifyProducts.length === 0 && !shopifyProductsError && (
-            <p className="text-sm text-slate-600">No Shopify products found for this artist.</p>
-          )}
-          {shopifyProducts.length > 0 && (
-            <ul className="grid gap-3">
-              {shopifyProducts.map((product) => {
-                const hasDimensions = product.breiteCm !== null || product.heightCm !== null;
-                const dimensions = hasDimensions ? `${product.breiteCm ?? "?"} × ${product.heightCm ?? "?"} cm` : null;
-                return (
-                  <li key={product.id} className="flex gap-3 rounded border border-slate-200 p-3">
-                    {product.imageUrl ? (
-                      <img src={product.imageUrl} alt={product.title} className="h-16 w-16 rounded object-cover" />
-                    ) : (
-                      <div className="flex h-16 w-16 items-center justify-center rounded border border-dashed border-slate-300 text-xs text-slate-500">
-                        No image
+        <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="space-y-3">
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDraggingArtworkUpload(true);
+              }}
+              onDragEnter={(e) => {
+                e.preventDefault();
+                setDraggingArtworkUpload(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                setDraggingArtworkUpload(false);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDraggingArtworkUpload(false);
+                handleUploadArtworkMedia(e.dataTransfer?.files || null);
+              }}
+              className={`rounded-lg border-2 border-dashed bg-slate-50 p-4 transition ${
+                draggingArtworkUpload ? "border-slate-900" : "border-slate-300"
+              }`}
+            >
+              <input
+                ref={artworkUploadInputRef}
+                type="file"
+                accept="image/*,video/*,.pdf"
+                multiple
+                className="hidden"
+                onChange={(e) => handleUploadArtworkMedia(e.target.files)}
+              />
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Upload artwork images</p>
+                  <p className="text-xs text-slate-600">
+                    Files go to /api/media with kind=&quot;artwork&quot;, show instantly, and are auto-selected for creation.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => artworkUploadInputRef.current?.click()}
+                  disabled={artworkGalleryUploading}
+                  className="inline-flex items-center rounded bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
+                >
+                  {artworkGalleryUploading ? "Uploading..." : "Select files"}
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-slate-500">Drag & drop images or tap to browse. Accepted: images, videos, PDFs.</p>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-slate-900">Selected:</span>
+                <span className="rounded-full bg-slate-900 px-2 py-0.5 text-xs font-semibold text-white">
+                  {selectedArtworkMediaIds.length}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={selectAllArtworkMedia}
+                  disabled={artworkMedia.length === 0}
+                  className="rounded border border-slate-200 bg-white px-2 py-1 font-semibold text-slate-700 hover:border-slate-300 disabled:opacity-60"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={clearArtworkSelection}
+                  disabled={selectedArtworkMediaIds.length === 0}
+                  className="rounded border border-slate-200 bg-white px-2 py-1 font-semibold text-slate-700 hover:border-slate-300 disabled:opacity-60"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+            {artworkFieldErrors.mediaIds && <p className="text-xs text-red-600">{artworkFieldErrors.mediaIds}</p>}
+            {mediaError && <p className="text-sm text-red-600">{mediaError}</p>}
+
+            {mediaLoading ? (
+              <p className="text-sm text-slate-600">Loading media...</p>
+            ) : artworkMedia.length === 0 ? (
+              <div className="rounded border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-700">
+                <p className="font-medium text-slate-900">No artwork media yet.</p>
+                <p className="text-sm text-slate-600">Upload artwork images above to start.</p>
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {artworkMedia.map((item) => {
+                  const isImage = item.mimeType?.startsWith("image/");
+                  const isVideo = item.mimeType?.startsWith("video/");
+                  const displayName = item.filename || item.s3Key;
+                  const selected = selectedArtworkMediaIds.includes(item._id);
+                  return (
+                    <div
+                      key={item._id}
+                      className={`rounded-lg border p-2 transition ${
+                        selected ? "border-slate-900 ring-1 ring-slate-900" : "border-slate-200 hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => toggleArtworkMediaSelection(item._id)}
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                        />
+                        <div className="flex-1 space-y-2">
+                          <div className="overflow-hidden rounded-md bg-slate-100">
+                            {isImage && item.url ? (
+                              <img src={item.url} alt={displayName} className="h-36 w-full object-cover" />
+                            ) : isVideo && item.url ? (
+                              <video src={item.url} className="h-36 w-full object-cover" muted playsInline />
+                            ) : (
+                              <div className="flex h-36 items-center justify-center text-xs text-slate-500">No preview</div>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <div className="truncate font-medium text-slate-900">{displayName}</div>
+                            <span className="text-[11px] uppercase text-slate-500">{item.mimeType?.split("/")[1] || "file"}</span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewMedia(item)}
+                              className="text-blue-600 underline"
+                            >
+                              Preview
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteMedia(item._id)}
+                              className="text-red-600 underline"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    )}
-                    <div className="flex-1 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="font-medium text-slate-900">{product.title}</div>
-                        <span className="text-xs text-slate-500">@{product.handle}</span>
-                        {product.status && (
-                          <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold uppercase text-slate-700">
-                            {product.status}
-                          </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <form
+            className="space-y-3 rounded border border-slate-200 bg-slate-50 p-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleCreateArtwork();
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Create artwork in Shopify</p>
+                <p className="text-sm text-slate-700">Selected media attach automatically as product images.</p>
+              </div>
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                {selectedArtworkMediaIds.length} selected
+              </span>
+            </div>
+
+            {artworkFormError && (
+              <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{artworkFormError}</div>
+            )}
+            {artworkSuccess && (
+              <div className="space-y-1 rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+                <div>{artworkSuccess}</div>
+                {artworkSuccessAdminUrl && (
+                  <a
+                    href={artworkSuccessAdminUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-green-800 underline"
+                  >
+                    Open draft in Shopify admin
+                  </a>
+                )}
+              </div>
+            )}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-sm font-medium text-slate-700">
+                Title <span className="text-red-600">*</span>
+                <input
+                  value={artworkTitle}
+                  onChange={(e) => setArtworkTitle(e.target.value)}
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  placeholder="Artwork title"
+                />
+                {artworkFieldErrors.title && <p className="text-xs text-red-600">{artworkFieldErrors.title}</p>}
+              </label>
+              <label className="space-y-1 text-sm font-medium text-slate-700">
+                Sale type <span className="text-red-600">*</span>
+                <select
+                  value={artworkSaleMode}
+                  onChange={(e) => setArtworkSaleMode(e.target.value as ArtworkSaleMode)}
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                >
+                  {saleModeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500">{saleModeOptions.find((option) => option.value === artworkSaleMode)?.helper}</p>
+                {artworkFieldErrors.saleMode && <p className="text-xs text-red-600">{artworkFieldErrors.saleMode}</p>}
+              </label>
+            </div>
+
+            <label className="space-y-1 text-sm font-medium text-slate-700">
+              Price {artworkSaleMode !== "PRINT_ONLY" && <span className="text-red-600">*</span>}
+              <input
+                value={artworkPrice}
+                onChange={(e) => setArtworkPrice(e.target.value)}
+                inputMode="decimal"
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                placeholder={artworkSaleMode === "PRINT_ONLY" ? "Optional for prints" : "e.g. 1200.00"}
+              />
+              <p className="text-xs text-slate-500">
+                {artworkSaleMode === "PRINT_ONLY"
+                  ? "Leave blank to trigger print-only automation; fill if you still want a price."
+                  : "Required for originals (+ prints) and must be greater than 0."}
+              </p>
+              {artworkFieldErrors.price && <p className="text-xs text-red-600">{artworkFieldErrors.price}</p>}
+            </label>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-sm font-medium text-slate-700">
+                Width (cm)
+                <input
+                  value={artworkWidthCm}
+                  onChange={(e) => setArtworkWidthCm(e.target.value)}
+                  type="number"
+                  step="0.01"
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  placeholder="e.g. 50"
+                />
+                <p className="text-xs text-slate-500">Sends to custom.breite_cm_ (number_decimal)</p>
+                {artworkFieldErrors.widthCm && <p className="text-xs text-red-600">{artworkFieldErrors.widthCm}</p>}
+              </label>
+              <label className="space-y-1 text-sm font-medium text-slate-700">
+                Height (cm)
+                <input
+                  value={artworkHeightCm}
+                  onChange={(e) => setArtworkHeightCm(e.target.value)}
+                  type="number"
+                  step="0.01"
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  placeholder="e.g. 70"
+                />
+                <p className="text-xs text-slate-500">Sends to custom.height (number_decimal)</p>
+                {artworkFieldErrors.heightCm && <p className="text-xs text-red-600">{artworkFieldErrors.heightCm}</p>}
+              </label>
+            </div>
+
+            <label className="space-y-1 text-sm font-medium text-slate-700">
+              Short description
+              <textarea
+                value={artworkKurzbeschreibung}
+                onChange={(e) => setArtworkKurzbeschreibung(e.target.value)}
+                rows={2}
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                placeholder="Kurze Beschreibung für Shopify"
+              />
+              <p className="text-xs text-slate-500">Maps to custom.kurzbeschreibung (multi_line_text_field)</p>
+            </label>
+
+            <label className="space-y-1 text-sm font-medium text-slate-700">
+              Edition size (optional)
+              <input
+                value={artworkEditionSize}
+                onChange={(e) => setArtworkEditionSize(e.target.value)}
+                inputMode="numeric"
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                placeholder="e.g. 25"
+              />
+              {artworkFieldErrors.editionSize && <p className="text-xs text-red-600">{artworkFieldErrors.editionSize}</p>}
+            </label>
+
+            <label className="space-y-1 text-sm font-medium text-slate-700">
+              Description (optional)
+              <textarea
+                value={artworkDescription}
+                onChange={(e) => setArtworkDescription(e.target.value)}
+                rows={3}
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                placeholder="Description/HTML"
+              />
+            </label>
+
+            {selectedArtworkMediaIds.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto rounded border border-slate-200 bg-white p-2">
+                {selectedArtworkMediaIds
+                  .map((id) => artworkMedia.find((item) => item._id === id))
+                  .filter(Boolean)
+                  .map((item) => {
+                    const media = item as MediaItem;
+                    return (
+                      <div key={media._id} className="flex items-center gap-2 rounded bg-slate-50 px-2 py-1 text-xs text-slate-700">
+                        {media.url ? (
+                          <img src={media.url} alt={media.filename || media.s3Key} className="h-10 w-10 rounded object-cover" />
+                        ) : (
+                          <div className="flex h-10 w-10 items-center justify-center rounded bg-slate-100 text-[11px] text-slate-600">
+                            {media.mimeType || "file"}
+                          </div>
+                        )}
+                        <span className="truncate max-w-[140px]">{media.filename || media.s3Key}</span>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-slate-600">
+                {selectedArtworkMediaIds.length === 0 ? "Select at least one artwork image" : "Ready to create with selected images"}
+              </div>
+              <button
+                type="submit"
+                disabled={isCreateArtworkDisabled}
+                className="inline-flex items-center rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-40"
+              >
+                {artworkSubmitting ? "Creating..." : "Create in Shopify"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <h4 className="text-sm font-semibold text-slate-800">Existing Shopify products</h4>
+          {shopifyProductsLoading && <span className="text-xs text-slate-500">Loading...</span>}
+        </div>
+        {!artist?.shopifySync?.metaobjectId ? (
+          <p className="text-sm text-slate-600">Link the artist to Shopify to list draft products.</p>
+        ) : (
+          <>
+            {shopifyProductsError && <p className="text-sm text-red-600">{shopifyProductsError}</p>}
+            {!shopifyProductsLoading && shopifyProducts.length === 0 && !shopifyProductsError && (
+              <p className="text-sm text-slate-600">No Shopify products found for this artist.</p>
+            )}
+            {shopifyProducts.length > 0 && (
+              <ul className="grid gap-3">
+                {shopifyProducts.map((product) => {
+                  const hasDimensions = product.breiteCm !== null || product.heightCm !== null;
+                  const dimensions = hasDimensions ? `${product.breiteCm ?? "?"} × ${product.heightCm ?? "?"} cm` : null;
+                  return (
+                    <li key={product.id} className="flex gap-3 rounded border border-slate-200 p-3">
+                      {product.imageUrl ? (
+                        <img src={product.imageUrl} alt={product.title} className="h-16 w-16 rounded object-cover" />
+                      ) : (
+                        <div className="flex h-16 w-16 items-center justify-center rounded border border-dashed border-slate-300 text-xs text-slate-500">
+                          No image
+                        </div>
+                      )}
+                      <div className="flex-1 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="font-medium text-slate-900">{product.title}</div>
+                          <span className="text-xs text-slate-500">@{product.handle}</span>
+                          {product.status && (
+                            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold uppercase text-slate-700">
+                              {product.status}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-slate-700">
+                          <span className="text-xs uppercase text-slate-500">Price:</span> {product.firstVariantPrice || "—"}
+                        </div>
+                        {dimensions && <div className="text-sm text-slate-700">Size: {dimensions}</div>}
+                        {product.kurzbeschreibung && (
+                          <p
+                            className="text-sm text-slate-600"
+                            style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+                          >
+                            {product.kurzbeschreibung}
+                          </p>
+                        )}
+                        {product.shopifyAdminUrl && (
+                          <a
+                            href={product.shopifyAdminUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-blue-600 underline"
+                          >
+                            Open in Shopify
+                          </a>
                         )}
                       </div>
-                      <div className="text-sm text-slate-700">
-                        <span className="text-xs uppercase text-slate-500">Price:</span> {product.firstVariantPrice || "—"}
-                      </div>
-                      {dimensions && <div className="text-sm text-slate-700">Size: {dimensions}</div>}
-                      {product.kurzbeschreibung && (
-                        <p
-                          className="text-sm text-slate-600"
-                          style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
-                        >
-                          {product.kurzbeschreibung}
-                        </p>
-                      )}
-                      {product.shopifyAdminUrl && (
-                        <a
-                          href={product.shopifyAdminUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs text-blue-600 underline"
-                        >
-                          Open in Shopify
-                        </a>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </>
-      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 
@@ -1760,280 +2189,44 @@ export default function ArtistDetailClient({ artistId }: Props) {
     { key: "payout", label: "Payout", chip: payoutStatusChip },
   ];
 
-  const selectedArtworkItems = selectedArtworkMediaIds
-    .map((id) => artworkMedia.find((item) => item._id === id))
-    .filter(Boolean) as MediaItem[];
-
-  const artworkWizardModal = !artworkModalOpen ? null : (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
-      <div className="w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">New artwork</p>
-            <p className="text-sm text-slate-600">Upload selected media to Shopify as a product.</p>
-          </div>
+  const previewModal = !previewMedia ? null : (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4">
+      <div className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <div className="truncate text-sm font-semibold text-slate-800">{previewMedia.filename || previewMedia.s3Key}</div>
           <button
             type="button"
-            onClick={closeArtworkModal}
-            className="rounded-full border border-slate-200 px-3 py-1 text-sm font-medium text-slate-700 hover:border-slate-300"
+            onClick={() => setPreviewMedia(null)}
+            className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300"
           >
             Close
           </button>
         </div>
-
-        <div className="flex gap-2 border-b border-slate-100 bg-slate-50 px-6 py-3 text-sm font-semibold text-slate-800">
-          <span
-            className={`rounded-full px-3 py-1 ${artworkStep === 1 ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
-          >
-            1. Select images
-          </span>
-          <span
-            className={`rounded-full px-3 py-1 ${artworkStep === 2 ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
-          >
-            2. Details
-          </span>
-        </div>
-
-        <div className="px-6 py-5">
-          {artworkStep === 1 ? (
-            <div className="space-y-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="text-xs uppercase tracking-wide text-slate-500">Step 1</div>
-                  <h4 className="text-lg font-semibold text-slate-900">Select images</h4>
-                  <p className="text-sm text-slate-600">Choose 1..n artwork media with a quick preview.</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={closeArtworkModal}
-                    className="rounded border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-300"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setArtworkStep(2)}
-                    disabled={selectedArtworkMediaIds.length === 0}
-                    className="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-40"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-
-              {artworkFieldErrors.mediaIds && <p className="text-sm text-red-600">{artworkFieldErrors.mediaIds}</p>}
-
-              {mediaLoading ? (
-                <p className="text-sm text-slate-600">Loading media...</p>
-              ) : !hasArtworkMedia ? (
-                <div className="rounded border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-600">
-                  <p className="font-medium text-slate-800">No artwork media yet</p>
-                  <p className="mt-1 text-slate-600">Upload artwork media in the Media tab first.</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      closeArtworkModal();
-                      goToTab("media");
-                    }}
-                    className="mt-3 inline-flex items-center rounded bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
-                  >
-                    Go to Media
-                  </button>
-                </div>
-              ) : (
-                <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-                  {artworkMedia.map((item) => {
-                    const selected = selectedArtworkMediaIds.includes(item._id);
-                    const isImage = item.mimeType?.startsWith("image/");
-                    return (
-                      <button
-                        key={item._id}
-                        type="button"
-                        onClick={() => toggleArtworkMediaSelection(item._id)}
-                        className={`group relative overflow-hidden rounded-xl border text-left transition ${
-                          selected ? "border-slate-900 ring-2 ring-slate-900" : "border-slate-200 hover:border-slate-300"
-                        }`}
-                      >
-                        <div className="relative h-40 w-full bg-slate-100">
-                          {isImage && item.url ? (
-                            <img src={item.url} alt={item.filename || item.s3Key} className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">
-                              {item.mimeType || "file"}
-                            </div>
-                          )}
-                          {selected && (
-                            <span className="absolute right-2 top-2 rounded-full bg-white/90 px-2 py-1 text-[11px] font-semibold text-slate-900 shadow">
-                              Selected
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between px-3 py-2">
-                          <div className="truncate text-sm font-medium text-slate-900">{item.filename || item.s3Key}</div>
-                          <span className="text-[11px] uppercase text-slate-500">{item.mimeType?.split("/")[1] || "img"}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+        <div className="max-h-[80vh] overflow-auto p-4 space-y-2">
+          <div className="text-xs text-slate-600">
+            {previewMedia.mimeType || "Unknown type"} • {previewMedia.kind}
+          </div>
+          {previewMedia.url && previewMedia.mimeType?.startsWith("image/") && (
+            <img src={previewMedia.url} alt={previewMedia.filename || previewMedia.s3Key} className="h-auto w-full rounded-lg object-contain" />
+          )}
+          {previewMedia.url && previewMedia.mimeType?.startsWith("video/") && (
+            <video
+              src={previewMedia.url}
+              controls
+              className="w-full rounded-lg"
+              style={{ maxHeight: "70vh" }}
+            />
+          )}
+          {previewMedia.url && !previewMedia.mimeType?.startsWith("image/") && !previewMedia.mimeType?.startsWith("video/") && (
+            <div className="space-y-2 text-sm text-slate-700">
+              <p>No inline preview for this file. You can download or open it below.</p>
+              <a href={previewMedia.url} target="_blank" rel="noreferrer" className="text-blue-600 underline">
+                Open file
+              </a>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="text-xs uppercase tracking-wide text-slate-500">Step 2</div>
-                  <h4 className="text-lg font-semibold text-slate-900">Details</h4>
-                  <p className="text-sm text-slate-600">
-                    Title and sale mode decide pricing/tag rules. Images will be attached after creation.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setArtworkStep(1)}
-                    className="rounded border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-300"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCreateArtwork}
-                    disabled={artworkSubmitting}
-                    className="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-40"
-                  >
-                    {artworkSubmitting ? "Creating..." : "Create in Shopify"}
-                  </button>
-                </div>
-              </div>
-
-              {selectedArtworkItems.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto rounded border border-slate-200 bg-slate-50 p-2">
-                  {selectedArtworkItems.map((item) => (
-                    <div key={item._id} className="flex items-center gap-2 rounded bg-white px-2 py-1 shadow-sm">
-                      {item.url ? (
-                        <img src={item.url} alt={item.filename || item.s3Key} className="h-10 w-10 rounded object-cover" />
-                      ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded bg-slate-100 text-[11px] text-slate-600">
-                          {item.mimeType || "file"}
-                        </div>
-                      )}
-                      <div className="text-xs text-slate-700 truncate max-w-[140px]">{item.filename || item.s3Key}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {artworkFormError && (
-                <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{artworkFormError}</div>
-              )}
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="space-y-1 text-sm font-medium text-slate-700">
-                  Title <span className="text-red-600">*</span>
-                  <input
-                    value={artworkTitle}
-                    onChange={(e) => setArtworkTitle(e.target.value)}
-                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                    placeholder="Artwork title"
-                  />
-                  {artworkFieldErrors.title && <p className="text-xs text-red-600">{artworkFieldErrors.title}</p>}
-                </label>
-                <label className="space-y-1 text-sm font-medium text-slate-700">
-                  Sale mode <span className="text-red-600">*</span>
-                  <select
-                    value={artworkSaleMode}
-                    onChange={(e) => setArtworkSaleMode(e.target.value as ArtworkSaleMode)}
-                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  >
-                    {saleModeOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-slate-500">
-                    {saleModeOptions.find((option) => option.value === artworkSaleMode)?.helper}
-                  </p>
-                  {artworkFieldErrors.saleMode && <p className="text-xs text-red-600">{artworkFieldErrors.saleMode}</p>}
-                </label>
-                <label className="space-y-1 text-sm font-medium text-slate-700">
-                  Price {artworkSaleMode !== "PRINT_ONLY" && <span className="text-red-600">*</span>}
-                  <input
-                    value={artworkPrice}
-                    onChange={(e) => setArtworkPrice(e.target.value)}
-                    inputMode="decimal"
-                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                    placeholder="e.g. 1200.00"
-                  />
-                  <p className="text-xs text-slate-500">
-                    {artworkSaleMode === "PRINT_ONLY" ? "Leave blank for print-only (no variant price)." : "Required for original or originals + prints."}
-                  </p>
-                  {artworkFieldErrors.price && <p className="text-xs text-red-600">{artworkFieldErrors.price}</p>}
-                </label>
-                <label className="space-y-1 text-sm font-medium text-slate-700">
-                  Edition size (optional)
-                  <input
-                    value={artworkEditionSize}
-                    onChange={(e) => setArtworkEditionSize(e.target.value)}
-                    inputMode="numeric"
-                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                    placeholder="z. B. 25"
-                  />
-                  {artworkFieldErrors.editionSize && <p className="text-xs text-red-600">{artworkFieldErrors.editionSize}</p>}
-                </label>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="space-y-1 text-sm font-medium text-slate-700">
-                  Width (cm)
-                  <input
-                    value={artworkWidthCm}
-                    onChange={(e) => setArtworkWidthCm(e.target.value)}
-                    type="number"
-                    step="0.01"
-                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                    placeholder="e.g. 50"
-                  />
-                  {artworkFieldErrors.widthCm && <p className="text-xs text-red-600">{artworkFieldErrors.widthCm}</p>}
-                </label>
-                <label className="space-y-1 text-sm font-medium text-slate-700">
-                  Height (cm)
-                  <input
-                    value={artworkHeightCm}
-                    onChange={(e) => setArtworkHeightCm(e.target.value)}
-                    type="number"
-                    step="0.01"
-                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                    placeholder="e.g. 70"
-                  />
-                  {artworkFieldErrors.heightCm && <p className="text-xs text-red-600">{artworkFieldErrors.heightCm}</p>}
-                </label>
-              </div>
-
-              <label className="space-y-1 text-sm font-medium text-slate-700">
-                Kurzbeschreibung (optional)
-                <textarea
-                  value={artworkKurzbeschreibung}
-                  onChange={(e) => setArtworkKurzbeschreibung(e.target.value)}
-                  rows={2}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  placeholder="Kurze Beschreibung für Shopify"
-                />
-              </label>
-
-              <label className="space-y-1 text-sm font-medium text-slate-700">
-                Description (optional)
-                <textarea
-                  value={artworkDescription}
-                  onChange={(e) => setArtworkDescription(e.target.value)}
-                  rows={4}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  placeholder="Description/HTML"
-                />
-              </label>
-            </div>
+          )}
+          {!previewMedia.url && (
+            <p className="text-sm text-slate-700">No preview URL available for this file.</p>
           )}
         </div>
       </div>
@@ -2219,7 +2412,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
           )}
         </div>
       </section>
-      {artworkWizardModal}
+      {previewModal}
     </>
   );
 }
