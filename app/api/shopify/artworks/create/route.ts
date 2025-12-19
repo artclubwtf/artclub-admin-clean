@@ -250,9 +250,9 @@ async function getPrimaryLocationId(): Promise<string> {
   return cachedLocationId;
 }
 
-async function updateVariantPriceAndInventory(productId: string, variantId: string, price: string | null, locationId: string) {
+async function updateVariantPrice(productId: string, variantId: string, price: string | null) {
   const mutation = `
-    mutation UpdateArtworkVariant($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+    mutation UpdateArtworkVariantPrice($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
       productVariantsBulkUpdate(productId: $productId, variants: $variants) {
         productVariants { id }
         userErrors { field message }
@@ -260,10 +260,7 @@ async function updateVariantPriceAndInventory(productId: string, variantId: stri
     }
   `;
 
-  const variantInput: Record<string, any> = {
-    id: variantId,
-    inventoryQuantities: [{ locationId, availableQuantity: 1 }],
-  };
+  const variantInput: Record<string, any> = { id: variantId };
   if (price !== null) {
     variantInput.price = price;
   }
@@ -280,6 +277,38 @@ async function updateVariantPriceAndInventory(productId: string, variantId: stri
 
 function waitMs(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function setInventoryToOne(inventoryItemId: string, locationId: string) {
+  const mutation = `
+    mutation AdjustInventory($input: InventoryAdjustQuantitiesInput!) {
+      inventoryAdjustQuantities(input: $input) {
+        userErrors { field message }
+      }
+    }
+  `;
+
+  const data = await callShopifyAdmin(mutation, {
+    input: {
+      reason: "correction",
+      name: "Set to 1 for artwork creation",
+      changes: [
+        {
+          inventoryItemId,
+          locationId,
+          availableDelta: 1,
+        },
+      ],
+    },
+  });
+
+  const payload = data?.inventoryAdjustQuantities;
+  if (!payload) throw new Error("Shopify inventoryAdjustQuantities returned no payload");
+  const userErrors = payload.userErrors || [];
+  if (userErrors.length) {
+    const message = userErrors.map((e: any) => e.message).join("; ") || "inventoryAdjustQuantities failed";
+    throw new Error(message);
+  }
 }
 
 function parseNumber(value: unknown): number | null | undefined {
@@ -456,14 +485,17 @@ export async function POST(req: Request) {
     if (!product.defaultVariantId) {
       throw new Error("Shopify productCreate missing default variant");
     }
+    if (!product.defaultInventoryItemId) {
+      throw new Error("Shopify productCreate missing default inventory item");
+    }
 
     const locationId = await getPrimaryLocationId();
 
     if (priceToSend !== null && priceToSend !== undefined && `${priceToSend}`.trim() !== "") {
-      await updateVariantPriceAndInventory(product.id, product.defaultVariantId, `${priceToSend}`.trim(), locationId);
-    } else {
-      await updateVariantPriceAndInventory(product.id, product.defaultVariantId, null, locationId);
+      await updateVariantPrice(product.id, product.defaultVariantId, `${priceToSend}`.trim());
     }
+
+    await setInventoryToOne(product.defaultInventoryItemId, locationId);
 
     const mediaResult = await attachMedia(product.id, stagedResources);
 
