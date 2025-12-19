@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactElement } from "react";
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 type Props = {
@@ -77,6 +77,40 @@ type PayoutDetails = {
   taxId?: string;
 };
 
+type PayoutTransaction = {
+  id: string;
+  amount: number;
+  currency: string;
+  method: string;
+  createdAt?: string;
+  note?: string;
+};
+
+type OrdersSummaryTotals = {
+  printGross: number;
+  originalGross: number;
+  unknownGross: number;
+  earned: number;
+  paid: number;
+  outstanding: number;
+};
+
+type OrdersSummary = {
+  orders: {
+    id: string;
+    source: "shopify" | "pos";
+    createdAt: string;
+    label: string;
+    currency: string;
+    printGross: number;
+    originalGross: number;
+    unknownGross: number;
+  }[];
+  totals: { allTime: OrdersSummaryTotals; last30d: OrdersSummaryTotals };
+  payouts: PayoutTransaction[];
+  commissionTerms: { printCommissionPct: number; originalCommissionPct: number } | null;
+};
+
 type MediaItem = {
   _id: string;
   artistId: string;
@@ -149,7 +183,7 @@ type FileUploadStatus = {
 
 const stageOptions = ["Idea", "In Review", "Offer", "Under Contract"] as const;
 type Stage = (typeof stageOptions)[number];
-type TabKey = "overview" | "media" | "artworks" | "publicProfile" | "contracts" | "payout";
+type TabKey = "overview" | "media" | "artworks" | "publicProfile" | "contracts" | "payout" | "orders";
 
 function parseErrorMessage(payload: any) {
   if (!payload) return "Unexpected error";
@@ -297,6 +331,30 @@ export default function ArtistDetailClient({ artistId }: Props) {
     heightCm: "",
     shortDescription: "",
   });
+
+  const [ordersSummary, setOrdersSummary] = useState<OrdersSummary | null>(null);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [ordersRange, setOrdersRange] = useState<"last30" | "all">("last30");
+  const [payoutModalOpen, setPayoutModalOpen] = useState(false);
+  const [payoutAmount, setPayoutAmount] = useState("");
+  const [payoutMethodSelection, setPayoutMethodSelection] = useState("bank");
+  const [payoutNoteTx, setPayoutNoteTx] = useState("");
+  const [payoutDateTx, setPayoutDateTx] = useState(() => new Date().toISOString().slice(0, 10));
+  const [payoutTxSaving, setPayoutTxSaving] = useState(false);
+  const [payoutTxMessage, setPayoutTxMessage] = useState<string | null>(null);
+
+  const displayedTotals = useMemo(() => {
+    if (!ordersSummary) return null;
+    return ordersRange === "last30" ? ordersSummary.totals.last30d : ordersSummary.totals.allTime;
+  }, [ordersSummary, ordersRange]);
+
+  const filteredOrders = useMemo(() => {
+    if (!ordersSummary) return [];
+    if (ordersRange === "all") return ordersSummary.orders;
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    return ordersSummary.orders.filter((o) => new Date(o.createdAt) >= cutoff);
+  }, [ordersSummary, ordersRange]);
   const bulkCancelRef = useRef(false);
   const bulkAbortController = useRef<AbortController | null>(null);
   const artistRecordId = artist?._id;
@@ -597,6 +655,26 @@ export default function ArtistDetailClient({ artistId }: Props) {
       }
     };
 
+    const loadOrdersSummary = async () => {
+      setOrdersLoading(true);
+      setOrdersError(null);
+      try {
+        const res = await fetch(`/api/artists/${encodeURIComponent(artistId)}/orders-summary`, { cache: "no-store" });
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null);
+          throw new Error(parseErrorMessage(payload));
+        }
+        const json = await res.json();
+        if (!active) return;
+        setOrdersSummary(json as OrdersSummary);
+      } catch (err: any) {
+        if (!active) return;
+        setOrdersError(err?.message ?? "Failed to load orders summary");
+      } finally {
+        if (active) setOrdersLoading(false);
+      }
+    };
+
     const loadPayout = async () => {
       setPayoutLoading(true);
       setPayoutError(null);
@@ -643,6 +721,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
 
     loadContractTerms();
     loadContracts();
+    loadOrdersSummary();
     loadPayout();
     loadMedia();
     return () => {
@@ -796,6 +875,68 @@ export default function ArtistDetailClient({ artistId }: Props) {
     }
   };
 
+  const refreshOrdersSummary = async () => {
+    try {
+      setOrdersLoading(true);
+      const res = await fetch(`/api/artists/${encodeURIComponent(artistId)}/orders-summary`, { cache: "no-store" });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(parseErrorMessage(payload));
+      }
+      const json = await res.json();
+      setOrdersSummary(json as OrdersSummary);
+      setOrdersError(null);
+    } catch (err: any) {
+      setOrdersError(err?.message ?? "Failed to refresh orders");
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
+
+  const handleRecordPayout = async () => {
+    setPayoutTxMessage(null);
+    if (!payoutAmount.trim()) {
+      setOrdersError("Amount is required");
+      return;
+    }
+    const amount = Number(payoutAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setOrdersError("Amount must be positive");
+      return;
+    }
+
+    setPayoutTxSaving(true);
+    try {
+      const res = await fetch("/api/payout-transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kunstlerId: artistId,
+          artistMetaobjectGid: artistShopifyMetaobjectId,
+          amount,
+          currency: "EUR",
+          method: payoutMethodSelection,
+          note: payoutNoteTx.trim() || undefined,
+          createdAt: payoutDateTx ? new Date(payoutDateTx).toISOString() : undefined,
+        }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(parseErrorMessage(payload));
+      }
+      setPayoutTxMessage("Payout recorded");
+      setPayoutAmount("");
+      setPayoutNoteTx("");
+      setPayoutDateTx(new Date().toISOString().slice(0, 10));
+      setPayoutModalOpen(false);
+      await refreshOrdersSummary();
+    } catch (err: any) {
+      setOrdersError(err?.message ?? "Failed to record payout");
+    } finally {
+      setPayoutTxSaving(false);
+    }
+  };
+
   const handleUploadContract = async (e: FormEvent) => {
     e.preventDefault();
     setUploadContractError(null);
@@ -905,6 +1046,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const lastShopifyStatus = artist?.shopifySync?.lastSyncStatus;
   const lastShopifySyncedAt = artist?.shopifySync?.lastSyncedAt;
   const lastShopifyError = artist?.shopifySync?.lastSyncError;
+  const formatCurrency = (amount: number, currency = "EUR") => `${amount.toFixed(2)} ${currency}`;
   const overviewStatusChip = name.trim() ? "Basics added" : "Missing name";
   const mediaStatusChip = mediaLoading ? "Loading..." : canViewMedia ? (hasMedia ? "OK" : "Missing") : "Locked";
   const artworksStatusChip = shopifyProductsLoading
@@ -931,6 +1073,14 @@ export default function ArtistDetailClient({ artistId }: Props) {
         ? "OK"
         : "Missing"
       : "Not required";
+  const ordersOutstanding = ordersSummary?.totals.allTime.outstanding ?? null;
+  const ordersStatusChip = ordersLoading
+    ? "Loading..."
+    : ordersOutstanding === null
+      ? "No data"
+      : ordersOutstanding > 0
+        ? `Outstanding ${formatCurrency(ordersOutstanding)}`
+        : "Settled";
   const badgeTone = (state: "ready" | "missing" | "locked" | "info") => {
     switch (state) {
       case "ready":
@@ -2768,6 +2918,126 @@ export default function ArtistDetailClient({ artistId }: Props) {
     </div>
   );
 
+  const ordersPanel = (
+    <div className="ac-card space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold text-slate-800">Orders</h3>
+          <p className="text-xs text-slate-500">Shopify + POS sales linked to this artist.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center rounded-full border border-slate-200 bg-slate-100 p-1 text-xs font-semibold text-slate-700">
+            <button
+              type="button"
+              onClick={() => setOrdersRange("last30")}
+              className={`rounded-full px-2 py-1 transition ${ordersRange === "last30" ? "bg-white shadow-sm" : "hover:bg-white/60"}`}
+            >
+              Last 30d
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrdersRange("all")}
+              className={`rounded-full px-2 py-1 transition ${ordersRange === "all" ? "bg-white shadow-sm" : "hover:bg-white/60"}`}
+            >
+              All time
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPayoutModalOpen(true)}
+            className="inline-flex items-center rounded bg-black px-3 py-2 text-sm font-medium text-white"
+          >
+            Record payout
+          </button>
+        </div>
+      </div>
+
+      {ordersLoading && <p className="text-sm text-slate-500">Loading orders...</p>}
+      {ordersError && <p className="text-sm text-red-600">{ordersError}</p>}
+
+      {displayedTotals && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="rounded border border-slate-200 bg-white p-3 shadow-sm">
+            <p className="text-xs uppercase text-slate-500">Print gross</p>
+            <p className="text-xl font-semibold text-slate-900">{formatCurrency(displayedTotals.printGross)}</p>
+          </div>
+          <div className="rounded border border-slate-200 bg-white p-3 shadow-sm">
+            <p className="text-xs uppercase text-slate-500">Original gross</p>
+            <p className="text-xl font-semibold text-slate-900">{formatCurrency(displayedTotals.originalGross)}</p>
+          </div>
+          <div className="rounded border border-slate-200 bg-white p-3 shadow-sm">
+            <p className="text-xs uppercase text-slate-500">Earned (commission)</p>
+            <p className="text-xl font-semibold text-slate-900">{formatCurrency(displayedTotals.earned)}</p>
+            {ordersSummary?.commissionTerms && (
+              <p className="text-xs text-slate-500">
+                Print {ordersSummary.commissionTerms.printCommissionPct}% • Original {ordersSummary.commissionTerms.originalCommissionPct}%
+              </p>
+            )}
+          </div>
+          <div className="rounded border border-slate-200 bg-white p-3 shadow-sm">
+            <p className="text-xs uppercase text-slate-500">Paid out</p>
+            <p className="text-xl font-semibold text-slate-900">{formatCurrency(displayedTotals.paid)}</p>
+          </div>
+          <div className="rounded border border-slate-200 bg-white p-3 shadow-sm">
+            <p className="text-xs uppercase text-slate-500">Outstanding</p>
+            <p className="text-xl font-semibold text-slate-900">{formatCurrency(displayedTotals.outstanding)}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="overflow-auto rounded border border-slate-200 bg-white shadow-sm">
+        <table className="min-w-full text-sm">
+          <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <tr>
+              <th className="px-3 py-2 text-left">Date</th>
+              <th className="px-3 py-2 text-left">Source</th>
+              <th className="px-3 py-2 text-left">Order</th>
+              <th className="px-3 py-2 text-left">Print</th>
+              <th className="px-3 py-2 text-left">Original</th>
+              <th className="px-3 py-2 text-left">Unknown</th>
+              <th className="px-3 py-2 text-left">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ordersLoading && (
+              <tr>
+                <td className="px-3 py-3 text-center text-slate-500" colSpan={7}>
+                  Loading...
+                </td>
+              </tr>
+            )}
+            {!ordersLoading && filteredOrders.length === 0 && (
+              <tr>
+                <td className="px-3 py-3 text-center text-slate-500" colSpan={7}>
+                  No orders yet.
+                </td>
+              </tr>
+            )}
+            {!ordersLoading &&
+              filteredOrders.map((order) => {
+                const total = order.printGross + order.originalGross + order.unknownGross;
+                return (
+                  <tr key={`${order.source}-${order.id}`} className="hover:bg-slate-50">
+                    <td className="px-3 py-3 whitespace-nowrap">{new Date(order.createdAt).toLocaleDateString()}</td>
+                    <td className="px-3 py-3">
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-slate-700">
+                        {order.source}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3">{order.label || order.id}</td>
+                    <td className="px-3 py-3">{formatCurrency(order.printGross, order.currency)}</td>
+                    <td className="px-3 py-3">{formatCurrency(order.originalGross, order.currency)}</td>
+                    <td className="px-3 py-3">{formatCurrency(order.unknownGross, order.currency)}</td>
+                    <td className="px-3 py-3 font-semibold text-slate-900">{formatCurrency(total, order.currency)}</td>
+                  </tr>
+                );
+              })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
   const tabPanels: Record<TabKey, ReactElement> = {
     overview: overviewPanel,
     media: mediaPanel,
@@ -2775,6 +3045,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
     publicProfile: publicProfilePanel,
     contracts: contractsPanel,
     payout: payoutPanel,
+    orders: ordersPanel,
   };
 
   const tabs: Array<{ key: TabKey; label: string; chip?: string }> = [
@@ -2784,6 +3055,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
     { key: "publicProfile", label: "Public Profile", chip: publicProfileStatusChip },
     { key: "contracts", label: "Contracts", chip: contractsStatusChip },
     { key: "payout", label: "Payout", chip: payoutStatusChip },
+    { key: "orders", label: "Orders", chip: ordersStatusChip },
   ];
   const bulkRunCount = bulkUiMode === "table" ? bulkRows.length : selectedArtworkMedia.length;
   const bulkTotal = bulkProgress.total || bulkRunCount;
