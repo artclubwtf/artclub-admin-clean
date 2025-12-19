@@ -103,6 +103,19 @@ type BulkDefaults = {
   heightCm: string;
   shortDescription: string;
 };
+type BulkUiMode = "defaults" | "table";
+type BulkRow = {
+  mediaId: string;
+  filename: string;
+  url?: string;
+  mimeType?: string;
+  title: string;
+  mode: ArtworkSaleMode;
+  widthCm: string;
+  heightCm: string;
+  shortDescription: string;
+  useDefaults: boolean;
+};
 type BulkCreateResult = {
   ok: boolean;
   mediaId: string;
@@ -254,6 +267,8 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
   const [bulkResults, setBulkResults] = useState<BulkCreateResult[]>([]);
   const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkUiMode, setBulkUiMode] = useState<BulkUiMode>("defaults");
+  const [bulkRows, setBulkRows] = useState<BulkRow[]>([]);
   const [bulkDefaults, setBulkDefaults] = useState<BulkDefaults>({
     mode: "PRINT_ONLY",
     titlePrefix: "",
@@ -1151,53 +1166,205 @@ export default function ArtistDetailClient({ artistId }: Props) {
     return fallback;
   };
 
+  const findMediaById = (id: string) => selectedArtworkMedia.find((media) => media._id === id);
+
+  const createBulkRowsFromSelection = (): BulkRow[] =>
+    selectedArtworkMedia.map((media) => ({
+      mediaId: media._id,
+      filename: media.filename || media.s3Key,
+      url: media.url,
+      mimeType: media.mimeType,
+      title: "",
+      mode: bulkDefaults.mode,
+      widthCm: "",
+      heightCm: "",
+      shortDescription: "",
+      useDefaults: true,
+    }));
+
+  const openBulkModal = () => {
+    setBulkError(null);
+    setBulkProgress({ done: 0, total: selectedArtworkMedia.length });
+    setBulkResults([]);
+    setBulkUiMode("defaults");
+    setBulkRows(createBulkRowsFromSelection());
+    setBulkOpen(true);
+  };
+
+  const updateBulkRow = (mediaId: string, patch: Partial<BulkRow>) => {
+    setBulkRows((prev) => prev.map((row) => (row.mediaId === mediaId ? { ...row, ...patch } : row)));
+  };
+
+  const applyDefaultsToRows = () => {
+    setBulkRows((prev) =>
+      prev.map((row) => {
+        if (!row.useDefaults) return row;
+        const media = findMediaById(row.mediaId);
+        const derivedTitle = media ? deriveBulkTitle(media) : row.title;
+        return {
+          ...row,
+          mode: bulkDefaults.mode,
+          widthCm: bulkDefaults.widthCm,
+          heightCm: bulkDefaults.heightCm,
+          shortDescription: bulkDefaults.shortDescription,
+          title: derivedTitle,
+        };
+      }),
+    );
+  };
+
+  const clearBulkRows = () => {
+    setBulkRows((prev) =>
+      prev.map((row) => ({
+        ...row,
+        title: "",
+        widthCm: "",
+        heightCm: "",
+        shortDescription: "",
+      })),
+    );
+  };
+
+  const copyFirstRowToAllRows = () => {
+    setBulkRows((prev) => {
+      if (!prev.length) return prev;
+      const [first, ...rest] = prev;
+      return [
+        first,
+        ...rest.map((row) => ({
+          ...row,
+          title: first.title,
+          mode: first.mode,
+          widthCm: first.widthCm,
+          heightCm: first.heightCm,
+          shortDescription: first.shortDescription,
+        })),
+      ];
+    });
+  };
+
+  const autoTitleRowsFromFilename = () => {
+    setBulkRows((prev) =>
+      prev.map((row) => {
+        const media = findMediaById(row.mediaId);
+        const derivedTitle = media ? deriveBulkTitle(media) : row.title;
+        return { ...row, title: derivedTitle };
+      }),
+    );
+  };
+
   const handleCancelBulk = () => {
     bulkCancelRef.current = true;
     bulkAbortController.current?.abort();
   };
 
-  const handleStartBulkCreate = async () => {
+  const handleStartBulkCreate = async (rowsOverride?: BulkRow[]) => {
     setBulkError(null);
     if (!artistShopifyMetaobjectId) {
       setBulkError("Artist is not linked to Shopify.");
       return;
     }
 
-    const itemsToCreate = [...selectedArtworkMedia];
-    if (itemsToCreate.length === 0) {
+    const sourceRows = rowsOverride || (bulkUiMode === "table" ? bulkRows : null);
+
+    const tasks: Array<{
+      media: MediaItem;
+      title: string;
+      saleMode: ArtworkSaleMode;
+      widthCm: number | null;
+      heightCm: number | null;
+      shortDescription: string | null;
+    }> = [];
+
+    if (sourceRows) {
+      if (!sourceRows.length) {
+        setBulkError("Select at least one artwork media.");
+        return;
+      }
+      for (const row of sourceRows) {
+        const media = findMediaById(row.mediaId);
+        if (!media) {
+          setBulkError("Some selected media are missing.");
+          return;
+        }
+        const widthRaw = row.widthCm.trim() || (row.useDefaults ? bulkDefaults.widthCm.trim() : "");
+        const heightRaw = row.heightCm.trim() || (row.useDefaults ? bulkDefaults.heightCm.trim() : "");
+        const widthParsed = widthRaw ? Number(widthRaw) : null;
+        const heightParsed = heightRaw ? Number(heightRaw) : null;
+        if (widthRaw && Number.isNaN(widthParsed)) {
+          setBulkError(`Width must be a number for ${row.filename}.`);
+          return;
+        }
+        if (heightRaw && Number.isNaN(heightParsed)) {
+          setBulkError(`Height must be a number for ${row.filename}.`);
+          return;
+        }
+        const shortDescription = row.shortDescription.trim() || (row.useDefaults ? bulkDefaults.shortDescription.trim() : "") || null;
+        const saleModeRaw = row.useDefaults ? bulkDefaults.mode : row.mode;
+        const saleMode = saleModeRaw === "PRINT_ONLY" ? "PRINT_ONLY" : "ORIGINAL_AND_PRINTS";
+        const title = row.title.trim() || deriveBulkTitle(media);
+        tasks.push({
+          media,
+          title,
+          saleMode,
+          widthCm: widthParsed,
+          heightCm: heightParsed,
+          shortDescription,
+        });
+      }
+    } else {
+      const itemsToCreate = [...selectedArtworkMedia];
+      if (itemsToCreate.length === 0) {
+        setBulkError("Select at least one artwork media.");
+        return;
+      }
+
+      const widthRaw = bulkDefaults.widthCm.trim();
+      const heightRaw = bulkDefaults.heightCm.trim();
+      if (widthRaw && Number.isNaN(Number(widthRaw))) {
+        setBulkError("Width must be a number.");
+        return;
+      }
+      if (heightRaw && Number.isNaN(Number(heightRaw))) {
+        setBulkError("Height must be a number.");
+        return;
+      }
+
+      const widthParsed = widthRaw ? Number(widthRaw) : null;
+      const heightParsed = heightRaw ? Number(heightRaw) : null;
+      const kurzbeschreibung = bulkDefaults.shortDescription.trim() || null;
+      const modeToSend: ArtworkSaleMode = bulkDefaults.mode === "PRINT_ONLY" ? "PRINT_ONLY" : "ORIGINAL_AND_PRINTS";
+
+      for (const mediaItem of itemsToCreate) {
+        tasks.push({
+          media: mediaItem,
+          title: deriveBulkTitle(mediaItem),
+          saleMode: modeToSend,
+          widthCm: widthParsed,
+          heightCm: heightParsed,
+          shortDescription: kurzbeschreibung,
+        });
+      }
+    }
+
+    if (tasks.length === 0) {
       setBulkError("Select at least one artwork media.");
       return;
     }
-
-    const widthRaw = bulkDefaults.widthCm.trim();
-    const heightRaw = bulkDefaults.heightCm.trim();
-    if (widthRaw && Number.isNaN(Number(widthRaw))) {
-      setBulkError("Width must be a number.");
-      return;
-    }
-    if (heightRaw && Number.isNaN(Number(heightRaw))) {
-      setBulkError("Height must be a number.");
-      return;
-    }
-
-    const widthParsed = widthRaw ? Number(widthRaw) : null;
-    const heightParsed = heightRaw ? Number(heightRaw) : null;
-    const kurzbeschreibung = bulkDefaults.shortDescription.trim() || null;
-    const modeToSend: ArtworkSaleMode = bulkDefaults.mode === "PRINT_ONLY" ? "PRINT_ONLY" : "ORIGINAL_AND_PRINTS";
 
     const controller = new AbortController();
     bulkAbortController.current = controller;
     bulkCancelRef.current = false;
     setBulkRunning(true);
-    setBulkProgress({ done: 0, total: itemsToCreate.length });
+    setBulkProgress({ done: 0, total: tasks.length });
     setBulkResults([]);
 
     const runResults: BulkCreateResult[] = [];
 
-    for (let index = 0; index < itemsToCreate.length; index += 1) {
-      const mediaItem = itemsToCreate[index];
+    for (let index = 0; index < tasks.length; index += 1) {
+      const task = tasks[index];
       if (bulkCancelRef.current) break;
-      const derivedTitle = deriveBulkTitle(mediaItem);
+      const derivedTitle = task.title;
       let result: BulkCreateResult | null = null;
       try {
         const res = await fetch("/api/shopify/artworks/create", {
@@ -1208,14 +1375,14 @@ export default function ArtistDetailClient({ artistId }: Props) {
             artistId,
             artistMetaobjectGid: artistShopifyMetaobjectId,
             title: derivedTitle,
-            saleMode: modeToSend,
-            price: modeToSend === "PRINT_ONLY" ? null : "0",
+            saleMode: task.saleMode,
+            price: task.saleMode === "PRINT_ONLY" ? null : "0",
             editionSize: null,
-            kurzbeschreibung,
-            widthCm: widthParsed,
-            heightCm: heightParsed,
+            kurzbeschreibung: task.shortDescription,
+            widthCm: task.widthCm,
+            heightCm: task.heightCm,
             description: null,
-            mediaIds: [mediaItem._id],
+            mediaIds: [task.media._id],
           }),
         });
 
@@ -1233,8 +1400,8 @@ export default function ArtistDetailClient({ artistId }: Props) {
 
         result = {
           ok: true,
-          mediaId: mediaItem._id,
-          mediaFilename: mediaItem.filename || mediaItem.s3Key,
+          mediaId: task.media._id,
+          mediaFilename: task.media.filename || task.media.s3Key,
           title: createdTitle,
           productGid,
           productId,
@@ -1247,8 +1414,8 @@ export default function ArtistDetailClient({ artistId }: Props) {
         }
         result = {
           ok: false,
-          mediaId: mediaItem._id,
-          mediaFilename: mediaItem.filename || mediaItem.s3Key,
+          mediaId: task.media._id,
+          mediaFilename: task.media.filename || task.media.s3Key,
           title: derivedTitle,
           error: err?.message || "Failed to create draft",
         };
@@ -1257,19 +1424,19 @@ export default function ArtistDetailClient({ artistId }: Props) {
       if (result) {
         runResults.push(result);
         setBulkResults([...runResults]);
-        setBulkProgress({ done: runResults.length, total: itemsToCreate.length });
+        setBulkProgress({ done: runResults.length, total: tasks.length });
       }
 
       if (bulkCancelRef.current) {
         break;
       }
 
-      if (index < itemsToCreate.length - 1) {
+      if (index < tasks.length - 1) {
         await sleep(600);
       }
     }
 
-    setBulkProgress({ done: runResults.length, total: itemsToCreate.length });
+    setBulkProgress({ done: runResults.length, total: tasks.length });
     bulkAbortController.current = null;
     setBulkRunning(false);
 
@@ -1291,6 +1458,17 @@ export default function ArtistDetailClient({ artistId }: Props) {
       });
       setBulkResults(mapped);
     }
+  };
+
+  const handleRetryFailedOnly = () => {
+    const failedIds = bulkResults.filter((item) => !item.ok).map((item) => item.mediaId);
+    const rowsToRetry = bulkRows.filter((row) => failedIds.includes(row.mediaId));
+    if (!failedIds.length || rowsToRetry.length === 0) {
+      setBulkError("No failed rows to retry.");
+      return;
+    }
+    setBulkUiMode("table");
+    handleStartBulkCreate(rowsToRetry);
   };
 
   const validateArtworkForm = () => {
@@ -1599,15 +1777,13 @@ export default function ArtistDetailClient({ artistId }: Props) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      setBulkError(null);
-                      setBulkProgress((prev) => ({ ...prev, total: selectedArtworkMediaIds.length }));
-                      setBulkOpen(true);
-                    }}
-                    className="inline-flex items-center rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
-                  >
-                    Bulk create drafts ({selectedArtworkMediaIds.length})
-                  </button>
+                  onClick={() => {
+                      openBulkModal();
+                  }}
+                  className="inline-flex items-center rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                >
+                  Bulk create drafts ({selectedArtworkMediaIds.length})
+                </button>
                 </div>
               </div>
             )}
@@ -2418,10 +2594,15 @@ export default function ArtistDetailClient({ artistId }: Props) {
     { key: "contracts", label: "Contracts", chip: contractsStatusChip },
     { key: "payout", label: "Payout", chip: payoutStatusChip },
   ];
-  const bulkTotal = bulkProgress.total || selectedArtworkMedia.length;
+  const bulkRunCount = bulkUiMode === "table" ? bulkRows.length : selectedArtworkMedia.length;
+  const bulkTotal = bulkProgress.total || bulkRunCount;
   const bulkProgressPercent = bulkTotal ? Math.min(100, Math.round((bulkProgress.done / bulkTotal) * 100)) : 0;
   const bulkSuccessCount = bulkResults.filter((item) => item.ok).length;
   const bulkFailureCount = bulkResults.filter((item) => !item.ok).length;
+  const previewItems =
+    bulkUiMode === "table"
+      ? bulkRows.map((row) => ({ id: row.mediaId, label: row.filename }))
+      : selectedArtworkMedia.map((item) => ({ id: item._id, label: item.filename || item.s3Key }));
 
   const bulkModal = !bulkOpen ? null : (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4">
@@ -2430,10 +2611,26 @@ export default function ArtistDetailClient({ artistId }: Props) {
           <div className="space-y-0.5">
             <div className="text-sm font-semibold text-slate-900">Bulk create Shopify drafts</div>
             <div className="text-xs text-slate-600">
-              {selectedArtworkMedia.length} media selected • sequential with 600ms delay
+              {bulkRunCount} media selected • sequential with 600ms delay
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <div className="flex items-center rounded-full border border-slate-200 bg-slate-100 p-1 text-xs font-semibold text-slate-700">
+              <button
+                type="button"
+                onClick={() => setBulkUiMode("defaults")}
+                className={`rounded-full px-2 py-1 transition ${bulkUiMode === "defaults" ? "bg-white shadow-sm" : "hover:bg-white/60"}`}
+              >
+                Simple defaults
+              </button>
+              <button
+                type="button"
+                onClick={() => setBulkUiMode("table")}
+                className={`rounded-full px-2 py-1 transition ${bulkUiMode === "table" ? "bg-white shadow-sm" : "hover:bg-white/60"}`}
+              >
+                Table (per media)
+              </button>
+            </div>
             {bulkRunning && (
               <button
                 type="button"
@@ -2460,92 +2657,329 @@ export default function ArtistDetailClient({ artistId }: Props) {
             </div>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="space-y-1 text-sm font-medium text-slate-700">
-              Create mode
-              <select
-                value={bulkDefaults.mode}
-                onChange={(e) => setBulkDefaults((prev) => ({ ...prev, mode: e.target.value as ArtworkSaleMode }))}
-                disabled={bulkRunning}
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
-              >
-                {saleModeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-slate-500">
-                One draft product per media. Original mode tags with \"original\" and uses a placeholder price of 0 on the draft.
-              </p>
-            </label>
+          {bulkUiMode === "defaults" ? (
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-1 text-sm font-medium text-slate-700">
+                  Create mode
+                  <select
+                    value={bulkDefaults.mode}
+                    onChange={(e) => setBulkDefaults((prev) => ({ ...prev, mode: e.target.value as ArtworkSaleMode }))}
+                    disabled={bulkRunning}
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                  >
+                    {saleModeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-500">
+                    One draft product per media. Original mode tags with \"original\" and uses a placeholder price of 0 on the draft.
+                  </p>
+                </label>
 
-            <div className="space-y-1 text-sm font-medium text-slate-700">
-              <div className="space-y-1">
-                <span>Title strategy</span>
-                <select
-                  value={bulkDefaults.titleStrategy}
-                  onChange={(e) => setBulkDefaults((prev) => ({ ...prev, titleStrategy: e.target.value as BulkTitleStrategy }))}
-                  disabled={bulkRunning}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
-                >
-                  <option value="filename">Use filename</option>
-                  <option value="prefix">Prefix + filename</option>
-                </select>
+                <div className="space-y-1 text-sm font-medium text-slate-700">
+                  <div className="space-y-1">
+                    <span>Title strategy</span>
+                    <select
+                      value={bulkDefaults.titleStrategy}
+                      onChange={(e) => setBulkDefaults((prev) => ({ ...prev, titleStrategy: e.target.value as BulkTitleStrategy }))}
+                      disabled={bulkRunning}
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                    >
+                      <option value="filename">Use filename</option>
+                      <option value="prefix">Prefix + filename</option>
+                    </select>
+                  </div>
+                  {bulkDefaults.titleStrategy === "prefix" && (
+                    <input
+                      value={bulkDefaults.titlePrefix}
+                      onChange={(e) => setBulkDefaults((prev) => ({ ...prev, titlePrefix: e.target.value }))}
+                      disabled={bulkRunning}
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                      placeholder="Prefix (optional)"
+                    />
+                  )}
+                  <p className="text-xs font-normal text-slate-500">
+                    Titles derive from media filenames; prefix adds a shared intro.
+                  </p>
+                </div>
               </div>
-              {bulkDefaults.titleStrategy === "prefix" && (
-                <input
-                  value={bulkDefaults.titlePrefix}
-                  onChange={(e) => setBulkDefaults((prev) => ({ ...prev, titlePrefix: e.target.value }))}
-                  disabled={bulkRunning}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
-                  placeholder="Prefix (optional)"
-                />
-              )}
-              <p className="text-xs font-normal text-slate-500">
-                Titles derive from media filenames; prefix adds a shared intro.
-              </p>
-            </div>
-          </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <label className="space-y-1 text-sm font-medium text-slate-700">
-              Width (cm)
-              <input
-                type="number"
-                step="0.01"
-                value={bulkDefaults.widthCm}
-                onChange={(e) => setBulkDefaults((prev) => ({ ...prev, widthCm: e.target.value }))}
-                disabled={bulkRunning}
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
-                placeholder="e.g. 50"
-              />
-            </label>
-            <label className="space-y-1 text-sm font-medium text-slate-700">
-              Height (cm)
-              <input
-                type="number"
-                step="0.01"
-                value={bulkDefaults.heightCm}
-                onChange={(e) => setBulkDefaults((prev) => ({ ...prev, heightCm: e.target.value }))}
-                disabled={bulkRunning}
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
-                placeholder="e.g. 70"
-              />
-            </label>
-            <label className="sm:col-span-3 space-y-1 text-sm font-medium text-slate-700">
-              Short description
-              <textarea
-                value={bulkDefaults.shortDescription}
-                onChange={(e) => setBulkDefaults((prev) => ({ ...prev, shortDescription: e.target.value }))}
-                disabled={bulkRunning}
-                rows={2}
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
-                placeholder="kurzbeschreibung (optional)"
-              />
-              <p className="text-xs font-normal text-slate-500">Left empty fields stay empty on the created drafts.</p>
-            </label>
-          </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="space-y-1 text-sm font-medium text-slate-700">
+                  Width (cm)
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={bulkDefaults.widthCm}
+                    onChange={(e) => setBulkDefaults((prev) => ({ ...prev, widthCm: e.target.value }))}
+                    disabled={bulkRunning}
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                    placeholder="e.g. 50"
+                  />
+                </label>
+                <label className="space-y-1 text-sm font-medium text-slate-700">
+                  Height (cm)
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={bulkDefaults.heightCm}
+                    onChange={(e) => setBulkDefaults((prev) => ({ ...prev, heightCm: e.target.value }))}
+                    disabled={bulkRunning}
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                    placeholder="e.g. 70"
+                  />
+                </label>
+                <label className="sm:col-span-3 space-y-1 text-sm font-medium text-slate-700">
+                  Short description
+                  <textarea
+                    value={bulkDefaults.shortDescription}
+                    onChange={(e) => setBulkDefaults((prev) => ({ ...prev, shortDescription: e.target.value }))}
+                    disabled={bulkRunning}
+                    rows={2}
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                    placeholder="kurzbeschreibung (optional)"
+                  />
+                  <p className="text-xs font-normal text-slate-500">Left empty fields stay empty on the created drafts.</p>
+                </label>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">Apply defaults to rows</div>
+                  <div className="text-xs text-slate-600">Rows with \"Use defaults\" checked will receive these values.</div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={applyDefaultsToRows}
+                    className="rounded border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-800 shadow-sm hover:border-slate-400"
+                  >
+                    Apply defaults to all rows
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearBulkRows}
+                    className="rounded border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-800 shadow-sm hover:border-slate-400"
+                  >
+                    Clear all
+                  </button>
+                  <button
+                    type="button"
+                    onClick={copyFirstRowToAllRows}
+                    className="rounded border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-800 shadow-sm hover:border-slate-400"
+                  >
+                    Copy first row -> all
+                  </button>
+                  <button
+                    type="button"
+                    onClick={autoTitleRowsFromFilename}
+                    className="rounded border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-800 shadow-sm hover:border-slate-400"
+                  >
+                    Auto-title from filename
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="space-y-1 text-sm font-medium text-slate-700">
+                  Create mode
+                  <select
+                    value={bulkDefaults.mode}
+                    onChange={(e) => setBulkDefaults((prev) => ({ ...prev, mode: e.target.value as ArtworkSaleMode }))}
+                    disabled={bulkRunning}
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                  >
+                    {saleModeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="space-y-1 text-sm font-medium text-slate-700">
+                  <div className="space-y-1">
+                    <span>Title strategy</span>
+                    <select
+                      value={bulkDefaults.titleStrategy}
+                      onChange={(e) => setBulkDefaults((prev) => ({ ...prev, titleStrategy: e.target.value as BulkTitleStrategy }))}
+                      disabled={bulkRunning}
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                    >
+                      <option value="filename">Use filename</option>
+                      <option value="prefix">Prefix + filename</option>
+                    </select>
+                  </div>
+                  {bulkDefaults.titleStrategy === "prefix" && (
+                    <input
+                      value={bulkDefaults.titlePrefix}
+                      onChange={(e) => setBulkDefaults((prev) => ({ ...prev, titlePrefix: e.target.value }))}
+                      disabled={bulkRunning}
+                      className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                      placeholder="Prefix (optional)"
+                    />
+                  )}
+                </div>
+                <div className="space-y-1 text-sm font-medium text-slate-700">
+                  <span>Short description (default)</span>
+                  <textarea
+                    value={bulkDefaults.shortDescription}
+                    onChange={(e) => setBulkDefaults((prev) => ({ ...prev, shortDescription: e.target.value }))}
+                    disabled={bulkRunning}
+                    rows={2}
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                    placeholder="kurzbeschreibung"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-1 text-sm font-medium text-slate-700">
+                  Width (cm)
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={bulkDefaults.widthCm}
+                    onChange={(e) => setBulkDefaults((prev) => ({ ...prev, widthCm: e.target.value }))}
+                    disabled={bulkRunning}
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                    placeholder="e.g. 50"
+                  />
+                </label>
+                <label className="space-y-1 text-sm font-medium text-slate-700">
+                  Height (cm)
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={bulkDefaults.heightCm}
+                    onChange={(e) => setBulkDefaults((prev) => ({ ...prev, heightCm: e.target.value }))}
+                    disabled={bulkRunning}
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                    placeholder="e.g. 70"
+                  />
+                </label>
+              </div>
+
+              <div className="overflow-auto rounded border border-slate-200">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="sticky top-0 bg-slate-100 text-xs uppercase text-slate-600">
+                    <tr>
+                      <th className="px-3 py-2">Preview</th>
+                      <th className="px-3 py-2">Title</th>
+                      <th className="px-3 py-2">Mode</th>
+                      <th className="px-3 py-2">Width (cm)</th>
+                      <th className="px-3 py-2">Height (cm)</th>
+                      <th className="px-3 py-2">Short description</th>
+                      <th className="px-3 py-2">Use defaults</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bulkRows.length === 0 && (
+                      <tr>
+                        <td className="px-3 py-2 text-sm text-slate-600" colSpan={7}>
+                          No rows. Close and reopen after selecting media.
+                        </td>
+                      </tr>
+                    )}
+                    {bulkRows.map((row) => {
+                      const media = findMediaById(row.mediaId);
+                      const isImage = media?.mimeType?.startsWith("image/");
+                      return (
+                        <tr key={row.mediaId} className="border-t border-slate-200">
+                          <td className="px-3 py-2 align-top">
+                            <div className="flex gap-2">
+                              {isImage && media?.url ? (
+                                <img src={media.url} alt={row.filename} className="h-12 w-12 rounded object-cover" />
+                              ) : (
+                                <div className="flex h-12 w-12 items-center justify-center rounded bg-slate-100 text-[11px] text-slate-600">
+                                  {media?.mimeType || "file"}
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <div className="truncate text-xs font-semibold text-slate-800">{row.filename}</div>
+                                <div className="text-[11px] text-slate-500">{media?.mimeType || "file"}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 align-top">
+                            <input
+                              value={row.title}
+                              onChange={(e) => updateBulkRow(row.mediaId, { title: e.target.value })}
+                              disabled={bulkRunning}
+                              className="w-full rounded border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                              placeholder="Title (optional)"
+                            />
+                          </td>
+                          <td className="px-3 py-2 align-top">
+                            <select
+                              value={row.mode}
+                              onChange={(e) => updateBulkRow(row.mediaId, { mode: e.target.value as ArtworkSaleMode })}
+                              disabled={bulkRunning}
+                              className="w-full rounded border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                            >
+                              {saleModeOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-3 py-2 align-top">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={row.widthCm}
+                              onChange={(e) => updateBulkRow(row.mediaId, { widthCm: e.target.value })}
+                              disabled={bulkRunning}
+                              className="w-full rounded border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                              placeholder="cm"
+                            />
+                          </td>
+                          <td className="px-3 py-2 align-top">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={row.heightCm}
+                              onChange={(e) => updateBulkRow(row.mediaId, { heightCm: e.target.value })}
+                              disabled={bulkRunning}
+                              className="w-full rounded border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                              placeholder="cm"
+                            />
+                          </td>
+                          <td className="px-3 py-2 align-top">
+                            <textarea
+                              value={row.shortDescription}
+                              onChange={(e) => updateBulkRow(row.mediaId, { shortDescription: e.target.value })}
+                              disabled={bulkRunning}
+                              rows={2}
+                              className="w-full rounded border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50"
+                              placeholder="kurzbeschreibung"
+                            />
+                          </td>
+                          <td className="px-3 py-2 align-top">
+                            <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={row.useDefaults}
+                                onChange={(e) => updateBulkRow(row.mediaId, { useDefaults: e.target.checked })}
+                                disabled={bulkRunning}
+                                className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                              />
+                              <span>Use defaults</span>
+                            </label>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {bulkError && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{bulkError}</div>}
 
@@ -2565,11 +2999,11 @@ export default function ArtistDetailClient({ artistId }: Props) {
               )}
               <button
                 type="button"
-                onClick={handleStartBulkCreate}
-                disabled={bulkRunning || !selectedArtworkMedia.length || !artistShopifyMetaobjectId}
+                onClick={() => handleStartBulkCreate()}
+                disabled={bulkRunning || !bulkRunCount || !artistShopifyMetaobjectId}
                 className="inline-flex items-center rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50"
               >
-                {bulkRunning ? "Running..." : `Start bulk create (${selectedArtworkMedia.length})`}
+                {bulkRunning ? "Running..." : `Start bulk create (${bulkRunCount})`}
               </button>
             </div>
           </div>
@@ -2588,20 +3022,20 @@ export default function ArtistDetailClient({ artistId }: Props) {
             </div>
           )}
 
-          {selectedArtworkMedia.length > 0 && (
+          {bulkRunCount > 0 && (
             <div className="rounded border border-slate-200 bg-white p-3">
               <div className="flex items-center justify-between text-sm font-semibold text-slate-900">
                 <span>Will create for</span>
-                <span className="text-xs text-slate-600">{selectedArtworkMedia.length} media</span>
+                <span className="text-xs text-slate-600">{bulkRunCount} media</span>
               </div>
               <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-700">
-                {selectedArtworkMedia.slice(0, 8).map((item) => (
-                  <span key={item._id} className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">
-                    {item.filename || item.s3Key}
+                {previewItems.slice(0, 8).map((item) => (
+                  <span key={item.id} className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">
+                    {item.label}
                   </span>
                 ))}
-                {selectedArtworkMedia.length > 8 && (
-                  <span className="text-xs text-slate-600">+ {selectedArtworkMedia.length - 8} more</span>
+                {bulkRunCount > 8 && (
+                  <span className="text-xs text-slate-600">+ {bulkRunCount - 8} more</span>
                 )}
               </div>
             </div>
@@ -2615,13 +3049,22 @@ export default function ArtistDetailClient({ artistId }: Props) {
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   {bulkFailureCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={selectFailedBulkItems}
-                      className="rounded border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-800 shadow-sm hover:border-slate-400"
-                    >
-                      Select failed ({bulkFailureCount})
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={selectFailedBulkItems}
+                        className="rounded border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-800 shadow-sm hover:border-slate-400"
+                      >
+                        Select failed ({bulkFailureCount})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRetryFailedOnly}
+                        className="rounded border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-800 shadow-sm hover:border-slate-400"
+                      >
+                        Retry failed only
+                      </button>
+                    </>
                   )}
                   {!bulkRunning && (
                     <button
