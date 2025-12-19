@@ -130,9 +130,11 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       });
     }
 
-    const payouts = await PayoutTransactionModel.find({
-      $or: [{ artistMongoId: id }, metaobjectId ? { artistMetaobjectGid: metaobjectId } : undefined].filter(Boolean),
-    }).lean();
+    const payoutFilter = metaobjectId
+      ? { $or: [{ artistMongoId: id }, { artistMetaobjectGid: metaobjectId }] }
+      : { artistMongoId: id };
+
+    const payouts = await PayoutTransactionModel.find(payoutFilter).lean();
 
     const totalsAll = orderEntries.reduce(
       (acc, entry) => {
