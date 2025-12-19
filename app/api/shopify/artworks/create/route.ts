@@ -311,6 +311,26 @@ async function setInventoryToOne(inventoryItemId: string, locationId: string) {
   }
 }
 
+async function setInventoryTracking(inventoryItemId: string, tracked: boolean) {
+  const mutation = `
+    mutation UpdateInventoryTracking($input: InventoryItemUpdateInput!) {
+      inventoryItemUpdate(input: $input) {
+        inventoryItem { id tracked }
+        userErrors { field message }
+      }
+    }
+  `;
+
+  const data = await callShopifyAdmin(mutation, { input: { id: inventoryItemId, tracked } });
+  const payload = data?.inventoryItemUpdate;
+  if (!payload) throw new Error("Shopify inventoryItemUpdate returned no payload");
+  const userErrors = payload.userErrors || [];
+  if (userErrors.length) {
+    const message = userErrors.map((e: any) => e.message).join("; ") || "inventoryItemUpdate failed";
+    throw new Error(message);
+  }
+}
+
 function parseNumber(value: unknown): number | null | undefined {
   if (value === undefined) return undefined;
   if (value === null) return null;
@@ -490,6 +510,9 @@ export async function POST(req: Request) {
     }
 
     const locationId = await getPrimaryLocationId();
+
+    // ensure inventory is tracked so downstream automations can read it
+    await setInventoryTracking(product.defaultInventoryItemId, true);
 
     if (priceToSend !== null && priceToSend !== undefined && `${priceToSend}`.trim() !== "") {
       await updateVariantPrice(product.id, product.defaultVariantId, `${priceToSend}`.trim());
