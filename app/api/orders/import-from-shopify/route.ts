@@ -1,10 +1,23 @@
 import { NextResponse } from "next/server";
 import { connectMongo } from "@/lib/mongodb";
-import { fetchShopifyOrders, ShopifyOrderLine } from "@/lib/shopifyOrders";
+import { fetchShopifyOrders } from "@/lib/shopifyOrders";
 import { ShopifyOrderCacheModel } from "@/models/ShopifyOrderCache";
 import { orderSaleTypes } from "@/models/ShopifyOrderCache";
 
 type InferredSaleType = (typeof orderSaleTypes)[number];
+
+type CachedLineItem = {
+  lineId: string;
+  title: string;
+  variantTitle: string | null;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  shopifyProductGid: string | null;
+  productTags: string[];
+  artistMetaobjectGid: string | null;
+  inferredSaleType: InferredSaleType;
+};
 
 function inferSaleType(tags: string[], variantTitle: string | null): InferredSaleType {
   const lowerTags = tags.map((t) => t.toLowerCase());
@@ -20,7 +33,7 @@ function inferSaleType(tags: string[], variantTitle: string | null): InferredSal
   return "unknown";
 }
 
-function buildAllocations(lines: (ShopifyOrderLine & { inferredSaleType: InferredSaleType })[]) {
+function buildAllocations(lines: CachedLineItem[]) {
   const map = new Map<
     string,
     { artistMetaobjectGid: string; gross: number; saleTypeBreakdown: { printGross: number; originalGross: number } }
@@ -72,7 +85,7 @@ export async function POST(req: Request) {
 
     for (const order of orders) {
       try {
-        const lines = order.lineItems.map((line, idx) => {
+        const lines: CachedLineItem[] = order.lineItems.map((line, idx) => {
           const inferredSaleType = inferSaleType(line.productTags, line.variantTitle);
           const lineId = line.id || `${order.id}:line:${idx}`;
           return {
@@ -87,7 +100,7 @@ export async function POST(req: Request) {
             artistMetaobjectGid: line.artistMetaobjectGid,
             inferredSaleType,
           };
-        }) as (ShopifyOrderLine & { inferredSaleType: InferredSaleType })[];
+        });
 
         const allocations = buildAllocations(lines);
 
