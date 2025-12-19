@@ -15,6 +15,31 @@ type OrderListItem = {
   status?: string | null;
 };
 
+type OrderDetailLine = {
+  lineKey: string;
+  title: string;
+  saleType: "print" | "original" | "unknown";
+  artistMetaobjectGid: string | null;
+  gross: number;
+  quantity: number;
+  variantTitle?: string | null;
+  override?: {
+    overrideArtistMetaobjectGid?: string | null;
+    overrideSaleType?: "print" | "original" | "unknown";
+    overrideGross?: number;
+  } | null;
+};
+
+type OrderDetail = {
+  id: string;
+  source: "shopify" | "pos";
+  label: string;
+  createdAt?: string;
+  currency: string;
+  totalGross: number;
+  lines: OrderDetailLine[];
+};
+
 type ArtistOption = { id: string; name: string; metaobjectId?: string | null };
 
 type DateRangeKey = "last7" | "last30" | "last90" | "custom";
@@ -42,6 +67,11 @@ export default function OrdersPageClient() {
   const [posMessage, setPosMessage] = useState<string | null>(null);
   const [posError, setPosError] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<OrderListItem | null>(null);
+  const [selectedOrderDetail, setSelectedOrderDetail] = useState<OrderDetail | null>(null);
+  const [orderDetailLoading, setOrderDetailLoading] = useState(false);
+  const [orderDetailError, setOrderDetailError] = useState<string | null>(null);
+  const [overrideSaving, setOverrideSaving] = useState(false);
+  const [editingLine, setEditingLine] = useState<OrderDetailLine | null>(null);
   const [posLines, setPosLines] = useState<
     { id: string; title: string; quantity: string; unitPrice: string; saleType: "print" | "original" | "unknown"; artist: string }[]
   >([
@@ -136,6 +166,24 @@ export default function OrdersPageClient() {
     const filtered = artists.filter((a) => a.metaobjectId);
     return filtered;
   }, [artists]);
+
+  const loadOrderDetail = async (order: OrderListItem) => {
+    setOrderDetailLoading(true);
+    setOrderDetailError(null);
+    try {
+      const res = await fetch(`/api/orders/detail?source=${order.source}&id=${order.id}`, { cache: "no-store" });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.error || "Failed to load order detail");
+      }
+      const json = await res.json();
+      setSelectedOrderDetail(json.order as OrderDetail);
+    } catch (err: any) {
+      setOrderDetailError(err?.message ?? "Failed to load order detail");
+    } finally {
+      setOrderDetailLoading(false);
+    }
+  };
 
   const handleImport = async () => {
     setImporting(true);
@@ -551,7 +599,10 @@ export default function OrdersPageClient() {
                 <tr
                   key={`${order.source}-${order.id}`}
                   className="cursor-pointer hover:bg-slate-50"
-                  onClick={() => setSelectedOrder(order)}
+                  onClick={() => {
+                    setSelectedOrder(order);
+                    loadOrderDetail(order);
+                  }}
                 >
                   <td className="px-3 py-3 whitespace-nowrap">{order.formattedDate}</td>
                   <td className="px-3 py-3">
@@ -575,7 +626,7 @@ export default function OrdersPageClient() {
 
       {selectedOrder && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-lg">
+          <div className="w-full max-w-3xl rounded-lg bg-white p-5 shadow-lg">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase text-slate-500">Order</p>
@@ -610,6 +661,151 @@ export default function OrdersPageClient() {
               <p>
                 <strong>Status:</strong> {selectedOrder.status || "—"}
               </p>
+            </div>
+
+            <div className="mt-4">
+              <h4 className="text-sm font-semibold text-slate-800 mb-2">Line items</h4>
+              {orderDetailLoading && <p className="text-sm text-slate-500">Loading lines...</p>}
+              {orderDetailError && <p className="text-sm text-red-600">{orderDetailError}</p>}
+              {selectedOrderDetail && (
+                <div className="overflow-auto rounded border border-slate-200">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Title</th>
+                        <th className="px-3 py-2 text-left">Sale type</th>
+                        <th className="px-3 py-2 text-left">Artist</th>
+                        <th className="px-3 py-2 text-left">Gross</th>
+                        <th className="px-3 py-2 text-left">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedOrderDetail.lines.map((line) => (
+                        <tr key={line.lineKey} className="hover:bg-slate-50">
+                          <td className="px-3 py-2">{line.title}</td>
+                          <td className="px-3 py-2">{line.saleType}</td>
+                          <td className="px-3 py-2">{line.artistMetaobjectGid || "Unassigned"}</td>
+                          <td className="px-3 py-2">{`${line.gross.toFixed(2)} ${selectedOrderDetail.currency}`}</td>
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingLine(line)}
+                              className="text-sm text-blue-600 underline"
+                            >
+                              Edit
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingLine && selectedOrder && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase text-slate-500">Override</p>
+                <h3 className="text-lg font-semibold text-slate-800">Edit line</h3>
+              </div>
+              <button type="button" onClick={() => setEditingLine(null)} className="text-sm text-slate-600 underline">
+                Close
+              </button>
+            </div>
+            <div className="mt-3 space-y-3">
+              <label className="space-y-1 text-sm font-medium text-slate-700">
+                Artist
+                <select
+                  value={editingLine.artistMetaobjectGid || ""}
+                  onChange={(e) =>
+                    setEditingLine({ ...editingLine, artistMetaobjectGid: e.target.value || null })
+                  }
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                >
+                  <option value="">Unassigned</option>
+                  {artistOptions.map((a) => (
+                    <option key={a.metaobjectId} value={a.metaobjectId!}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-1 text-sm font-medium text-slate-700">
+                Sale type
+                <select
+                  value={editingLine.saleType}
+                  onChange={(e) => setEditingLine({ ...editingLine, saleType: e.target.value as any })}
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                >
+                  <option value="unknown">Unknown</option>
+                  <option value="print">Print</option>
+                  <option value="original">Original</option>
+                </select>
+              </label>
+              <label className="space-y-1 text-sm font-medium text-slate-700">
+                Gross (override)
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editingLine.gross}
+                  onChange={(e) => setEditingLine({ ...editingLine, gross: Number(e.target.value) })}
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                />
+              </label>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingLine(null)}
+                  className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={overrideSaving}
+                  onClick={async () => {
+                    if (!selectedOrder || !editingLine) return;
+                    setOverrideSaving(true);
+                    try {
+                      await fetch("/api/orders/overrides", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          orderSource: selectedOrder.source,
+                          orderId: selectedOrder.id,
+                          lineKey: editingLine.lineKey,
+                          overrideArtistMetaobjectGid: editingLine.artistMetaobjectGid || undefined,
+                          overrideSaleType: editingLine.saleType,
+                          overrideGross: editingLine.gross,
+                        }),
+                      });
+                      await loadOrderDetail(selectedOrder);
+                      setEditingLine(null);
+                      // refresh list
+                      const params = new URLSearchParams();
+                      if (sourceFilter !== "all") params.set("source", sourceFilter);
+                      if (computedDateRange.start) params.set("start", computedDateRange.start);
+                      if (computedDateRange.end) params.set("end", computedDateRange.end);
+                      if (artistFilter !== "all") params.set("artistMetaobjectId", artistFilter);
+                      await fetch(`/api/orders?${params.toString()}`, { cache: "no-store" })
+                        .then((res) => res.json())
+                        .then((json) => setOrders(Array.isArray(json.orders) ? json.orders : []));
+                    } finally {
+                      setOverrideSaving(false);
+                    }
+                  }}
+                  className="inline-flex items-center rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                >
+                  {overrideSaving ? "Saving..." : "Save"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

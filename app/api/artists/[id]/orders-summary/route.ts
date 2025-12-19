@@ -5,6 +5,7 @@ import { ContractTermsModel } from "@/models/ContractTerms";
 import { ShopifyOrderCacheModel } from "@/models/ShopifyOrderCache";
 import { PosOrderModel } from "@/models/PosOrder";
 import { PayoutTransactionModel } from "@/models/PayoutTransaction";
+import { OrderLineOverrideModel } from "@/models/OrderLineOverride";
 
 type Totals = {
   printGross: number;
@@ -69,20 +70,28 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         .sort({ createdAt: -1 })
         .lean();
 
+      const shopifyIds = shopifyOrders.map((doc) => doc.shopifyOrderGid).filter(Boolean);
+      const overrides = await OrderLineOverrideModel.find({ orderSource: "shopify", shopifyOrderGid: { $in: shopifyIds } }).lean();
+      const overrideMap = new Map<string, any>();
+      overrides.forEach((ov) => ov.lineKey && overrideMap.set(`${ov.shopifyOrderGid}:${ov.lineKey}`, ov));
+
       for (const doc of shopifyOrders) {
         const lineItems: any[] = Array.isArray(doc.lineItems) ? doc.lineItems : [];
         let printGross = 0;
         let originalGross = 0;
         let unknownGross = 0;
 
-        for (const li of lineItems) {
-          if (li.artistMetaobjectGid !== metaobjectId) continue;
-          const gross = Number(li.lineTotal || 0);
-          const saleType = li.inferredSaleType || "unknown";
+        lineItems.forEach((li, idx) => {
+          const lineKey = li.lineId || li.id || `${doc.shopifyOrderGid}:line:${idx}`;
+          const ov = overrideMap.get(`${doc.shopifyOrderGid}:${lineKey}`);
+          const artistMatch = ov?.overrideArtistMetaobjectGid !== undefined ? ov.overrideArtistMetaobjectGid === metaobjectId : li.artistMetaobjectGid === metaobjectId;
+          if (!artistMatch) return;
+          const saleType = ov?.overrideSaleType || li.inferredSaleType || "unknown";
+          const gross = ov?.overrideGross !== undefined ? ov.overrideGross : Number(li.lineTotal || 0);
           if (saleType === "print") printGross += gross;
           else if (saleType === "original") originalGross += gross;
           else unknownGross += gross;
-        }
+        });
 
         if (printGross + originalGross + unknownGross === 0) continue;
 
@@ -105,20 +114,31 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       .sort({ createdAt: -1 })
       .lean();
 
+    const posIds = posOrders.map((doc) => doc._id?.toString()).filter(Boolean);
+    const posOverrides = await OrderLineOverrideModel.find({ orderSource: "pos", posOrderId: { $in: posIds } }).lean();
+    const posOverrideMap = new Map<string, any>();
+    posOverrides.forEach((ov) => ov.lineKey && posOverrideMap.set(`${ov.posOrderId}:${ov.lineKey}`, ov));
+
     for (const doc of posOrders) {
       const lineItems: any[] = Array.isArray(doc.lineItems) ? doc.lineItems : [];
       let printGross = 0;
       let originalGross = 0;
       let unknownGross = 0;
-      for (const li of lineItems) {
-        if (li.artistShopifyMetaobjectGid === metaobjectId || li.artistMongoId === id) {
-          const gross = Number(li.quantity || 0) * Number(li.unitPrice || 0);
-          const saleType = li.saleType || "unknown";
-          if (saleType === "print") printGross += gross;
-          else if (saleType === "original") originalGross += gross;
-          else unknownGross += gross;
-        }
-      }
+      lineItems.forEach((li, idx) => {
+        const lineKey = li.lineId || li.id || `pos:${doc._id}:line:${idx}`;
+        const ov = posOverrideMap.get(`${doc._id}:${lineKey}`);
+        const artistMatch =
+          ov?.overrideArtistMetaobjectGid !== undefined
+            ? ov.overrideArtistMetaobjectGid === metaobjectId
+            : li.artistShopifyMetaobjectGid === metaobjectId || li.artistMongoId === id;
+        if (!artistMatch) return;
+        const saleType = ov?.overrideSaleType || li.saleType || "unknown";
+        const gross =
+          ov?.overrideGross !== undefined ? ov.overrideGross : Number(li.quantity || 0) * Number(li.unitPrice || 0);
+        if (saleType === "print") printGross += gross;
+        else if (saleType === "original") originalGross += gross;
+        else unknownGross += gross;
+      });
       if (printGross + originalGross + unknownGross === 0) continue;
       orderEntries.push({
         id: String(doc._id),

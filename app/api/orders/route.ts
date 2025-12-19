@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { connectMongo } from "@/lib/mongodb";
 import { PosOrderModel } from "@/models/PosOrder";
 import { ShopifyOrderCacheModel } from "@/models/ShopifyOrderCache";
+import { OrderLineOverrideModel } from "@/models/OrderLineOverride";
 import { z } from "zod";
 
 const createPosOrderSchema = z.object({
@@ -54,24 +55,46 @@ export async function GET(req: Request) {
       const docs = await ShopifyOrderCacheModel.find(filter).sort({ createdAt: -1 }).lean();
       for (const doc of docs) {
         const lineItems = Array.isArray(doc.lineItems) ? doc.lineItems : [];
+        const overrides = await OrderLineOverrideModel.find({ orderSource: "shopify", shopifyOrderGid: doc.shopifyOrderGid }).lean();
+        const overrideMap = new Map<string, any>();
+        overrides.forEach((ov) => ov.lineKey && overrideMap.set(ov.lineKey, ov));
+
+        const appliedLines = lineItems.map((line: any, idx: number) => {
+          const lineKey = line.lineId || line.id || `${doc.shopifyOrderGid}:line:${idx}`;
+          const ov = overrideMap.get(lineKey);
+          const next = { ...line };
+          if (ov?.overrideArtistMetaobjectGid !== undefined) {
+            next.artistMetaobjectGid = ov.overrideArtistMetaobjectGid || null;
+          }
+          if (ov?.overrideSaleType !== undefined) {
+            next.inferredSaleType = ov.overrideSaleType;
+          }
+          if (ov?.overrideGross !== undefined) {
+            next.lineTotal = ov.overrideGross;
+          }
+          next.lineKey = lineKey;
+          return next;
+        });
+
         const artistIds = Array.from(
           new Set(
-            lineItems
+            appliedLines
               .map((l: any) => l.artistMetaobjectGid)
               .filter((v: any) => typeof v === "string" && v.length > 0),
           ),
         );
-        const unassigned = lineItems.filter((l: any) => !l.artistMetaobjectGid).length;
+        const unassigned = appliedLines.filter((l: any) => !l.artistMetaobjectGid).length;
+        const totalGross = appliedLines.reduce((sum, li) => sum + Number(li.lineTotal || 0), 0);
         const normalized: NormalizedOrder = {
           id: String(doc._id || doc.shopifyOrderGid),
           source: "shopify",
           createdAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : new Date().toISOString(),
           label: doc.orderName || doc.shopifyOrderGid,
-          gross: Number(doc.totalGross || 0),
+          gross: Number(totalGross || doc.totalGross || 0),
           currency: doc.currency || "EUR",
           artistMetaobjectGids: artistIds,
           unassignedCount: unassigned,
-          lineItemCount: lineItems.length,
+          lineItemCount: appliedLines.length,
           status: doc.financialStatus || doc.fulfillmentStatus || null,
         };
         orders.push(normalized);
