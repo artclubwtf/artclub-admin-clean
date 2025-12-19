@@ -15,6 +15,14 @@ type StagedUploadTarget = {
   parameters: { name: string; value: string }[];
 };
 
+type CreatedProduct = {
+  id: string;
+  handle: string;
+  status: string;
+  title: string;
+  defaultVariantId?: string | null;
+};
+
 type AiWorkerConfig = {
   shop: string;
   limit: number;
@@ -145,7 +153,13 @@ async function createProduct(input: any) {
   const mutation = `
     mutation CreateArtworkProduct($input: ProductInput!) {
       productCreate(input: $input) {
-        product { id handle status title }
+        product {
+          id
+          handle
+          status
+          title
+          variants(first: 1) { nodes { id } }
+        }
         userErrors { field message }
       }
     }
@@ -161,7 +175,14 @@ async function createProduct(input: any) {
   }
   const product = payload.product;
   if (!product?.id) throw new Error("Shopify productCreate missing product");
-  return { id: product.id as string, handle: product.handle as string, status: product.status as string, title: product.title as string };
+  const defaultVariantId = product?.variants?.nodes?.[0]?.id ?? null;
+  return {
+    id: product.id as string,
+    handle: product.handle as string,
+    status: product.status as string,
+    title: product.title as string,
+    defaultVariantId,
+  } satisfies CreatedProduct;
 }
 
 async function attachMedia(productId: string, resourceUrls: string[]) {
@@ -197,6 +218,26 @@ async function attachMedia(productId: string, resourceUrls: string[]) {
   const mediaNodes = (payload.media || []) as any[];
   const firstImage = mediaNodes.find((node) => node?.image?.url);
   return { imageUrl: firstImage?.image?.url ?? null };
+}
+
+async function updateVariantPrice(variantId: string, price: string) {
+  const mutation = `
+    mutation UpdateArtworkVariant($input: ProductVariantInput!) {
+      productVariantUpdate(input: $input) {
+        productVariant { id }
+        userErrors { field message }
+      }
+    }
+  `;
+
+  const data = await callShopifyAdmin(mutation, { input: { id: variantId, price } });
+  const payload = data?.productVariantUpdate;
+  if (!payload) throw new Error("Shopify productVariantUpdate returned no payload");
+  const userErrors = payload.userErrors || [];
+  if (userErrors.length) {
+    const message = userErrors.map((e: any) => e.message).join("; ") || "productVariantUpdate failed";
+    throw new Error(message);
+  }
 }
 
 function parseNumber(value: unknown): number | null | undefined {
@@ -364,15 +405,19 @@ export async function POST(req: Request) {
       metafields,
     };
 
-    if (priceToSend !== null && priceToSend !== undefined && `${priceToSend}`.trim() !== "") {
-      productInput.variants = [{ price: `${priceToSend}`.trim() }];
-    }
-
     if (description) {
       productInput.descriptionHtml = description;
     }
 
     const product = await createProduct(productInput);
+
+    if (priceToSend !== null && priceToSend !== undefined && `${priceToSend}`.trim() !== "") {
+      if (!product.defaultVariantId) {
+        throw new Error("Shopify productCreate missing default variant");
+      }
+      await updateVariantPrice(product.defaultVariantId, `${priceToSend}`.trim());
+    }
+
     const mediaResult = await attachMedia(product.id, stagedResources);
 
     const aiAutomationErrors: string[] = [];
