@@ -290,12 +290,12 @@ async function setInventoryToOne(inventoryItemId: string, locationId: string) {
 
   const data = await callShopifyAdmin(mutation, {
     input: {
+      name: "Set to 1 for artwork creation",
       reason: "correction",
       changes: [
         {
           inventoryItemId,
           locationId,
-          name: "available",
           delta: 1,
         },
       ],
