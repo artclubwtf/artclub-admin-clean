@@ -15,6 +15,19 @@ type StagedUploadTarget = {
   parameters: { name: string; value: string }[];
 };
 
+type AiWorkerConfig = {
+  shop: string;
+  limit: number;
+  key: string;
+};
+
+type AiAutomationStatus = {
+  productsWorker: "ok" | "error";
+  tagsWorker: "ok" | "error";
+  tagUpdate: "ok" | "error";
+  errors?: string[];
+};
+
 type CreateArtworkRequest = {
   artistId: string;
   artistMetaobjectGid: string;
@@ -194,6 +207,51 @@ function parseNumber(value: unknown): number | null | undefined {
   return Number.isFinite(parsed) ? parsed : NaN;
 }
 
+function resolveAiWorkerConfig(): AiWorkerConfig {
+  const shop = mustEnv("AI_WORKER_SHOP");
+  const limitRaw = mustEnv("AI_WORKER_LIMIT");
+  const limit = Number(limitRaw);
+  if (!Number.isFinite(limit)) {
+    throw new Error("AI_WORKER_LIMIT must be a number");
+  }
+  const key = mustEnv("AI_WORKER_KEY");
+  return { shop, limit, key };
+}
+
+async function triggerWorker(url: string, config: AiWorkerConfig): Promise<void> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ shop: config.shop, limit: config.limit, key: config.key }),
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Worker request failed (${res.status} ${res.statusText})`);
+  }
+}
+
+async function addAiReadyTag(productId: string, baseTags: string[]): Promise<void> {
+  const tags = Array.from(new Set([...(baseTags || []), "ai-ready"]));
+  const mutation = `
+    mutation UpdateArtworkTags($input: ProductInput!) {
+      productUpdate(input: $input) {
+        product { id }
+        userErrors { field message }
+      }
+    }
+  `;
+
+  const data = await callShopifyAdmin(mutation, { input: { id: productId, tags } });
+  const payload = data?.productUpdate;
+  if (!payload) throw new Error("Shopify productUpdate returned no payload");
+  const userErrors = payload.userErrors || [];
+  if (userErrors.length) {
+    const message = userErrors.map((e: any) => e.message).join("; ") || "productUpdate failed";
+    throw new Error(message);
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => null)) as Partial<CreateArtworkRequest> | null;
@@ -298,10 +356,11 @@ export async function POST(req: Request) {
       kurzbeschreibung: kurzbeschreibung || null,
     });
 
+    const baseTags = saleMode === "ORIGINAL_AND_PRINTS" ? ["original"] : [];
     const productInput: any = {
       title,
       status: "DRAFT",
-      tags: saleMode === "ORIGINAL_AND_PRINTS" ? ["original"] : [],
+      tags: [...baseTags],
       metafields,
     };
 
@@ -316,6 +375,56 @@ export async function POST(req: Request) {
     const product = await createProduct(productInput);
     const mediaResult = await attachMedia(product.id, stagedResources);
 
+    const aiAutomationErrors: string[] = [];
+    const aiAutomation: AiAutomationStatus = {
+      productsWorker: "ok",
+      tagsWorker: "ok",
+      tagUpdate: "ok",
+    };
+    const recordAutomationError = (key: keyof Omit<AiAutomationStatus, "errors">, err: unknown) => {
+      aiAutomation[key] = "error";
+      const message = err instanceof Error ? err.message : "Unknown automation error";
+      if (!aiAutomationErrors.includes(message)) {
+        aiAutomationErrors.push(message);
+      }
+    };
+
+    let workerConfig: AiWorkerConfig | null = null;
+    try {
+      workerConfig = resolveAiWorkerConfig();
+    } catch (err) {
+      recordAutomationError("productsWorker", err);
+      recordAutomationError("tagsWorker", err);
+    }
+
+    if (workerConfig) {
+      try {
+        const productsWorkerUrl = mustEnv("AI_WORKER_PRODUCTS_URL");
+        await triggerWorker(productsWorkerUrl, workerConfig);
+      } catch (err) {
+        recordAutomationError("productsWorker", err);
+      }
+    }
+
+    try {
+      await addAiReadyTag(product.id, baseTags);
+    } catch (err) {
+      recordAutomationError("tagUpdate", err);
+    }
+
+    if (workerConfig) {
+      try {
+        const tagsWorkerUrl = mustEnv("AI_WORKER_TAGS_URL");
+        await triggerWorker(tagsWorkerUrl, workerConfig);
+      } catch (err) {
+        recordAutomationError("tagsWorker", err);
+      }
+    }
+
+    if (aiAutomationErrors.length) {
+      aiAutomation.errors = aiAutomationErrors;
+    }
+
     return NextResponse.json(
       {
         productGid: product.id,
@@ -324,6 +433,7 @@ export async function POST(req: Request) {
         status: product.status,
         imageUrl: mediaResult.imageUrl,
         price: priceToSend ?? null,
+        aiAutomation,
       },
       { status: 201 },
     );
