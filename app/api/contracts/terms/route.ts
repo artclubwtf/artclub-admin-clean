@@ -6,11 +6,11 @@ import { ContractTermsModel } from "@/models/ContractTerms";
 const termsSchema = z.object({
   kunstlerId: z.string().min(1, "kunstlerId is required"),
   printCommissionPct: z.coerce
-    .number({ invalid_type_error: "printCommissionPct must be a number" })
+    .number()
     .min(0, "printCommissionPct must be between 0 and 100")
     .max(100, "printCommissionPct must be between 0 and 100"),
   originalCommissionPct: z.coerce
-    .number({ invalid_type_error: "originalCommissionPct must be a number" })
+    .number()
     .min(0, "originalCommissionPct must be between 0 and 100")
     .max(100, "originalCommissionPct must be between 0 and 100"),
   effectiveFrom: z.coerce.date().optional(),
