@@ -254,18 +254,26 @@ body.ac-theme textarea::placeholder {
     box-shadow: var(--shadow);
     border-color: var(--hairline);
   }
-  body.ac-theme input,
-  body.ac-theme textarea,
-  body.ac-theme select {
-    background: color-mix(in srgb, var(--surface2) 85%, transparent);
-    border-color: var(--hairline);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), inset 0 -1px 0 rgba(0, 0, 0, 0.25);
-  }
-  body.ac-theme .ac-table thead {
-    background: color-mix(in srgb, var(--surface2) 92%, transparent);
-  }
-  body.ac-theme .ac-table tbody tr:nth-child(odd) {
-    background: color-mix(in srgb, var(--surface2) 75%, transparent);
+body.ac-theme input,
+body.ac-theme textarea,
+body.ac-theme select {
+  background: color-mix(in srgb, var(--surface2) 85%, transparent);
+  border-color: var(--hairline);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+}
+body.ac-theme select option {
+  color: var(--text);
+  background: var(--surface);
+}
+body.ac-theme .ac-table thead {
+  background: color-mix(in srgb, var(--surface2) 92%, transparent);
+}
+body.ac-theme .ac-table tbody tr:nth-child(odd) {
+  background: color-mix(in srgb, var(--surface2) 75%, transparent);
+}
+  body.ac-theme .ac-table td,
+  body.ac-theme .ac-table th {
+    color: var(--text);
   }
 }
 
@@ -293,6 +301,34 @@ body.ac-theme .bg-white {
 body.ac-theme .bg-slate-50,
 body.ac-theme .bg-slate-100 {
   background-color: var(--surface2) !important;
+}
+
+/* Improve dark-mode legibility for Tailwind text utility colors */
+@media (prefers-color-scheme: dark) {
+  body.ac-theme .text-slate-900,
+  body.ac-theme .text-slate-800,
+  body.ac-theme .text-slate-700 {
+    color: var(--text) !important;
+  }
+  body.ac-theme .text-slate-600,
+  body.ac-theme .text-slate-500,
+  body.ac-theme .text-slate-400 {
+    color: var(--muted) !important;
+  }
+  body.ac-theme .text-slate-300,
+  body.ac-theme .text-slate-200,
+  body.ac-theme .text-slate-100 {
+    color: color-mix(in srgb, var(--muted) 80%, #fff 20%) !important;
+  }
+  body.ac-theme label,
+  body.ac-theme small,
+  body.ac-theme .text-xs {
+    color: var(--muted);
+  }
+  body.ac-theme strong,
+  body.ac-theme b {
+    color: var(--text);
+  }
 }
 
 body.ac-theme .rounded-lg,
