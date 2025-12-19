@@ -2976,6 +2976,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
                 Print {ordersSummary.commissionTerms.printCommissionPct}% • Original {ordersSummary.commissionTerms.originalCommissionPct}%
               </p>
             )}
+            <p className="text-[11px] text-slate-500">Unknown lines count as original until classified.</p>
           </div>
           <div className="rounded border border-slate-200 bg-white p-3 shadow-sm">
             <p className="text-xs uppercase text-slate-500">Paid out</p>

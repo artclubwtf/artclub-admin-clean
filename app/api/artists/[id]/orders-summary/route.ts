@@ -24,8 +24,10 @@ const emptyTotals: Totals = {
   outstanding: 0,
 };
 
-function computeEarned(printGross: number, originalGross: number, printPct: number, originalPct: number) {
-  return printGross * (printPct / 100) + originalGross * (originalPct / 100);
+function computeEarned(printGross: number, originalGross: number, unknownGross: number, printPct: number, originalPct: number) {
+  // Unknown is treated like original until explicitly classified.
+  const effectiveOriginal = originalGross + unknownGross;
+  return printGross * (printPct / 100) + effectiveOriginal * (originalPct / 100);
 }
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -145,7 +147,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       },
       { ...emptyTotals },
     );
-    totalsAll.earned = computeEarned(totalsAll.printGross, totalsAll.originalGross, printPct, originalPct);
+    totalsAll.earned = computeEarned(totalsAll.printGross, totalsAll.originalGross, totalsAll.unknownGross, printPct, originalPct);
     totalsAll.paid = payouts.reduce((sum, p) => sum + Number(p.amount || 0), 0);
     totalsAll.outstanding = totalsAll.earned - totalsAll.paid;
 
@@ -160,7 +162,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         },
         { ...emptyTotals },
       );
-    totals30.earned = computeEarned(totals30.printGross, totals30.originalGross, printPct, originalPct);
+    totals30.earned = computeEarned(totals30.printGross, totals30.originalGross, totals30.unknownGross, printPct, originalPct);
     totals30.paid = totalsAll.paid; // payouts not filtered by date for outstanding calculations
     totals30.outstanding = totals30.earned - totals30.paid;
 
