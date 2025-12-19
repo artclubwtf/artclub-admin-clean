@@ -56,6 +56,17 @@ type Contract = {
   createdAt?: string;
 };
 
+type ContractTerms = {
+  _id?: string;
+  kunstlerId: string;
+  printCommissionPct: number;
+  originalCommissionPct: number;
+  effectiveFrom?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 type PayoutDetails = {
   kunstlerId: string;
   accountHolder?: string;
@@ -220,6 +231,15 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [uploadingContract, setUploadingContract] = useState(false);
   const [uploadContractMessage, setUploadContractMessage] = useState<string | null>(null);
   const [uploadContractError, setUploadContractError] = useState<string | null>(null);
+  const [contractTerms, setContractTerms] = useState<ContractTerms | null>(null);
+  const [termsLoading, setTermsLoading] = useState(false);
+  const [termsSaving, setTermsSaving] = useState(false);
+  const [termsError, setTermsError] = useState<string | null>(null);
+  const [termsMessage, setTermsMessage] = useState<string | null>(null);
+  const [printCommissionPct, setPrintCommissionPct] = useState("");
+  const [originalCommissionPct, setOriginalCommissionPct] = useState("");
+  const [commissionEffectiveFrom, setCommissionEffectiveFrom] = useState("");
+  const [commissionNotes, setCommissionNotes] = useState("");
 
   const [payout, setPayout] = useState<PayoutDetails | null>(null);
   const [payoutLoading, setPayoutLoading] = useState(false);
@@ -542,6 +562,41 @@ export default function ArtistDetailClient({ artistId }: Props) {
       }
     };
 
+    const loadContractTerms = async () => {
+      setTermsLoading(true);
+      setTermsError(null);
+      setTermsMessage(null);
+      setContractTerms(null);
+      setPrintCommissionPct("");
+      setOriginalCommissionPct("");
+      setCommissionEffectiveFrom("");
+      setCommissionNotes("");
+      try {
+        const res = await fetch(`/api/contracts/terms?kunstlerId=${encodeURIComponent(artistId)}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null);
+          throw new Error(parseErrorMessage(payload));
+        }
+        const json = await res.json();
+        if (!active) return;
+        const terms = (json.terms ?? null) as ContractTerms | null;
+        setContractTerms(terms);
+        setPrintCommissionPct(typeof terms?.printCommissionPct === "number" ? String(terms.printCommissionPct) : "");
+        setOriginalCommissionPct(
+          typeof terms?.originalCommissionPct === "number" ? String(terms.originalCommissionPct) : "",
+        );
+        setCommissionEffectiveFrom(terms?.effectiveFrom ? terms.effectiveFrom.slice(0, 10) : "");
+        setCommissionNotes(terms?.notes ?? "");
+      } catch (err: any) {
+        if (!active) return;
+        setTermsError(err?.message ?? "Failed to load commission terms");
+      } finally {
+        if (active) setTermsLoading(false);
+      }
+    };
+
     const loadPayout = async () => {
       setPayoutLoading(true);
       setPayoutError(null);
@@ -586,6 +641,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
       }
     };
 
+    loadContractTerms();
     loadContracts();
     loadPayout();
     loadMedia();
@@ -686,6 +742,57 @@ export default function ArtistDetailClient({ artistId }: Props) {
       setError(err?.message ?? "Failed to save artist");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveTerms = async (e: FormEvent) => {
+    e.preventDefault();
+    setTermsError(null);
+    setTermsMessage(null);
+    setTermsSaving(true);
+
+    try {
+      const printPct = Number(printCommissionPct);
+      const originalPct = Number(originalCommissionPct);
+
+      if (!Number.isFinite(printPct) || printPct < 0 || printPct > 100) {
+        throw new Error("Print commission must be between 0 and 100");
+      }
+      if (!Number.isFinite(originalPct) || originalPct < 0 || originalPct > 100) {
+        throw new Error("Original commission must be between 0 and 100");
+      }
+
+      const res = await fetch("/api/contracts/terms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kunstlerId: artistId,
+          printCommissionPct: printPct,
+          originalCommissionPct: originalPct,
+          effectiveFrom: commissionEffectiveFrom.trim() || undefined,
+          notes: commissionNotes.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(parseErrorMessage(payload));
+      }
+
+      const json = await res.json();
+      const saved = (json.terms ?? null) as ContractTerms | null;
+      setContractTerms(saved);
+      setPrintCommissionPct(typeof saved?.printCommissionPct === "number" ? String(saved.printCommissionPct) : "");
+      setOriginalCommissionPct(
+        typeof saved?.originalCommissionPct === "number" ? String(saved.originalCommissionPct) : "",
+      );
+      setCommissionEffectiveFrom(saved?.effectiveFrom ? saved.effectiveFrom.slice(0, 10) : "");
+      setCommissionNotes(saved?.notes ?? "");
+      setTermsMessage("Saved terms");
+    } catch (err: any) {
+      setTermsError(err?.message ?? "Failed to save commission terms");
+    } finally {
+      setTermsSaving(false);
     }
   };
 
@@ -2398,6 +2505,87 @@ export default function ArtistDetailClient({ artistId }: Props) {
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-slate-800">Contracts</h3>
         {contractsLoading && <span className="text-xs text-slate-500">Loading...</span>}
+      </div>
+
+      <div className="rounded border border-slate-200 bg-slate-50 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <div className="font-semibold text-slate-800">Commission terms</div>
+            <p className="text-xs text-slate-500">Set the artist commission split.</p>
+          </div>
+          <div className="text-right text-xs text-slate-500">
+            {termsLoading && <span>Loading...</span>}
+            {!termsLoading && contractTerms?.updatedAt && (
+              <span>Updated {new Date(contractTerms.updatedAt).toLocaleDateString()}</span>
+            )}
+          </div>
+        </div>
+
+        <form className="mt-3 space-y-3" onSubmit={handleSaveTerms}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1 text-sm font-medium text-slate-700">
+              Print commission %
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                value={printCommissionPct}
+                onChange={(e) => setPrintCommissionPct(e.target.value)}
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                placeholder="e.g. 40"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium text-slate-700">
+              Original commission %
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                value={originalCommissionPct}
+                onChange={(e) => setOriginalCommissionPct(e.target.value)}
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                placeholder="e.g. 30"
+              />
+            </label>
+          </div>
+
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Effective from (optional)
+            <input
+              type="date"
+              value={commissionEffectiveFrom}
+              onChange={(e) => setCommissionEffectiveFrom(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            />
+          </label>
+
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Notes
+            <textarea
+              value={commissionNotes}
+              onChange={(e) => setCommissionNotes(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              rows={3}
+              placeholder="Internal notes about the commission agreement"
+            />
+          </label>
+
+          {termsError && <p className="text-sm text-red-600">{termsError}</p>}
+          {termsMessage && <p className="text-sm text-green-600">{termsMessage}</p>}
+
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-slate-500">Used for payout calculations.</p>
+            <button
+              type="submit"
+              disabled={termsSaving}
+              className="inline-flex items-center rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            >
+              {termsSaving ? "Saving..." : "Save terms"}
+            </button>
+          </div>
+        </form>
       </div>
 
       <form className="space-y-2" onSubmit={handleUploadContract}>
