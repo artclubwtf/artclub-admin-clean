@@ -36,13 +36,24 @@ export default function OrdersPageClient() {
   const [artistsLoading, setArtistsLoading] = useState(false);
 
   const [showPosForm, setShowPosForm] = useState(false);
-  const [posTitle, setPosTitle] = useState("");
-  const [posGross, setPosGross] = useState("");
+  const [posDate, setPosDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [posNote, setPosNote] = useState("");
   const [posSaving, setPosSaving] = useState(false);
   const [posMessage, setPosMessage] = useState<string | null>(null);
   const [posError, setPosError] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<OrderListItem | null>(null);
+  const [posLines, setPosLines] = useState<
+    { id: string; title: string; quantity: string; unitPrice: string; saleType: "print" | "original" | "unknown"; artist: string }[]
+  >([
+    {
+      id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+      title: "",
+      quantity: "1",
+      unitPrice: "",
+      saleType: "unknown",
+      artist: "",
+    },
+  ]);
 
   const computedDateRange = useMemo(() => {
     if (dateRange === "custom") {
@@ -153,27 +164,66 @@ export default function OrdersPageClient() {
     }
   };
 
+  const handleAddPosLine = () => {
+    setPosLines((prev) => [
+      ...prev,
+      {
+        id: typeof crypto !== "undefined" ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+        title: "",
+        quantity: "1",
+        unitPrice: "",
+        saleType: "unknown",
+        artist: "",
+      },
+    ]);
+  };
+
+  const handleRemovePosLine = (id: string) => {
+    setPosLines((prev) => (prev.length > 1 ? prev.filter((l) => l.id !== id) : prev));
+  };
+
+  const handleUpdatePosLine = (id: string, patch: Partial<{ title: string; quantity: string; unitPrice: string; saleType: "print" | "original" | "unknown"; artist: string }>) => {
+    setPosLines((prev) => prev.map((line) => (line.id === id ? { ...line, ...patch } : line)));
+  };
+
   const handleCreatePos = async () => {
     setPosError(null);
     setPosMessage(null);
-    const gross = Number(posGross);
-    if (!Number.isFinite(gross) || gross <= 0) {
-      setPosError("Gross amount must be greater than 0");
+    const cleanedLines = posLines.map((line) => ({
+      ...line,
+      title: line.title.trim(),
+      quantity: Number(line.quantity),
+      unitPrice: Number(line.unitPrice),
+    }));
+
+    if (cleanedLines.some((l) => !l.title)) {
+      setPosError("Each line needs a title");
       return;
     }
-    if (!posTitle.trim()) {
-      setPosError("Title is required");
+    if (cleanedLines.some((l) => !Number.isFinite(l.quantity) || l.quantity <= 0)) {
+      setPosError("Quantities must be > 0");
+      return;
+    }
+    if (cleanedLines.some((l) => !Number.isFinite(l.unitPrice) || l.unitPrice < 0)) {
+      setPosError("Unit prices must be >= 0");
       return;
     }
     setPosSaving(true);
     try {
-      const res = await fetch("/api/orders", {
+      const res = await fetch("/api/orders/pos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: posTitle.trim(),
-          gross,
+          createdAt: posDate ? new Date(posDate).toISOString() : undefined,
           note: posNote.trim() || undefined,
+          lineItems: cleanedLines.map((line) => ({
+            title: line.title,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice,
+            currency: "EUR",
+            saleType: line.saleType,
+            artistShopifyMetaobjectGid: line.artist || undefined,
+          })),
         }),
       });
       if (!res.ok) {
@@ -181,9 +231,18 @@ export default function OrdersPageClient() {
         throw new Error(payload?.error || "Failed to create POS order");
       }
       setPosMessage("POS order created");
-      setPosTitle("");
-      setPosGross("");
       setPosNote("");
+      setPosDate(new Date().toISOString().slice(0, 10));
+      setPosLines([
+        {
+          id: typeof crypto !== "undefined" ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+          title: "",
+          quantity: "1",
+          unitPrice: "",
+          saleType: "unknown",
+          artist: "",
+        },
+      ]);
       setShowPosForm(false);
       // reload
       const params = new URLSearchParams();
@@ -304,60 +363,154 @@ export default function OrdersPageClient() {
       </div>
 
       {showPosForm && (
-        <div className="rounded border border-slate-200 bg-white p-4 shadow-sm space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="font-semibold text-slate-800">Quick POS order</div>
-            {posMessage && <span className="text-xs text-green-600">{posMessage}</span>}
-          </div>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <label className="space-y-1 text-sm font-medium text-slate-700">
-              Title
-              <input
-                value={posTitle}
-                onChange={(e) => setPosTitle(e.target.value)}
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                placeholder="POS sale"
-              />
-            </label>
-            <label className="space-y-1 text-sm font-medium text-slate-700">
-              Gross amount
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={posGross}
-                onChange={(e) => setPosGross(e.target.value)}
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                placeholder="100.00"
-              />
-            </label>
-            <label className="space-y-1 text-sm font-medium text-slate-700">
-              Note
-              <input
-                value={posNote}
-                onChange={(e) => setPosNote(e.target.value)}
-                className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                placeholder="Optional note"
-              />
-            </label>
-          </div>
-          {posError && <p className="text-sm text-red-600">{posError}</p>}
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setShowPosForm(false)}
-              className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleCreatePos}
-              disabled={posSaving}
-              className="inline-flex items-center rounded bg-black px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
-            >
-              {posSaving ? "Saving..." : "Save POS order"}
-            </button>
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-3xl rounded-lg bg-white p-5 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase text-slate-500">POS</p>
+                <h3 className="text-lg font-semibold text-slate-800">New POS order</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPosForm(false)}
+                className="text-sm text-slate-600 underline"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-sm font-medium text-slate-700">
+                Date
+                <input
+                  type="date"
+                  value={posDate}
+                  onChange={(e) => setPosDate(e.target.value)}
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                />
+              </label>
+              <label className="space-y-1 text-sm font-medium text-slate-700">
+                Note
+                <input
+                  value={posNote}
+                  onChange={(e) => setPosNote(e.target.value)}
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  placeholder="Optional note"
+                />
+              </label>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="font-semibold text-slate-800">Line items</div>
+                <button
+                  type="button"
+                  onClick={handleAddPosLine}
+                  className="text-sm text-blue-600 underline"
+                >
+                  Add line
+                </button>
+              </div>
+
+              {posLines.map((line) => (
+                <div key={line.id} className="rounded border border-slate-200 p-3">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <label className="space-y-1 text-sm font-medium text-slate-700">
+                      Title
+                      <input
+                        value={line.title}
+                        onChange={(e) => handleUpdatePosLine(line.id, { title: e.target.value })}
+                        className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                        placeholder="Item title"
+                      />
+                    </label>
+                    <label className="space-y-1 text-sm font-medium text-slate-700">
+                      Quantity
+                      <input
+                        type="number"
+                        min="1"
+                        value={line.quantity}
+                        onChange={(e) => handleUpdatePosLine(line.id, { quantity: e.target.value })}
+                        className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                      />
+                    </label>
+                    <label className="space-y-1 text-sm font-medium text-slate-700">
+                      Unit price
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={line.unitPrice}
+                        onChange={(e) => handleUpdatePosLine(line.id, { unitPrice: e.target.value })}
+                        className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                        placeholder="100.00"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="mt-2 grid gap-3 sm:grid-cols-3">
+                    <label className="space-y-1 text-sm font-medium text-slate-700">
+                      Sale type
+                      <select
+                        value={line.saleType}
+                        onChange={(e) => handleUpdatePosLine(line.id, { saleType: e.target.value as any })}
+                        className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                      >
+                        <option value="unknown">Unknown</option>
+                        <option value="print">Print</option>
+                        <option value="original">Original</option>
+                      </select>
+                    </label>
+                    <label className="space-y-1 text-sm font-medium text-slate-700">
+                      Artist
+                      <select
+                        value={line.artist}
+                        onChange={(e) => handleUpdatePosLine(line.id, { artist: e.target.value })}
+                        className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                      >
+                        <option value="">Unassigned</option>
+                        {artistOptions.map((a) => (
+                          <option key={a.metaobjectId} value={a.metaobjectId!}>
+                            {a.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="flex items-end justify-end">
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePosLine(line.id)}
+                        className="text-sm text-red-600 underline"
+                        disabled={posLines.length === 1}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {posError && <p className="mt-3 text-sm text-red-600">{posError}</p>}
+            {posMessage && <p className="mt-1 text-sm text-green-600">{posMessage}</p>}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowPosForm(false)}
+                className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCreatePos}
+                disabled={posSaving}
+                className="inline-flex items-center rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              >
+                {posSaving ? "Saving..." : "Save POS order"}
+              </button>
+            </div>
           </div>
         </div>
       )}

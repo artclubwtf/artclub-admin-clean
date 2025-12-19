@@ -91,11 +91,11 @@ export async function GET(req: Request) {
         const artistIds = Array.from(
           new Set(
             lineItems
-              .map((l: any) => l.artistShopifyMetaobjectGid)
+              .map((l: any) => l.artistShopifyMetaobjectGid || (l.artistMongoId ? `mongo:${l.artistMongoId}` : null))
               .filter((v: any) => typeof v === "string" && v.length > 0),
           ),
         );
-        const unassigned = lineItems.filter((l: any) => !l.artistShopifyMetaobjectGid).length;
+        const unassigned = lineItems.filter((l: any) => !l.artistShopifyMetaobjectGid && !l.artistMongoId).length;
         const normalized: NormalizedOrder = {
           id: String(doc._id),
           source: "pos",
