@@ -220,22 +220,22 @@ async function attachMedia(productId: string, resourceUrls: string[]) {
   return { imageUrl: firstImage?.image?.url ?? null };
 }
 
-async function updateVariantPrice(variantId: string, price: string) {
+async function updateVariantPrice(productId: string, variantId: string, price: string) {
   const mutation = `
-    mutation UpdateArtworkVariant($input: ProductVariantInput!) {
-      productVariantUpdate(input: $input) {
-        productVariant { id }
+    mutation UpdateArtworkVariant($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+      productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+        productVariants { id }
         userErrors { field message }
       }
     }
   `;
 
-  const data = await callShopifyAdmin(mutation, { input: { id: variantId, price } });
-  const payload = data?.productVariantUpdate;
-  if (!payload) throw new Error("Shopify productVariantUpdate returned no payload");
+  const data = await callShopifyAdmin(mutation, { productId, variants: [{ id: variantId, price }] });
+  const payload = data?.productVariantsBulkUpdate;
+  if (!payload) throw new Error("Shopify productVariantsBulkUpdate returned no payload");
   const userErrors = payload.userErrors || [];
   if (userErrors.length) {
-    const message = userErrors.map((e: any) => e.message).join("; ") || "productVariantUpdate failed";
+    const message = userErrors.map((e: any) => e.message).join("; ") || "productVariantsBulkUpdate failed";
     throw new Error(message);
   }
 }
@@ -415,7 +415,7 @@ export async function POST(req: Request) {
       if (!product.defaultVariantId) {
         throw new Error("Shopify productCreate missing default variant");
       }
-      await updateVariantPrice(product.defaultVariantId, `${priceToSend}`.trim());
+      await updateVariantPrice(product.id, product.defaultVariantId, `${priceToSend}`.trim());
     }
 
     const mediaResult = await attachMedia(product.id, stagedResources);
