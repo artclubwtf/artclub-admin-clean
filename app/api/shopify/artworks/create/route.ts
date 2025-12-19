@@ -313,15 +313,15 @@ async function setInventoryToOne(inventoryItemId: string, locationId: string) {
 
 async function setInventoryTracking(inventoryItemId: string, tracked: boolean) {
   const mutation = `
-    mutation UpdateInventoryTracking($input: InventoryItemUpdateInput!) {
-      inventoryItemUpdate(input: $input) {
+    mutation UpdateInventoryTracking($id: ID!, $input: InventoryItemInput!) {
+      inventoryItemUpdate(id: $id, input: $input) {
         inventoryItem { id tracked }
         userErrors { field message }
       }
     }
   `;
 
-  const data = await callShopifyAdmin(mutation, { input: { id: inventoryItemId, tracked } });
+  const data = await callShopifyAdmin(mutation, { id: inventoryItemId, input: { tracked } });
   const payload = data?.inventoryItemUpdate;
   if (!payload) throw new Error("Shopify inventoryItemUpdate returned no payload");
   const userErrors = payload.userErrors || [];
