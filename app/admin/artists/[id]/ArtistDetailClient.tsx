@@ -2773,7 +2773,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
                     onClick={copyFirstRowToAllRows}
                     className="rounded border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-800 shadow-sm hover:border-slate-400"
                   >
-                    Copy first row -> all
+                    Copy first row to all
                   </button>
                   <button
                     type="button"
