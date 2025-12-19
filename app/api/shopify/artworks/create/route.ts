@@ -21,6 +21,7 @@ type CreatedProduct = {
   status: string;
   title: string;
   defaultVariantId?: string | null;
+  defaultInventoryItemId?: string | null;
 };
 
 type AiWorkerConfig = {
@@ -158,7 +159,7 @@ async function createProduct(input: any) {
           handle
           status
           title
-          variants(first: 1) { nodes { id } }
+          variants(first: 1) { nodes { id inventoryItem { id } } }
         }
         userErrors { field message }
       }
@@ -176,12 +177,14 @@ async function createProduct(input: any) {
   const product = payload.product;
   if (!product?.id) throw new Error("Shopify productCreate missing product");
   const defaultVariantId = product?.variants?.nodes?.[0]?.id ?? null;
+  const defaultInventoryItemId = product?.variants?.nodes?.[0]?.inventoryItem?.id ?? null;
   return {
     id: product.id as string,
     handle: product.handle as string,
     status: product.status as string,
     title: product.title as string,
     defaultVariantId,
+    defaultInventoryItemId,
   } satisfies CreatedProduct;
 }
 
@@ -220,7 +223,34 @@ async function attachMedia(productId: string, resourceUrls: string[]) {
   return { imageUrl: firstImage?.image?.url ?? null };
 }
 
-async function updateVariantPrice(productId: string, variantId: string, price: string) {
+let cachedLocationId: string | null = null;
+async function getPrimaryLocationId(): Promise<string> {
+  if (cachedLocationId) return cachedLocationId;
+
+  const envLocation = process.env.SHOPIFY_PRIMARY_LOCATION_ID;
+  if (envLocation) {
+    cachedLocationId = envLocation;
+    return envLocation;
+  }
+
+  const query = `
+    query FetchPrimaryLocation {
+      locations(first: 1) {
+        nodes { id name }
+      }
+    }
+  `;
+
+  const data = await callShopifyAdmin(query, {});
+  const location = data?.locations?.nodes?.[0];
+  if (!location?.id) {
+    throw new Error("No Shopify locations available for inventory updates");
+  }
+  cachedLocationId = location.id as string;
+  return cachedLocationId;
+}
+
+async function updateVariantPriceAndInventory(productId: string, variantId: string, price: string | null, locationId: string) {
   const mutation = `
     mutation UpdateArtworkVariant($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
       productVariantsBulkUpdate(productId: $productId, variants: $variants) {
@@ -230,7 +260,15 @@ async function updateVariantPrice(productId: string, variantId: string, price: s
     }
   `;
 
-  const data = await callShopifyAdmin(mutation, { productId, variants: [{ id: variantId, price }] });
+  const variantInput: Record<string, any> = {
+    id: variantId,
+    inventoryQuantities: [{ locationId, availableQuantity: 1 }],
+  };
+  if (price !== null) {
+    variantInput.price = price;
+  }
+
+  const data = await callShopifyAdmin(mutation, { productId, variants: [variantInput] });
   const payload = data?.productVariantsBulkUpdate;
   if (!payload) throw new Error("Shopify productVariantsBulkUpdate returned no payload");
   const userErrors = payload.userErrors || [];
@@ -238,6 +276,10 @@ async function updateVariantPrice(productId: string, variantId: string, price: s
     const message = userErrors.map((e: any) => e.message).join("; ") || "productVariantsBulkUpdate failed";
     throw new Error(message);
   }
+}
+
+function waitMs(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function parseNumber(value: unknown): number | null | undefined {
@@ -411,14 +453,22 @@ export async function POST(req: Request) {
 
     const product = await createProduct(productInput);
 
+    if (!product.defaultVariantId) {
+      throw new Error("Shopify productCreate missing default variant");
+    }
+
+    const locationId = await getPrimaryLocationId();
+
     if (priceToSend !== null && priceToSend !== undefined && `${priceToSend}`.trim() !== "") {
-      if (!product.defaultVariantId) {
-        throw new Error("Shopify productCreate missing default variant");
-      }
-      await updateVariantPrice(product.id, product.defaultVariantId, `${priceToSend}`.trim());
+      await updateVariantPriceAndInventory(product.id, product.defaultVariantId, `${priceToSend}`.trim(), locationId);
+    } else {
+      await updateVariantPriceAndInventory(product.id, product.defaultVariantId, null, locationId);
     }
 
     const mediaResult = await attachMedia(product.id, stagedResources);
+
+    // Allow Shopify to settle before kicking off automation
+    await waitMs(60_000);
 
     const aiAutomationErrors: string[] = [];
     const aiAutomation: AiAutomationStatus = {
