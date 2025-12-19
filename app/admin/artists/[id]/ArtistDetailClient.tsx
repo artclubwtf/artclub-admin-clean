@@ -2113,7 +2113,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
 
   const overviewPanel = (
     <div className="space-y-4">
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+      <div className="ac-card space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-slate-800">Next actions</h3>
           <span className="text-xs font-medium text-slate-500">Stage: {formatStage(stage)}</span>
@@ -2155,7 +2155,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
         </ul>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+      <div className="ac-card space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-1 text-sm font-medium text-slate-700">
             Name
@@ -2190,7 +2190,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="ac-card">
         <label className="space-y-1 text-sm font-medium text-slate-700">
           Internal notes
           <textarea
@@ -2206,21 +2206,21 @@ export default function ArtistDetailClient({ artistId }: Props) {
   );
 
   const mediaPanel = (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+    <div className="ac-card space-y-4">
       {mediaHeader}
       <div className="space-y-4">{mediaContent}</div>
     </div>
   );
 
   const artworksPanel = (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+    <div className="ac-card space-y-4">
       {artworksHeader}
       <div className="space-y-4">{artworksContent}</div>
     </div>
   );
 
   const publicProfilePanel = (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+    <div className="ac-card space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-slate-800">Public Profile (required for Under Contract)</h3>
         {lastShopifyStatus && (
@@ -2391,7 +2391,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
   );
 
   const contractsPanel = (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+    <div className="ac-card space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-slate-800">Contracts</h3>
         {contractsLoading && <span className="text-xs text-slate-500">Loading...</span>}
@@ -2495,7 +2495,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
   );
 
   const payoutPanel = (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+    <div className="ac-card space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-slate-800">Payout</h3>
         {payoutLoading && <span className="text-xs text-slate-500">Loading...</span>}
@@ -2865,7 +2865,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
               </div>
 
               <div className="overflow-auto rounded border border-slate-200">
-                <table className="min-w-full text-left text-sm">
+                <table className="ac-table min-w-full text-left text-sm">
                   <thead className="sticky top-0 bg-slate-100 text-xs uppercase text-slate-600">
                     <tr>
                       <th className="px-3 py-2">Preview</th>
@@ -3211,7 +3211,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
 
   return (
     <>
-      <section className="space-y-5">
+      <section className="ac-shell space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-xs text-slate-500">ID</div>
@@ -3223,7 +3223,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
         </div>
 
         <div className="sticky top-0 z-20 -mx-4 sm:-mx-6">
-          <div className="mx-4 sm:mx-6 rounded-b-lg border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur">
+          <div className="ac-card ac-blur mx-4 sm:mx-6 p-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap items-center gap-3">
                 <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
@@ -3311,7 +3311,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
         </div>
 
         {!isUnderContract && (
-          <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="ac-card p-3">
             <div className="flex flex-col gap-2 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
               <p>Sections unlock as the stage advances. Media/Artworks start in In Review, Contracts in Offer, Public Profile and Payout in Under Contract.</p>
               <p className="text-xs text-slate-500">Change the stage in the header to progress.</p>

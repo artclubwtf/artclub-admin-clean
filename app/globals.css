@@ -1,26 +1,275 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --bg: #f6f7fb;
+  --bg-accent: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.6), transparent 35%),
+    radial-gradient(circle at 80% 0%, rgba(255, 255, 255, 0.45), transparent 30%);
+  --surface: #ffffff;
+  --surface2: #eef1f6;
+  --text: #0f172a;
+  --muted: #64748b;
+  --hairline: rgba(15, 23, 42, 0.08);
+  --shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+  --primary: #0f172a;
+  --primaryText: #ffffff;
+  --danger: #ef4444;
+  --radius: 14px;
+  --pad: 16px;
+  --gap: 12px;
+  --focus: rgba(79, 132, 255, 0.35);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #0b0f17;
+    --bg-accent: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.04), transparent 35%),
+      radial-gradient(circle at 80% 0%, rgba(255, 255, 255, 0.06), transparent 30%);
+    --surface: #0f1720;
+    --surface2: #131a24;
+    --text: #e4e7ec;
+    --muted: #9aa3b5;
+    --hairline: rgba(228, 231, 236, 0.08);
+    --shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+    --primary: #9ec5ff;
+    --primaryText: #0a0f1a;
+    --danger: #f87171;
+    --focus: rgba(158, 197, 255, 0.55);
   }
 }
 
+@theme inline {
+  --color-background: var(--surface);
+  --color-foreground: var(--text);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+  background: var(--bg);
+  background-image: var(--bg-accent);
+  color: var(--text);
+  font-family: "SF Pro Text", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: -0.01em;
+  line-height: 1.6;
+  text-rendering: optimizeLegibility;
+}
+
+body.ac-theme {
+  background-attachment: fixed;
+}
+
+body::selection {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--text);
+}
+
+@media (prefers-color-scheme: dark) {
+  body::selection {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--text);
+  }
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.ac-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 20px 40px;
+}
+
+.ac-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid transparent;
+  padding: 16px;
+}
+
+.ac-blur {
+  backdrop-filter: blur(14px);
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+}
+
+.ac-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  border-radius: calc(var(--radius) - 6px);
+  border: 1px solid transparent;
+  background: var(--surface2);
+  color: var(--text);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
+  transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+.ac-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.ac-button-primary {
+  background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 88%, #ffffff));
+  color: var(--primaryText);
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+
+.ac-button-ghost {
+  background: transparent;
+  border-color: var(--hairline);
+}
+
+.ac-button-danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.ac-tabs {
+  display: inline-flex;
+  padding: 4px;
+  gap: 6px;
+  border-radius: 999px;
+  background: var(--surface2);
+  box-shadow: inset 0 1px 0 var(--hairline);
+}
+
+.ac-tab {
+  border: none;
+  background: transparent;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-weight: 600;
+  color: var(--muted);
+  transition: all 120ms ease;
+}
+
+.ac-tab-active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.ac-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--surface2);
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.ac-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--hairline), transparent);
+  margin: 12px 0;
+}
+
+.ac-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--surface);
+}
+
+.ac-table thead {
+  position: sticky;
+  top: 0;
+  background: var(--surface2);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ac-table th,
+.ac-table td {
+  padding: 10px 12px;
+}
+
+.ac-table tbody tr:nth-child(odd) {
+  background: color-mix(in srgb, var(--surface2) 70%, transparent);
+}
+
+.ac-table tbody tr:hover {
+  background: color-mix(in srgb, var(--surface2) 90%, transparent);
+}
+
+body.ac-theme button {
+  border-radius: calc(var(--radius) - 8px);
+}
+
+body.ac-theme button:focus-visible,
+body.ac-theme input:focus-visible,
+body.ac-theme textarea:focus-visible,
+body.ac-theme select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+body.ac-theme input,
+body.ac-theme textarea,
+body.ac-theme select {
+  background: var(--surface2);
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) - 8px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -1px 0 rgba(0, 0, 0, 0.04);
+  transition: box-shadow 150ms ease, background 150ms ease;
+}
+
+body.ac-theme input:hover,
+body.ac-theme textarea:hover,
+body.ac-theme select:hover {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+}
+
+body.ac-theme input:disabled,
+body.ac-theme textarea:disabled,
+body.ac-theme select:disabled,
+body.ac-theme button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+body.ac-theme .border {
+  border-color: var(--hairline) !important;
+}
+
+body.ac-theme .shadow-sm,
+body.ac-theme .shadow {
+  box-shadow: var(--shadow) !important;
+}
+
+body.ac-theme .bg-white {
+  background-color: var(--surface) !important;
+}
+
+body.ac-theme .bg-slate-50,
+body.ac-theme .bg-slate-100 {
+  background-color: var(--surface2) !important;
+}
+
+body.ac-theme .rounded-lg,
+body.ac-theme .rounded-md,
+body.ac-theme .rounded {
+  border-radius: var(--radius);
 }
