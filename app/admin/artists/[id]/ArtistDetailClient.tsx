@@ -421,49 +421,6 @@ export default function ArtistDetailClient({ artistId }: Props) {
     }
   };
 
-  const renderShopifyFileField = (
-    key: ShopifyFileFieldKey,
-    label: string,
-    value: string,
-    onChange: (next: string) => void,
-  ) => {
-    const upload = fileUploads[key];
-    return (
-      <label className="space-y-1 text-sm font-medium text-slate-700">
-        {label}
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-          placeholder="gid://shopify/File/..."
-        />
-        <div className="flex flex-wrap items-center gap-2 text-xs font-normal text-slate-700">
-          <input
-            ref={fileInputRefs[key]}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => handleShopifyFileUpload(key, e.target.files)}
-          />
-          <button
-            type="button"
-            onClick={() => triggerFilePicker(key)}
-            disabled={upload?.uploading}
-            className="inline-flex items-center rounded border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-          >
-            {upload?.uploading ? "Uploading..." : "Upload to Shopify"}
-          </button>
-          {upload?.filename && upload.uploading && <span className="text-slate-600">Lade {upload.filename}...</span>}
-          {upload?.filename && !upload.uploading && !upload.error && (
-            <span className="text-slate-600">Datei: {upload.filename}</span>
-          )}
-          {upload?.success && <span className="text-green-600">{upload.success}</span>}
-          {upload?.error && <span className="text-red-600">{upload.error}</span>}
-        </div>
-      </label>
-    );
-  };
-
   useEffect(() => {
     let active = true;
     setArtworkSuccess(null);
@@ -2219,174 +2176,220 @@ export default function ArtistDetailClient({ artistId }: Props) {
     </div>
   );
 
-  const publicProfilePanel = (
-    <div className="ac-card space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-slate-800">Public Profile (required for Under Contract)</h3>
-        {lastShopifyStatus && (
-          <span className="text-xs text-slate-500">
-            Status: {lastShopifyStatus}
-            {lastShopifySyncedAt && ` • ${new Date(lastShopifySyncedAt).toLocaleString()}`}
-          </span>
-        )}
+  const renderShopifySlot = (
+    key: ShopifyFileFieldKey,
+    label: string,
+    value: string,
+    onChange: (next: string) => void,
+  ) => {
+    const upload = fileUploads[key];
+    return (
+      <div className="acSlot">
+        <div className="acSlotHead">
+          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{label}</div>
+          {value && <span className="acBadge">Has ID</span>}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <input
+            ref={fileInputRefs[key]}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => handleShopifyFileUpload(key, e.target.files)}
+          />
+          <button
+            type="button"
+            onClick={() => triggerFilePicker(key)}
+            disabled={upload?.uploading}
+            className="btnGhost"
+          >
+            {upload?.uploading ? "Uploading..." : "Upload to Shopify"}
+          </button>
+          {upload?.filename && upload.uploading && <span className="text-slate-600">Lade {upload.filename}...</span>}
+          {upload?.filename && !upload.uploading && !upload.error && (
+            <span className="text-slate-600">Datei: {upload.filename}</span>
+          )}
+          {upload?.success && <span className="text-green-600">{upload.success}</span>}
+          {upload?.error && <span className="text-red-600">{upload.error}</span>}
+        </div>
+        <details className="acDetailsSub">
+          <summary>Show ID</summary>
+          <div className="field mt-2">
+            <input value={value} onChange={(e) => onChange(e.target.value)} placeholder="gid://shopify/File/..." />
+          </div>
+        </details>
       </div>
+    );
+  };
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="space-y-1 text-sm font-medium text-slate-700">
-          Name {stage === "Under Contract" && <span className="text-red-600">*</span>}
-          <input
-            value={publicName}
-            onChange={(e) => setPublicName(e.target.value)}
-            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            placeholder="Public name"
-          />
-        </label>
-        <label className="space-y-1 text-sm font-medium text-slate-700">
-          Instagram (URL)
-          <input
-            type="url"
-            value={publicInstagram}
-            onChange={(e) => setPublicInstagram(e.target.value)}
-            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            placeholder="https://instagram.com/..."
-          />
-        </label>
-        <label className="space-y-1 text-sm font-medium text-slate-700">
-          Quote
-          <input
-            value={publicQuote}
-            onChange={(e) => setPublicQuote(e.target.value)}
-            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            placeholder="Kurz-Zitat"
-          />
-        </label>
-        <label className="space-y-1 text-sm font-medium text-slate-700">
-          Kategorie (Shopify Collection, optional)
-          <div className="space-y-2 rounded border border-slate-200 p-3">
-            <input
-              type="search"
-              value={collectionSearch}
-              onChange={(e) => setCollectionSearch(e.target.value)}
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-              placeholder="Kollektionen suchen..."
-            />
-            <select
-              value={publicKategorie}
-              onChange={(e) => handleSelectCollection(e.target.value)}
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            >
-              <option value="">Keine Kategorie</option>
-              {collectionResults.map((collection) => (
-                <option key={collection.id} value={collection.id}>
-                  {collection.title}
-                </option>
-              ))}
-            </select>
-            <div className="flex items-center justify-between text-xs text-slate-600">
-              <span className="break-all">Auswahl: {selectedCollectionLabel}</span>
-              {publicKategorie && (
-                <button
-                  type="button"
-                  onClick={() => handleSelectCollection("")}
-                  className="text-blue-600 underline"
-                >
-                  Entfernen
-                </button>
+  const publicProfilePanel = (
+    <div className="space-y-4">
+      <section className="acSection">
+        <header className="acSectionHeader">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Public Profile</h3>
+            <p className="text-xs text-slate-500">Required for Under Contract</p>
+          </div>
+          {lastShopifyStatus && (
+            <div className="text-right text-xs text-slate-500">
+              <div>Status: {lastShopifyStatus}</div>
+              {lastShopifySyncedAt && <div>{new Date(lastShopifySyncedAt).toLocaleString()}</div>}
+            </div>
+          )}
+        </header>
+
+        <div className="acGrid2">
+          <div className="acCard">
+            <div className="acSectionHeader">
+              <div>
+                <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Essentials</div>
+                <div className="text-xs text-slate-500">Name, Instagram, Quote</div>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <label className="field">
+                <span>
+                  Name {stage === "Under Contract" && <span className="text-red-600">*</span>}
+                </span>
+                <input value={publicName} onChange={(e) => setPublicName(e.target.value)} placeholder="Public name" />
+              </label>
+              <label className="field">
+                <span>Instagram (URL)</span>
+                <input
+                  type="url"
+                  value={publicInstagram}
+                  onChange={(e) => setPublicInstagram(e.target.value)}
+                  placeholder="https://instagram.com/..."
+                />
+              </label>
+              <label className="field">
+                <span>Quote</span>
+                <input value={publicQuote} onChange={(e) => setPublicQuote(e.target.value)} placeholder="Kurz-Zitat" />
+              </label>
+            </div>
+          </div>
+
+          <div className="acCard">
+            <div className="acSectionHeader">
+              <div>
+                <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Kategorie</div>
+                <div className="text-xs text-slate-500">Shopify Collection (optional)</div>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <label className="field">
+                <span>Search</span>
+                <input
+                  type="search"
+                  value={collectionSearch}
+                  onChange={(e) => setCollectionSearch(e.target.value)}
+                  placeholder="Kollektionen suchen..."
+                />
+              </label>
+              <label className="field">
+                <span>Choose</span>
+                <select value={publicKategorie} onChange={(e) => handleSelectCollection(e.target.value)}>
+                  <option value="">Keine Kategorie</option>
+                  {collectionResults.map((collection) => (
+                    <option key={collection.id} value={collection.id}>
+                      {collection.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex items-center justify-between gap-2">
+                <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  {selectedCollectionLabel || "Keine Kategorie"}
+                </div>
+                {publicKategorie && (
+                  <button type="button" onClick={() => handleSelectCollection("")} className="btnGhost text-xs px-3 py-1">
+                    Entfernen
+                  </button>
+                )}
+              </div>
+              <details className="acDetailsSub">
+                <summary>Details / GID</summary>
+                <div className="text-xs text-slate-600 break-all mt-2">{publicKategorie || "Keine Auswahl"}</div>
+              </details>
+              {collectionLoading && <p className="text-xs text-slate-500">Lade Collections...</p>}
+              {collectionError && <p className="text-xs text-red-600">{collectionError}</p>}
+              {!collectionLoading && !collectionResults.length && !collectionError && (
+                <p className="text-xs text-slate-500">Keine Collections gefunden.</p>
               )}
             </div>
-            {collectionLoading && <p className="text-xs text-slate-500">Lade Collections...</p>}
-            {collectionError && <p className="text-xs text-red-600">{collectionError}</p>}
-            {!collectionLoading && !collectionResults.length && !collectionError && (
-              <p className="text-xs text-slate-500">Keine Collections gefunden.</p>
-            )}
           </div>
-        </label>
-      </div>
+        </div>
 
-      <label className="space-y-1 text-sm font-medium text-slate-700">
-        Einleitung 1
-        <textarea
-          value={publicEinleitung1}
-          onChange={(e) => setPublicEinleitung1(e.target.value)}
-          rows={3}
-          className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-          placeholder="Intro text"
-        />
-      </label>
+        <div className="acCard">
+          <div className="acSectionHeader">
+            <div>
+              <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Biography</div>
+              <div className="text-xs text-slate-500">Kurz und knapp</div>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <label className="field">
+              <span>Einleitung 1</span>
+              <textarea
+                value={publicEinleitung1}
+                onChange={(e) => setPublicEinleitung1(e.target.value)}
+                rows={3}
+                placeholder="Intro text"
+              />
+            </label>
+            <label className="field">
+              <span>
+                Text 1 {stage === "Under Contract" && <span className="text-red-600">*</span>}
+              </span>
+              <textarea
+                value={publicText1}
+                onChange={(e) => setPublicText1(e.target.value)}
+                rows={5}
+                placeholder="Main text"
+              />
+            </label>
+          </div>
+        </div>
 
-      <label className="space-y-1 text-sm font-medium text-slate-700">
-        Text 1 {stage === "Under Contract" && <span className="text-red-600">*</span>}
-        <textarea
-          value={publicText1}
-          onChange={(e) => setPublicText1(e.target.value)}
-          rows={5}
-          className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-          placeholder="Main text"
-        />
-      </label>
+        <details className="acDetails">
+          <summary>Shopify Assets</summary>
+          <div className="mt-3 acSlotGrid">
+            {renderShopifySlot("bilder", "Titelbild", publicBilder, setPublicBilder)}
+            {renderShopifySlot("bild_1", "Bild 1", publicBild1, setPublicBild1)}
+            {renderShopifySlot("bild_2", "Bild 2", publicBild2, setPublicBild2)}
+            {renderShopifySlot("bild_3", "Bild 3", publicBild3, setPublicBild3)}
+          </div>
+        </details>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        {renderShopifyFileField(
-          "bilder",
-          "Titelbild (Shopify File ID / GID)",
-          publicBilder,
-          setPublicBilder,
-        )}
-        {renderShopifyFileField(
-          "bild_1",
-          "Bild 1 (Shopify File ID / GID)",
-          publicBild1,
-          setPublicBild1,
-        )}
-        {renderShopifyFileField(
-          "bild_2",
-          "Bild 2 (Shopify File ID / GID)",
-          publicBild2,
-          setPublicBild2,
-        )}
-        {renderShopifyFileField(
-          "bild_3",
-          "Bild 3 (Shopify File ID / GID)",
-          publicBild3,
-          setPublicBild3,
-        )}
-      </div>
+        <details className="acDetails">
+          <summary>Internal</summary>
+          <div className="mt-3 acGrid2">
+            <label className="field">
+              <span>Location (internal only)</span>
+              <input value={publicLocation} onChange={(e) => setPublicLocation(e.target.value)} placeholder="City, Country" />
+            </label>
+            <label className="field">
+              <span>Website (internal only)</span>
+              <input value={publicWebsite} onChange={(e) => setPublicWebsite(e.target.value)} placeholder="https://" />
+            </label>
+          </div>
+        </details>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="space-y-1 text-sm font-medium text-slate-700">
-          Location (internal only, not sent to Shopify)
-          <input
-            value={publicLocation}
-            onChange={(e) => setPublicLocation(e.target.value)}
-            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            placeholder="City, Country"
-          />
-        </label>
-        <label className="space-y-1 text-sm font-medium text-slate-700">
-          Website (internal only)
-          <input
-            value={publicWebsite}
-            onChange={(e) => setPublicWebsite(e.target.value)}
-            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            placeholder="https://"
-          />
-        </label>
-      </div>
+        {shopifyError && <p className="text-sm text-red-600">{shopifyError}</p>}
+        {shopifyMessage && <p className="text-sm text-green-600">{shopifyMessage}</p>}
+        {lastShopifyError && <p className="text-sm text-red-600">Last error: {lastShopifyError}</p>}
 
-      {shopifyError && <p className="text-sm text-red-600">{shopifyError}</p>}
-      {shopifyMessage && <p className="text-sm text-green-600">{shopifyMessage}</p>}
-      {lastShopifyError && <p className="text-sm text-red-600">Last error: {lastShopifyError}</p>}
-
-      <div className="flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={handleSyncShopify}
-          disabled={shopifySyncing || !canSync}
-          className="inline-flex items-center rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-        >
-          {shopifySyncing ? "Syncing..." : "Sync to Shopify"}
-        </button>
-      </div>
+        <div className="acStickyFooter relative">
+          <button
+            type="button"
+            onClick={handleSyncShopify}
+            disabled={shopifySyncing || !canSync}
+            className="btnPrimary disabled:opacity-60"
+          >
+            {shopifySyncing ? "Syncing..." : "Sync to Shopify"}
+          </button>
+        </div>
+      </section>
     </div>
   );
 

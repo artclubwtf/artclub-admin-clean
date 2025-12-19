@@ -131,6 +131,30 @@ a:hover {
   margin-bottom: 12px;
 }
 
+.acSection {
+  margin-top: 16px;
+}
+
+.acSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.acGrid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 900px) {
+  .acGrid2 {
+    grid-template-columns: 1fr;
+  }
+}
+
 .ac-button {
   display: inline-flex;
   align-items: center;
@@ -271,6 +295,98 @@ a:hover {
   margin: 12px 0;
 }
 
+.acCard {
+  background: var(--surface);
+  border: 0 !important;
+  box-shadow: var(--shadow);
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.acCardTight {
+  padding: 12px;
+}
+
+.acDetails {
+  background: var(--surface);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 10px 12px;
+}
+.acDetails > summary {
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+  opacity: 0.9;
+}
+.acDetails > summary::-webkit-details-marker {
+  display: none;
+}
+
+.acDetailsSub {
+  margin-top: 10px;
+}
+.acDetailsSub > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+}
+.acDetailsSub > summary::-webkit-details-marker {
+  display: none;
+}
+
+.acSlotGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 900px) {
+  .acSlotGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.acSlot {
+  background: var(--surface2);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.acSlotHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.acBadge {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  opacity: 0.9;
+}
+
+.acStickyFooter {
+  position: sticky;
+  bottom: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 10px;
+  margin-top: 14px;
+}
+.acStickyFooter::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -10px;
+  height: 10px;
+  background: linear-gradient(to bottom, transparent, var(--bg));
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -303,6 +419,10 @@ a:hover {
 .field input::placeholder,
 .field textarea::placeholder {
   color: var(--muted);
+}
+.field textarea {
+  min-height: 110px;
+  line-height: 1.5;
 }
 
 .ac-table {
