@@ -38,6 +38,8 @@ export async function GET(req: Request) {
     const artistMetaobjectId = searchParams.get("artistMetaobjectId")?.trim() || null;
     const start = parseDate(searchParams.get("start"));
     const end = parseDate(searchParams.get("end"));
+    const includeUnpaid = searchParams.get("includeUnpaid") === "true";
+    const includeCancelled = searchParams.get("includeCancelled") === "true";
     const includeShopify = !source || source === "shopify";
     const includePos = !source || source === "pos";
 
@@ -58,6 +60,12 @@ export async function GET(req: Request) {
         const overrides = await OrderLineOverrideModel.find({ orderSource: "shopify", shopifyOrderGid: doc.shopifyOrderGid }).lean();
         const overrideMap = new Map<string, any>();
         overrides.forEach((ov) => ov.lineKey && overrideMap.set(ov.lineKey, ov));
+
+        const status = (doc.financialStatus || "").toLowerCase();
+        const isPaid = status.includes("paid");
+        const isCancelled = Boolean(doc.cancelledAt) || Number(doc.refundedTotalGross || 0) > 0;
+        if (!includeUnpaid && !isPaid) continue;
+        if (!includeCancelled && isCancelled) continue;
 
         const appliedLines = lineItems.map((line: any, idx: number) => {
           const lineKey = line.lineId || line.id || `${doc.shopifyOrderGid}:line:${idx}`;

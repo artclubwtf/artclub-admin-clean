@@ -34,6 +34,9 @@ function computeEarned(printGross: number, originalGross: number, unknownGross: 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    const { searchParams } = new URL(_.url);
+    const includeUnpaid = searchParams.get("includeUnpaid") === "true";
+    const includeCancelled = searchParams.get("includeCancelled") === "true";
     await connectMongo();
 
     const artist = await ArtistModel.findById(id).lean();
@@ -61,14 +64,14 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     }[] = [];
 
     if (metaobjectId) {
-      const shopifyOrders = await ShopifyOrderCacheModel.find({
-        $or: [
-          { "allocations.artistMetaobjectGid": metaobjectId },
-          { "lineItems.artistMetaobjectGid": metaobjectId },
-        ],
-      })
-        .sort({ createdAt: -1 })
-        .lean();
+        const shopifyOrders = await ShopifyOrderCacheModel.find({
+          $or: [
+            { "allocations.artistMetaobjectGid": metaobjectId },
+            { "lineItems.artistMetaobjectGid": metaobjectId },
+          ],
+        })
+          .sort({ createdAt: -1 })
+          .lean();
 
       const shopifyIds = shopifyOrders.map((doc) => doc.shopifyOrderGid).filter(Boolean);
       const overrides = await OrderLineOverrideModel.find({ orderSource: "shopify", shopifyOrderGid: { $in: shopifyIds } }).lean();
@@ -76,6 +79,12 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       overrides.forEach((ov) => ov.lineKey && overrideMap.set(`${ov.shopifyOrderGid}:${ov.lineKey}`, ov));
 
       for (const doc of shopifyOrders) {
+        const status = (doc.financialStatus || "").toLowerCase();
+        const isPaid = status.includes("paid");
+        const isCancelled = Boolean(doc.cancelledAt) || Number(doc.refundedTotalGross || 0) > 0;
+        if (!includeUnpaid && !isPaid) continue;
+        if (!includeCancelled && isCancelled) continue;
+
         const lineItems: any[] = Array.isArray(doc.lineItems) ? doc.lineItems : [];
         let printGross = 0;
         let originalGross = 0;

@@ -43,6 +43,8 @@ const shopifyOrderCacheSchema = new Schema(
     createdAt: { type: Date, required: true },
     processedAt: { type: Date },
     financialStatus: { type: String },
+    cancelledAt: { type: Date },
+    refundedTotalGross: { type: Number },
     fulfillmentStatus: { type: String },
     currency: { type: String, default: "EUR" },
     totalGross: { type: Number, required: true },

@@ -57,6 +57,8 @@ export default function OrdersPageClient() {
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [artistFilter, setArtistFilter] = useState<string>("all");
+  const [includeUnpaid, setIncludeUnpaid] = useState(false);
+  const [includeCancelled, setIncludeCancelled] = useState(false);
   const [artists, setArtists] = useState<ArtistOption[]>([]);
   const [artistsLoading, setArtistsLoading] = useState(false);
 
@@ -110,6 +112,8 @@ export default function OrdersPageClient() {
         if (computedDateRange.start) params.set("start", computedDateRange.start);
         if (computedDateRange.end) params.set("end", computedDateRange.end);
         if (artistFilter !== "all") params.set("artistMetaobjectId", artistFilter);
+        if (includeUnpaid) params.set("includeUnpaid", "true");
+        if (includeCancelled) params.set("includeCancelled", "true");
 
         const res = await fetch(`/api/orders?${params.toString()}`, { cache: "no-store" });
         if (!res.ok) {
@@ -131,7 +135,7 @@ export default function OrdersPageClient() {
     return () => {
       active = false;
     };
-  }, [sourceFilter, computedDateRange.start, computedDateRange.end, artistFilter]);
+  }, [sourceFilter, computedDateRange.start, computedDateRange.end, artistFilter, includeUnpaid, includeCancelled]);
 
   useEffect(() => {
     let active = true;
@@ -366,6 +370,28 @@ export default function OrdersPageClient() {
             <option value="last30">Last 30 days</option>
             <option value="last90">Last 90 days</option>
             <option value="custom">Custom</option>
+          </select>
+        </label>
+        <label className="space-y-1 text-sm font-medium text-slate-700">
+          Paid only
+          <select
+            value={includeUnpaid ? "all" : "paid"}
+            onChange={(e) => setIncludeUnpaid(e.target.value === "all")}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+          >
+            <option value="paid">Paid only</option>
+            <option value="all">Include unpaid</option>
+          </select>
+        </label>
+        <label className="space-y-1 text-sm font-medium text-slate-700">
+          Cancelled/Refunded
+          <select
+            value={includeCancelled ? "include" : "exclude"}
+            onChange={(e) => setIncludeCancelled(e.target.value === "include")}
+            className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+          >
+            <option value="exclude">Exclude</option>
+            <option value="include">Include</option>
           </select>
         </label>
         <label className="space-y-1 text-sm font-medium text-slate-700">

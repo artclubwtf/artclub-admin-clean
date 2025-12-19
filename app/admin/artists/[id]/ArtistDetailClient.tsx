@@ -660,7 +660,12 @@ export default function ArtistDetailClient({ artistId }: Props) {
       setOrdersLoading(true);
       setOrdersError(null);
       try {
-        const res = await fetch(`/api/artists/${encodeURIComponent(artistId)}/orders-summary`, { cache: "no-store" });
+        const params = new URLSearchParams();
+        if (ordersRange === "all") params.set("includeUnpaid", "true");
+        if (ordersRange === "all") params.set("includeCancelled", "true");
+        const res = await fetch(`/api/artists/${encodeURIComponent(artistId)}/orders-summary?${params.toString()}`, {
+          cache: "no-store",
+        });
         if (!res.ok) {
           const payload = await res.json().catch(() => null);
           throw new Error(parseErrorMessage(payload));

@@ -21,6 +21,8 @@ export type ShopifyOrder = {
   processedAt?: string | null;
   financialStatus?: string | null;
   fulfillmentStatus?: string | null;
+  cancelledAt?: string | null;
+  refundedTotalGross?: number | null;
   currency: string;
   totalGross: number;
   lineItems: ShopifyOrderLine[];
@@ -83,7 +85,9 @@ export async function fetchShopifyOrders(params: {
             processedAt
             displayFinancialStatus
             displayFulfillmentStatus
+            canceledAt
             currentTotalPriceSet { shopMoney { amount currencyCode } }
+            currentTotalRefundedSet { shopMoney { amount currencyCode } }
             lineItems(first: 100) {
               edges {
                 node {
@@ -149,6 +153,7 @@ export async function fetchShopifyOrders(params: {
 
     const orders: ShopifyOrder[] = edges.map(({ node }) => {
     const total = parseMoney(node?.currentTotalPriceSet);
+    const refund = parseMoney(node?.currentTotalRefundedSet);
     const currency = total.currencyCode || "EUR";
 
     const lineItems: ShopifyOrderLine[] =
@@ -181,6 +186,8 @@ export async function fetchShopifyOrders(params: {
       processedAt: node?.processedAt ?? null,
       financialStatus: node?.displayFinancialStatus ?? null,
       fulfillmentStatus: node?.displayFulfillmentStatus ?? null,
+      cancelledAt: node?.canceledAt ?? null,
+      refundedTotalGross: refund.amount ?? 0,
       currency,
       totalGross: total.amount ?? 0,
       lineItems,

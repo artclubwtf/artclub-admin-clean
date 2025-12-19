@@ -114,6 +114,8 @@ export async function POST(req: Request) {
             processedAt: order.processedAt ? new Date(order.processedAt) : undefined,
             financialStatus: order.financialStatus,
             fulfillmentStatus: order.fulfillmentStatus,
+            cancelledAt: order.cancelledAt ? new Date(order.cancelledAt) : undefined,
+            refundedTotalGross: order.refundedTotalGross ?? 0,
             currency: order.currency || "EUR",
             totalGross: Number.isFinite(order.totalGross) ? order.totalGross : 0,
             lineItems: lines,
