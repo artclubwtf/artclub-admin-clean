@@ -1,4 +1,4 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 type S3Config = {
   region: string;
@@ -44,6 +44,19 @@ function getClient() {
   return client;
 }
 
+async function streamToBuffer(stream: any): Promise<Buffer> {
+  if (!stream) return Buffer.alloc(0);
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream as any) {
+    if (typeof chunk === "string") {
+      chunks.push(Buffer.from(chunk));
+    } else {
+      chunks.push(Buffer.from(chunk));
+    }
+  }
+  return Buffer.concat(chunks);
+}
+
 export async function uploadToS3(key: string, body: Buffer, contentType: string, filename?: string) {
   const cfg = resolveConfig();
   const s3 = getClient();
@@ -62,5 +75,25 @@ export async function uploadToS3(key: string, body: Buffer, contentType: string,
     sizeBytes: body.length,
     mimeType: contentType,
     filename,
+  };
+}
+
+export async function downloadFromS3(key: string) {
+  const cfg = resolveConfig();
+  const s3 = getClient();
+  const res = await s3.send(
+    new GetObjectCommand({
+      Bucket: cfg.bucket,
+      Key: key,
+    }),
+  );
+  const body = await streamToBuffer(res.Body);
+
+  return {
+    key,
+    body,
+    contentType: res.ContentType || undefined,
+    contentLength: res.ContentLength || body.length,
+    lastModified: res.LastModified,
   };
 }

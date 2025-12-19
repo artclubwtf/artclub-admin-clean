@@ -92,6 +92,8 @@ type ShopifyProduct = {
 };
 
 type ShopifyCollection = { id: string; title: string };
+type ArtworkSaleMode = "PRINT_ONLY" | "ORIGINAL_ONLY" | "ORIGINAL_AND_PRINTS";
+type ArtworkFieldErrors = Record<string, string>;
 
 type ShopifyFileFieldKey = "bilder" | "bild_1" | "bild_2" | "bild_3";
 type FileUploadStatus = {
@@ -113,6 +115,18 @@ function parseErrorMessage(payload: any) {
     if (payload.error?.message) return payload.error.message;
   }
   return "Unexpected error";
+}
+
+async function fetchShopifyProductsForMetaobject(metaobjectId: string) {
+  const res = await fetch(`/api/shopify/products-by-artist?artistMetaobjectGid=${encodeURIComponent(metaobjectId)}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null);
+    throw new Error(parseErrorMessage(payload));
+  }
+  const json = await res.json();
+  return Array.isArray(json.products) ? json.products : [];
 }
 
 export default function ArtistDetailClient({ artistId }: Props) {
@@ -190,8 +204,43 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [shopifyProducts, setShopifyProducts] = useState<ShopifyProduct[]>([]);
   const [shopifyProductsLoading, setShopifyProductsLoading] = useState(false);
   const [shopifyProductsError, setShopifyProductsError] = useState<string | null>(null);
+  const [artworkModalOpen, setArtworkModalOpen] = useState(false);
+  const [artworkStep, setArtworkStep] = useState<1 | 2>(1);
+  const [selectedArtworkMediaIds, setSelectedArtworkMediaIds] = useState<string[]>([]);
+  const [artworkTitle, setArtworkTitle] = useState("");
+  const [artworkSaleMode, setArtworkSaleMode] = useState<ArtworkSaleMode>("PRINT_ONLY");
+  const [artworkPrice, setArtworkPrice] = useState("");
+  const [artworkEditionSize, setArtworkEditionSize] = useState("");
+  const [artworkKurzbeschreibung, setArtworkKurzbeschreibung] = useState("");
+  const [artworkWidthCm, setArtworkWidthCm] = useState("");
+  const [artworkHeightCm, setArtworkHeightCm] = useState("");
+  const [artworkDescription, setArtworkDescription] = useState("");
+  const [artworkSubmitting, setArtworkSubmitting] = useState(false);
+  const [artworkFormError, setArtworkFormError] = useState<string | null>(null);
+  const [artworkFieldErrors, setArtworkFieldErrors] = useState<ArtworkFieldErrors>({});
+  const [artworkSuccess, setArtworkSuccess] = useState<string | null>(null);
   const artistRecordId = artist?._id;
   const artistShopifyMetaobjectId = artist?.shopifySync?.metaobjectId;
+
+  const refreshShopifyProducts = async () => {
+    const metaobjectId = artistRecordId === artistId ? artistShopifyMetaobjectId : undefined;
+    if (!metaobjectId) {
+      setShopifyProducts([]);
+      setShopifyProductsError(null);
+      return;
+    }
+
+    setShopifyProductsLoading(true);
+    setShopifyProductsError(null);
+    try {
+      const products = await fetchShopifyProductsForMetaobject(metaobjectId);
+      setShopifyProducts(products);
+    } catch (err: any) {
+      setShopifyProductsError(err?.message ?? "Failed to load artworks from Shopify");
+    } finally {
+      setShopifyProductsLoading(false);
+    }
+  };
 
   const buildPublicProfilePayload = (
     overrides: Partial<NonNullable<Artist["publicProfile"]>> = {},
@@ -328,6 +377,20 @@ export default function ArtistDetailClient({ artistId }: Props) {
 
   useEffect(() => {
     let active = true;
+    setArtworkSuccess(null);
+    setArtworkModalOpen(false);
+    setSelectedArtworkMediaIds([]);
+    setArtworkTitle("");
+    setArtworkSaleMode("PRINT_ONLY");
+    setArtworkPrice("");
+    setArtworkEditionSize("");
+    setArtworkKurzbeschreibung("");
+    setArtworkWidthCm("");
+    setArtworkHeightCm("");
+    setArtworkDescription("");
+    setArtworkFieldErrors({});
+    setArtworkFormError(null);
+    setArtworkStep(1);
     const load = async () => {
       setLoading(true);
       setError(null);
@@ -391,17 +454,9 @@ export default function ArtistDetailClient({ artistId }: Props) {
       setShopifyProductsLoading(true);
       setShopifyProductsError(null);
       try {
-        const res = await fetch(
-          `/api/shopify/products-by-artist?artistMetaobjectGid=${encodeURIComponent(metaobjectId)}`,
-          { cache: "no-store" },
-        );
-        if (!res.ok) {
-          const payload = await res.json().catch(() => null);
-          throw new Error(parseErrorMessage(payload));
-        }
-        const json = await res.json();
+        const products = await fetchShopifyProductsForMetaobject(metaobjectId);
         if (!active) return;
-        setShopifyProducts(Array.isArray(json.products) ? json.products : []);
+        setShopifyProducts(products);
       } catch (err: any) {
         if (!active) return;
         setShopifyProductsError(err?.message ?? "Failed to load artworks from Shopify");
@@ -690,6 +745,8 @@ export default function ArtistDetailClient({ artistId }: Props) {
     payout: { enabled: canViewPayout, reason: "Available from Under Contract" },
   };
   const hasMedia = media.length > 0;
+  const artworkMedia = media.filter((item) => item.kind?.toLowerCase() === "artwork");
+  const hasArtworkMedia = artworkMedia.length > 0;
   const hasShopifyLink = Boolean(artist?.shopifySync?.metaobjectId);
   const hasShopifyArtworks = shopifyProducts.length > 0;
   const hasPublicImage = [publicBilder, publicBild1, publicBild2, publicBild3].some((value) => value && value.trim().length > 0);
@@ -762,6 +819,11 @@ export default function ArtistDetailClient({ artistId }: Props) {
       text: payoutStatusChip,
       tone: badgeTone(isUnderContract ? (hasPayoutRequired ? "ready" : "missing") : "locked"),
     },
+  ];
+  const saleModeOptions: Array<{ value: ArtworkSaleMode; label: string; helper: string }> = [
+    { value: "PRINT_ONLY", label: "Print-only", helper: "Prints only. Leave price blank." },
+    { value: "ORIGINAL_ONLY", label: "Original only", helper: "Price required. No original tag." },
+    { value: "ORIGINAL_AND_PRINTS", label: "Original + Prints", helper: "Price required. Adds \"original\" tag." },
   ];
   const goToTab = (tab: TabKey) => setActiveTab(tab);
   const checklistItems: Array<{
@@ -906,6 +968,128 @@ export default function ArtistDetailClient({ artistId }: Props) {
     }
   };
 
+  const resetArtworkForm = () => {
+    setSelectedArtworkMediaIds([]);
+    setArtworkTitle("");
+    setArtworkSaleMode("PRINT_ONLY");
+    setArtworkPrice("");
+    setArtworkEditionSize("");
+    setArtworkKurzbeschreibung("");
+    setArtworkWidthCm("");
+    setArtworkHeightCm("");
+    setArtworkDescription("");
+    setArtworkFieldErrors({});
+    setArtworkFormError(null);
+    setArtworkStep(1);
+  };
+
+  const openArtworkModal = () => {
+    resetArtworkForm();
+    setArtworkModalOpen(true);
+  };
+
+  const closeArtworkModal = () => {
+    setArtworkModalOpen(false);
+    setArtworkSubmitting(false);
+    setArtworkFormError(null);
+    setArtworkFieldErrors({});
+  };
+
+  const toggleArtworkMediaSelection = (id: string) => {
+    setSelectedArtworkMediaIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
+    setArtworkFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.mediaIds;
+      return next;
+    });
+  };
+
+  const validateArtworkForm = () => {
+    const errors: ArtworkFieldErrors = {};
+    if (selectedArtworkMediaIds.length === 0) {
+      errors.mediaIds = "Please select at least one image.";
+    }
+    if (!artworkTitle.trim()) {
+      errors.title = "Title is required.";
+    }
+    const priceValue = artworkPrice.trim();
+    const priceRequired = artworkSaleMode !== "PRINT_ONLY";
+    if (priceRequired && !priceValue) {
+      errors.price = "Price is required for this sale mode.";
+    }
+    if (priceValue && Number.isNaN(Number(priceValue))) {
+      errors.price = "Price must be a number.";
+    }
+    if (artworkEditionSize.trim() && Number.isNaN(Number(artworkEditionSize.trim()))) {
+      errors.editionSize = "Edition size must be a number.";
+    }
+    if (artworkWidthCm.trim() && Number.isNaN(Number(artworkWidthCm.trim()))) {
+      errors.widthCm = "Width must be a number.";
+    }
+    if (artworkHeightCm.trim() && Number.isNaN(Number(artworkHeightCm.trim()))) {
+      errors.heightCm = "Height must be a number.";
+    }
+    return errors;
+  };
+
+  const handleCreateArtwork = async () => {
+    setArtworkFormError(null);
+    const errors = validateArtworkForm();
+    setArtworkFieldErrors(errors);
+    if (Object.keys(errors).length) {
+      if (errors.mediaIds) {
+        setArtworkStep(1);
+      } else {
+        setArtworkStep(2);
+      }
+      return;
+    }
+    if (!artistShopifyMetaobjectId) {
+      setArtworkFormError("Artist is not linked to Shopify.");
+      return;
+    }
+
+    setArtworkSubmitting(true);
+    try {
+      const res = await fetch("/api/shopify/artworks/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          artistId,
+          artistMetaobjectGid: artistShopifyMetaobjectId,
+          title: artworkTitle.trim(),
+          saleMode: artworkSaleMode,
+          price: artworkSaleMode === "PRINT_ONLY" ? null : artworkPrice.trim() || null,
+          editionSize: artworkEditionSize.trim() || null,
+          kurzbeschreibung: artworkKurzbeschreibung.trim() || null,
+          widthCm: artworkWidthCm.trim() ? Number(artworkWidthCm.trim()) : null,
+          heightCm: artworkHeightCm.trim() ? Number(artworkHeightCm.trim()) : null,
+          description: artworkDescription.trim() || null,
+          mediaIds: selectedArtworkMediaIds,
+        }),
+      });
+
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        if (payload?.fieldErrors) {
+          setArtworkFieldErrors(payload.fieldErrors);
+          if (payload.fieldErrors.mediaIds) setArtworkStep(1);
+        }
+        throw new Error(parseErrorMessage(payload));
+      }
+
+      await res.json();
+      setArtworkSuccess("Artwork created in Shopify.");
+      closeArtworkModal();
+      await refreshShopifyProducts();
+      resetArtworkForm();
+    } catch (err: any) {
+      setArtworkFormError(err?.message ?? "Failed to create artwork");
+    } finally {
+      setArtworkSubmitting(false);
+    }
+  };
+
   const mediaHeader = (
     <div className="flex items-center justify-between">
       <h3 className="text-lg font-semibold text-slate-800">Media</h3>
@@ -1000,9 +1184,23 @@ export default function ArtistDetailClient({ artistId }: Props) {
   );
 
   const artworksHeader = (
-    <div className="flex items-center justify-between">
-      <h3 className="text-lg font-semibold text-slate-800">Artworks (Shopify)</h3>
-      {shopifyProductsLoading && <span className="text-xs text-slate-500">Loading...</span>}
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h3 className="text-lg font-semibold text-slate-800">Artworks (Shopify)</h3>
+        <p className="text-xs text-slate-500">Create artworks directly in Shopify. Images come from existing media.</p>
+      </div>
+      <div className="flex items-center gap-3">
+        {shopifyProductsLoading && <span className="text-xs text-slate-500">Loading...</span>}
+        <button
+          type="button"
+          onClick={openArtworkModal}
+          disabled={!artist?.shopifySync?.metaobjectId}
+          className="inline-flex items-center rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50"
+          title={!artist?.shopifySync?.metaobjectId ? "Link artist to Shopify first" : undefined}
+        >
+          New artwork
+        </button>
+      </div>
     </div>
   );
 
@@ -1014,6 +1212,9 @@ export default function ArtistDetailClient({ artistId }: Props) {
 
       {artist?.shopifySync?.metaobjectId && (
         <>
+          {artworkSuccess && (
+            <div className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{artworkSuccess}</div>
+          )}
           {shopifyProductsError && <p className="text-sm text-red-600">{shopifyProductsError}</p>}
           {!shopifyProductsLoading && shopifyProducts.length === 0 && !shopifyProductsError && (
             <p className="text-sm text-slate-600">No Shopify products found for this artist.</p>
@@ -1559,6 +1760,286 @@ export default function ArtistDetailClient({ artistId }: Props) {
     { key: "payout", label: "Payout", chip: payoutStatusChip },
   ];
 
+  const selectedArtworkItems = selectedArtworkMediaIds
+    .map((id) => artworkMedia.find((item) => item._id === id))
+    .filter(Boolean) as MediaItem[];
+
+  const artworkWizardModal = !artworkModalOpen ? null : (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+      <div className="w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">New artwork</p>
+            <p className="text-sm text-slate-600">Upload selected media to Shopify as a product.</p>
+          </div>
+          <button
+            type="button"
+            onClick={closeArtworkModal}
+            className="rounded-full border border-slate-200 px-3 py-1 text-sm font-medium text-slate-700 hover:border-slate-300"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="flex gap-2 border-b border-slate-100 bg-slate-50 px-6 py-3 text-sm font-semibold text-slate-800">
+          <span
+            className={`rounded-full px-3 py-1 ${artworkStep === 1 ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
+          >
+            1. Select images
+          </span>
+          <span
+            className={`rounded-full px-3 py-1 ${artworkStep === 2 ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
+          >
+            2. Details
+          </span>
+        </div>
+
+        <div className="px-6 py-5">
+          {artworkStep === 1 ? (
+            <div className="space-y-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Step 1</div>
+                  <h4 className="text-lg font-semibold text-slate-900">Select images</h4>
+                  <p className="text-sm text-slate-600">Choose 1..n artwork media with a quick preview.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={closeArtworkModal}
+                    className="rounded border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-300"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setArtworkStep(2)}
+                    disabled={selectedArtworkMediaIds.length === 0}
+                    className="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+
+              {artworkFieldErrors.mediaIds && <p className="text-sm text-red-600">{artworkFieldErrors.mediaIds}</p>}
+
+              {mediaLoading ? (
+                <p className="text-sm text-slate-600">Loading media...</p>
+              ) : !hasArtworkMedia ? (
+                <div className="rounded border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-600">
+                  <p className="font-medium text-slate-800">No artwork media yet</p>
+                  <p className="mt-1 text-slate-600">Upload artwork media in the Media tab first.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeArtworkModal();
+                      goToTab("media");
+                    }}
+                    className="mt-3 inline-flex items-center rounded bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+                  >
+                    Go to Media
+                  </button>
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                  {artworkMedia.map((item) => {
+                    const selected = selectedArtworkMediaIds.includes(item._id);
+                    const isImage = item.mimeType?.startsWith("image/");
+                    return (
+                      <button
+                        key={item._id}
+                        type="button"
+                        onClick={() => toggleArtworkMediaSelection(item._id)}
+                        className={`group relative overflow-hidden rounded-xl border text-left transition ${
+                          selected ? "border-slate-900 ring-2 ring-slate-900" : "border-slate-200 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="relative h-40 w-full bg-slate-100">
+                          {isImage && item.url ? (
+                            <img src={item.url} alt={item.filename || item.s3Key} className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">
+                              {item.mimeType || "file"}
+                            </div>
+                          )}
+                          {selected && (
+                            <span className="absolute right-2 top-2 rounded-full bg-white/90 px-2 py-1 text-[11px] font-semibold text-slate-900 shadow">
+                              Selected
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between px-3 py-2">
+                          <div className="truncate text-sm font-medium text-slate-900">{item.filename || item.s3Key}</div>
+                          <span className="text-[11px] uppercase text-slate-500">{item.mimeType?.split("/")[1] || "img"}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Step 2</div>
+                  <h4 className="text-lg font-semibold text-slate-900">Details</h4>
+                  <p className="text-sm text-slate-600">
+                    Title and sale mode decide pricing/tag rules. Images will be attached after creation.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setArtworkStep(1)}
+                    className="rounded border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-300"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateArtwork}
+                    disabled={artworkSubmitting}
+                    className="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-40"
+                  >
+                    {artworkSubmitting ? "Creating..." : "Create in Shopify"}
+                  </button>
+                </div>
+              </div>
+
+              {selectedArtworkItems.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto rounded border border-slate-200 bg-slate-50 p-2">
+                  {selectedArtworkItems.map((item) => (
+                    <div key={item._id} className="flex items-center gap-2 rounded bg-white px-2 py-1 shadow-sm">
+                      {item.url ? (
+                        <img src={item.url} alt={item.filename || item.s3Key} className="h-10 w-10 rounded object-cover" />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded bg-slate-100 text-[11px] text-slate-600">
+                          {item.mimeType || "file"}
+                        </div>
+                      )}
+                      <div className="text-xs text-slate-700 truncate max-w-[140px]">{item.filename || item.s3Key}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {artworkFormError && (
+                <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{artworkFormError}</div>
+              )}
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-1 text-sm font-medium text-slate-700">
+                  Title <span className="text-red-600">*</span>
+                  <input
+                    value={artworkTitle}
+                    onChange={(e) => setArtworkTitle(e.target.value)}
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    placeholder="Artwork title"
+                  />
+                  {artworkFieldErrors.title && <p className="text-xs text-red-600">{artworkFieldErrors.title}</p>}
+                </label>
+                <label className="space-y-1 text-sm font-medium text-slate-700">
+                  Sale mode <span className="text-red-600">*</span>
+                  <select
+                    value={artworkSaleMode}
+                    onChange={(e) => setArtworkSaleMode(e.target.value as ArtworkSaleMode)}
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  >
+                    {saleModeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-500">
+                    {saleModeOptions.find((option) => option.value === artworkSaleMode)?.helper}
+                  </p>
+                  {artworkFieldErrors.saleMode && <p className="text-xs text-red-600">{artworkFieldErrors.saleMode}</p>}
+                </label>
+                <label className="space-y-1 text-sm font-medium text-slate-700">
+                  Price {artworkSaleMode !== "PRINT_ONLY" && <span className="text-red-600">*</span>}
+                  <input
+                    value={artworkPrice}
+                    onChange={(e) => setArtworkPrice(e.target.value)}
+                    inputMode="decimal"
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    placeholder="e.g. 1200.00"
+                  />
+                  <p className="text-xs text-slate-500">
+                    {artworkSaleMode === "PRINT_ONLY" ? "Leave blank for print-only (no variant price)." : "Required for original or originals + prints."}
+                  </p>
+                  {artworkFieldErrors.price && <p className="text-xs text-red-600">{artworkFieldErrors.price}</p>}
+                </label>
+                <label className="space-y-1 text-sm font-medium text-slate-700">
+                  Edition size (optional)
+                  <input
+                    value={artworkEditionSize}
+                    onChange={(e) => setArtworkEditionSize(e.target.value)}
+                    inputMode="numeric"
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    placeholder="z. B. 25"
+                  />
+                  {artworkFieldErrors.editionSize && <p className="text-xs text-red-600">{artworkFieldErrors.editionSize}</p>}
+                </label>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-1 text-sm font-medium text-slate-700">
+                  Width (cm)
+                  <input
+                    value={artworkWidthCm}
+                    onChange={(e) => setArtworkWidthCm(e.target.value)}
+                    type="number"
+                    step="0.01"
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    placeholder="e.g. 50"
+                  />
+                  {artworkFieldErrors.widthCm && <p className="text-xs text-red-600">{artworkFieldErrors.widthCm}</p>}
+                </label>
+                <label className="space-y-1 text-sm font-medium text-slate-700">
+                  Height (cm)
+                  <input
+                    value={artworkHeightCm}
+                    onChange={(e) => setArtworkHeightCm(e.target.value)}
+                    type="number"
+                    step="0.01"
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    placeholder="e.g. 70"
+                  />
+                  {artworkFieldErrors.heightCm && <p className="text-xs text-red-600">{artworkFieldErrors.heightCm}</p>}
+                </label>
+              </div>
+
+              <label className="space-y-1 text-sm font-medium text-slate-700">
+                Kurzbeschreibung (optional)
+                <textarea
+                  value={artworkKurzbeschreibung}
+                  onChange={(e) => setArtworkKurzbeschreibung(e.target.value)}
+                  rows={2}
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  placeholder="Kurze Beschreibung für Shopify"
+                />
+              </label>
+
+              <label className="space-y-1 text-sm font-medium text-slate-700">
+                Description (optional)
+                <textarea
+                  value={artworkDescription}
+                  onChange={(e) => setArtworkDescription(e.target.value)}
+                  rows={4}
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  placeholder="Description/HTML"
+                />
+              </label>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   if (loading) {
     return <p className="text-sm text-slate-600">Loading artist...</p>;
   }
@@ -1586,148 +2067,159 @@ export default function ArtistDetailClient({ artistId }: Props) {
   }
 
   return (
-    <section className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-xs text-slate-500">ID</div>
-          <div className="break-all font-mono text-sm text-slate-700">{artist._id}</div>
+    <>
+      <section className="space-y-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs text-slate-500">ID</div>
+            <div className="break-all font-mono text-sm text-slate-700">{artist._id}</div>
+          </div>
+          <Link href="/admin/artists" className="text-sm text-blue-600 underline">
+            Back to artists
+          </Link>
         </div>
-        <Link href="/admin/artists" className="text-sm text-blue-600 underline">
-          Back to artists
-        </Link>
-      </div>
 
-      <div className="sticky top-0 z-20 -mx-4 sm:-mx-6">
-        <div className="mx-4 sm:mx-6 rounded-b-lg border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                Stage
-                <select
-                  value={stage}
-                  onChange={(e) => setStage(e.target.value as Stage)}
-                  className="rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                >
-                  {stageOptions.map((s) => (
-                    <option key={s} value={s}>
-                      {formatStage(s)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {contextualCta && (
+        <div className="sticky top-0 z-20 -mx-4 sm:-mx-6">
+          <div className="mx-4 sm:mx-6 rounded-b-lg border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                  Stage
+                  <select
+                    value={stage}
+                    onChange={(e) => setStage(e.target.value as Stage)}
+                    className="rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  >
+                    {stageOptions.map((s) => (
+                      <option key={s} value={s}>
+                        {formatStage(s)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {contextualCta && (
+                  <button
+                    type="button"
+                    onClick={contextualCta.action}
+                    disabled={contextualCta.disabled}
+                    className="inline-flex items-center rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                  >
+                    {contextualCta.label}
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={contextualCta.action}
-                  disabled={contextualCta.disabled}
-                  className="inline-flex items-center rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                  onClick={handleSyncShopify}
+                  disabled={shopifySyncing || !isUnderContract || !canSync}
+                  title={!isUnderContract ? "Sync is available in Under Contract stage" : !canSync ? "Name und text_1 erforderlich" : undefined}
+                  className="inline-flex items-center rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 shadow-sm transition hover:border-slate-400 disabled:opacity-60"
                 >
-                  {contextualCta.label}
+                  {shopifySyncing ? "Syncing..." : "Sync to Shopify"}
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={handleSyncShopify}
-                disabled={shopifySyncing || !isUnderContract || !canSync}
-                title={!isUnderContract ? "Sync is available in Under Contract stage" : !canSync ? "Name und text_1 erforderlich" : undefined}
-                className="inline-flex items-center rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 shadow-sm transition hover:border-slate-400 disabled:opacity-60"
-              >
-                {shopifySyncing ? "Syncing..." : "Sync to Shopify"}
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className="inline-flex items-center rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 shadow-sm transition hover:border-slate-400 disabled:opacity-60"
-              >
-                {saving ? "Saving..." : "Save"}
-              </button>
-            </div>
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            {statusBadges.map((badge) => (
-              <span key={badge.label} className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold ${badge.tone}`}>
-                <span className="text-xs">{badge.label}:</span> {badge.text}
-              </span>
-            ))}
-            {lastShopifyStatus && (
-              <span className="text-xs text-slate-600">
-                Shopify: {lastShopifyStatus}
-                {lastShopifySyncedAt && ` • ${new Date(lastShopifySyncedAt).toLocaleString()}`}
-              </span>
-            )}
-            {saveMessage && (
-              <span className="rounded-full bg-green-50 px-2 py-1 text-[11px] font-semibold text-green-700">
-                {saveMessage}
-              </span>
-            )}
-            {shopifyMessage && (
-              <span className="rounded-full bg-green-50 px-2 py-1 text-[11px] font-semibold text-green-700">
-                {shopifyMessage}
-              </span>
-            )}
-            {shopifyError && (
-              <span className="rounded-full bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700">
-                {shopifyError}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {!isUnderContract && (
-        <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="flex flex-col gap-2 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
-            <p>Sections unlock as the stage advances. Media/Artworks start in In Review, Contracts in Offer, Public Profile and Payout in Under Contract.</p>
-            <p className="text-xs text-slate-500">Change the stage in the header to progress.</p>
-          </div>
-        </div>
-      )}
-
-      <nav className="flex flex-wrap items-center gap-2">
-        {tabs.map((tab) => {
-          const availability = tabAvailability[tab.key];
-          const disabled = !availability.enabled;
-          const isActive = activeTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              disabled={disabled}
-              title={disabled ? availability.reason : undefined}
-              className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                isActive
-                  ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-                  : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-              }`}
-            >
-              <span>{tab.label}</span>
-              {tab.chip && (
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                    isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
-                  }`}
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="inline-flex items-center rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 shadow-sm transition hover:border-slate-400 disabled:opacity-60"
                 >
-                  {tab.chip}
+                  {saving ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {statusBadges.map((badge) => (
+                <span key={badge.label} className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold ${badge.tone}`}>
+                  <span className="text-xs">{badge.label}:</span> {badge.text}
+                </span>
+              ))}
+              {lastShopifyStatus && (
+                <span className="text-xs text-slate-600">
+                  Shopify: {lastShopifyStatus}
+                  {lastShopifySyncedAt && ` • ${new Date(lastShopifySyncedAt).toLocaleString()}`}
                 </span>
               )}
-            </button>
-          );
-        })}
-      </nav>
+              {saveMessage && (
+                <span className="rounded-full bg-green-50 px-2 py-1 text-[11px] font-semibold text-green-700">
+                  {saveMessage}
+                </span>
+              )}
+              {shopifyMessage && (
+                <span className="rounded-full bg-green-50 px-2 py-1 text-[11px] font-semibold text-green-700">
+                  {shopifyMessage}
+                </span>
+              )}
+              {shopifyError && (
+                <span className="rounded-full bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700">
+                  {shopifyError}
+                </span>
+              )}
+              {lastShopifyError && (
+                <span className="rounded-full bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700">
+                  Last Shopify error: {lastShopifyError}
+                </span>
+              )}
+              {error && (
+                <span className="rounded-full bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700">{error}</span>
+              )}
+            </div>
+          </div>
+        </div>
 
-      <div className="space-y-4">
-        {tabAvailability[activeTab].enabled ? (
-          tabPanels[activeTab]
-        ) : (
-          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-700">
-            This section is locked. {tabAvailability[activeTab].reason || "Change the stage to continue."}
+        {!isUnderContract && (
+          <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="flex flex-col gap-2 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
+              <p>Sections unlock as the stage advances. Media/Artworks start in In Review, Contracts in Offer, Public Profile and Payout in Under Contract.</p>
+              <p className="text-xs text-slate-500">Change the stage in the header to progress.</p>
+            </div>
           </div>
         )}
-      </div>
-    </section>
+
+        <nav className="flex flex-wrap items-center gap-2">
+          {tabs.map((tab) => {
+            const availability = tabAvailability[tab.key];
+            const disabled = !availability.enabled;
+            const isActive = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                disabled={disabled}
+                title={disabled ? availability.reason : undefined}
+                className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                  isActive
+                    ? "border-slate-900 bg-slate-900 text-white shadow-sm"
+                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                }`}
+              >
+                <span>{tab.label}</span>
+                {tab.chip && (
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
+                    }`}
+                  >
+                    {tab.chip}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="space-y-4">
+          {tabAvailability[activeTab].enabled ? (
+            tabPanels[activeTab]
+          ) : (
+            <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-700">
+              This section is locked. {tabAvailability[activeTab].reason || "Change the stage to continue."}
+            </div>
+          )}
+        </div>
+      </section>
+      {artworkWizardModal}
+    </>
   );
 }
