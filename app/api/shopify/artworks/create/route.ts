@@ -296,7 +296,7 @@ async function setInventoryToOne(inventoryItemId: string, locationId: string) {
         {
           inventoryItemId,
           locationId,
-          availableDelta: 1,
+          delta: 1,
         },
       ],
     },
