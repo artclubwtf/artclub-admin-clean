@@ -343,6 +343,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [payoutDateTx, setPayoutDateTx] = useState(() => new Date().toISOString().slice(0, 10));
   const [payoutTxSaving, setPayoutTxSaving] = useState(false);
   const [payoutTxMessage, setPayoutTxMessage] = useState<string | null>(null);
+  const [payoutTxError, setPayoutTxError] = useState<string | null>(null);
 
   const displayedTotals = useMemo(() => {
     if (!ordersSummary) return null;
@@ -895,13 +896,14 @@ export default function ArtistDetailClient({ artistId }: Props) {
 
   const handleRecordPayout = async () => {
     setPayoutTxMessage(null);
+    setPayoutTxError(null);
     if (!payoutAmount.trim()) {
-      setOrdersError("Amount is required");
+      setPayoutTxError("Amount is required");
       return;
     }
     const amount = Number(payoutAmount);
     if (!Number.isFinite(amount) || amount <= 0) {
-      setOrdersError("Amount must be positive");
+      setPayoutTxError("Amount must be positive");
       return;
     }
 
@@ -931,7 +933,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
       setPayoutModalOpen(false);
       await refreshOrdersSummary();
     } catch (err: any) {
-      setOrdersError(err?.message ?? "Failed to record payout");
+      setPayoutTxError(err?.message ?? "Failed to record payout");
     } finally {
       setPayoutTxSaving(false);
     }
@@ -1031,6 +1033,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
     contracts: { enabled: canViewContracts, reason: "Available from Offer/Angebot" },
     publicProfile: { enabled: canViewPublicProfile, reason: "Available from Under Contract" },
     payout: { enabled: canViewPayout, reason: "Available from Under Contract" },
+    orders: { enabled: canViewPublicProfile, reason: "Available from Under Contract" },
   };
   const hasMedia = media.length > 0;
   const artworkMedia = media.filter((item) => item.kind?.toLowerCase() === "artwork");
@@ -3602,6 +3605,87 @@ export default function ArtistDetailClient({ artistId }: Props) {
     </div>
   );
 
+  const payoutModal = !payoutModalOpen ? null : (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs uppercase text-slate-500">Payout</p>
+            <h3 className="text-lg font-semibold text-slate-800">Record payout</h3>
+          </div>
+          <button type="button" onClick={() => setPayoutModalOpen(false)} className="text-sm text-slate-600 underline">
+            Close
+          </button>
+        </div>
+
+        <div className="mt-3 space-y-3">
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Amount
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={payoutAmount}
+              onChange={(e) => setPayoutAmount(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="100.00"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Date
+            <input
+              type="date"
+              value={payoutDateTx}
+              onChange={(e) => setPayoutDateTx(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Method
+            <select
+              value={payoutMethodSelection}
+              onChange={(e) => setPayoutMethodSelection(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            >
+              <option value="bank">Bank</option>
+              <option value="cash">Cash</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            Note
+            <textarea
+              value={payoutNoteTx}
+              onChange={(e) => setPayoutNoteTx(e.target.value)}
+              rows={2}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="Optional note"
+            />
+          </label>
+          {payoutTxError && <p className="text-sm text-red-600">{payoutTxError}</p>}
+          {payoutTxMessage && <p className="text-sm text-green-600">{payoutTxMessage}</p>}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setPayoutModalOpen(false)}
+              className="inline-flex items-center rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleRecordPayout}
+              disabled={payoutTxSaving}
+              className="inline-flex items-center rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            >
+              {payoutTxSaving ? "Saving..." : "Save payout"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   const previewModal = !previewMedia ? null : (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4">
       <div className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
@@ -3823,6 +3907,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
       </section>
       {bulkModal}
       {previewModal}
+      {payoutModal}
     </>
   );
 }
