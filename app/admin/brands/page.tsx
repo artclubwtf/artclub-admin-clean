@@ -1,7 +1,12 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+
+type BrandKey = "artclub" | "alea";
 
 type Brand = {
-  key: "artclub" | "alea";
+  key: BrandKey;
   displayName: string;
   tone?: string;
   about?: string;
@@ -9,15 +14,35 @@ type Brand = {
   logoDarkUrl?: string;
 };
 
-async function loadBrands(): Promise<Brand[]> {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ""}/api/brands`, { cache: "no-store" }).catch(() => null);
-  if (!res?.ok) return [];
-  const json = await res.json().catch(() => null);
-  return Array.isArray(json?.brands) ? (json.brands as Brand[]) : [];
-}
+export default function BrandsPage() {
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-export default async function BrandsPage() {
-  const brands = await loadBrands();
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch("/api/brands", { cache: "no-store" });
+        const json = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(json?.error || "Failed to load brands");
+        if (!active) return;
+        setBrands(Array.isArray(json?.brands) ? (json.brands as Brand[]) : []);
+      } catch (err: unknown) {
+        if (!active) return;
+        const message = err instanceof Error ? err.message : "Failed to load brands";
+        setError(message);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <main className="p-6 space-y-6">
@@ -27,6 +52,9 @@ export default async function BrandsPage() {
           <p className="text-sm text-slate-600">Manage tone, defaults, and assets for ARTCLUB and ALÉA.</p>
         </div>
       </header>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      {loading && <p className="text-sm text-slate-600">Loading brands...</p>}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {brands.map((brand) => (
@@ -57,7 +85,7 @@ export default async function BrandsPage() {
             </div>
           </article>
         ))}
-        {brands.length === 0 && <p className="text-sm text-slate-600">No brands found.</p>}
+        {!loading && brands.length === 0 && <p className="text-sm text-slate-600">No brands found.</p>}
       </div>
     </main>
   );
