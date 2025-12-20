@@ -28,9 +28,10 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
   let chromium: any = null;
   try {
-    // @ts-expect-error optional dependency
-    const pw = await import("playwright");
-    chromium = pw.chromium;
+    const req: NodeRequire | null = typeof require === "function" ? require : eval("require");
+    // Use dynamic require so build does not fail when playwright is not installed
+    const pw = req ? (req("playwright") as { chromium?: unknown }) : null;
+    chromium = pw?.chromium;
   } catch (err) {
     console.error("Playwright not available for server PDF", err);
     return NextResponse.json({ error: "Server PDF not available (missing playwright)" }, { status: 501 });

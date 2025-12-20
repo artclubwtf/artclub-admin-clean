@@ -44,7 +44,8 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = (user as { id?: string }).id ?? token.sub;
         token.email = (user as { email?: string }).email ?? token.email;
-        token.role = (user as { role?: string }).role;
+        const role = (user as { role?: "team" | "artist" }).role;
+        if (role) token.role = role;
         token.artistId = (user as { artistId?: string }).artistId;
         token.mustChangePassword = (user as { mustChangePassword?: boolean }).mustChangePassword;
       }
@@ -57,7 +58,7 @@ export const authOptions: NextAuthOptions = {
           token.artistId = session.artistId as string;
         }
         if ("role" in session && session.role) {
-          token.role = session.role as string;
+          token.role = session.role as "team" | "artist";
         }
       }
 
