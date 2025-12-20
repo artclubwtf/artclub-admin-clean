@@ -88,6 +88,41 @@ export default async function ConceptExportPage({ params, searchParams }: PagePr
 
   const concept: Concept = {
     ...conceptDoc,
+    sections: conceptDoc.sections
+      ? {
+          goalContext: conceptDoc.sections.goalContext ?? undefined,
+          targetAudience: conceptDoc.sections.targetAudience ?? undefined,
+          narrative: conceptDoc.sections.narrative ?? undefined,
+          kpis: conceptDoc.sections.kpis ?? undefined,
+          legal: conceptDoc.sections.legal ?? undefined,
+        }
+      : undefined,
+    references: conceptDoc.references
+      ? {
+        artists: Array.isArray(conceptDoc.references.artists)
+          ? conceptDoc.references.artists.map((a: any) => ({
+              source: a.source,
+              id: a.id,
+              label: a.label ?? undefined,
+            }))
+          : undefined,
+        artworks: Array.isArray(conceptDoc.references.artworks)
+          ? conceptDoc.references.artworks.map((a: any) => ({
+              productId: a.productId,
+              label: a.label ?? undefined,
+            }))
+          : undefined,
+      }
+      : undefined,
+    assets: Array.isArray(conceptDoc.assets)
+      ? conceptDoc.assets.map((a: any) => ({
+          kind: a.kind,
+          id: a.id ?? undefined,
+          url: a.url ?? undefined,
+          previewUrl: a.previewUrl ?? undefined,
+          label: a.label ?? undefined,
+        }))
+      : undefined,
     _id: conceptDoc._id.toString(),
     createdAt: conceptDoc.createdAt ? new Date(conceptDoc.createdAt).toISOString() : undefined,
     updatedAt: conceptDoc.updatedAt ? new Date(conceptDoc.updatedAt).toISOString() : undefined,
