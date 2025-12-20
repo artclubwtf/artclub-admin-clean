@@ -676,6 +676,68 @@ body.ac-theme .rounded {
   gap: 18px;
 }
 
+.ga-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ga-filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.ga-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.ga-filter input {
+  padding: 8px 10px;
+  border-radius: calc(var(--radius) - 8px);
+  border: 1px solid var(--hairline);
+  background: var(--surface2);
+  color: var(--text);
+}
+
+.ga-table-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.ga-card {
+  border: 1px solid color-mix(in srgb, var(--hairline) 60%, transparent);
+  box-shadow: var(--shadow);
+}
+
+.ga-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.ga-table th,
+.ga-table td {
+  padding: 10px 12px;
+}
+.ga-table thead th {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--hairline);
+}
+.ga-table tbody tr + tr {
+  border-top: 1px solid var(--hairline);
+}
+.ga-table tbody tr:hover {
+  background: color-mix(in srgb, var(--surface2) 90%, transparent);
+}
+
 .admin-cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
