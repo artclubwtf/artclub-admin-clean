@@ -123,6 +123,17 @@ type MediaItem = {
   createdAt?: string;
 };
 
+type UserAccount = {
+  id: string;
+  _id?: string;
+  email: string;
+  role: string;
+  artistId?: string;
+  isActive: boolean;
+  createdAt?: string;
+  mustChangePassword?: boolean;
+};
+
 type ShopifyProduct = {
   id: string;
   title: string;
@@ -224,6 +235,13 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [phone, setPhone] = useState("");
   const [stage, setStage] = useState<Stage>("Idea");
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const [artistUser, setArtistUser] = useState<UserAccount | null>(null);
+  const [accountEmail, setAccountEmail] = useState("");
+  const [accountTempPassword, setAccountTempPassword] = useState("");
+  const [accountLoading, setAccountLoading] = useState(false);
+  const [accountMessage, setAccountMessage] = useState<string | null>(null);
+  const [accountError, setAccountError] = useState<string | null>(null);
+  const [accountChecking, setAccountChecking] = useState(false);
   const [internalNotes, setInternalNotes] = useState("");
   const [publicName, setPublicName] = useState("");
   const [publicInstagram, setPublicInstagram] = useState("");
@@ -563,6 +581,40 @@ export default function ArtistDetailClient({ artistId }: Props) {
       active = false;
     };
   }, [artistId]);
+
+  useEffect(() => {
+    let active = true;
+    const loadUser = async () => {
+      setAccountChecking(true);
+      setAccountError(null);
+      try {
+        const res = await fetch(`/api/users?artistId=${encodeURIComponent(artistId)}`, { cache: "no-store" });
+        const payload = (await res.json().catch(() => null)) as { users?: UserAccount[]; error?: string } | null;
+        if (!res.ok) {
+          throw new Error(payload?.error || "Failed to load account");
+        }
+        const firstUser = Array.isArray(payload?.users) ? payload?.users[0] ?? null : null;
+        if (!active) return;
+        setArtistUser(firstUser);
+      } catch (err: any) {
+        if (!active) return;
+        setAccountError(err?.message ?? "Failed to load account");
+      } finally {
+        if (active) setAccountChecking(false);
+      }
+    };
+
+    loadUser();
+    return () => {
+      active = false;
+    };
+  }, [artistId]);
+
+  useEffect(() => {
+    if (artist?.email && !accountEmail) {
+      setAccountEmail(artist.email);
+    }
+  }, [artist, accountEmail]);
 
   useEffect(() => {
     let active = true;
@@ -1331,6 +1383,45 @@ export default function ArtistDetailClient({ artistId }: Props) {
       setError(err?.message ?? "Failed to set hero image");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCreateArtistAccount = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setAccountError(null);
+    setAccountMessage(null);
+    const trimmedEmail = accountEmail.trim().toLowerCase();
+    if (!trimmedEmail || !trimmedEmail.includes("@")) {
+      setAccountError("Valid email required");
+      return;
+    }
+    if (!accountTempPassword || accountTempPassword.length < 8) {
+      setAccountError("Temp password must be at least 8 characters");
+      return;
+    }
+
+    setAccountLoading(true);
+    try {
+      const res = await fetch("/api/users/create-artist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          artistId,
+          email: trimmedEmail,
+          tempPassword: accountTempPassword,
+        }),
+      });
+      const payload = (await res.json().catch(() => null)) as { user?: UserAccount; error?: string } | null;
+      if (!res.ok) {
+        throw new Error(payload?.error || "Failed to create account");
+      }
+      setArtistUser(payload?.user ?? null);
+      setAccountMessage("Artist account created. Share temp password with the artist.");
+      setAccountTempPassword("");
+    } catch (err: any) {
+      setAccountError(err?.message ?? "Failed to create account");
+    } finally {
+      setAccountLoading(false);
     }
   };
 
@@ -2410,6 +2501,67 @@ export default function ArtistDetailClient({ artistId }: Props) {
             />
           </label>
         </div>
+      </div>
+
+      <div className="ac-card space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-800">Account</h3>
+            <p className="text-xs text-slate-500">Create a login for this artist manually.</p>
+          </div>
+          {accountChecking && <span className="text-xs text-slate-500">Checking...</span>}
+        </div>
+
+        {accountError && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{accountError}</div>}
+        {accountMessage && (
+          <div className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{accountMessage}</div>
+        )}
+
+        {artistUser ? (
+          <div className="space-y-1 text-sm text-slate-700">
+            <div className="font-semibold text-slate-900">Account exists</div>
+            <div>Email: {artistUser.email}</div>
+            {artistUser.createdAt && (
+              <div className="text-xs text-slate-500">Created {new Date(artistUser.createdAt).toLocaleString()}</div>
+            )}
+            <div className="text-xs text-slate-500">Artists cannot change their email; update via team only.</div>
+          </div>
+        ) : (
+          <form className="space-y-3" onSubmit={handleCreateArtistAccount}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-sm font-medium text-slate-700">
+                Email
+                <input
+                  type="email"
+                  value={accountEmail}
+                  onChange={(e) => setAccountEmail(e.target.value)}
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  placeholder="artist@example.com"
+                  disabled={accountLoading}
+                  required
+                />
+              </label>
+              <label className="space-y-1 text-sm font-medium text-slate-700">
+                Temp password
+                <input
+                  type="text"
+                  value={accountTempPassword}
+                  onChange={(e) => setAccountTempPassword(e.target.value)}
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  placeholder="min. 8 characters"
+                  disabled={accountLoading}
+                  required
+                />
+              </label>
+            </div>
+            <p className="text-xs text-slate-500">
+              Artists will be forced to change this password on first login. Share the temp password securely.
+            </p>
+            <button type="submit" className="btnPrimary" disabled={accountLoading}>
+              {accountLoading ? "Creating..." : "Create artist account"}
+            </button>
+          </form>
+        )}
       </div>
 
       <div className="ac-card">

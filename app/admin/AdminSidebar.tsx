@@ -11,6 +11,7 @@ const navItems = [
   { label: "Products", href: "/admin/products" },
   { label: "Concepts", href: "/admin/concepts" },
   { label: "Brands", href: "/admin/brands" },
+  { label: "Users", href: "/admin/users" },
 ];
 
 export default function AdminSidebar() {
