@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Types } from "mongoose";
 
 import { connectMongo } from "@/lib/mongodb";
 import { ConceptModel } from "@/models/Concept";
@@ -16,7 +17,7 @@ async function resolveId(context: RouteContext) {
 }
 
 type ConceptForSnapshot = {
-  _id: unknown;
+  _id: Types.ObjectId;
 } & Pick<Concept, "status" | "title" | "brandKey" | "type" | "granularity" | "sections" | "references" | "assets" | "exports">;
 
 async function createSnapshot(concept: ConceptForSnapshot) {
@@ -51,7 +52,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     );
     if (!concept) return notFound("Concept not found");
 
-    const snapshot = await createSnapshot(concept.toObject());
+    const snapshot = await createSnapshot(concept.toObject() as ConceptForSnapshot);
 
     return NextResponse.json({ concept: concept.toObject(), snapshot: snapshot.toObject() }, { status: 200 });
   } catch (err) {
