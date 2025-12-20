@@ -55,6 +55,8 @@ const shopifyOrderCacheSchema = new Schema(
   { timestamps: true, collection: "shopify_orders_cache" },
 );
 
+shopifyOrderCacheSchema.index({ createdAt: -1 });
+
 type ShopifyOrderCache = InferSchemaType<typeof shopifyOrderCacheSchema>;
 
 export const ShopifyOrderCacheModel =

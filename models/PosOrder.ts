@@ -35,6 +35,8 @@ const posOrderSchema = new Schema(
   { timestamps: true, collection: "pos_orders" },
 );
 
+posOrderSchema.index({ createdAt: -1 });
+
 type PosOrder = InferSchemaType<typeof posOrderSchema>;
 
 export const PosOrderModel = (models.PosOrder as Model<PosOrder>) || model<PosOrder>("PosOrder", posOrderSchema);
