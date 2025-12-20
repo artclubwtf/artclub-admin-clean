@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 type OverviewResponse = {
   totals: { revenue: number; orders: number; aov: number };
@@ -28,6 +29,7 @@ type Ga4Overview = {
 type Ga4Response = Ga4Overview | Ga4NotConfigured | Ga4ErrorResponse;
 
 type RangeOption = 7 | 30 | 90;
+type TabKey = "sales" | "web";
 
 const currencyFormatter = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 const numberFormatter = new Intl.NumberFormat("de-DE");
@@ -52,7 +54,18 @@ function dateInputString(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
+function normalizeDateInput(value: string | null, fallback: string) {
+  if (!value) return fallback;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return fallback;
+  return dateInputString(parsed);
+}
+
 export default function AnalyticsPageClient() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const [range, setRange] = useState<RangeOption>(30);
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [locations, setLocations] = useState<LocationsResponse | null>(null);
@@ -61,8 +74,11 @@ export default function AnalyticsPageClient() {
   const [gaData, setGaData] = useState<Ga4Response | null>(null);
   const [gaLoading, setGaLoading] = useState(false);
   const [gaError, setGaError] = useState<string | null>(null);
-  const [gaStart, setGaStart] = useState(() => dateInputString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)));
-  const [gaEnd, setGaEnd] = useState(() => dateInputString(new Date()));
+  const defaultGaStart = dateInputString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+  const defaultGaEnd = dateInputString(new Date());
+  const [tab, setTab] = useState<TabKey>(() => (searchParams?.get("tab") === "web" ? "web" : "sales"));
+  const [gaStart, setGaStart] = useState(() => normalizeDateInput(searchParams?.get("start"), defaultGaStart));
+  const [gaEnd, setGaEnd] = useState(() => normalizeDateInput(searchParams?.get("end"), defaultGaEnd));
 
   const { sinceIso, untilIso } = useMemo(() => {
     const now = new Date();
@@ -72,6 +88,15 @@ export default function AnalyticsPageClient() {
       untilIso: now.toISOString(),
     };
   }, [range]);
+
+  useEffect(() => {
+    if (!pathname) return;
+    const params = new URLSearchParams();
+    params.set("tab", tab);
+    params.set("start", gaStart);
+    params.set("end", gaEnd);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }, [tab, gaStart, gaEnd, router, pathname]);
 
   useEffect(() => {
     let active = true;
@@ -134,13 +159,18 @@ export default function AnalyticsPageClient() {
   }, [gaStart, gaEnd]);
 
   useEffect(() => {
+    if (tab !== "web") return;
     fetchGaOverview();
-  }, [fetchGaOverview]);
+  }, [fetchGaOverview, tab]);
 
   const rangeOptions: { label: string; value: RangeOption }[] = [
     { label: "Last 7 days", value: 7 },
     { label: "Last 30 days", value: 30 },
     { label: "Last 90 days", value: 90 },
+  ];
+  const tabOptions: { label: string; value: TabKey }[] = [
+    { label: "Sales", value: "sales" },
+    { label: "Web", value: "web" },
   ];
 
   const renderKpiCards = () => {
@@ -256,45 +286,66 @@ export default function AnalyticsPageClient() {
     <div className="admin-dashboard">
       <header className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-sm text-slate-500">Sales analytics</p>
+          <p className="text-sm text-slate-500">{tab === "sales" ? "Sales analytics" : "Web analytics"}</p>
           <h1 className="text-2xl font-semibold">Analytics</h1>
-          <p className="text-sm text-slate-600">Pulling from Shopify cache and POS orders.</p>
+          <p className="text-sm text-slate-600">
+            {tab === "sales" ? "Pulling from Shopify cache and POS orders." : "Server-side GA4 Data API (cached 10 min)."}
+          </p>
         </div>
-        <div className="segmented" role="group" aria-label="Select timeframe">
-          {rangeOptions.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              className={opt.value === range ? "active" : ""}
-              onClick={() => setRange(opt.value)}
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap gap-2 items-center justify-end">
+          <div className="segmented" role="tablist" aria-label="Select analytics view">
+            {tabOptions.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                className={opt.value === tab ? "active" : ""}
+                onClick={() => setTab(opt.value)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {tab === "sales" && (
+            <div className="segmented" role="group" aria-label="Select timeframe">
+              {rangeOptions.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={opt.value === range ? "active" : ""}
+                  onClick={() => setRange(opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </header>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {tab === "sales" && (
+        <>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          {renderKpiCards()}
+          <section className="acSection">
+            <div className="acSectionHeader">
+              <div>
+                <p className="text-sm text-slate-500 m-0">Locations</p>
+                <h2 className="text-xl font-semibold m-0">Top regions</h2>
+              </div>
+              {overview?.updatedAt && (
+                <span className="ac-badge">Updated {new Date(overview.updatedAt).toLocaleString()}</span>
+              )}
+            </div>
+            <div className="acGrid2">
+              {renderTable("Countries", countryRows, "No orders in this range")}
+              {renderTable("Cities", cityRows, "No city data yet")}
+            </div>
+          </section>
+        </>
+      )}
 
-      {renderKpiCards()}
-
-      <section className="acSection">
-        <div className="acSectionHeader">
-          <div>
-            <p className="text-sm text-slate-500 m-0">Locations</p>
-            <h2 className="text-xl font-semibold m-0">Top regions</h2>
-          </div>
-          {overview?.updatedAt && (
-            <span className="ac-badge">Updated {new Date(overview.updatedAt).toLocaleString()}</span>
-          )}
-        </div>
-        <div className="acGrid2">
-          {renderTable("Countries", countryRows, "No orders in this range")}
-          {renderTable("Cities", cityRows, "No city data yet")}
-        </div>
-      </section>
-
-      <section className="acSection ga-section">
+      {tab === "web" && (
+        <section className="acSection ga-section">
         <div className="acSectionHeader">
           <div>
             <p className="text-sm text-slate-500 m-0">Web Analytics</p>
