@@ -404,238 +404,239 @@ export default function AnalyticsPageClient() {
 
       {tab === "web" && (
         <section className="acSection ga-section">
-        <div className="ga-status">
-          {gaStatus?.configured ? (
-            <div className="ga-status-pill ga-status-ok">
-              <span className="ga-dot" />
-              Configured · Property {gaStatus.propertyId} · Cache {gaStatus.cacheTtlMinutes}m
+          <div className="ga-status">
+            {gaStatus?.configured ? (
+              <div className="ga-status-pill ga-status-ok">
+                <span className="ga-dot" />
+                Configured · Property {gaStatus.propertyId} · Cache {gaStatus.cacheTtlMinutes}m
+              </div>
+            ) : (
+              <div className="ga-status-pill ga-status-warn">
+                <span className="ga-dot" />
+                Not configured · Set {gaStatus?.configured === false ? gaStatus.required.join(", ") : "GA4 env vars"}
+              </div>
+            )}
+          </div>
+          <div className="acSectionHeader">
+            <div>
+              <p className="text-sm text-slate-500 m-0">Web Analytics</p>
+              <h2 className="text-xl font-semibold m-0">GA4 overview</h2>
+              <p className="text-sm text-slate-600 m-0">Server-side GA4 Data API (cached 10 min).</p>
             </div>
-          ) : (
-            <div className="ga-status-pill ga-status-warn">
-              <span className="ga-dot" />
-              Not configured · Set {gaStatus?.configured === false ? gaStatus.required.join(", ") : "GA4 env vars"}
+            <div className="ga-filters">
+              <label className="ga-filter">
+                <span>Start</span>
+                <input type="date" value={gaStart} onChange={(e) => setGaStart(e.target.value)} />
+              </label>
+              <label className="ga-filter">
+                <span>End</span>
+                <input type="date" value={gaEnd} onChange={(e) => setGaEnd(e.target.value)} />
+              </label>
+              <label className="ga-filter ga-filter-inline">
+                <span>Compare to previous</span>
+                <input
+                  type="checkbox"
+                  checked={compareEnabled}
+                  onChange={(e) => setCompareEnabled(e.target.checked)}
+                />
+              </label>
+              <button className="ac-button" type="button" onClick={fetchGaOverview} disabled={gaLoading}>
+                {gaLoading ? "Refreshing…" : "Refresh"}
+              </button>
+            </div>
+          </div>
+
+          {gaError && <p className="text-sm text-red-600">{gaError}</p>}
+
+          {gaData && gaData.ok === false && gaData.code === "not_configured" && (
+            <div className="card ga-card">
+              <p className="text-sm text-slate-500 m-0">GA4 not configured</p>
+              <h3 className="text-lg font-semibold mt-1 mb-2">Set environment variables to enable reports.</h3>
+              <ul className="list-disc pl-5 text-sm text-slate-600 m-0">
+                {(gaData.required || []).map((env) => (
+                  <li key={env}>{env}</li>
+                ))}
+              </ul>
             </div>
           )}
-        </div>
-        <div className="acSectionHeader">
-          <div>
-            <p className="text-sm text-slate-500 m-0">Web Analytics</p>
-            <h2 className="text-xl font-semibold m-0">GA4 overview</h2>
-            <p className="text-sm text-slate-600 m-0">Server-side GA4 Data API (cached 10 min).</p>
-          </div>
-          <div className="ga-filters">
-            <label className="ga-filter">
-              <span>Start</span>
-              <input type="date" value={gaStart} onChange={(e) => setGaStart(e.target.value)} />
-            </label>
-            <label className="ga-filter">
-              <span>End</span>
-              <input type="date" value={gaEnd} onChange={(e) => setGaEnd(e.target.value)} />
-            </label>
-            <label className="ga-filter ga-filter-inline">
-              <span>Compare to previous</span>
-              <input
-                type="checkbox"
-                checked={compareEnabled}
-                onChange={(e) => setCompareEnabled(e.target.checked)}
-              />
-            </label>
-            <button className="ac-button" type="button" onClick={fetchGaOverview} disabled={gaLoading}>
-              {gaLoading ? "Refreshing…" : "Refresh"}
-            </button>
-          </div>
-        </div>
 
-        {gaError && <p className="text-sm text-red-600">{gaError}</p>}
-
-        {gaData && gaData.ok === false && gaData.code === "not_configured" && (
-          <div className="card ga-card">
-            <p className="text-sm text-slate-500 m-0">GA4 not configured</p>
-            <h3 className="text-lg font-semibold mt-1 mb-2">Set environment variables to enable reports.</h3>
-            <ul className="list-disc pl-5 text-sm text-slate-600 m-0">
-              {(gaData.required || []).map((env) => (
-                <li key={env}>{env}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {gaLoading && !gaData && (
-          <div className="card ga-card">
-            <p className="text-sm text-slate-500 m-0">Loading GA4 data…</p>
-          </div>
-        )}
-
-        {gaData && gaData.ok && (
-          <>
-            <div className="admin-cards-grid">
-              {[
-                {
-                  label: "Active users",
-                  value: formatNumber(gaData.kpis.activeUsers),
-                  delta: gaCompare.previous ? percentDelta(gaData.kpis.activeUsers, gaCompare.previous.kpis.activeUsers) : null,
-                },
-                {
-                  label: "New users",
-                  value: formatNumber(gaData.kpis.newUsers),
-                  delta: gaCompare.previous ? percentDelta(gaData.kpis.newUsers, gaCompare.previous.kpis.newUsers) : null,
-                },
-                {
-                  label: "Sessions",
-                  value: formatNumber(gaData.kpis.sessions),
-                  delta: gaCompare.previous ? percentDelta(gaData.kpis.sessions, gaCompare.previous.kpis.sessions) : null,
-                },
-                {
-                  label: "Engaged sessions",
-                  value: formatNumber(gaData.kpis.engagedSessions),
-                  delta: gaCompare.previous ? percentDelta(gaData.kpis.engagedSessions, gaCompare.previous.kpis.engagedSessions) : null,
-                },
-                {
-                  label: "Engagement rate",
-                  value: formatPercent(gaData.kpis.engagementRate),
-                  delta: gaCompare.previous ? percentDelta(gaData.kpis.engagementRate, gaCompare.previous.kpis.engagementRate) : null,
-                },
-              ].map((card) => (
-                <div key={card.label} className="admin-stat-card">
-                  <small>{card.label}</small>
-                  <strong>{gaLoading ? "…" : card.value}</strong>
-                  {card.delta && <p className="text-xs text-slate-500 m-0">vs prev: {card.delta}</p>}
-                </div>
-              ))}
+          {gaLoading && !gaData && (
+            <div className="card ga-card">
+              <p className="text-sm text-slate-500 m-0">Loading GA4 data…</p>
             </div>
+          )}
 
-            <div className="ga-table-grid">
-              <div className="card ga-card">
-                <div className="cardHeader">
-                  <div>
-                    <p className="text-sm text-slate-500 m-0">Countries</p>
-                    <strong className="text-lg m-0">Top 10</strong>
+          {gaData && gaData.ok && (
+            <>
+              <div className="admin-cards-grid">
+                {[
+                  {
+                    label: "Active users",
+                    value: formatNumber(gaData.kpis.activeUsers),
+                    delta: gaCompare.previous ? percentDelta(gaData.kpis.activeUsers, gaCompare.previous.kpis.activeUsers) : null,
+                  },
+                  {
+                    label: "New users",
+                    value: formatNumber(gaData.kpis.newUsers),
+                    delta: gaCompare.previous ? percentDelta(gaData.kpis.newUsers, gaCompare.previous.kpis.newUsers) : null,
+                  },
+                  {
+                    label: "Sessions",
+                    value: formatNumber(gaData.kpis.sessions),
+                    delta: gaCompare.previous ? percentDelta(gaData.kpis.sessions, gaCompare.previous.kpis.sessions) : null,
+                  },
+                  {
+                    label: "Engaged sessions",
+                    value: formatNumber(gaData.kpis.engagedSessions),
+                    delta: gaCompare.previous ? percentDelta(gaData.kpis.engagedSessions, gaCompare.previous.kpis.engagedSessions) : null,
+                  },
+                  {
+                    label: "Engagement rate",
+                    value: formatPercent(gaData.kpis.engagementRate),
+                    delta: gaCompare.previous ? percentDelta(gaData.kpis.engagementRate, gaCompare.previous.kpis.engagementRate) : null,
+                  },
+                ].map((card) => (
+                  <div key={card.label} className="admin-stat-card">
+                    <small>{card.label}</small>
+                    <strong>{gaLoading ? "…" : card.value}</strong>
+                    {card.delta && <p className="text-xs text-slate-500 m-0">vs prev: {card.delta}</p>}
                   </div>
-                </div>
-                <table className="ga-table">
-                  <thead>
-                    <tr>
-                      <th align="left">Country</th>
-                      <th align="left">Active users</th>
-                      <th align="left">Sessions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {gaCountries.length === 0 && (
-                      <tr>
-                        <td colSpan={3}>No data for this range.</td>
-                      </tr>
-                    )}
-                    {gaCountries.map((row) => (
-                      <tr key={row.country}>
-                        <td>{row.country}</td>
-                        <td>{formatNumber(row.activeUsers)}</td>
-                        <td>{formatNumber(row.sessions)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                ))}
               </div>
 
-              <div className="card ga-card">
-                <div className="cardHeader">
-                  <div>
-                    <p className="text-sm text-slate-500 m-0">Cities</p>
-                    <strong className="text-lg m-0">Top 10</strong>
+              <div className="ga-table-grid">
+                <div className="card ga-card">
+                  <div className="cardHeader">
+                    <div>
+                      <p className="text-sm text-slate-500 m-0">Countries</p>
+                      <strong className="text-lg m-0">Top 10</strong>
+                    </div>
                   </div>
-                </div>
-                <table className="ga-table">
-                  <thead>
-                    <tr>
-                      <th align="left">City</th>
-                      <th align="left">Country</th>
-                      <th align="left">Active users</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {gaCities.length === 0 && (
+                  <table className="ga-table">
+                    <thead>
                       <tr>
-                        <td colSpan={3}>No data for this range.</td>
+                        <th align="left">Country</th>
+                        <th align="left">Active users</th>
+                        <th align="left">Sessions</th>
                       </tr>
-                    )}
-                    {gaCities.map((row) => (
-                      <tr key={`${row.country}-${row.city}`}>
-                        <td>{row.city}</td>
-                        <td className="text-slate-500">{row.country}</td>
-                        <td>{formatNumber(row.activeUsers)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {gaCountries.length === 0 && (
+                        <tr>
+                          <td colSpan={3}>No data for this range.</td>
+                        </tr>
+                      )}
+                      {gaCountries.map((row) => (
+                        <tr key={row.country}>
+                          <td>{row.country}</td>
+                          <td>{formatNumber(row.activeUsers)}</td>
+                          <td>{formatNumber(row.sessions)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-              <div className="card ga-card">
-                <div className="cardHeader">
-                  <div>
-                    <p className="text-sm text-slate-500 m-0">Devices</p>
-                    <strong className="text-lg m-0">Top 10</strong>
+                <div className="card ga-card">
+                  <div className="cardHeader">
+                    <div>
+                      <p className="text-sm text-slate-500 m-0">Cities</p>
+                      <strong className="text-lg m-0">Top 10</strong>
+                    </div>
                   </div>
-                </div>
-                <table className="ga-table">
-                  <thead>
-                    <tr>
-                      <th align="left">Device</th>
-                      <th align="left">Active users</th>
-                      <th align="left">Sessions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {gaDevices.length === 0 && (
+                  <table className="ga-table">
+                    <thead>
                       <tr>
-                        <td colSpan={3}>No data for this range.</td>
+                        <th align="left">City</th>
+                        <th align="left">Country</th>
+                        <th align="left">Active users</th>
                       </tr>
-                    )}
-                    {gaDevices.map((row) => (
-                      <tr key={row.deviceCategory}>
-                        <td>{row.deviceCategory}</td>
-                        <td>{formatNumber(row.activeUsers)}</td>
-                        <td>{formatNumber(row.sessions)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {gaCities.length === 0 && (
+                        <tr>
+                          <td colSpan={3}>No data for this range.</td>
+                        </tr>
+                      )}
+                      {gaCities.map((row) => (
+                        <tr key={`${row.country}-${row.city}`}>
+                          <td>{row.city}</td>
+                          <td className="text-slate-500">{row.country}</td>
+                          <td>{formatNumber(row.activeUsers)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-              <div className="card ga-card">
-                <div className="cardHeader">
-                  <div>
-                    <p className="text-sm text-slate-500 m-0">Sources</p>
-                    <strong className="text-lg m-0">Top 10</strong>
+                <div className="card ga-card">
+                  <div className="cardHeader">
+                    <div>
+                      <p className="text-sm text-slate-500 m-0">Devices</p>
+                      <strong className="text-lg m-0">Top 10</strong>
+                    </div>
                   </div>
-                </div>
-                <table className="ga-table">
-                  <thead>
-                    <tr>
-                      <th align="left">Source / Medium</th>
-                      <th align="left">Active users</th>
-                      <th align="left">Sessions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {gaSources.length === 0 && (
+                  <table className="ga-table">
+                    <thead>
                       <tr>
-                        <td colSpan={3}>No data for this range.</td>
+                        <th align="left">Device</th>
+                        <th align="left">Active users</th>
+                        <th align="left">Sessions</th>
                       </tr>
-                    )}
-                    {gaSources.map((row) => (
-                      <tr key={row.sessionSourceMedium}>
-                        <td>{row.sessionSourceMedium}</td>
-                        <td>{formatNumber(row.activeUsers)}</td>
-                        <td>{formatNumber(row.sessions)}</td>
+                    </thead>
+                    <tbody>
+                      {gaDevices.length === 0 && (
+                        <tr>
+                          <td colSpan={3}>No data for this range.</td>
+                        </tr>
+                      )}
+                      {gaDevices.map((row) => (
+                        <tr key={row.deviceCategory}>
+                          <td>{row.deviceCategory}</td>
+                          <td>{formatNumber(row.activeUsers)}</td>
+                          <td>{formatNumber(row.sessions)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="card ga-card">
+                  <div className="cardHeader">
+                    <div>
+                      <p className="text-sm text-slate-500 m-0">Sources</p>
+                      <strong className="text-lg m-0">Top 10</strong>
+                    </div>
+                  </div>
+                  <table className="ga-table">
+                    <thead>
+                      <tr>
+                        <th align="left">Source / Medium</th>
+                        <th align="left">Active users</th>
+                        <th align="left">Sessions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {gaSources.length === 0 && (
+                        <tr>
+                          <td colSpan={3}>No data for this range.</td>
+                        </tr>
+                      )}
+                      {gaSources.map((row) => (
+                        <tr key={row.sessionSourceMedium}>
+                          <td>{row.sessionSourceMedium}</td>
+                          <td>{formatNumber(row.activeUsers)}</td>
+                          <td>{formatNumber(row.sessions)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          </>
-        )}
-      </section>
+            </>
+          )}
+        </section>
+      )}
     </div>
   );
 }
