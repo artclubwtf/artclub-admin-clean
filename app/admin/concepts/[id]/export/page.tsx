@@ -86,7 +86,7 @@ export default async function ConceptExportPage({ params, searchParams }: PagePr
     );
   }
 
-  const concept = conceptDoc as Concept;
+  const concept = { ...conceptDoc, _id: conceptDoc._id.toString() } as Concept;
   const brandDoc = await BrandSettingsModel.findOne({ key: concept.brandKey }).lean();
   const brand = (brandDoc || null) as Brand | null;
 
