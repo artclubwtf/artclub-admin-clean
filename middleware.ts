@@ -31,6 +31,14 @@ export async function middleware(req: NextRequest) {
       if (!token) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
+
+      if (pathname.startsWith("/api/artist")) {
+        if (token.role !== "artist") {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+        return NextResponse.next();
+      }
+
       if (token.role !== "team") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
