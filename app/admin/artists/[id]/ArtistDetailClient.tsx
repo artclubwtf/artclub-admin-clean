@@ -194,7 +194,16 @@ type FileUploadStatus = {
 
 const stageOptions = ["Idea", "In Review", "Offer", "Under Contract"] as const;
 type Stage = (typeof stageOptions)[number];
-type TabKey = "overview" | "media" | "artworks" | "publicProfile" | "contracts" | "payout" | "orders";
+type TabKey = "overview" | "media" | "artworks" | "publicProfile" | "contracts" | "payout" | "orders" | "messages";
+
+type ChatMessage = {
+  id: string;
+  senderRole: "artist" | "team";
+  text?: string;
+  mediaIds: string[];
+  attachments?: { id: string; filename?: string; url?: string; mimeType?: string }[];
+  createdAt?: string;
+};
 
 function parseErrorMessage(payload: any) {
   if (!payload) return "Unexpected error";
@@ -238,6 +247,12 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [artistUser, setArtistUser] = useState<UserAccount | null>(null);
   const [accountEmail, setAccountEmail] = useState("");
   const [accountTempPassword, setAccountTempPassword] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [messagesError, setMessagesError] = useState<string | null>(null);
+  const [messageText, setMessageText] = useState("");
+  const [messageSending, setMessageSending] = useState(false);
+  const [messageAttachmentIds, setMessageAttachmentIds] = useState<string[]>([]);
   const [accountLoading, setAccountLoading] = useState(false);
   const [accountMessage, setAccountMessage] = useState<string | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
@@ -605,6 +620,30 @@ export default function ArtistDetailClient({ artistId }: Props) {
     };
 
     loadUser();
+    return () => {
+      active = false;
+    };
+  }, [artistId]);
+
+  useEffect(() => {
+    let active = true;
+    const loadMessages = async () => {
+      setMessagesLoading(true);
+      setMessagesError(null);
+      try {
+        const res = await fetch(`/api/admin/artists/${encodeURIComponent(artistId)}/messages`, { cache: "no-store" });
+        const payload = (await res.json().catch(() => null)) as { messages?: ChatMessage[]; error?: string } | null;
+        if (!res.ok) throw new Error(payload?.error || "Failed to load messages");
+        if (!active) return;
+        setMessages(Array.isArray(payload?.messages) ? payload.messages : []);
+      } catch (err: any) {
+        if (!active) return;
+        setMessagesError(err?.message ?? "Failed to load messages");
+      } finally {
+        if (active) setMessagesLoading(false);
+      }
+    };
+    loadMessages();
     return () => {
       active = false;
     };
@@ -1091,6 +1130,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
     publicProfile: { enabled: canViewPublicProfile, reason: "Available from Under Contract" },
     payout: { enabled: canViewPayout, reason: "Available from Under Contract" },
     orders: { enabled: canViewPublicProfile, reason: "Available from Under Contract" },
+    messages: { enabled: true },
   };
   const hasMedia = media.length > 0;
   const artworkMedia = media.filter((item) => item.kind?.toLowerCase() === "artwork");
@@ -1422,6 +1462,43 @@ export default function ArtistDetailClient({ artistId }: Props) {
       setAccountError(err?.message ?? "Failed to create account");
     } finally {
       setAccountLoading(false);
+    }
+  };
+
+  const toggleMessageAttachment = (id: string) => {
+    setMessageAttachmentIds((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
+  };
+
+  const handleSendMessage = async () => {
+    if (!messageText.trim() && messageAttachmentIds.length === 0) {
+      setMessagesError("Message or attachment required");
+      return;
+    }
+    setMessageSending(true);
+    setMessagesError(null);
+    try {
+      const res = await fetch(`/api/admin/artists/${encodeURIComponent(artistId)}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: messageText, mediaIds: messageAttachmentIds }),
+      });
+      const payload = (await res.json().catch(() => null)) as { message?: ChatMessage; error?: string } | null;
+      if (!res.ok) throw new Error(payload?.error || "Failed to send");
+      if (payload?.message) {
+        const attachments = media.filter((m) => messageAttachmentIds.includes(m._id)).map((m) => ({
+          id: m._id,
+          filename: m.filename,
+          url: m.url,
+          mimeType: m.mimeType,
+        }));
+        setMessages((prev) => [...prev, { ...payload.message, attachments }]);
+      }
+      setMessageText("");
+      setMessageAttachmentIds([]);
+    } catch (err: any) {
+      setMessagesError(err?.message ?? "Failed to send");
+    } finally {
+      setMessageSending(false);
     }
   };
 
@@ -2593,6 +2670,106 @@ export default function ArtistDetailClient({ artistId }: Props) {
     </div>
   );
 
+  const messagesPanel = (
+    <div className="space-y-3">
+      <div className="ac-card space-y-1">
+        <div className="text-lg font-semibold text-slate-800">Messages</div>
+        <div className="text-xs text-slate-500">Chat with the artist. Attach existing media if needed.</div>
+      </div>
+
+      {messagesError && <div className="ac-card text-sm text-red-600">Error: {messagesError}</div>}
+      {messagesLoading && <div className="ac-card text-sm text-slate-600">Loading messages...</div>}
+
+      <div className="ac-card space-y-3" style={{ maxHeight: 420, overflowY: "auto" }}>
+        {messages.length === 0 && !messagesLoading ? (
+          <div className="text-sm text-slate-600">No messages yet.</div>
+        ) : (
+          messages.map((m) => {
+            const isTeam = m.senderRole === "team";
+            const isImage = (mime?: string) => (mime || "").startsWith("image/");
+            return (
+              <div key={m.id} className={`flex ${isTeam ? "justify-end" : "justify-start"}`}>
+                <div
+                  className="rounded-2xl px-3 py-2 shadow-sm"
+                  style={{
+                    background: isTeam ? "var(--primary)" : "color-mix(in srgb, var(--surface2) 92%, transparent)",
+                    color: isTeam ? "var(--primaryText)" : "var(--text)",
+                    maxWidth: "80%",
+                  }}
+                >
+                  {m.text && <div className="text-sm whitespace-pre-wrap">{m.text}</div>}
+                  {m.attachments?.length ? (
+                    <div className="mt-2 space-y-1">
+                      {m.attachments.map((att) => (
+                        <a
+                          key={att.id}
+                          href={att.url || "#"}
+                          target={att.url ? "_blank" : undefined}
+                          rel="noreferrer"
+                          className="block rounded bg-white/20 px-2 py-1 text-xs underline"
+                        >
+                          {isImage(att.mimeType) ? "Image" : att.mimeType || "File"} · {att.filename || att.id}
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="mt-1 text-[10px] opacity-70">
+                    {m.createdAt ? new Date(m.createdAt).toLocaleString() : ""}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <div className="ac-card space-y-2">
+        <label className="field">
+          <span>Reply</span>
+          <textarea
+            value={messageText}
+            onChange={(e) => setMessageText(e.target.value)}
+            rows={3}
+            placeholder="Type a message to the artist..."
+          />
+        </label>
+
+        <div className="space-y-2">
+          <div className="text-xs text-slate-600">Attach media (optional)</div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {media.map((m) => {
+              const selected = messageAttachmentIds.includes(m._id);
+              const isImage = (mime?: string) => (mime || "").startsWith("image/");
+              return (
+                <button
+                  key={m._id}
+                  type="button"
+                  onClick={() => toggleMessageAttachment(m._id)}
+                  className={`rounded-lg border px-2 py-2 text-left ${selected ? "border-slate-900" : "border-slate-200"}`}
+                >
+                  <div className="text-sm font-semibold text-slate-900">{m.filename || "Media"}</div>
+                  <div className="text-xs text-slate-500">{isImage(m.mimeType) ? "Image" : m.mimeType || "File"}</div>
+                </button>
+              );
+            })}
+          </div>
+          {messageAttachmentIds.length > 0 && (
+            <div className="text-xs text-slate-600">{messageAttachmentIds.length} attachment(s) selected</div>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <button type="button" className="btnPrimary" onClick={handleSendMessage} disabled={messageSending}>
+            {messageSending ? "Sending..." : "Send"}
+          </button>
+          <button type="button" className="btnGhost" onClick={() => setMessageAttachmentIds([])}>
+            Clear attachments
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderShopifySlot = (
     key: ShopifyFileFieldKey,
     label: string,
@@ -3207,6 +3384,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
     contracts: contractsPanel,
     payout: payoutPanel,
     orders: ordersPanel,
+    messages: messagesPanel,
   };
 
   const tabs: Array<{ key: TabKey; label: string; chip?: string }> = [
@@ -3217,6 +3395,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
     { key: "contracts", label: "Contracts", chip: contractsStatusChip },
     { key: "payout", label: "Payout", chip: payoutStatusChip },
     { key: "orders", label: "Orders", chip: ordersStatusChip },
+    { key: "messages", label: "Messages", chip: `${messages.length || 0}` },
   ];
   const bulkRunCount = bulkUiMode === "table" ? bulkRows.length : selectedArtworkMedia.length;
   const bulkTotal = bulkProgress.total || bulkRunCount;
