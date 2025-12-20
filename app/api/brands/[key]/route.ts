@@ -1,16 +1,17 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { connectMongo } from "@/lib/mongodb";
 import { BrandSettingsModel } from "@/models/BrandSettings";
 import { BrandPayload, extractBrandUpdate, normalizeBrandKey } from "../utils";
 
-type RouteParams = {
-  params: { key: string };
+type RouteContext = {
+  params: Promise<{ key: string }> | { key: string };
 };
 
-export async function GET(_req: Request, { params }: RouteParams) {
+export async function GET(_req: NextRequest, context: RouteContext) {
   try {
-    const key = normalizeBrandKey(params.key);
+    const { key: rawKey } = await context.params;
+    const key = normalizeBrandKey(rawKey);
     if (!key) {
       return NextResponse.json({ error: "Brand not found" }, { status: 404 });
     }
@@ -28,9 +29,10 @@ export async function GET(_req: Request, { params }: RouteParams) {
   }
 }
 
-export async function PATCH(req: Request, { params }: RouteParams) {
+export async function PATCH(req: NextRequest, context: RouteContext) {
   try {
-    const key = normalizeBrandKey(params.key);
+    const { key: rawKey } = await context.params;
+    const key = normalizeBrandKey(rawKey);
     if (!key) {
       return NextResponse.json({ error: "Brand not found" }, { status: 404 });
     }

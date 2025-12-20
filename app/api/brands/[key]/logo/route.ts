@@ -1,12 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { connectMongo } from "@/lib/mongodb";
 import { uploadToS3 } from "@/lib/s3";
 import { BrandSettingsModel } from "@/models/BrandSettings";
 import { normalizeBrandKey } from "../../utils";
 
-type RouteParams = {
-  params: { key: string };
+type RouteContext = {
+  params: Promise<{ key: string }> | { key: string };
 };
 
 const MAX_LOGO_SIZE_BYTES = 10 * 1024 * 1024;
@@ -36,9 +36,10 @@ function inferExtension(file: File, mimeType: (typeof allowedMimeTypes)[number])
   return extFromName || mimeToExtension[mimeType] || "file";
 }
 
-export async function POST(req: Request, { params }: RouteParams) {
+export async function POST(req: NextRequest, context: RouteContext) {
   try {
-    const key = normalizeBrandKey(params.key);
+    const { key: rawKey } = await context.params;
+    const key = normalizeBrandKey(rawKey);
     if (!key) {
       return NextResponse.json({ error: "Brand not found" }, { status: 404 });
     }
