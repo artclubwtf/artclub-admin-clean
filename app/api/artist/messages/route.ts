@@ -47,9 +47,9 @@ export async function GET() {
             rows.forEach((m) => {
               map[m._id.toString()] = {
                 id: m._id.toString(),
-                filename: m.filename,
-                url: m.url,
-                mimeType: m.mimeType,
+                filename: m.filename ?? undefined,
+                url: m.url ?? undefined,
+                mimeType: m.mimeType ?? undefined,
               };
             });
             return map;

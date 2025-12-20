@@ -82,8 +82,16 @@ export default function ArtistMessagesPage() {
       });
       const payload = (await res.json().catch(() => null)) as { message?: Message; error?: string } | null;
       if (!res.ok) throw new Error(payload?.error || "Failed to send");
-      if (payload?.message) {
-        setMessages((prev) => [...prev, { ...payload.message, attachments: selectedMedia }]);
+      if (payload?.message?.id) {
+        const newMessage: Message = {
+          id: payload.message.id,
+          senderRole: payload.message.senderRole,
+          text: payload.message.text,
+          mediaIds: payload.message.mediaIds || [],
+          attachments: selectedMedia,
+          createdAt: payload.message.createdAt,
+        };
+        setMessages((prev) => [...prev, newMessage]);
       }
       setText("");
       setSelectedMediaIds([]);
