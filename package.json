@@ -14,6 +14,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.954.0",
     "@aws-sdk/s3-request-presigner": "^3.954.0",
+    "@google-analytics/data": "^5.2.1",
     "aws": "^0.0.3-2",
     "mongoose": "^9.0.2",
     "next": "16.0.10",
