@@ -564,7 +564,7 @@ export default function ConceptDetailClient({ conceptId }: Props) {
                 className="text-sm text-blue-600 hover:underline"
                 onClick={() => scrollToStep("content")}
               >
-                Next: Content >>
+                Next: Content &gt;&gt;
               </button>
             </div>
           </div>
@@ -629,7 +629,7 @@ export default function ConceptDetailClient({ conceptId }: Props) {
                 className="text-sm text-blue-600 hover:underline"
                 onClick={() => scrollToStep("assets")}
               >
-                Next: Assets & References >>
+                Next: Assets & References &gt;&gt;
               </button>
             </div>
           </div>
@@ -929,7 +929,7 @@ export default function ConceptDetailClient({ conceptId }: Props) {
                 className="text-sm text-blue-600 hover:underline"
                 onClick={() => scrollToStep("export")}
               >
-                Next: Export >>
+                Next: Export &gt;&gt;
               </button>
             </div>
           </div>
