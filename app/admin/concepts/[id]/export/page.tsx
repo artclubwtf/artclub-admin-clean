@@ -1,5 +1,6 @@
 import { Types } from "mongoose";
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
 import { connectMongo } from "@/lib/mongodb";
 import { ConceptModel } from "@/models/Concept";
@@ -67,23 +68,16 @@ export default async function ConceptExportPage({ params, searchParams }: PagePr
   const resolvedParams = await params;
   const resolvedSearch = (await searchParams) || {};
   const theme = resolvedSearch.theme === "dark" ? "dark" : "light";
+  const autoprint = resolvedSearch.autoprint === "1";
 
   if (!Types.ObjectId.isValid(resolvedParams.id)) {
-    return (
-      <main className="p-8">
-        <p className="text-sm text-slate-600">Concept not found.</p>
-      </main>
-    );
+    redirect("/admin/concepts");
   }
 
   await connectMongo();
   const conceptDoc = await ConceptModel.findById(resolvedParams.id).lean();
   if (!conceptDoc) {
-    return (
-      <main className="p-8">
-        <p className="text-sm text-slate-600">Concept not found.</p>
-      </main>
-    );
+    redirect("/admin/concepts");
   }
 
   const concept: Concept = {
@@ -138,9 +132,12 @@ export default async function ConceptExportPage({ params, searchParams }: PagePr
   const today = new Date(concept.updatedAt || concept.createdAt || Date.now()).toLocaleDateString();
 
   return (
-    <div className={`print-export ${theme}`}>
+    <div className={`print-export ${theme}`} data-autoprint={autoprint ? "1" : "0"}>
       <style>{printStyles({ accent, background, text, fontFamily, theme })}</style>
       <main className="export-shell">
+        <div className="no-print tip-bar">
+          <span className="text-xs text-slate-600">Tip: In print dialog choose “Save as PDF”</span>
+        </div>
         <section className="page cover">
           <div className="cover-header">
             <div className="brand-block">
@@ -313,8 +310,11 @@ function printStyles({
   .asset-placeholder { height: 120px; background: rgba(15,23,42,0.05); }
   footer { position: fixed; bottom: 12mm; left: 20mm; right: 20mm; font-size: 11px; color: rgba(15,23,42,0.6); display: flex; justify-content: space-between; }
   footer .page-num::before { counter-increment: page; content: counter(page); }
+  .tip-bar { padding: 8px 16px; border-bottom: 1px solid rgba(15,23,42,0.06); }
+  .no-print { }
   @media print {
     body.print-export { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .no-print { display: none !important; }
     .page { box-shadow: none; }
   }
   `;

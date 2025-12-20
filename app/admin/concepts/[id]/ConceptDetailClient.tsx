@@ -756,18 +756,31 @@ export default function ConceptDetailClient({ conceptId }: Props) {
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <div className="text-xs text-slate-600">
-                Status: <span className="font-semibold">{statusLabel}</span>
-              </div>
-              <button
-                type="button"
-                className="text-sm text-blue-600 hover:underline"
-                onClick={() => scrollToStep("content")}
-              >
-                Next: Content &gt;&gt;
-              </button>
-            </div>
+          <div className="text-xs text-slate-600">
+            Status: <span className="font-semibold">{statusLabel}</span>
           </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium"
+              onClick={() => {
+                if (concept?._id) {
+                  window.open(`/admin/concepts/${concept._id}/export?autoprint=1`, "_blank", "noopener,noreferrer");
+                }
+              }}
+            >
+              Export as PDF
+            </button>
+            <button
+              type="button"
+              className="text-sm text-blue-600 hover:underline"
+              onClick={() => scrollToStep("content")}
+            >
+              Next: Content &gt;&gt;
+            </button>
+          </div>
+        </div>
+      </div>
 
           <div
             id="concept-step-content"
