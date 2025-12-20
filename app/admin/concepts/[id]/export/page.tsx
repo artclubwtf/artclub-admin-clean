@@ -1,4 +1,9 @@
+import { Types } from "mongoose";
 import type { Metadata } from "next";
+
+import { connectMongo } from "@/lib/mongodb";
+import { ConceptModel } from "@/models/Concept";
+import { BrandSettingsModel } from "@/models/BrandSettings";
 
 type PageProps = {
   params: { id: string } | Promise<{ id: string }>;
@@ -49,13 +54,6 @@ export const metadata: Metadata = {
   title: "Concept Export",
 };
 
-async function fetchJson<T>(url: string): Promise<T | null> {
-  const res = await fetch(url, { cache: "no-store" }).catch(() => null);
-  if (!res?.ok) return null;
-  const json = await res.json().catch(() => null);
-  return json as T | null;
-}
-
 function pickFirstImage(assets: Concept["assets"]): string | null {
   if (!assets) return null;
   for (const asset of assets) {
@@ -69,11 +67,8 @@ export default async function ConceptExportPage({ params, searchParams }: PagePr
   const resolvedParams = await params;
   const resolvedSearch = (await searchParams) || {};
   const theme = resolvedSearch.theme === "dark" ? "dark" : "light";
-  const base = process.env.NEXT_PUBLIC_BASE_URL || "";
 
-  const conceptRes = await fetchJson<{ concept?: Concept }>(`${base}/api/concepts/${resolvedParams.id}`);
-  const concept = conceptRes?.concept;
-  if (!concept) {
+  if (!Types.ObjectId.isValid(resolvedParams.id)) {
     return (
       <main className="p-8">
         <p className="text-sm text-slate-600">Concept not found.</p>
@@ -81,8 +76,19 @@ export default async function ConceptExportPage({ params, searchParams }: PagePr
     );
   }
 
-  const brandRes = await fetchJson<{ brand?: Brand }>(`${base}/api/brands/${concept.brandKey}`);
-  const brand = brandRes?.brand || null;
+  await connectMongo();
+  const conceptDoc = await ConceptModel.findById(resolvedParams.id).lean();
+  if (!conceptDoc) {
+    return (
+      <main className="p-8">
+        <p className="text-sm text-slate-600">Concept not found.</p>
+      </main>
+    );
+  }
+
+  const concept = conceptDoc as Concept;
+  const brandDoc = await BrandSettingsModel.findOne({ key: concept.brandKey }).lean();
+  const brand = (brandDoc || null) as Brand | null;
 
   const heroImage = pickFirstImage(concept.assets);
   const accent = brand?.colors?.accent || "#111827";
@@ -92,103 +98,99 @@ export default async function ConceptExportPage({ params, searchParams }: PagePr
   const today = new Date(concept.updatedAt || concept.createdAt || Date.now()).toLocaleDateString();
 
   return (
-    <html lang="en">
-      <head>
-        <style>{printStyles({ accent, background, text, fontFamily, theme })}</style>
-      </head>
-      <body className={`print-export ${theme}`}>
-        <main className="export-shell">
-          <section className="page cover">
-            <div className="cover-header">
-              <div className="brand-block">
-                {brand?.logoLightUrl || brand?.logoDarkUrl ? (
-                  <img
-                    src={theme === "dark" ? brand?.logoDarkUrl || brand?.logoLightUrl! : brand?.logoLightUrl || brand?.logoDarkUrl!}
-                    alt={brand?.displayName || concept.brandKey}
-                    className="brand-logo"
-                  />
-                ) : (
-                  <div className="brand-placeholder">{brand?.displayName || concept.brandKey}</div>
-                )}
-                <p className="brand-sub">{brand?.tone || "Brand Proposal"}</p>
-              </div>
-              <div className="cover-meta">
-                <p className="eyebrow">Concept</p>
-                <h1 className="cover-title">{concept.title}</h1>
-                <p className="cover-subtitle">
-                  {concept.type} • {concept.granularity} • {today}
-                </p>
-              </div>
+    <div className={`print-export ${theme}`}>
+      <style>{printStyles({ accent, background, text, fontFamily, theme })}</style>
+      <main className="export-shell">
+        <section className="page cover">
+          <div className="cover-header">
+            <div className="brand-block">
+              {brand?.logoLightUrl || brand?.logoDarkUrl ? (
+                <img
+                  src={theme === "dark" ? brand?.logoDarkUrl || brand?.logoLightUrl! : brand?.logoLightUrl || brand?.logoDarkUrl!}
+                  alt={brand?.displayName || concept.brandKey}
+                  className="brand-logo"
+                />
+              ) : (
+                <div className="brand-placeholder">{brand?.displayName || concept.brandKey}</div>
+              )}
+              <p className="brand-sub">{brand?.tone || "Brand Proposal"}</p>
             </div>
-            {heroImage && <img src={heroImage} alt="Hero" className="hero" />}
-          </section>
+            <div className="cover-meta">
+              <p className="eyebrow">Concept</p>
+              <h1 className="cover-title">{concept.title}</h1>
+              <p className="cover-subtitle">
+                {concept.type} • {concept.granularity} • {today}
+              </p>
+            </div>
+          </div>
+          {heroImage && <img src={heroImage} alt="Hero" className="hero" />}
+        </section>
 
-          <SectionPage title="Goal & Context">
-            <p>{concept.sections?.goalContext || "No content provided."}</p>
-            <p>{concept.sections?.targetAudience || ""}</p>
-          </SectionPage>
+        <SectionPage title="Goal & Context">
+          <p>{concept.sections?.goalContext || "No content provided."}</p>
+          <p>{concept.sections?.targetAudience || ""}</p>
+        </SectionPage>
 
-          <SectionPage title="Narrative">
-            <p>{concept.sections?.narrative || "No narrative provided."}</p>
-          </SectionPage>
+        <SectionPage title="Narrative">
+          <p>{concept.sections?.narrative || "No narrative provided."}</p>
+        </SectionPage>
 
-          <SectionPage title="KPIs">
-            <p>{concept.sections?.kpis || "No KPIs provided."}</p>
-          </SectionPage>
+        <SectionPage title="KPIs">
+          <p>{concept.sections?.kpis || "No KPIs provided."}</p>
+        </SectionPage>
 
-          <SectionPage title="Legal & Notes">
-            <p>{concept.sections?.legal || "No legal notes provided."}</p>
-          </SectionPage>
+        <SectionPage title="Legal & Notes">
+          <p>{concept.sections?.legal || "No legal notes provided."}</p>
+        </SectionPage>
 
-          <SectionPage title="Included Artists">
-            {concept.references?.artists?.length ? (
-              <ul className="pill-list">
-                {concept.references.artists.map((a) => (
-                  <li key={`${a.source}-${a.id}`} className="pill">
-                    {a.label || a.id} <span className="pill-sub">{a.source}</span>
-                  </li>
+        <SectionPage title="Included Artists">
+          {concept.references?.artists?.length ? (
+            <ul className="pill-list">
+              {concept.references.artists.map((a) => (
+                <li key={`${a.source}-${a.id}`} className="pill">
+                  {a.label || a.id} <span className="pill-sub">{a.source}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No artists attached.</p>
+          )}
+        </SectionPage>
+
+        <SectionPage title="Artworks">
+          {concept.references?.artworks?.length ? (
+            <ul className="pill-list">
+              {concept.references.artworks.map((a) => (
+                <li key={a.productId} className="pill">
+                  {a.label || a.productId}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No artworks attached.</p>
+          )}
+        </SectionPage>
+
+        {concept.assets?.length ? (
+          <SectionPage title="Assets">
+            <div className="asset-grid">
+              {concept.assets
+                .filter((a) => a.url || a.previewUrl)
+                .map((a, idx) => (
+                  <figure key={idx} className="asset-card">
+                    {a.url || a.previewUrl ? (
+                      <img src={a.url || a.previewUrl} alt={a.label || "Asset"} />
+                    ) : (
+                      <div className="asset-placeholder" />
+                    )}
+                    <figcaption>{a.label || a.url || a.id}</figcaption>
+                  </figure>
                 ))}
-              </ul>
-            ) : (
-              <p>No artists attached.</p>
-            )}
+            </div>
           </SectionPage>
-
-          <SectionPage title="Artworks">
-            {concept.references?.artworks?.length ? (
-              <ul className="pill-list">
-                {concept.references.artworks.map((a) => (
-                  <li key={a.productId} className="pill">
-                    {a.label || a.productId}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>No artworks attached.</p>
-            )}
-          </SectionPage>
-
-          {concept.assets?.length ? (
-            <SectionPage title="Assets">
-              <div className="asset-grid">
-                {concept.assets
-                  .filter((a) => a.url || a.previewUrl)
-                  .map((a, idx) => (
-                    <figure key={idx} className="asset-card">
-                      {a.url || a.previewUrl ? (
-                        <img src={a.url || a.previewUrl} alt={a.label || "Asset"} />
-                      ) : (
-                        <div className="asset-placeholder" />
-                      )}
-                      <figcaption>{a.label || a.url || a.id}</figcaption>
-                    </figure>
-                  ))}
-              </div>
-            </SectionPage>
-          ) : null}
-        </main>
-      </body>
-    </html>
+        ) : null}
+      </main>
+    </div>
   );
 }
 
@@ -223,13 +225,15 @@ function printStyles({
     size: A4;
   }
   * { box-sizing: border-box; }
-  body.print-export {
-    margin: 0;
+  :global(.admin-shell) { display: none !important; }
+  :global(body) { margin: 0; background: ${background}; color: ${text}; font-family: ${fontFamily}; }
+  :global(body.dark) { background: #0f172a; color: #e5e7eb; }
+  .print-export {
     background: ${background};
     color: ${text};
     font-family: ${fontFamily};
   }
-  body.print-export.dark {
+  .print-export.dark {
     background: #0f172a;
     color: #e5e7eb;
   }
