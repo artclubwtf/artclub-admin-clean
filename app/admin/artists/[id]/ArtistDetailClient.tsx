@@ -1485,13 +1485,23 @@ export default function ArtistDetailClient({ artistId }: Props) {
       const payload = (await res.json().catch(() => null)) as { message?: ChatMessage; error?: string } | null;
       if (!res.ok) throw new Error(payload?.error || "Failed to send");
       if (payload?.message) {
-        const attachments = media.filter((m) => messageAttachmentIds.includes(m._id)).map((m) => ({
-          id: m._id,
-          filename: m.filename,
-          url: m.url,
-          mimeType: m.mimeType,
-        }));
-        setMessages((prev) => [...prev, { ...payload.message, attachments }]);
+        const attachments = media
+          .filter((m) => messageAttachmentIds.includes(m._id))
+          .map((m) => ({
+            id: m._id,
+            filename: m.filename,
+            url: m.url,
+            mimeType: m.mimeType,
+          }));
+        const nextMessage: ChatMessage = {
+          id: payload.message.id,
+          senderRole: payload.message.senderRole,
+          text: payload.message.text,
+          mediaIds: payload.message.mediaIds || [],
+          attachments,
+          createdAt: payload.message.createdAt,
+        };
+        setMessages((prev): ChatMessage[] => [...prev, nextMessage]);
       }
       setMessageText("");
       setMessageAttachmentIds([]);
