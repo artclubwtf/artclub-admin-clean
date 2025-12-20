@@ -7,6 +7,7 @@ import {
   isValidObjectId,
   notFound,
   parseAssets,
+  parseExports,
   parseGranularity,
   parseReferences,
   parseSections,
@@ -89,6 +90,13 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     if ("notes" in json) {
       update.notes = parseString(json.notes) || "";
+    }
+
+    if ("exports" in json) {
+      const exportsData = parseExports(json.exports);
+      if (exportsData) {
+        update.exports = exportsData;
+      }
     }
 
     if (Object.keys(update).length === 0) {

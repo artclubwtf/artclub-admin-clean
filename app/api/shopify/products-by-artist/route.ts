@@ -61,7 +61,7 @@ export async function GET(req: Request) {
     // Shopify product search expects the metafield query in the format metafield:'namespace.key:value'
     const searchQuery = `metafield:'${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}.${PRODUCT_METAFIELD_KEYS.artistMetaobject}:${escapedMetaobjectId}'`;
 
-    const query = `
+  const query = `
       query ProductsByArtist($first: Int!, $query: String!) {
         products(first: $first, query: $query, sortKey: CREATED_AT, reverse: true) {
           edges {
@@ -99,7 +99,7 @@ export async function GET(req: Request) {
         "Content-Type": "application/json",
         "X-Shopify-Access-Token": token,
       },
-      body: JSON.stringify({ query, variables: { first: 50, query: searchQuery } }),
+      body: JSON.stringify({ query, variables: { first: 100, query: searchQuery } }),
       cache: "no-store",
     });
 

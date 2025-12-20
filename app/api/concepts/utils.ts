@@ -134,7 +134,7 @@ export function parseExports(value: unknown) {
   if (typeof emailDraftText === "string") exports.emailDraftText = emailDraftText;
   if (typeof lastGeneratedAt === "string") exports.lastGeneratedAt = lastGeneratedAt;
   if (parsedProvider) exports.provider = parsedProvider;
-  return exports;
+  return Object.keys(exports).length ? exports : undefined;
 }
 
 export function parseStatus(value: unknown) {

@@ -828,7 +828,7 @@ export default function ConceptDetailClient({ conceptId }: Props) {
                     <div>
                       <p className="text-xs font-semibold text-slate-600">Artists (Database)</p>
                       <div className="mt-1 flex flex-wrap gap-2">
-                        {filteredDbArtists.slice(0, 10).map((a) => (
+                        {filteredDbArtists.map((a) => (
                           <button
                             key={a._id}
                             type="button"
@@ -844,7 +844,7 @@ export default function ConceptDetailClient({ conceptId }: Props) {
                     <div>
                       <p className="text-xs font-semibold text-slate-600">Artists (Shopify)</p>
                       <div className="mt-1 flex flex-wrap gap-2">
-                        {filteredShopifyArtists.slice(0, 10).map((a) => (
+                        {filteredShopifyArtists.map((a) => (
                           <button
                             key={a.metaobjectId}
                             type="button"
