@@ -14,8 +14,6 @@ const userSchema = new Schema(
   { timestamps: true },
 );
 
-userSchema.index({ email: 1 }, { unique: true });
-
 type User = InferSchemaType<typeof userSchema>;
 export type UserRole = (typeof userRoles)[number];
 

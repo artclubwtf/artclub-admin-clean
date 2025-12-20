@@ -1,12 +1,15 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import { getSession, signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 const MIN_PASSWORD_LENGTH = 8;
 
-export default function ArtistChangePasswordPage() {
+function ChangePasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [password, setPassword] = useState("");
@@ -145,5 +148,13 @@ export default function ArtistChangePasswordPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function ArtistChangePasswordPage() {
+  return (
+    <Suspense fallback={<div className="ac-shell">Loading...</div>}>
+      <ChangePasswordForm />
+    </Suspense>
   );
 }

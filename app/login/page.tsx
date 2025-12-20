@@ -1,9 +1,12 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+
 import type { Session } from "next-auth";
 import { getSession, signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 
 function resolveDestination(session: Session | null, callbackUrl?: string | null) {
   if (!session?.user) return "/login";
@@ -26,7 +29,7 @@ function resolveDestination(session: Session | null, callbackUrl?: string | null
   return defaultArtistTarget;
 }
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
@@ -137,5 +140,13 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="ac-shell">Loading...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

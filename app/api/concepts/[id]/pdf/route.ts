@@ -28,9 +28,11 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
   let chromium: any = null;
   try {
-    const req: NodeRequire | null = typeof require === "function" ? require : eval("require");
-    // Use dynamic require so build does not fail when playwright is not installed
-    const pw = req ? (req("playwright") as { chromium?: unknown }) : null;
+    const moduleName = "playwright";
+    // Use eval to avoid static analysis; this will throw at runtime if not installed
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const req = eval("require") as NodeRequire;
+    const pw = req ? (req(moduleName) as { chromium?: unknown }) : null;
     chromium = pw?.chromium;
   } catch (err) {
     console.error("Playwright not available for server PDF", err);
