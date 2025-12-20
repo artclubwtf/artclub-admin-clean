@@ -38,3 +38,27 @@ export async function POST(req: Request) {
     { status: 201 },
   );
 }
+
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== "artist" || !session.user.artistId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  await connectMongo();
+  const requests = await RequestModel.find({ artistId: session.user.artistId })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const payload = requests.map((r) => ({
+    id: r._id.toString(),
+    type: r.type,
+    status: r.status,
+    payload: r.payload,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    appliedAt: r.appliedAt,
+  }));
+
+  return NextResponse.json({ requests: payload }, { status: 200 });
+}

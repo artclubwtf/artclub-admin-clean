@@ -13,6 +13,13 @@ type ArtistProfile = {
   updatedAt?: string;
 };
 
+type RequestItem = {
+  id: string;
+  type: string;
+  status: string;
+  createdAt?: string;
+};
+
 const stageHints: Record<string, string> = {
   Idea: "Upload media and add your profile basics.",
   "In Review": "Hang tight. You’ll hear from the team soon.",
@@ -24,6 +31,7 @@ export default function ArtistOverviewPage() {
   const [profile, setProfile] = useState<ArtistProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [requests, setRequests] = useState<RequestItem[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -46,6 +54,25 @@ export default function ArtistOverviewPage() {
       }
     };
     load();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadRequests = async () => {
+      try {
+        const res = await fetch("/api/artist/requests", { cache: "no-store" });
+        const payload = (await res.json().catch(() => null)) as { requests?: RequestItem[] } | null;
+        if (!res.ok) throw new Error(payload?.requests ? "" : "Failed to load requests");
+        if (!active) return;
+        setRequests(Array.isArray(payload?.requests) ? payload.requests : []);
+      } catch {
+        // ignore silently
+      }
+    };
+    loadRequests();
     return () => {
       active = false;
     };
@@ -104,6 +131,26 @@ export default function ArtistOverviewPage() {
               <div className="artist-section-sub">Stay in touch with the team.</div>
               <div className="artist-placeholder">Coming next: inbox & replies.</div>
             </Link>
+          </div>
+
+          <div className="artist-card space-y-2">
+            <div className="artist-section-title">Requests</div>
+            <div className="artist-section-sub">Track your submitted requests.</div>
+            {requests.length === 0 ? (
+              <div className="artist-placeholder">No requests yet.</div>
+            ) : (
+              <ul className="space-y-2">
+                {requests.map((r) => (
+                  <li key={r.id} className="rounded-lg bg-white/60 p-3 shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-semibold text-slate-900">{r.type}</div>
+                      <span className="artist-chip">{r.status}</span>
+                    </div>
+                    <div className="text-xs text-slate-500">{r.createdAt ? new Date(r.createdAt).toLocaleString() : ""}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </>
       )}
