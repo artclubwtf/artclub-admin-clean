@@ -29,6 +29,11 @@ type Concept = {
   };
   assets?: ConceptAsset[];
   notes?: string;
+  exports?: {
+    proposalMarkdown?: string;
+    emailDraftText?: string;
+    provider?: "local" | "openai";
+  };
   updatedAt?: string;
 };
 
@@ -102,6 +107,8 @@ export default function ConceptDetailClient({ conceptId }: Props) {
   const [artistRefs, setArtistRefs] = useState<ArtistReference[]>([]);
   const [artworkRefs, setArtworkRefs] = useState<ArtworkReference[]>([]);
   const [assets, setAssets] = useState<ConceptAsset[]>([]);
+  const [proposalMarkdown, setProposalMarkdown] = useState("");
+  const [emailDraftText, setEmailDraftText] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
@@ -121,6 +128,7 @@ export default function ConceptDetailClient({ conceptId }: Props) {
   const [fileUploadSuccess, setFileUploadSuccess] = useState<string | null>(null);
   const [selectedShopifyArtistId, setSelectedShopifyArtistId] = useState<string>("");
   const [selectedDbArtistId, setSelectedDbArtistId] = useState<string>("");
+  const [brandAbout, setBrandAbout] = useState<string>("");
 
   const scrollToStep = (step: StepKey) => {
     const el = document.getElementById(`concept-step-${step}`);
@@ -158,6 +166,8 @@ export default function ConceptDetailClient({ conceptId }: Props) {
         setArtistRefs(Array.isArray(data.references?.artists) ? data.references!.artists : []);
         setArtworkRefs(Array.isArray(data.references?.artworks) ? data.references!.artworks : []);
         setAssets(Array.isArray(data.assets) ? data.assets : []);
+        setProposalMarkdown(data.exports?.proposalMarkdown || "");
+        setEmailDraftText(data.exports?.emailDraftText || "");
       } catch (err: unknown) {
         if (!active) return;
         const message = err instanceof Error ? err.message : "Failed to load concept";
@@ -213,6 +223,28 @@ export default function ConceptDetailClient({ conceptId }: Props) {
   }, [artistSearch]);
 
   useEffect(() => {
+    let active = true;
+    const loadBrands = async () => {
+      try {
+        const res = await fetch("/api/brands", { cache: "no-store" });
+        const json = await res.json().catch(() => null);
+        if (!res.ok) return;
+        const brands = Array.isArray(json?.brands) ? json.brands : [];
+        const found = brands.find((b: any) => b.key === concept?.brandKey);
+        if (active && found?.about) {
+          setBrandAbout(found.about);
+        }
+      } catch {
+        // ignore brand load errors to keep export working with defaults
+      }
+    };
+    loadBrands();
+    return () => {
+      active = false;
+    };
+  }, [concept?.brandKey]);
+
+  useEffect(() => {
     const firstShopify = artistRefs.find((a) => a.source === "shopify");
     if (firstShopify) {
       setSelectedShopifyArtistId((prev) => prev || firstShopify.id);
@@ -228,6 +260,131 @@ export default function ConceptDetailClient({ conceptId }: Props) {
   }, [artistRefs]);
 
   const statusLabel = useMemo(() => status.replace(/_/g, " "), [status]);
+
+  const buildProposalMarkdown = () => {
+    const lines: string[] = [];
+    lines.push(`# ${title || "Concept"}`);
+    if (brandAbout) {
+      lines.push("", `## About`, brandAbout.trim());
+    }
+    lines.push("", `## Sections`);
+    if (sections.goalContext) lines.push(`- **Goal / Context:** ${sections.goalContext}`);
+    if (sections.targetAudience) lines.push(`- **Target Audience:** ${sections.targetAudience}`);
+    if (sections.narrative) lines.push(`- **Narrative:** ${sections.narrative}`);
+    if (sections.kpis) lines.push(`- **KPIs:** ${sections.kpis}`);
+    if (sections.legal) lines.push(`- **Legal:** ${sections.legal}`);
+
+    lines.push("", `## Included Artists`);
+    if (artistRefs.length === 0) {
+      lines.push("- None");
+    } else {
+      artistRefs.forEach((a) => lines.push(`- ${a.label || a.id} (${a.source})`));
+    }
+
+    lines.push("", `## Included Artworks`);
+    if (artworkRefs.length === 0) {
+      lines.push("- None");
+    } else {
+      artworkRefs.forEach((a) => lines.push(`- ${a.label || a.productId}`));
+    }
+
+    lines.push("", `## Assets`);
+    if (assets.length === 0) {
+      lines.push("- None");
+    } else {
+      assets.forEach((a) => {
+        const label = a.label || a.url || a.id || a.kind;
+        lines.push(`- ${label}${a.url ? ` (${a.url})` : ""}`);
+      });
+    }
+
+    return lines.join("\n");
+  };
+
+  const buildEmailDraft = () => {
+    const summary = [
+      sections.goalContext ? `Goal: ${sections.goalContext}` : null,
+      sections.targetAudience ? `Audience: ${sections.targetAudience}` : null,
+      sections.kpis ? `KPIs: ${sections.kpis}` : null,
+      artistRefs.length ? `Artists: ${artistRefs.map((a) => a.label || a.id).join(", ")}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n- ");
+
+    const subject = `${title || "New Concept"} - ${concept?.brandKey || ""}`.trim();
+    const bodyLines = [
+      `Subject: ${subject}`,
+      "",
+      "Hi team,",
+      "",
+      `Here's the latest concept draft for ${concept?.brandKey || "the brand"}.`,
+      "",
+      "Summary:",
+      summary ? `- ${summary}` : "- Draft in progress",
+      "",
+      "Preview assets:",
+      assets.length ? assets.map((a) => `- ${a.label || a.url || a.id}`).join("\n") : "- None yet",
+      "",
+      "CTA: Can you review and share feedback by EOD?",
+      "",
+      "Thanks,",
+    ];
+
+    return bodyLines.join("\n");
+  };
+
+  const saveExports = async (nextExports: { proposalMarkdown?: string; emailDraftText?: string }) => {
+    try {
+      const res = await fetch(`/api/concepts/${conceptId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          exports: { ...nextExports, provider: "local" },
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.error || "Failed to save exports");
+      }
+      setProposalMarkdown(json?.concept?.exports?.proposalMarkdown || nextExports.proposalMarkdown || "");
+      setEmailDraftText(json?.concept?.exports?.emailDraftText || nextExports.emailDraftText || "");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to save exports";
+      setError(message);
+    }
+  };
+
+  const handleGenerateProposal = async () => {
+    const draft = buildProposalMarkdown();
+    setProposalMarkdown(draft);
+    await saveExports({ proposalMarkdown: draft, emailDraftText });
+  };
+
+  const handleGenerateEmail = async () => {
+    const draft = buildEmailDraft();
+    setEmailDraftText(draft);
+    await saveExports({ proposalMarkdown, emailDraftText: draft });
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // ignore copy failure
+    }
+  };
+
+  const downloadMarkdown = () => {
+    const blob = new Blob([proposalMarkdown || buildProposalMarkdown()], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${title || "concept"}.md`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
 
   const filteredDbArtists = useMemo(() => {
     const query = artistSearch.trim().toLowerCase();
@@ -386,6 +543,11 @@ export default function ConceptDetailClient({ conceptId }: Props) {
             artworks: artworkRefs,
           },
           assets,
+          exports: {
+            proposalMarkdown,
+            emailDraftText,
+            provider: "local",
+          },
           notes,
         }),
       });
@@ -397,6 +559,8 @@ export default function ConceptDetailClient({ conceptId }: Props) {
       setArtistRefs(Array.isArray(json?.concept?.references?.artists) ? json.concept.references.artists : artistRefs);
       setArtworkRefs(Array.isArray(json?.concept?.references?.artworks) ? json.concept.references.artworks : artworkRefs);
       setAssets(Array.isArray(json?.concept?.assets) ? json.concept.assets : assets);
+      setProposalMarkdown(json?.concept?.exports?.proposalMarkdown || proposalMarkdown);
+      setEmailDraftText(json?.concept?.exports?.emailDraftText || emailDraftText);
       router.refresh();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to save";
@@ -936,15 +1100,93 @@ export default function ConceptDetailClient({ conceptId }: Props) {
 
           <div
             id="concept-step-export"
-            className="rounded-2xl bg-white/80 p-5 shadow-sm ring-1 ring-slate-200 backdrop-blur space-y-3"
+            className="rounded-2xl bg-white/80 p-5 shadow-sm ring-1 ring-slate-200 backdrop-blur space-y-4"
           >
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Export</h2>
-              <span className="text-xs text-slate-500">Coming next</span>
+              <span className="text-xs text-slate-500">Generate locally without AI</span>
             </div>
-            <p className="text-sm text-slate-600">
-              Generate proposal documents and outreach drafts here. Export tools will be added in the next iteration.
-            </p>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className="space-y-2 rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold">Proposal Markdown</p>
+                    <p className="text-xs text-slate-500">Builds from sections and references</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="rounded border border-slate-200 px-3 py-1 text-xs font-medium"
+                      onClick={handleGenerateProposal}
+                    >
+                      Generate (local)
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded border border-slate-200 px-3 py-1 text-xs font-medium"
+                      onClick={() => copyToClipboard(proposalMarkdown || buildProposalMarkdown())}
+                    >
+                      Copy
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded border border-slate-200 px-3 py-1 text-xs font-medium"
+                      onClick={downloadMarkdown}
+                    >
+                      Download .md
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  className="min-h-[200px] w-full rounded border border-slate-200 px-3 py-2 text-sm font-mono"
+                  value={proposalMarkdown}
+                  onChange={(e) => setProposalMarkdown(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2 rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold">Email Draft</p>
+                    <p className="text-xs text-slate-500">Subject + body for outreach</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="rounded border border-slate-200 px-3 py-1 text-xs font-medium"
+                      onClick={handleGenerateEmail}
+                    >
+                      Generate (local)
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded border border-slate-200 px-3 py-1 text-xs font-medium"
+                      onClick={() => copyToClipboard(emailDraftText || buildEmailDraft())}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  className="min-h-[200px] w-full rounded border border-slate-200 px-3 py-2 text-sm font-mono"
+                  value={emailDraftText}
+                  onChange={(e) => setEmailDraftText(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-slate-500">
+                Provider: local | Last saved proposal length {proposalMarkdown.length} chars
+              </div>
+              <button
+                type="button"
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700"
+                onClick={() => saveExports({ proposalMarkdown, emailDraftText })}
+              >
+                Save exports
+              </button>
+            </div>
           </div>
 
           {statusSaving && <p className="text-xs text-slate-600">Updating status to {statusLabel}...</p>}
