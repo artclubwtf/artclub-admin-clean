@@ -8,7 +8,7 @@ import { BrandSettingsModel } from "@/models/BrandSettings";
 
 type PageProps = {
   params: { id: string } | Promise<{ id: string }>;
-  searchParams?: { theme?: string } | Promise<{ theme?: string }>;
+  searchParams?: { theme?: string; autoprint?: string } | Promise<{ theme?: string; autoprint?: string }>;
 };
 
 type Brand = {
