@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { protos } from "@google-analytics/data";
-import { getGa4Client, getGa4Config } from "@/lib/ga4";
+import { getGa4Client, getGa4Config, getGaCache, isCacheFresh, setGaCache } from "@/lib/ga4";
 
 export const runtime = "nodejs";
 
@@ -48,9 +48,9 @@ type Ga4NotConfigured = {
 
 type Ga4OverviewResponse = Ga4OverviewOk | Ga4NotConfigured;
 
-const cache = new Map<string, { ts: number; data: Ga4OverviewResponse }>();
 const TTL_MS = 10 * 60 * 1000;
 const REQUIRED_ENV = ["GA4_PROPERTY_ID", "GA4_SERVICE_ACCOUNT_JSON_BASE64"] as const;
+const REPORT_VERSION = "v2";
 
 function formatDate(date: Date) {
   return date.toISOString().slice(0, 10);
@@ -129,12 +129,6 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const { start, end } = resolveRange(searchParams);
-    const cacheKey = `${start}:${end}`;
-
-    const cached = cache.get(cacheKey);
-    if (cached && Date.now() - cached.ts < TTL_MS) {
-      return NextResponse.json(cached.data, { status: 200 });
-    }
 
     const config = getGa4Config();
     if (!config.ok || !config.propertyId) {
@@ -145,6 +139,12 @@ export async function GET(req: Request) {
         required: [...REQUIRED_ENV],
       };
       return NextResponse.json(data, { status: 200 });
+    }
+
+    const cacheKey = `${config.propertyId}:${start}:${end}:${REPORT_VERSION}`;
+    const cached = getGaCache<Ga4OverviewResponse>(cacheKey);
+    if (isCacheFresh(cached, TTL_MS)) {
+      return NextResponse.json(cached!.data, { status: 200 });
     }
 
     const client = await getGa4Client();
@@ -251,7 +251,7 @@ export async function GET(req: Request) {
       demographics,
     };
 
-    cache.set(cacheKey, { ts: Date.now(), data });
+    setGaCache(cacheKey, data);
     return NextResponse.json(data, { status: 200 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to load GA4 analytics";

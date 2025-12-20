@@ -5,6 +5,7 @@ export type Ga4Client = BetaAnalyticsDataClient;
 type Ga4Config = { propertyId?: string; ok: boolean; reason?: string };
 
 let clientPromise: Promise<Ga4Client | null> | null = null;
+const gaCache = new Map<string, { ts: number; data: unknown }>();
 
 function decodeServiceAccount(): { client_email?: string; private_key?: string; project_id?: string } | null {
   const encoded = process.env.GA4_SERVICE_ACCOUNT_JSON_BASE64;
@@ -52,4 +53,18 @@ export async function getGa4Client(): Promise<Ga4Client | null> {
   })();
 
   return clientPromise;
+}
+
+export function getGaCache<T = unknown>(key: string): { ts: number; data: T } | null {
+  const entry = gaCache.get(key);
+  return entry ? (entry as { ts: number; data: T }) : null;
+}
+
+export function setGaCache<T = unknown>(key: string, data: T) {
+  gaCache.set(key, { ts: Date.now(), data });
+}
+
+export function isCacheFresh(entry: { ts: number } | null | undefined, ttlMs: number) {
+  if (!entry) return false;
+  return Date.now() - entry.ts < ttlMs;
 }

@@ -697,6 +697,11 @@ body.ac-theme .rounded {
   font-size: 12px;
   color: var(--muted);
 }
+.ga-filter-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
 .ga-filter input {
   padding: 8px 10px;
   border-radius: calc(var(--radius) - 8px);
@@ -736,6 +741,34 @@ body.ac-theme .rounded {
 }
 .ga-table tbody tr:hover {
   background: color-mix(in srgb, var(--surface2) 90%, transparent);
+}
+
+.ga-status {
+  display: flex;
+  justify-content: flex-end;
+}
+.ga-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 13px;
+}
+.ga-status-ok {
+  background: color-mix(in srgb, var(--surface2) 80%, transparent);
+  color: var(--text);
+}
+.ga-status-warn {
+  background: color-mix(in srgb, #fde68a 55%, transparent);
+  color: #92400e;
+}
+.ga-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: currentColor;
 }
 
 .admin-cards-grid {

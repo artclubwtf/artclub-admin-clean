@@ -27,6 +27,11 @@ type Ga4Overview = {
   sources: { sessionSourceMedium: string; activeUsers: number; sessions: number }[];
 };
 type Ga4Response = Ga4Overview | Ga4NotConfigured | Ga4ErrorResponse;
+type Ga4Compare = { current: Ga4Overview | null; previous: Ga4Overview | null };
+
+type Ga4Status =
+  | { ok: true; configured: true; propertyId: string; cacheTtlMinutes: number }
+  | { ok: true; configured: false; required: string[] };
 
 type RangeOption = 7 | 30 | 90;
 type TabKey = "sales" | "web";
@@ -48,6 +53,14 @@ function formatPercent(value: number | undefined | null) {
   const safe = Number(value || 0);
   const normalized = safe > 1.2 ? safe : safe * 100;
   return `${Number.isFinite(normalized) ? normalized.toFixed(1) : "0.0"}%`;
+}
+
+function percentDelta(current: number, previous: number | null | undefined) {
+  if (!previous || previous === 0) return null;
+  const delta = ((current - previous) / previous) * 100;
+  if (!Number.isFinite(delta)) return null;
+  const sign = delta > 0 ? "+" : "";
+  return `${sign}${delta.toFixed(1)}%`;
 }
 
 function dateInputString(date: Date) {
@@ -74,6 +87,9 @@ export default function AnalyticsPageClient() {
   const [gaData, setGaData] = useState<Ga4Response | null>(null);
   const [gaLoading, setGaLoading] = useState(false);
   const [gaError, setGaError] = useState<string | null>(null);
+  const [gaCompare, setGaCompare] = useState<Ga4Compare>({ current: null, previous: null });
+  const [compareEnabled, setCompareEnabled] = useState(false);
+  const [gaStatus, setGaStatus] = useState<Ga4Status | null>(null);
   const defaultGaStart = dateInputString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
   const defaultGaEnd = dateInputString(new Date());
   const [tab, setTab] = useState<TabKey>(() => (searchParams?.get("tab") === "web" ? "web" : "sales"));
@@ -95,8 +111,9 @@ export default function AnalyticsPageClient() {
     params.set("tab", tab);
     params.set("start", gaStart);
     params.set("end", gaEnd);
+    if (compareEnabled) params.set("compare", "1");
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  }, [tab, gaStart, gaEnd, router, pathname]);
+  }, [tab, gaStart, gaEnd, compareEnabled, router, pathname]);
 
   useEffect(() => {
     let active = true;
@@ -149,19 +166,60 @@ export default function AnalyticsPageClient() {
       }
       const json = (await res.json()) as Ga4Response;
       setGaData(json);
+
+      if (compareEnabled) {
+        const startDate = new Date(gaStart);
+        const endDate = new Date(gaEnd);
+        const diff = endDate.getTime() - startDate.getTime();
+        const prevEnd = new Date(startDate.getTime() - 24 * 60 * 60 * 1000);
+        const prevStart = new Date(prevEnd.getTime() - diff);
+
+        const prevParams = new URLSearchParams({
+          start: dateInputString(prevStart),
+          end: dateInputString(prevEnd),
+        });
+        const prevRes = await fetch(`/api/analytics/ga4/overview?${prevParams.toString()}`, { cache: "no-store" });
+        if (prevRes.ok) {
+          const prevJson = (await prevRes.json()) as Ga4Response;
+          if (prevJson && prevJson.ok) {
+            setGaCompare({ current: json.ok ? json : null, previous: prevJson });
+          } else {
+            setGaCompare({ current: json.ok ? json : null, previous: null });
+          }
+        } else {
+          setGaCompare({ current: json.ok ? json : null, previous: null });
+        }
+      } else {
+        setGaCompare({ current: json.ok ? json : null, previous: null });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load GA4 analytics";
       setGaData(null);
       setGaError(message);
+      setGaCompare({ current: null, previous: null });
     } finally {
       setGaLoading(false);
     }
-  }, [gaStart, gaEnd]);
+  }, [gaStart, gaEnd, compareEnabled]);
 
   useEffect(() => {
     if (tab !== "web") return;
     fetchGaOverview();
   }, [fetchGaOverview, tab]);
+
+  useEffect(() => {
+    const loadStatus = async () => {
+      try {
+        const res = await fetch("/api/analytics/ga4/status", { cache: "no-store" });
+        if (!res.ok) return;
+        const json = (await res.json()) as Ga4Status;
+        setGaStatus(json);
+      } catch {
+        /* ignore */
+      }
+    };
+    loadStatus();
+  }, []);
 
   const rangeOptions: { label: string; value: RangeOption }[] = [
     { label: "Last 7 days", value: 7 },
@@ -346,6 +404,19 @@ export default function AnalyticsPageClient() {
 
       {tab === "web" && (
         <section className="acSection ga-section">
+        <div className="ga-status">
+          {gaStatus?.configured ? (
+            <div className="ga-status-pill ga-status-ok">
+              <span className="ga-dot" />
+              Configured · Property {gaStatus.propertyId} · Cache {gaStatus.cacheTtlMinutes}m
+            </div>
+          ) : (
+            <div className="ga-status-pill ga-status-warn">
+              <span className="ga-dot" />
+              Not configured · Set {gaStatus?.configured === false ? gaStatus.required.join(", ") : "GA4 env vars"}
+            </div>
+          )}
+        </div>
         <div className="acSectionHeader">
           <div>
             <p className="text-sm text-slate-500 m-0">Web Analytics</p>
@@ -360,6 +431,14 @@ export default function AnalyticsPageClient() {
             <label className="ga-filter">
               <span>End</span>
               <input type="date" value={gaEnd} onChange={(e) => setGaEnd(e.target.value)} />
+            </label>
+            <label className="ga-filter ga-filter-inline">
+              <span>Compare to previous</span>
+              <input
+                type="checkbox"
+                checked={compareEnabled}
+                onChange={(e) => setCompareEnabled(e.target.checked)}
+              />
             </label>
             <button className="ac-button" type="button" onClick={fetchGaOverview} disabled={gaLoading}>
               {gaLoading ? "Refreshing…" : "Refresh"}
@@ -391,15 +470,36 @@ export default function AnalyticsPageClient() {
           <>
             <div className="admin-cards-grid">
               {[
-                { label: "Active users", value: formatNumber(gaData.kpis.activeUsers) },
-                { label: "New users", value: formatNumber(gaData.kpis.newUsers) },
-                { label: "Sessions", value: formatNumber(gaData.kpis.sessions) },
-                { label: "Engaged sessions", value: formatNumber(gaData.kpis.engagedSessions) },
-                { label: "Engagement rate", value: formatPercent(gaData.kpis.engagementRate) },
+                {
+                  label: "Active users",
+                  value: formatNumber(gaData.kpis.activeUsers),
+                  delta: gaCompare.previous ? percentDelta(gaData.kpis.activeUsers, gaCompare.previous.kpis.activeUsers) : null,
+                },
+                {
+                  label: "New users",
+                  value: formatNumber(gaData.kpis.newUsers),
+                  delta: gaCompare.previous ? percentDelta(gaData.kpis.newUsers, gaCompare.previous.kpis.newUsers) : null,
+                },
+                {
+                  label: "Sessions",
+                  value: formatNumber(gaData.kpis.sessions),
+                  delta: gaCompare.previous ? percentDelta(gaData.kpis.sessions, gaCompare.previous.kpis.sessions) : null,
+                },
+                {
+                  label: "Engaged sessions",
+                  value: formatNumber(gaData.kpis.engagedSessions),
+                  delta: gaCompare.previous ? percentDelta(gaData.kpis.engagedSessions, gaCompare.previous.kpis.engagedSessions) : null,
+                },
+                {
+                  label: "Engagement rate",
+                  value: formatPercent(gaData.kpis.engagementRate),
+                  delta: gaCompare.previous ? percentDelta(gaData.kpis.engagementRate, gaCompare.previous.kpis.engagementRate) : null,
+                },
               ].map((card) => (
                 <div key={card.label} className="admin-stat-card">
                   <small>{card.label}</small>
                   <strong>{gaLoading ? "…" : card.value}</strong>
+                  {card.delta && <p className="text-xs text-slate-500 m-0">vs prev: {card.delta}</p>}
                 </div>
               ))}
             </div>
