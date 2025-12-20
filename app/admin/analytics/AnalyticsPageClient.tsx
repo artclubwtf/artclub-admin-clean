@@ -323,7 +323,7 @@ export default function AnalyticsPageClient() {
             <p className="text-sm text-slate-500 m-0">GA4 not configured</p>
             <h3 className="text-lg font-semibold mt-1 mb-2">Set environment variables to enable reports.</h3>
             <ul className="list-disc pl-5 text-sm text-slate-600 m-0">
-              {gaData.required.map((env) => (
+              {(gaData.required || []).map((env) => (
                 <li key={env}>{env}</li>
               ))}
             </ul>
