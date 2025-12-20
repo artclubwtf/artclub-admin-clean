@@ -1,12 +1,11 @@
-export default function ArtistHomePage() {
+export default function ArtistOverviewPage() {
   return (
-    <div className="ac-shell">
-      <div className="ac-card" style={{ maxWidth: 720, margin: "40px auto" }}>
-        <h1 style={{ marginBottom: 8, fontSize: 24, fontWeight: 700 }}>Artist dashboard</h1>
-        <p style={{ color: "var(--muted)" }}>
-          Welcome! Your artist tools will appear here. For now, you can update your password from the menu.
-        </p>
+    <div className="artist-card">
+      <div className="artist-section-title">Overview</div>
+      <div className="artist-section-sub">
+        Welcome to your artist dashboard. Track your uploads, payouts, and updates here.
       </div>
+      <div className="artist-placeholder">Coming next: quick stats, tasks, and recent updates.</div>
     </div>
   );
 }
