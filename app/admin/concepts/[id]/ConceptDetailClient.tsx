@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 type ConceptStatus = "draft" | "internal_review" | "ready_to_send" | "sent" | "won" | "lost";
 type ConceptGranularity = "short" | "standard" | "detailed";
+type ArtistSource = "mongo" | "shopify";
 
 type Sections = {
   goalContext?: string;
@@ -22,6 +23,11 @@ type Concept = {
   granularity: ConceptGranularity;
   status: ConceptStatus;
   sections?: Sections;
+  references?: {
+    artists?: ArtistReference[];
+    artworks?: ArtworkReference[];
+  };
+  assets?: ConceptAsset[];
   notes?: string;
   updatedAt?: string;
 };
@@ -35,6 +41,42 @@ const steps = [
   { key: "export", label: "Export" },
 ] as const;
 type StepKey = (typeof steps)[number]["key"];
+
+type ArtistReference = { source: ArtistSource; id: string; label?: string };
+type ArtworkReference = { productId: string; label?: string };
+type ConceptAsset = {
+  kind: "s3" | "shopify_file" | "url";
+  id?: string;
+  url?: string;
+  mimeType?: string;
+  label?: string;
+  previewUrl?: string;
+};
+
+type DbArtist = {
+  _id: string;
+  name: string;
+};
+
+type ShopifyArtist = {
+  metaobjectId: string;
+  displayName?: string | null;
+  handle?: string | null;
+};
+
+type ShopifyProduct = {
+  id: string;
+  title: string;
+  imageUrl?: string | null;
+  firstVariantPrice?: string | null;
+};
+
+type MediaItem = {
+  _id: string;
+  filename?: string;
+  url?: string;
+  mimeType?: string;
+};
 
 type Props = {
   conceptId: string;
@@ -57,9 +99,28 @@ export default function ConceptDetailClient({ conceptId }: Props) {
     legal: "",
   });
   const [notes, setNotes] = useState("");
+  const [artistRefs, setArtistRefs] = useState<ArtistReference[]>([]);
+  const [artworkRefs, setArtworkRefs] = useState<ArtworkReference[]>([]);
+  const [assets, setAssets] = useState<ConceptAsset[]>([]);
 
   const [saving, setSaving] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
+  const [artistSearch, setArtistSearch] = useState("");
+  const [dbArtists, setDbArtists] = useState<DbArtist[]>([]);
+  const [shopifyArtists, setShopifyArtists] = useState<ShopifyArtist[]>([]);
+  const [artistsLoading, setArtistsLoading] = useState(false);
+  const [artistsError, setArtistsError] = useState<string | null>(null);
+  const [artworks, setArtworks] = useState<ShopifyProduct[]>([]);
+  const [artworksLoading, setArtworksLoading] = useState(false);
+  const [artworksError, setArtworksError] = useState<string | null>(null);
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const [fileUploading, setFileUploading] = useState(false);
+  const [fileUploadError, setFileUploadError] = useState<string | null>(null);
+  const [fileUploadSuccess, setFileUploadSuccess] = useState<string | null>(null);
+  const [selectedShopifyArtistId, setSelectedShopifyArtistId] = useState<string>("");
+  const [selectedDbArtistId, setSelectedDbArtistId] = useState<string>("");
 
   const scrollToStep = (step: StepKey) => {
     const el = document.getElementById(`concept-step-${step}`);
@@ -94,6 +155,9 @@ export default function ConceptDetailClient({ conceptId }: Props) {
           legal: data.sections?.legal ?? "",
         });
         setNotes(data.notes ?? "");
+        setArtistRefs(Array.isArray(data.references?.artists) ? data.references!.artists : []);
+        setArtworkRefs(Array.isArray(data.references?.artworks) ? data.references!.artworks : []);
+        setAssets(Array.isArray(data.assets) ? data.assets : []);
       } catch (err: unknown) {
         if (!active) return;
         const message = err instanceof Error ? err.message : "Failed to load concept";
@@ -108,7 +172,202 @@ export default function ConceptDetailClient({ conceptId }: Props) {
     };
   }, [conceptId]);
 
+  useEffect(() => {
+    let active = true;
+    const loadArtists = async () => {
+      setArtistsLoading(true);
+      setArtistsError(null);
+      try {
+        const [dbRes, shopifyRes] = await Promise.all([
+          fetch(`/api/artists${artistSearch.trim() ? `?q=${encodeURIComponent(artistSearch.trim())}` : ""}`, {
+            cache: "no-store",
+          }),
+          fetch("/api/shopify/artists", { cache: "no-store" }),
+        ]);
+        const [dbJson, shopifyJson] = await Promise.all([dbRes.json().catch(() => null), shopifyRes.json().catch(() => null)]);
+        if (!dbRes.ok) throw new Error(dbJson?.error || "Failed to load database artists");
+        if (!shopifyRes.ok) throw new Error(shopifyJson?.error || "Failed to load Shopify artists");
+        if (!active) return;
+        setDbArtists(Array.isArray(dbJson?.artists) ? dbJson.artists.map((a: any) => ({ _id: a._id, name: a.name })) : []);
+        setShopifyArtists(
+          Array.isArray(shopifyJson?.artists)
+            ? shopifyJson.artists.map((a: any) => ({
+                metaobjectId: a.metaobjectId,
+                displayName: a.displayName || a.handle,
+                handle: a.handle,
+              }))
+            : [],
+        );
+      } catch (err: unknown) {
+        if (!active) return;
+        const message = err instanceof Error ? err.message : "Failed to load artists";
+        setArtistsError(message);
+      } finally {
+        if (active) setArtistsLoading(false);
+      }
+    };
+    loadArtists();
+    return () => {
+      active = false;
+    };
+  }, [artistSearch]);
+
+  useEffect(() => {
+    const firstShopify = artistRefs.find((a) => a.source === "shopify");
+    if (firstShopify) {
+      setSelectedShopifyArtistId((prev) => prev || firstShopify.id);
+    } else {
+      setSelectedShopifyArtistId("");
+    }
+    const firstDb = artistRefs.find((a) => a.source === "mongo");
+    if (firstDb) {
+      setSelectedDbArtistId((prev) => prev || firstDb.id);
+    } else {
+      setSelectedDbArtistId("");
+    }
+  }, [artistRefs]);
+
   const statusLabel = useMemo(() => status.replace(/_/g, " "), [status]);
+
+  const filteredDbArtists = useMemo(() => {
+    const query = artistSearch.trim().toLowerCase();
+    if (!query) return dbArtists;
+    return dbArtists.filter((a) => a.name.toLowerCase().includes(query));
+  }, [dbArtists, artistSearch]);
+
+  const filteredShopifyArtists = useMemo(() => {
+    const query = artistSearch.trim().toLowerCase();
+    if (!query) return shopifyArtists;
+    return shopifyArtists.filter((a) => (a.displayName || a.handle || "").toLowerCase().includes(query));
+  }, [shopifyArtists, artistSearch]);
+
+  const addArtistRef = (ref: ArtistReference) => {
+    setArtistRefs((prev) => {
+      if (prev.some((a) => a.source === ref.source && a.id === ref.id)) return prev;
+      return [...prev, ref];
+    });
+  };
+
+  const removeArtistRef = (ref: ArtistReference) => {
+    setArtistRefs((prev) => prev.filter((a) => !(a.source === ref.source && a.id === ref.id)));
+  };
+
+  const parseShopifyId = (gid: string) => {
+    const parts = gid.split("/");
+    return parts[parts.length - 1] || gid;
+  };
+
+  const addArtworkRef = (product: ShopifyProduct) => {
+    const productId = parseShopifyId(product.id);
+    setArtworkRefs((prev) => {
+      if (prev.some((a) => a.productId === productId)) return prev;
+      return [...prev, { productId, label: product.title }];
+    });
+  };
+
+  const removeArtworkRef = (productId: string) => {
+    setArtworkRefs((prev) => prev.filter((a) => a.productId !== productId));
+  };
+
+  const upsertAsset = (asset: ConceptAsset) => {
+    setAssets((prev) => {
+      const exists = prev.some((a) => a.kind === asset.kind && (asset.id ? a.id === asset.id : a.url && a.url === asset.url));
+      if (exists) return prev;
+      return [...prev, asset];
+    });
+  };
+
+  const removeAsset = (predicate: (a: ConceptAsset) => boolean) => {
+    setAssets((prev) => prev.filter((a) => !predicate(a)));
+  };
+
+  const toggleMediaAsset = (media: MediaItem) => {
+    const exists = assets.some((a) => a.kind === "s3" && (a.id === media._id || a.previewUrl === media.url));
+    if (exists) {
+      removeAsset((a) => a.kind === "s3" && (a.id === media._id || a.previewUrl === media.url));
+    } else {
+      upsertAsset({
+        kind: "s3",
+        id: media._id,
+        url: media.url,
+        previewUrl: media.url,
+        label: media.filename,
+        mimeType: media.mimeType,
+      });
+    }
+  };
+
+  const loadArtworks = async () => {
+    if (!selectedShopifyArtistId) return;
+    setArtworksLoading(true);
+    setArtworksError(null);
+    try {
+      const res = await fetch(
+        `/api/shopify/products-by-artist?artistMetaobjectGid=${encodeURIComponent(selectedShopifyArtistId)}`,
+        { cache: "no-store" },
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error || "Failed to load artworks");
+      setArtworks(Array.isArray(json?.products) ? json.products : []);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load artworks";
+      setArtworksError(message);
+    } finally {
+      setArtworksLoading(false);
+    }
+  };
+
+  const loadMedia = async () => {
+    if (!selectedDbArtistId) return;
+    setMediaLoading(true);
+    setMediaError(null);
+    try {
+      const res = await fetch(`/api/media?kunstlerId=${encodeURIComponent(selectedDbArtistId)}`, { cache: "no-store" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error || "Failed to load media");
+      setMediaItems(Array.isArray(json?.media) ? json.media : []);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load media";
+      setMediaError(message);
+    } finally {
+      setMediaLoading(false);
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    setFileUploading(true);
+    setFileUploadError(null);
+    setFileUploadSuccess(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/shopify/files/upload", { method: "POST", body: form });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.error || "Upload failed");
+      }
+      const fileId = json?.fileIdGid;
+      const url = json?.url;
+      const filename = json?.filename || file.name;
+      upsertAsset({
+        kind: "shopify_file",
+        id: typeof fileId === "string" ? fileId : undefined,
+        url: typeof url === "string" ? url : undefined,
+        previewUrl: typeof url === "string" ? url : undefined,
+        label: filename,
+      });
+      setFileUploadSuccess(`Uploaded ${filename}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Upload failed";
+      setFileUploadError(message);
+    } finally {
+      setFileUploading(false);
+      setTimeout(() => {
+        setFileUploadSuccess(null);
+        setFileUploadError(null);
+      }, 3500);
+    }
+  };
 
   const handleSave = async () => {
     if (!concept) return;
@@ -122,6 +381,11 @@ export default function ConceptDetailClient({ conceptId }: Props) {
           title,
           granularity,
           sections,
+          references: {
+            artists: artistRefs,
+            artworks: artworkRefs,
+          },
+          assets,
           notes,
         }),
       });
@@ -130,6 +394,9 @@ export default function ConceptDetailClient({ conceptId }: Props) {
         throw new Error(json?.error || "Failed to save");
       }
       setConcept(json?.concept || concept);
+      setArtistRefs(Array.isArray(json?.concept?.references?.artists) ? json.concept.references.artists : artistRefs);
+      setArtworkRefs(Array.isArray(json?.concept?.references?.artworks) ? json.concept.references.artworks : artworkRefs);
+      setAssets(Array.isArray(json?.concept?.assets) ? json.concept.assets : assets);
       router.refresh();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to save";
@@ -171,7 +438,7 @@ export default function ConceptDetailClient({ conceptId }: Props) {
   if (loading) {
     return (
       <main className="p-6">
-        <p className="text-sm text-slate-600">Loading concept…</p>
+        <p className="text-sm text-slate-600">Loading concept...</p>
       </main>
     );
   }
@@ -240,7 +507,7 @@ export default function ConceptDetailClient({ conceptId }: Props) {
             <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
               <div className="space-y-2">
                 <p className="text-xs uppercase tracking-[0.08em] text-slate-500">
-                  {concept.brandKey} • {concept.type}
+                  {concept.brandKey} - {concept.type}
                 </p>
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
                   <input
@@ -261,7 +528,7 @@ export default function ConceptDetailClient({ conceptId }: Props) {
                   </select>
                 </div>
                 <p className="text-xs text-slate-500">
-                  Last updated {concept.updatedAt ? new Date(concept.updatedAt).toLocaleString() : "—"}
+                  Last updated {concept.updatedAt ? new Date(concept.updatedAt).toLocaleString() : "--"}
                 </p>
               </div>
 
@@ -297,7 +564,7 @@ export default function ConceptDetailClient({ conceptId }: Props) {
                 className="text-sm text-blue-600 hover:underline"
                 onClick={() => scrollToStep("content")}
               >
-                Next: Content ↓
+                Next: Content >>
               </button>
             </div>
           </div>
@@ -362,30 +629,309 @@ export default function ConceptDetailClient({ conceptId }: Props) {
                 className="text-sm text-blue-600 hover:underline"
                 onClick={() => scrollToStep("assets")}
               >
-                Next: Assets & References ↓
+                Next: Assets & References >>
               </button>
             </div>
           </div>
 
           <div
             id="concept-step-assets"
-            className="rounded-2xl bg-white/80 p-5 shadow-sm ring-1 ring-slate-200 backdrop-blur space-y-3"
+            className="rounded-2xl bg-white/80 p-5 shadow-sm ring-1 ring-slate-200 backdrop-blur space-y-5"
           >
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Assets & References</h2>
-              <span className="text-xs text-slate-500">Coming next</span>
+              <span className="text-xs text-slate-500">Connect artists, artworks, media, and uploads</span>
             </div>
-            <p className="text-sm text-slate-600">
-              Attach artworks, collections, artists, and supporting files to enrich this concept. This section will be added
-              soon.
-            </p>
-            <button
-              type="button"
-              className="text-sm text-blue-600 hover:underline"
-              onClick={() => scrollToStep("export")}
-            >
-              Next: Export ↓
-            </button>
+
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold">Artists</p>
+                    <p className="text-xs text-slate-500">Attach from database and Shopify</p>
+                  </div>
+                  {artistsLoading && <span className="text-xs text-slate-500">Loading...</span>}
+                </div>
+                <div className="mt-3 space-y-2">
+                  <input
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    placeholder="Search artists..."
+                    value={artistSearch}
+                    onChange={(e) => setArtistSearch(e.target.value)}
+                  />
+                  {artistsError && <p className="text-xs text-red-600">{artistsError}</p>}
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-600">Artists (Database)</p>
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        {filteredDbArtists.slice(0, 10).map((a) => (
+                          <button
+                            key={a._id}
+                            type="button"
+                            className="rounded border border-slate-200 px-2 py-1 text-xs hover:bg-slate-50"
+                            onClick={() => addArtistRef({ source: "mongo", id: a._id, label: a.name })}
+                          >
+                            + {a.name}
+                          </button>
+                        ))}
+                        {filteredDbArtists.length === 0 && <span className="text-xs text-slate-500">No matches</span>}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-600">Artists (Shopify)</p>
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        {filteredShopifyArtists.slice(0, 10).map((a) => (
+                          <button
+                            key={a.metaobjectId}
+                            type="button"
+                            className="rounded border border-slate-200 px-2 py-1 text-xs hover:bg-slate-50"
+                            onClick={() =>
+                              addArtistRef({
+                                source: "shopify",
+                                id: a.metaobjectId,
+                                label: a.displayName || a.handle || a.metaobjectId,
+                              })
+                            }
+                          >
+                            + {a.displayName || a.handle || "Shopify artist"}
+                          </button>
+                        ))}
+                        {filteredShopifyArtists.length === 0 && <span className="text-xs text-slate-500">No matches</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    <p className="text-xs font-semibold text-slate-600">Attached</p>
+                    <div className="flex flex-wrap gap-2">
+                      {artistRefs.length === 0 && <span className="text-xs text-slate-500">None</span>}
+                      {artistRefs.map((ref) => (
+                        <span
+                          key={`${ref.source}-${ref.id}`}
+                          className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs"
+                        >
+                          {ref.label || ref.id}{" "}
+                          <button
+                            type="button"
+                            className="text-slate-500 hover:text-red-600"
+                            onClick={() => removeArtistRef(ref)}
+                            aria-label="Remove artist"
+                          >
+                            x
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold">Artworks (Shopify)</p>
+                    <p className="text-xs text-slate-500">Load products for a selected Shopify artist</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-xs"
+                      value={selectedShopifyArtistId}
+                      onChange={(e) => setSelectedShopifyArtistId(e.target.value)}
+                    >
+                      <option value="">Select Shopify artist</option>
+                      {artistRefs
+                        .filter((a) => a.source === "shopify")
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.label || a.id}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="rounded border border-slate-200 px-3 py-2 text-xs font-medium"
+                      onClick={loadArtworks}
+                      disabled={!selectedShopifyArtistId || artworksLoading}
+                    >
+                      {artworksLoading ? "Loading..." : "Load"}
+                    </button>
+                  </div>
+                </div>
+                {artworksError && <p className="text-xs text-red-600 mt-2">{artworksError}</p>}
+                <div className="mt-3 space-y-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {artworks.map((p) => (
+                      <div key={p.id} className="rounded-lg border border-slate-200 p-3 text-xs space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-semibold text-slate-800">{p.title}</p>
+                            {p.firstVariantPrice && <p className="text-slate-500">{p.firstVariantPrice}</p>}
+                          </div>
+                          {p.imageUrl && <img src={p.imageUrl} alt={p.title} className="h-12 w-12 rounded object-cover" />}
+                        </div>
+                        <button
+                          type="button"
+                          className="w-full rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white"
+                          onClick={() => addArtworkRef(p)}
+                        >
+                          Attach
+                        </button>
+                      </div>
+                    ))}
+                    {artworks.length === 0 && (
+                      <p className="text-xs text-slate-500">Load a Shopify artist to view products.</p>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-slate-600">Attached artworks</p>
+                    <div className="flex flex-wrap gap-2">
+                      {artworkRefs.length === 0 && <span className="text-xs text-slate-500">None</span>}
+                      {artworkRefs.map((a) => (
+                        <span key={a.productId} className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs">
+                          {a.label || a.productId}
+                          <button
+                            type="button"
+                            className="text-slate-500 hover:text-red-600"
+                            onClick={() => removeArtworkRef(a.productId)}
+                            aria-label="Remove artwork"
+                          >
+                            x
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold">Media (S3)</p>
+                    <p className="text-xs text-slate-500">Attach artist media as assets</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-xs"
+                      value={selectedDbArtistId}
+                      onChange={(e) => setSelectedDbArtistId(e.target.value)}
+                    >
+                      <option value="">Select DB artist</option>
+                      {artistRefs
+                        .filter((a) => a.source === "mongo")
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.label || a.id}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="rounded border border-slate-200 px-3 py-2 text-xs font-medium"
+                      onClick={loadMedia}
+                      disabled={!selectedDbArtistId || mediaLoading}
+                    >
+                      {mediaLoading ? "Loading..." : "Load"}
+                    </button>
+                  </div>
+                </div>
+                {mediaError && <p className="text-xs text-red-600">{mediaError}</p>}
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {mediaItems.map((m) => {
+                    const attached = assets.some((a) => a.kind === "s3" && (a.id === m._id || a.previewUrl === m.url));
+                    return (
+                      <button
+                        type="button"
+                        key={m._id}
+                        className={`group overflow-hidden rounded-lg border text-left text-xs shadow-sm transition ${
+                          attached ? "border-green-400 ring-2 ring-green-100" : "border-slate-200 hover:border-slate-300"
+                        }`}
+                        onClick={() => toggleMediaAsset(m)}
+                      >
+                        {m.url ? <img src={m.url} alt={m.filename || "Media"} className="h-24 w-full object-cover" /> : <div className="h-24 w-full bg-slate-100" />}
+                        <div className="p-2">
+                          <p className="line-clamp-1 font-semibold">{m.filename || "Media"}</p>
+                          <p className="text-[11px] text-slate-500">{attached ? "Attached" : "Tap to attach"}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                  {mediaItems.length === 0 && <p className="text-xs text-slate-500">Load media for a DB artist.</p>}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold">Upload to Shopify Files</p>
+                    <p className="text-xs text-slate-500">Brand images, slides, and assets</p>
+                  </div>
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded border border-slate-200 px-3 py-2 text-xs font-medium hover:bg-slate-50">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleFileUpload(file);
+                        e.target.value = "";
+                      }}
+                      disabled={fileUploading}
+                    />
+                    {fileUploading ? "Uploading..." : "Upload"}
+                  </label>
+                </div>
+                {fileUploadError && <p className="text-xs text-red-600">{fileUploadError}</p>}
+                {fileUploadSuccess && <p className="text-xs text-green-600">{fileUploadSuccess}</p>}
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-slate-600">Attached uploads</p>
+                  <div className="flex flex-wrap gap-2">
+                    {assets.filter((a) => a.kind === "shopify_file").length === 0 && (
+                      <span className="text-xs text-slate-500">None</span>
+                    )}
+                    {assets
+                      .filter((a) => a.kind === "shopify_file")
+                      .map((a, idx) => (
+                        <span
+                          key={`shopify-file-${a.id || idx}`}
+                          className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs"
+                        >
+                          {a.label || a.id || "Shopify file"}
+                          <button
+                            type="button"
+                            className="text-slate-500 hover:text-red-600"
+                            onClick={() =>
+                              removeAsset((asset) => asset.kind === "shopify_file" && asset.id === a.id && asset.label === a.label)
+                            }
+                            aria-label="Remove upload"
+                          >
+                            x
+                          </button>
+                        </span>
+                      ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700"
+                onClick={handleSave}
+                disabled={saving}
+              >
+                {saving ? "Saving..." : "Save references & assets"}
+              </button>
+              <button
+                type="button"
+                className="text-sm text-blue-600 hover:underline"
+                onClick={() => scrollToStep("export")}
+              >
+                Next: Export >>
+              </button>
+            </div>
           </div>
 
           <div
@@ -401,7 +947,7 @@ export default function ConceptDetailClient({ conceptId }: Props) {
             </p>
           </div>
 
-          {statusSaving && <p className="text-xs text-slate-600">Updating status to {statusLabel}…</p>}
+          {statusSaving && <p className="text-xs text-slate-600">Updating status to {statusLabel}...</p>}
           {error && <p className="text-sm text-red-600">{error}</p>}
         </section>
       </div>
