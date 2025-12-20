@@ -8,7 +8,9 @@ import { BrandSettingsModel } from "@/models/BrandSettings";
 
 type PageProps = {
   params: { id: string } | Promise<{ id: string }>;
-  searchParams?: { theme?: string; autoprint?: string } | Promise<{ theme?: string; autoprint?: string }>;
+  searchParams?:
+    | { theme?: string; autoprint?: string; template?: "minimal" | "editorial" | "night" }
+    | Promise<{ theme?: string; autoprint?: string; template?: "minimal" | "editorial" | "night" }>;
 };
 
 type Brand = {
@@ -69,6 +71,7 @@ export default async function ConceptExportPage({ params, searchParams }: PagePr
   const resolvedSearch = (await searchParams) || {};
   const theme = resolvedSearch.theme === "dark" ? "dark" : "light";
   const autoprint = resolvedSearch.autoprint === "1";
+  const template = resolvedSearch.template || "minimal";
 
   if (!Types.ObjectId.isValid(resolvedParams.id)) {
     redirect("/admin/concepts");
@@ -132,7 +135,7 @@ export default async function ConceptExportPage({ params, searchParams }: PagePr
   const today = new Date(concept.updatedAt || concept.createdAt || Date.now()).toLocaleDateString();
 
   return (
-    <div className={`print-export ${theme}`} data-autoprint={autoprint ? "1" : "0"}>
+    <div className={`print-export ${theme} template-${template}`} data-autoprint={autoprint ? "1" : "0"}>
       <style>{printStyles({ accent, background, text, fontFamily, theme })}</style>
       <main className="export-shell">
         <div className="no-print tip-bar">
@@ -210,7 +213,7 @@ export default async function ConceptExportPage({ params, searchParams }: PagePr
 
         {concept.assets?.length ? (
           <SectionPage title="Assets">
-            <div className="asset-grid">
+            <div className="asset-grid two-col">
               {concept.assets
                 .filter((a) => a.url || a.previewUrl)
                 .map((a, idx) => (
@@ -226,6 +229,14 @@ export default async function ConceptExportPage({ params, searchParams }: PagePr
             </div>
           </SectionPage>
         ) : null}
+
+        <SectionPage title="Signature">
+          <div className="signature-card">
+            <p className="sig-prep">Prepared by</p>
+            <p className="sig-brand">{brand?.displayName || concept.brandKey}</p>
+            <p className="sig-contact">contact@artclub.co • +49 (0)30 123 456</p>
+          </div>
+        </SectionPage>
       </main>
     </div>
   );
@@ -295,19 +306,29 @@ function printStyles({
   .eyebrow { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: ${accent}; }
   .cover-title { font-size: 34px; line-height: 1.1; margin: 6px 0; }
   .cover-subtitle { font-size: 14px; color: rgba(15,23,42,0.7); }
-  .hero { width: 100%; height: 220px; object-fit: cover; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.12); }
+  .hero { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.12); }
   .section-header { margin-bottom: 12px; }
-  .section-header h2 { margin: 0; font-size: 20px; color: ${accent}; }
-  .divider { height: 1px; background: rgba(15,23,42,0.1); margin-top: 8px; }
+  .section-header h2 { margin: 0; font-size: 20px; color: ${accent}; position: relative; padding-bottom: 6px; }
+  .section-header h2::after { content: ""; position: absolute; left: 0; bottom: 0; width: 44px; height: 2px; background: ${accent}; opacity: 0.5; }
+  .divider { height: 1px; background: rgba(15,23,42,0.08); margin-top: 8px; }
   .section-body { font-size: 14px; line-height: 1.6; display: grid; gap: 10px; }
   .pill-list { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
-  .pill { background: rgba(15,23,42,0.06); border-radius: 9999px; padding: 8px 12px; font-size: 12px; display: inline-flex; gap: 6px; align-items: center; }
+  .pill { background: rgba(15,23,42,0.06); border-radius: 9999px; padding: 8px 12px; font-size: 12px; display: inline-flex; gap: 6px; align-items: center; border: 1px solid rgba(15,23,42,0.06); }
   .pill-sub { font-size: 11px; color: rgba(15,23,42,0.6); }
-  .asset-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .asset-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .asset-grid.two-col { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
   .asset-card { border: 1px solid rgba(15,23,42,0.08); border-radius: 10px; overflow: hidden; background: white; }
-  .asset-card img { width: 100%; height: 120px; object-fit: cover; display: block; }
+  .asset-card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; }
   .asset-card figcaption { padding: 8px 10px; font-size: 12px; color: rgba(15,23,42,0.8); }
-  .asset-placeholder { height: 120px; background: rgba(15,23,42,0.05); }
+  .asset-placeholder { aspect-ratio: 4 / 3; background: rgba(15,23,42,0.05); }
+  .signature-card { padding: 14px 16px; border: 1px solid rgba(15,23,42,0.08); border-radius: 10px; background: rgba(15,23,42,0.02); }
+  .sig-prep { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(15,23,42,0.6); margin: 0 0 4px; }
+  .sig-brand { font-size: 18px; font-weight: 700; margin: 0 0 4px; color: ${accent}; }
+  .sig-contact { font-size: 12px; color: rgba(15,23,42,0.7); margin: 0; }
+  .template-editorial .cover-title { font-size: 38px; letter-spacing: -0.01em; }
+  .template-editorial .section-header h2 { font-size: 22px; }
+  .template-night { background: #0b1220; color: #e5e7eb; }
+  .template-night .section-header h2 { color: ${accent}; }
   footer { position: fixed; bottom: 12mm; left: 20mm; right: 20mm; font-size: 11px; color: rgba(15,23,42,0.6); display: flex; justify-content: space-between; }
   footer .page-num::before { counter-increment: page; content: counter(page); }
   .tip-bar { padding: 8px 16px; border-bottom: 1px solid rgba(15,23,42,0.06); }
