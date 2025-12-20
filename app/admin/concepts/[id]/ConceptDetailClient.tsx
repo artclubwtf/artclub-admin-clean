@@ -109,6 +109,7 @@ export default function ConceptDetailClient({ conceptId }: Props) {
   const [assets, setAssets] = useState<ConceptAsset[]>([]);
   const [proposalMarkdown, setProposalMarkdown] = useState("");
   const [emailDraftText, setEmailDraftText] = useState("");
+  const [exportProvider, setExportProvider] = useState<"local" | "openai">("local");
 
   const [saving, setSaving] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
@@ -129,6 +130,8 @@ export default function ConceptDetailClient({ conceptId }: Props) {
   const [selectedShopifyArtistId, setSelectedShopifyArtistId] = useState<string>("");
   const [selectedDbArtistId, setSelectedDbArtistId] = useState<string>("");
   const [brandAbout, setBrandAbout] = useState<string>("");
+  const [aiLoadingProposal, setAiLoadingProposal] = useState(false);
+  const [aiLoadingEmail, setAiLoadingEmail] = useState(false);
 
   const scrollToStep = (step: StepKey) => {
     const el = document.getElementById(`concept-step-${step}`);
@@ -168,6 +171,7 @@ export default function ConceptDetailClient({ conceptId }: Props) {
         setAssets(Array.isArray(data.assets) ? data.assets : []);
         setProposalMarkdown(data.exports?.proposalMarkdown || "");
         setEmailDraftText(data.exports?.emailDraftText || "");
+        setExportProvider((data.exports?.provider as "local" | "openai") || "local");
       } catch (err: unknown) {
         if (!active) return;
         const message = err instanceof Error ? err.message : "Failed to load concept";
@@ -333,13 +337,14 @@ export default function ConceptDetailClient({ conceptId }: Props) {
     return bodyLines.join("\n");
   };
 
-  const saveExports = async (nextExports: { proposalMarkdown?: string; emailDraftText?: string }) => {
+  const saveExports = async (nextExports: { proposalMarkdown?: string; emailDraftText?: string; provider?: "local" | "openai" }) => {
     try {
+      const provider = nextExports.provider || exportProvider || "local";
       const res = await fetch(`/api/concepts/${conceptId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          exports: { ...nextExports, provider: "local" },
+          exports: { ...nextExports, provider },
         }),
       });
       const json = await res.json().catch(() => null);
@@ -348,6 +353,7 @@ export default function ConceptDetailClient({ conceptId }: Props) {
       }
       setProposalMarkdown(json?.concept?.exports?.proposalMarkdown || nextExports.proposalMarkdown || "");
       setEmailDraftText(json?.concept?.exports?.emailDraftText || nextExports.emailDraftText || "");
+      setExportProvider((json?.concept?.exports?.provider as "local" | "openai") || provider);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to save exports";
       setError(message);
@@ -357,13 +363,13 @@ export default function ConceptDetailClient({ conceptId }: Props) {
   const handleGenerateProposal = async () => {
     const draft = buildProposalMarkdown();
     setProposalMarkdown(draft);
-    await saveExports({ proposalMarkdown: draft, emailDraftText });
+    await saveExports({ proposalMarkdown: draft, emailDraftText, provider: "local" });
   };
 
   const handleGenerateEmail = async () => {
     const draft = buildEmailDraft();
     setEmailDraftText(draft);
-    await saveExports({ proposalMarkdown, emailDraftText: draft });
+    await saveExports({ proposalMarkdown, emailDraftText: draft, provider: "local" });
   };
 
   const copyToClipboard = async (text: string) => {
@@ -384,6 +390,36 @@ export default function ConceptDetailClient({ conceptId }: Props) {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+  };
+
+  const handlePolish = async (target: "proposal" | "email") => {
+    if (target === "proposal") setAiLoadingProposal(true);
+    else setAiLoadingEmail(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/ai/concepts/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conceptId, target }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.error || "Failed to generate");
+      }
+      const text = json?.text || "";
+      if (target === "proposal") {
+        setProposalMarkdown(text);
+      } else {
+        setEmailDraftText(text);
+      }
+      setExportProvider((json?.provider as "local" | "openai") || exportProvider);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to generate";
+      setError(message);
+    } finally {
+      if (target === "proposal") setAiLoadingProposal(false);
+      else setAiLoadingEmail(false);
+    }
   };
 
   const filteredDbArtists = useMemo(() => {
@@ -1124,6 +1160,14 @@ export default function ConceptDetailClient({ conceptId }: Props) {
                     <button
                       type="button"
                       className="rounded border border-slate-200 px-3 py-1 text-xs font-medium"
+                      onClick={() => handlePolish("proposal")}
+                      disabled={aiLoadingProposal}
+                    >
+                      {aiLoadingProposal ? "Polishing..." : "Polish with AI"}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded border border-slate-200 px-3 py-1 text-xs font-medium"
                       onClick={() => copyToClipboard(proposalMarkdown || buildProposalMarkdown())}
                     >
                       Copy
@@ -1161,6 +1205,14 @@ export default function ConceptDetailClient({ conceptId }: Props) {
                     <button
                       type="button"
                       className="rounded border border-slate-200 px-3 py-1 text-xs font-medium"
+                      onClick={() => handlePolish("email")}
+                      disabled={aiLoadingEmail}
+                    >
+                      {aiLoadingEmail ? "Polishing..." : "Polish with AI"}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded border border-slate-200 px-3 py-1 text-xs font-medium"
                       onClick={() => copyToClipboard(emailDraftText || buildEmailDraft())}
                     >
                       Copy
@@ -1177,7 +1229,7 @@ export default function ConceptDetailClient({ conceptId }: Props) {
 
             <div className="flex items-center justify-between">
               <div className="text-xs text-slate-500">
-                Provider: local | Last saved proposal length {proposalMarkdown.length} chars
+                Provider: {exportProvider} | Last saved proposal length {proposalMarkdown.length} chars
               </div>
               <button
                 type="button"
