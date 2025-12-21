@@ -5,15 +5,20 @@ function cx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
 }
 
-export function ApSection({
-  as: Tag = "section",
+export function ApSection<T extends keyof JSX.IntrinsicElements = "div">({
+  as,
   className,
   children,
   ...rest
-}: PropsWithChildren<{ as?: keyof JSX.IntrinsicElements; className?: string } & ComponentProps<"div">>) {
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore allow dynamic tag
-  return <Tag className={cx("ap-section", className)} {...rest}>{children}</Tag>;
+}: PropsWithChildren<{ as?: T; className?: string } & ComponentProps<T>>) {
+  const Tag = (as || "div") as T;
+  return (
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore allow dynamic tag
+    <Tag className={cx("ap-section", className)} {...rest}>
+      {children}
+    </Tag>
+  );
 }
 
 export function ApSectionHeader({
