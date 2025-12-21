@@ -35,10 +35,8 @@ export async function POST(req: Request) {
 
     await connectMongo();
 
-    const url =
-      process.env.S3_PUBLIC_BASE_URL?.replace(/\\/$/, "")
-        ? `${process.env.S3_PUBLIC_BASE_URL.replace(/\\/$/, "")}/${key}`
-        : undefined;
+    const base = process.env.S3_PUBLIC_BASE_URL ? process.env.S3_PUBLIC_BASE_URL.replace(/\/$/, "") : undefined;
+    const url = base ? `${base}/${key}` : undefined;
 
     const created = await MediaModel.create({
       artistId: new Types.ObjectId(artistId),

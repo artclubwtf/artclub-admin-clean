@@ -39,12 +39,8 @@ export async function POST(req: Request) {
     const key = `artist/${encodeURIComponent(artistId)}/${Date.now()}-${safeName}`;
     const { uploadUrl, expiresIn } = await createPresignedPutUrl(key, contentType);
 
-    let previewUrl: string | undefined;
-    if (!process.env.S3_PUBLIC_BASE_URL) {
-      previewUrl = await getS3ObjectUrl(key, 15 * 60).catch(() => undefined);
-    } else {
-      previewUrl = `${process.env.S3_PUBLIC_BASE_URL.replace(/\\/$/, "")}/${key}`;
-    }
+    const publicBase = process.env.S3_PUBLIC_BASE_URL ? process.env.S3_PUBLIC_BASE_URL.replace(/\/$/, "") : undefined;
+    const previewUrl = publicBase ? `${publicBase}/${key}` : await getS3ObjectUrl(key, 15 * 60).catch(() => undefined);
 
     return NextResponse.json(
       {
