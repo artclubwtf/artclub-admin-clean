@@ -6,6 +6,9 @@ import { getS3ObjectUrl, uploadToS3 } from "@/lib/s3";
 
 const MAX_SIZE_BYTES = 500 * 1024 * 1024; // 500MB per file
 
+// Allow longer processing for large uploads
+export const maxDuration = 300;
+
 function sanitizeFilename(name: string) {
   const trimmed = name.trim() || "upload";
   const base = trimmed.replace(/[^a-zA-Z0-9._-]/g, "_");

@@ -159,27 +159,39 @@ export default function ArtistMediaPage() {
         };
 
         xhr.onload = () => {
-          const payload =
-            xhr.response ??
-            (() => {
-              try {
-                return JSON.parse(xhr.responseText);
-              } catch {
-                return null;
-              }
-            })();
+          const status = xhr.status;
+          const header = xhr.getResponseHeader("content-type") || "";
+          let payload: any = xhr.response;
 
-          if (xhr.status >= 200 && xhr.status < 300) {
+          if (!payload && header.includes("application/json")) {
+            try {
+              payload = JSON.parse(xhr.responseText);
+            } catch {
+              payload = null;
+            }
+          }
+
+          if (status >= 200 && status < 300) {
             resolve((payload as { media?: MediaItem[]; error?: string }) || {});
             return;
           }
 
-          const message =
-            (payload as { error?: string } | null)?.error || `Upload failed (${xhr.status || "network"})`;
+          const serverError =
+            (payload as { error?: string } | null)?.error ||
+            (typeof payload === "string" ? payload : "") ||
+            (xhr.responseText || "").slice(0, 180);
+
+          let message = serverError || `Upload failed (status ${status || "network"})`;
+          if (status === 413) {
+            message = "Upload rejected: request is larger than the server limit (413). Please keep files under the configured max or restart the server after changing the limit.";
+          } else if (status === 401 || status === 403) {
+            message = "Not authorized to upload. Please log in again.";
+          }
+
           reject(new Error(message));
         };
 
-        xhr.onerror = () => reject(new Error("Upload failed"));
+        xhr.onerror = () => reject(new Error("Upload failed (network error)"));
         xhr.onabort = () => reject(new Error("Upload canceled"));
         xhr.send(formData);
       });

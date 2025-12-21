@@ -9,6 +9,9 @@ import { MediaModel, mediaKinds } from "@/models/Media";
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 
+// Allow slow/large uploads to complete
+export const maxDuration = 300;
+
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== "artist") {
