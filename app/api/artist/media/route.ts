@@ -4,7 +4,7 @@ import { Types } from "mongoose";
 
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
-import { uploadToS3 } from "@/lib/s3";
+import { getS3ObjectUrl, uploadToS3 } from "@/lib/s3";
 import { MediaModel, mediaKinds } from "@/models/Media";
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
@@ -30,17 +30,22 @@ export async function GET(req: Request) {
   await connectMongo();
   const media = await MediaModel.find(filter).sort({ createdAt: -1 }).lean();
 
-  const payload = media.map((m) => ({
-    id: m._id.toString(),
-    artistId: m.artistId?.toString(),
-    kind: m.kind,
-    filename: m.filename,
-    mimeType: m.mimeType,
-    sizeBytes: m.sizeBytes,
-    s3Key: m.s3Key,
-    url: m.url,
-    createdAt: m.createdAt,
-  }));
+  const payload = await Promise.all(
+    media.map(async (m) => {
+      const signedUrl = await getS3ObjectUrl(m.s3Key).catch(() => m.url);
+      return {
+        id: m._id.toString(),
+        artistId: m.artistId?.toString(),
+        kind: m.kind,
+        filename: m.filename,
+        mimeType: m.mimeType,
+        sizeBytes: m.sizeBytes,
+        s3Key: m.s3Key,
+        url: signedUrl || m.url,
+        createdAt: m.createdAt,
+      };
+    }),
+  );
 
   return NextResponse.json({ media: payload }, { status: 200 });
 }

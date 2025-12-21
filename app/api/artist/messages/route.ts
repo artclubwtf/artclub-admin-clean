@@ -5,6 +5,7 @@ import { Types } from "mongoose";
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
 import { MediaModel } from "@/models/Media";
+import { getS3ObjectUrl } from "@/lib/s3";
 import { MessageModel } from "@/models/Message";
 import { MessageThreadModel } from "@/models/MessageThread";
 
@@ -40,18 +41,19 @@ export async function GET() {
   const mediaMap =
     mediaIds.length > 0
       ? await MediaModel.find({ _id: { $in: mediaIds.map((id) => new Types.ObjectId(id)) }, artistId: session.user.artistId })
-          .select({ filename: 1, url: 1, mimeType: 1 })
+          .select({ filename: 1, url: 1, mimeType: 1, s3Key: 1 })
           .lean()
-          .then((rows) => {
+          .then(async (rows) => {
             const map: Record<string, { id: string; filename?: string; url?: string; mimeType?: string }> = {};
-            rows.forEach((m) => {
+            for (const m of rows) {
+              const signedUrl = await getS3ObjectUrl(m.s3Key).catch(() => m.url ?? undefined);
               map[m._id.toString()] = {
                 id: m._id.toString(),
                 filename: m.filename ?? undefined,
-                url: m.url ?? undefined,
+                url: signedUrl ?? m.url ?? undefined,
                 mimeType: m.mimeType ?? undefined,
               };
-            });
+            }
             return map;
           })
       : {};
@@ -69,8 +71,8 @@ export async function GET() {
     }))
     .reverse();
 
-  return NextResponse.json({ thread: { id: thread._id.toString() }, messages: payload }, { status: 200 });
-}
+    return NextResponse.json({ thread: { id: thread._id.toString() }, messages: payload }, { status: 200 });
+  }
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);

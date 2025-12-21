@@ -32,6 +32,10 @@ async function fetchProductsByArtistMetaobject(metaobjectId: string) {
             status
             featuredImage { url }
             priceRangeV2 { minVariantPrice { amount currencyCode } }
+            artistMetaobject: metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.artistMetaobject}") {
+              value
+              reference { ... on Metaobject { id } }
+            }
           }
         }
       }
@@ -62,15 +66,29 @@ async function fetchProductsByArtistMetaobject(metaobjectId: string) {
   }
 
   const edges = json.data?.products?.edges ?? [];
-  const payload = edges.map(({ node }) => ({
-    id: node.id as string,
-    title: node.title as string,
-    status: (node.status as string | undefined) ?? "DRAFT",
-    price: node.priceRangeV2?.minVariantPrice?.amount || null,
-    currency: node.priceRangeV2?.minVariantPrice?.currencyCode || null,
-    imageUrl: node.featuredImage?.url || null,
-    adminUrl: buildShopifyAdminProductUrl(shop, node.id as string),
-  }));
+  const payload = edges
+    .map(({ node }) => {
+      const value = node.artistMetaobject?.value || node.artistMetaobject?.reference?.id || null;
+      if (!value || value !== metaobjectId) return null;
+      return {
+        id: node.id as string,
+        title: node.title as string,
+        status: (node.status as string | undefined) ?? "DRAFT",
+        price: node.priceRangeV2?.minVariantPrice?.amount || null,
+        currency: node.priceRangeV2?.minVariantPrice?.currencyCode || null,
+        imageUrl: node.featuredImage?.url || null,
+        adminUrl: buildShopifyAdminProductUrl(shop, node.id as string),
+      };
+    })
+    .filter(Boolean) as {
+    id: string;
+    title: string;
+    status: string;
+    price: string | null;
+    currency: string | null;
+    imageUrl: string | null;
+    adminUrl: string | null;
+  }[];
 
   return payload;
 }
