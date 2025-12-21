@@ -1,27 +1,27 @@
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
+
 import { connectMongo } from "@/lib/mongodb";
 import { MediaModel } from "@/models/Media";
 import { ArtistModel } from "@/models/Artist";
 import { downloadFromS3 } from "@/lib/s3";
-import { buildProductMetafieldsForArtwork } from "@/lib/shopify";
+import { createDraftArtworkProduct } from "@/lib/shopifyArtworks";
 
 const saleModes = ["PRINT_ONLY", "ORIGINAL_ONLY", "ORIGINAL_AND_PRINTS"] as const;
 type SaleMode = (typeof saleModes)[number];
 
-type StagedUploadTarget = {
-  url: string;
-  resourceUrl: string;
-  parameters: { name: string; value: string }[];
-};
-
-type CreatedProduct = {
-  id: string;
-  handle: string;
-  status: string;
+type CreateArtworkRequest = {
+  artistId: string;
+  artistMetaobjectGid: string;
   title: string;
-  defaultVariantId?: string | null;
-  defaultInventoryItemId?: string | null;
+  saleMode: SaleMode;
+  price: string | null;
+  editionSize?: string | null;
+  kurzbeschreibung?: string | null;
+  widthCm?: number | null;
+  heightCm?: number | null;
+  description?: string | null;
+  mediaIds: string[];
 };
 
 type AiWorkerConfig = {
@@ -38,30 +38,10 @@ type AiAutomationStatus = {
   errors?: string[];
 };
 
-type CreateArtworkRequest = {
-  artistId: string;
-  artistMetaobjectGid: string;
-  title: string;
-  saleMode: SaleMode;
-  price: string | null;
-  editionSize?: string | null;
-  kurzbeschreibung?: string | null;
-  widthCm?: number | null;
-  heightCm?: number | null;
-  description?: string | null;
-  mediaIds: string[];
-};
-
 function mustEnv(name: string): string {
   const value = process.env[name] || (name === "SHOPIFY_SHOP_DOMAIN" ? process.env.SHOPIFY_STORE_DOMAIN : undefined);
   if (!value) throw new Error(`Missing env var: ${name}`);
   return value;
-}
-
-function sanitizeFilename(name: string, mimeType: string) {
-  const fallbackExt = mimeType.split("/")[1] || "img";
-  const base = (name || "upload").trim().replace(/[^a-zA-Z0-9._-]/g, "_") || "upload";
-  return base.includes(".") ? base : `${base}.${fallbackExt}`;
 }
 
 async function callShopifyAdmin(query: string, variables: any) {
@@ -91,245 +71,6 @@ async function callShopifyAdmin(query: string, variables: any) {
   }
 
   return json.data as any;
-}
-
-async function createStagedUpload(filename: string, mimeType: string, fileSize: number): Promise<StagedUploadTarget> {
-  const mutation = `
-    mutation StagedUploads($input: [StagedUploadInput!]!) {
-      stagedUploadsCreate(input: $input) {
-        stagedTargets { url resourceUrl parameters { name value } }
-        userErrors { field message }
-      }
-    }
-  `;
-
-  const variables = {
-    input: [
-      {
-        resource: "IMAGE",
-        filename,
-        mimeType,
-        fileSize: String(fileSize),
-        httpMethod: "POST",
-      },
-    ],
-  };
-
-  const data = await callShopifyAdmin(mutation, variables);
-  const payload = data?.stagedUploadsCreate;
-  if (!payload) throw new Error("Shopify stagedUploadsCreate returned no data");
-  const userErrors = payload.userErrors || [];
-  if (userErrors.length) {
-    const message = userErrors.map((e: any) => e.message).join("; ") || "Staging upload failed";
-    throw new Error(message);
-  }
-
-  const target = (payload.stagedTargets || [])[0] as StagedUploadTarget | undefined;
-  if (!target?.url || !target?.resourceUrl) {
-    throw new Error("Shopify staged upload target missing url");
-  }
-
-  return target;
-}
-
-async function uploadToShopifyStagedTarget(staged: StagedUploadTarget, buffer: Buffer, mimeType: string, filename: string) {
-  const form = new FormData();
-  for (const param of staged.parameters || []) {
-    form.append(param.name, param.value);
-  }
-  const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
-  form.append("file", new Blob([arrayBuffer], { type: mimeType || "application/octet-stream" }), filename);
-
-  const uploadRes = await fetch(staged.url, {
-    method: "POST",
-    body: form,
-  });
-
-  if (!uploadRes.ok) {
-    const text = await uploadRes.text().catch(() => "");
-    throw new Error(`Failed to upload file to Shopify storage (${uploadRes.status}): ${text || uploadRes.statusText}`);
-  }
-}
-
-async function createProduct(input: any) {
-  const mutation = `
-    mutation CreateArtworkProduct($input: ProductInput!) {
-      productCreate(input: $input) {
-        product {
-          id
-          handle
-          status
-          title
-          variants(first: 1) { nodes { id inventoryItem { id } } }
-        }
-        userErrors { field message }
-      }
-    }
-  `;
-
-  const data = await callShopifyAdmin(mutation, { input });
-  const payload = data?.productCreate;
-  if (!payload) throw new Error("Shopify productCreate returned no payload");
-  const userErrors = payload.userErrors || [];
-  if (userErrors.length) {
-    const message = userErrors.map((e: any) => e.message).join("; ") || "productCreate failed";
-    throw new Error(message);
-  }
-  const product = payload.product;
-  if (!product?.id) throw new Error("Shopify productCreate missing product");
-  const defaultVariantId = product?.variants?.nodes?.[0]?.id ?? null;
-  const defaultInventoryItemId = product?.variants?.nodes?.[0]?.inventoryItem?.id ?? null;
-  return {
-    id: product.id as string,
-    handle: product.handle as string,
-    status: product.status as string,
-    title: product.title as string,
-    defaultVariantId,
-    defaultInventoryItemId,
-  } satisfies CreatedProduct;
-}
-
-async function attachMedia(productId: string, resourceUrls: string[]) {
-  if (!resourceUrls.length) return { imageUrl: null as string | null };
-
-  const mutation = `
-    mutation AttachMedia($productId: ID!, $media: [CreateMediaInput!]!) {
-      productCreateMedia(productId: $productId, media: $media) {
-        media {
-          mediaContentType
-          status
-          ... on MediaImage { image { url } }
-        }
-        mediaUserErrors { field message }
-      }
-    }
-  `;
-
-  const mediaInput = resourceUrls.map((url) => ({
-    originalSource: url,
-    mediaContentType: "IMAGE",
-  }));
-
-  const data = await callShopifyAdmin(mutation, { productId, media: mediaInput });
-  const payload = data?.productCreateMedia;
-  if (!payload) throw new Error("Shopify productCreateMedia returned no payload");
-  const userErrors = payload.mediaUserErrors || [];
-  if (userErrors.length) {
-    const message = userErrors.map((e: any) => e.message).join("; ") || "productCreateMedia failed";
-    throw new Error(message);
-  }
-
-  const mediaNodes = (payload.media || []) as any[];
-  const firstImage = mediaNodes.find((node) => node?.image?.url);
-  return { imageUrl: firstImage?.image?.url ?? null };
-}
-
-let cachedLocationId: string | null = null;
-async function getPrimaryLocationId(): Promise<string> {
-  if (cachedLocationId) return cachedLocationId;
-
-  const envLocation = process.env.SHOPIFY_PRIMARY_LOCATION_ID;
-  if (envLocation) {
-    cachedLocationId = envLocation;
-    return envLocation;
-  }
-
-  const query = `
-    query FetchPrimaryLocation {
-      locations(first: 1) {
-        nodes { id name }
-      }
-    }
-  `;
-
-  const data = await callShopifyAdmin(query, {});
-  const location = data?.locations?.nodes?.[0];
-  if (!location?.id) {
-    throw new Error("No Shopify locations available for inventory updates");
-  }
-  cachedLocationId = location.id as string;
-  return cachedLocationId;
-}
-
-async function updateVariantPrice(productId: string, variantId: string, price: string | null) {
-  const mutation = `
-    mutation UpdateArtworkVariantPrice($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-      productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-        productVariants { id }
-        userErrors { field message }
-      }
-    }
-  `;
-
-  const variantInput: Record<string, any> = { id: variantId };
-  if (price !== null) {
-    variantInput.price = price;
-  }
-
-  const data = await callShopifyAdmin(mutation, { productId, variants: [variantInput] });
-  const payload = data?.productVariantsBulkUpdate;
-  if (!payload) throw new Error("Shopify productVariantsBulkUpdate returned no payload");
-  const userErrors = payload.userErrors || [];
-  if (userErrors.length) {
-    const message = userErrors.map((e: any) => e.message).join("; ") || "productVariantsBulkUpdate failed";
-    throw new Error(message);
-  }
-}
-
-function waitMs(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function setInventoryToOne(inventoryItemId: string, locationId: string) {
-  const mutation = `
-    mutation AdjustInventory($input: InventoryAdjustQuantitiesInput!) {
-      inventoryAdjustQuantities(input: $input) {
-        userErrors { field message }
-      }
-    }
-  `;
-
-  const data = await callShopifyAdmin(mutation, {
-    input: {
-      name: "available",
-      reason: "correction",
-      changes: [
-        {
-          inventoryItemId,
-          locationId,
-          delta: 1,
-        },
-      ],
-    },
-  });
-
-  const payload = data?.inventoryAdjustQuantities;
-  if (!payload) throw new Error("Shopify inventoryAdjustQuantities returned no payload");
-  const userErrors = payload.userErrors || [];
-  if (userErrors.length) {
-    const message = userErrors.map((e: any) => e.message).join("; ") || "inventoryAdjustQuantities failed";
-    throw new Error(message);
-  }
-}
-
-async function setInventoryTracking(inventoryItemId: string, tracked: boolean) {
-  const mutation = `
-    mutation UpdateInventoryTracking($id: ID!, $input: InventoryItemInput!) {
-      inventoryItemUpdate(id: $id, input: $input) {
-        inventoryItem { id tracked }
-        userErrors { field message }
-      }
-    }
-  `;
-
-  const data = await callShopifyAdmin(mutation, { id: inventoryItemId, input: { tracked } });
-  const payload = data?.inventoryItemUpdate;
-  if (!payload) throw new Error("Shopify inventoryItemUpdate returned no payload");
-  const userErrors = payload.userErrors || [];
-  if (userErrors.length) {
-    const message = userErrors.map((e: any) => e.message).join("; ") || "inventoryItemUpdate failed";
-    throw new Error(message);
-  }
 }
 
 function parseNumber(value: unknown): number | null | undefined {
@@ -362,6 +103,10 @@ async function triggerWorker(url: string, config: AiWorkerConfig): Promise<void>
   if (!res.ok) {
     throw new Error(`Worker request failed (${res.status} ${res.statusText})`);
   }
+}
+
+function waitMs(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function addAiReadyTag(productId: string, baseTags: string[]): Promise<void> {
@@ -404,7 +149,6 @@ export async function POST(req: Request) {
 
     const widthParsed = parseNumber(body.widthCm);
     const heightParsed = parseNumber(body.heightCm);
-    const editionParsed = parseNumber(body.editionSize);
 
     if (!artistId || !Types.ObjectId.isValid(artistId)) {
       fieldErrors.artistId = "artistId is required";
@@ -438,9 +182,6 @@ export async function POST(req: Request) {
     if (heightParsed !== undefined && Number.isNaN(heightParsed)) {
       fieldErrors.heightCm = "Height must be a number";
     }
-    if (editionParsed !== undefined && Number.isNaN(editionParsed)) {
-      fieldErrors.editionSize = "Edition size must be a number";
-    }
 
     if (Object.keys(fieldErrors).length) {
       return NextResponse.json({ error: "Validation failed", fieldErrors }, { status: 400 });
@@ -467,61 +208,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Some media files were not found or are not artwork kind" }, { status: 400 });
     }
 
-    const stagedResources: string[] = [];
+    const downloadedImages = [];
     for (const doc of mediaDocs) {
       const downloaded = await downloadFromS3(doc.s3Key);
       if (!downloaded.body || downloaded.body.length === 0) {
         throw new Error(`Failed to download media: ${doc._id.toString()}`);
       }
-      const mimeType = doc.mimeType || downloaded.contentType || "application/octet-stream";
-      const filename = sanitizeFilename(doc.filename || doc.s3Key, mimeType);
-
-      const staged = await createStagedUpload(filename, mimeType, downloaded.body.length);
-      await uploadToShopifyStagedTarget(staged, downloaded.body, mimeType, filename);
-      stagedResources.push(staged.resourceUrl);
+      downloadedImages.push({
+        buffer: downloaded.body,
+        mimeType: doc.mimeType || downloaded.contentType || "application/octet-stream",
+        filename: doc.filename || doc.s3Key,
+      });
     }
 
-    const priceToSend = saleMode === "PRINT_ONLY" ? null : priceRaw;
-    const metafields = buildProductMetafieldsForArtwork({
-      artistMetaobjectId: artistMetaobjectGid,
+    const offering = saleMode === "PRINT_ONLY" ? "print_only" : "original_plus_prints";
+    const priceToSend = offering === "original_plus_prints" ? Number(priceRaw) : null;
+
+    const product = await createDraftArtworkProduct({
+      artistShopifyMetaobjectGid: artistMetaobjectGid,
+      title,
+      shortDescription: kurzbeschreibung || description || undefined,
       widthCm: widthParsed ?? null,
       heightCm: heightParsed ?? null,
-      kurzbeschreibung: kurzbeschreibung || null,
+      offering,
+      originalPriceEur: priceToSend ?? undefined,
+      images: downloadedImages,
     });
 
-    const baseTags = saleMode === "ORIGINAL_AND_PRINTS" ? ["original"] : [];
-    const productInput: any = {
-      title,
-      status: "DRAFT",
-      tags: [...baseTags],
-      metafields,
-    };
-
-    if (description) {
-      productInput.descriptionHtml = description;
-    }
-
-    const product = await createProduct(productInput);
-
-    if (!product.defaultVariantId) {
-      throw new Error("Shopify productCreate missing default variant");
-    }
-    if (!product.defaultInventoryItemId) {
-      throw new Error("Shopify productCreate missing default inventory item");
-    }
-
-    const locationId = await getPrimaryLocationId();
-
-    // ensure inventory is tracked so downstream automations can read it
-    await setInventoryTracking(product.defaultInventoryItemId, true);
-
-    if (priceToSend !== null && priceToSend !== undefined && `${priceToSend}`.trim() !== "") {
-      await updateVariantPrice(product.id, product.defaultVariantId, `${priceToSend}`.trim());
-    }
-
-    await setInventoryToOne(product.defaultInventoryItemId, locationId);
-
-    const mediaResult = await attachMedia(product.id, stagedResources);
+    const baseTags = product.tags || [];
 
     const aiAutomation: AiAutomationStatus = {
       productsWorker: "pending",
@@ -529,7 +243,6 @@ export async function POST(req: Request) {
       tagUpdate: "pending",
     };
 
-    // Fire-and-forget automation so API response returns quickly
     (async () => {
       const automationErrors: string[] = [];
       const recordAutomationError = (key: keyof Omit<AiAutomationStatus, "errors">, err: unknown) => {
@@ -548,11 +261,10 @@ export async function POST(req: Request) {
         recordAutomationError("tagsWorker", err);
       }
 
-      // allow Shopify to settle
       await waitMs(60_000);
 
       try {
-        await addAiReadyTag(product.id, baseTags);
+        await addAiReadyTag(product.productId, baseTags);
         aiAutomation.tagUpdate = "ok";
       } catch (err) {
         recordAutomationError("tagUpdate", err);
@@ -568,7 +280,6 @@ export async function POST(req: Request) {
         }
       }
 
-      // wait before second automation
       await waitMs(60_000);
 
       if (workerConfig) {
@@ -590,13 +301,13 @@ export async function POST(req: Request) {
 
     return NextResponse.json(
       {
-        productGid: product.id,
-        title: product.title,
-        handle: product.handle,
-        status: product.status,
-        imageUrl: mediaResult.imageUrl,
+        productGid: product.productId,
+        title,
+        status: "DRAFT",
+        imageUrl: product.imageUrl ?? null,
         price: priceToSend ?? null,
         aiAutomation,
+        adminUrl: product.adminUrl,
       },
       { status: 201 },
     );

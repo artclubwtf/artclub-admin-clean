@@ -45,6 +45,7 @@ export async function GET(req: Request) {
     type: r.type,
     status: r.status,
     payload: r.payload,
+    result: r.result,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
     appliedAt: r.appliedAt,

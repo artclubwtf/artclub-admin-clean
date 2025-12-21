@@ -8,6 +8,10 @@ const requestSchema = new Schema(
     type: { type: String, required: true },
     status: { type: String, enum: requestStatuses, default: "submitted" },
     payload: { type: Schema.Types.Mixed, default: {} },
+    result: {
+      shopifyProductId: { type: String },
+      shopifyAdminUrl: { type: String },
+    },
     createdByUserId: { type: Types.ObjectId, ref: "User", required: true },
     reviewerUserId: { type: Types.ObjectId, ref: "User" },
     reviewerNote: { type: String },
