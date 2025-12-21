@@ -64,7 +64,7 @@ export default function ArtistShell({ children }: PropsWithChildren<{ email?: st
               <span>{item.label}</span>
             </Link>
           ))}
-        </div>
+        </nav>
         <div className="ap-sidebar-footer">
           <button type="button" className="ap-btn-ghost" onClick={() => signOut({ callbackUrl: "/login" })}>
             Logout
