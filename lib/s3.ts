@@ -59,7 +59,7 @@ async function streamToBuffer(stream: any): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-type UploadBody = Buffer | Uint8Array | Readable | ReadableStream;
+type UploadBody = Buffer | Uint8Array | Readable;
 
 export async function uploadToS3(
   key: string,
@@ -71,9 +71,8 @@ export async function uploadToS3(
   const cfg = resolveConfig();
   const s3 = getClient();
 
-  const nodeBody = body instanceof Readable ? body : body instanceof ReadableStream ? Readable.fromWeb(body) : body;
-  const size =
-    typeof (nodeBody as any)?.length === "number" ? (nodeBody as any).length : typeof contentLength === "number" ? contentLength : undefined;
+  const nodeBody = body instanceof Readable ? body : body;
+  const size = typeof (nodeBody as any)?.length === "number" ? (nodeBody as any).length : typeof contentLength === "number" ? contentLength : undefined;
 
   await s3.send(
     new PutObjectCommand({
