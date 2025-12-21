@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PageTitle } from "@/components/ui/PageTitle";
+import { Card, CardHeader } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { FilePreview } from "@/components/ui/FilePreview";
 
 type MediaItem = {
   id: string;
@@ -104,21 +108,16 @@ export default function ArtistMessagesPage() {
 
   const formatTime = (date?: string) => (date ? new Date(date).toLocaleString() : "");
 
-  const isImage = (mime?: string) => (mime || "").startsWith("image/");
-
   return (
     <div className="space-y-4">
-      <div className="artist-card space-y-1">
-        <div className="artist-section-title">Messages</div>
-        <div className="artist-section-sub">Chat with the Artclub team. Attach files from your media.</div>
-      </div>
+      <PageTitle title="Messages" description="Chat with the Artclub team. Attach files from your media." />
 
-      {error && <div className="artist-card artist-placeholder">Error: {error}</div>}
-      {loading && <div className="artist-card artist-placeholder">Loading messages...</div>}
+      {error && <Card className="artist-placeholder">Error: {error}</Card>}
+      {loading && <Card className="artist-placeholder">Loading messages...</Card>}
 
-      <div className="artist-card space-y-3" style={{ maxHeight: 520, overflowY: "auto" }}>
+      <Card className="space-y-3" style={{ maxHeight: 520, overflowY: "auto" }}>
         {messages.length === 0 && !loading ? (
-          <div className="artist-placeholder">No messages yet. Say hello!</div>
+          <EmptyState title="No messages yet" description="Say hello or ask a question." />
         ) : (
           messages.map((m) => (
             <div
@@ -144,7 +143,7 @@ export default function ArtistMessagesPage() {
                         rel="noreferrer"
                         className="block rounded bg-white/20 px-2 py-1 text-xs underline"
                       >
-                        {isImage(att.mimeType) ? "Image" : att.mimeType || "File"} · {att.filename || att.id}
+                        {att.mimeType || "File"} · {att.filename || att.id}
                       </a>
                     ))}
                   </div>
@@ -155,9 +154,9 @@ export default function ArtistMessagesPage() {
           ))
         )}
         <div ref={endRef} />
-      </div>
+      </Card>
 
-      <div className="artist-card space-y-3">
+      <Card className="space-y-3">
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -179,14 +178,7 @@ export default function ArtistMessagesPage() {
                   className={`artist-media-card ${checked ? "ring-2 ring-slate-900" : ""}`}
                   style={{ alignItems: "flex-start" }}
                 >
-                  <div className="artist-media-preview" style={{ height: 100 }}>
-                    {isImage(m.mimeType) && m.url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={m.url} alt={m.filename || "media"} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="text-xs text-slate-500">{m.filename || m.id}</div>
-                    )}
-                  </div>
+                  <FilePreview mimeType={m.mimeType} url={m.url} filename={m.filename || "media"} height={100} />
                   <div className="text-sm font-semibold text-slate-900">{m.filename || "Untitled"}</div>
                 </button>
               );
@@ -194,14 +186,12 @@ export default function ArtistMessagesPage() {
           </div>
         </div>
 
-        {selectedMedia.length > 0 && (
-          <div className="artist-placeholder">Attachments: {selectedMedia.length} selected</div>
-        )}
+        {selectedMedia.length > 0 && <div className="artist-placeholder">Attachments: {selectedMedia.length} selected</div>}
 
         <button type="button" className="artist-btn" onClick={handleSend} disabled={sending}>
           {sending ? "Sending..." : "Send"}
         </button>
-      </div>
+      </Card>
     </div>
   );
 }

@@ -11,14 +11,15 @@ type NavItem = {
   icon: string;
 };
 
-const navItems: NavItem[] = [
+const mainNavItems: NavItem[] = [
   { label: "Overview", href: "/artist", icon: "🏠" },
   { label: "Media", href: "/artist/media", icon: "🖼️" },
   { label: "Artworks", href: "/artist/artworks", icon: "🎨" },
   { label: "Contracts", href: "/artist/contracts", icon: "📄" },
-  { label: "Payout", href: "/artist/payout", icon: "💸" },
   { label: "Messages", href: "/artist/messages", icon: "💬" },
 ];
+
+const extraNavItems: NavItem[] = [{ label: "Payout", href: "/artist/payout", icon: "💸" }];
 
 export default function ArtistShell({ children }: PropsWithChildren<{ email?: string }>) {
   const pathname = usePathname() || "";
@@ -41,7 +42,7 @@ export default function ArtistShell({ children }: PropsWithChildren<{ email?: st
           </div>
         </div>
         <nav className="artist-nav">
-          {navItems.map((item) => (
+          {mainNavItems.map((item) => (
             <Link key={item.href} href={item.href} className={`artist-nav-link${isActive(item.href) ? " active" : ""}`}>
               <span className="artist-nav-icon" aria-hidden>
                 {item.icon}
@@ -50,6 +51,16 @@ export default function ArtistShell({ children }: PropsWithChildren<{ email?: st
             </Link>
           ))}
         </nav>
+        <div className="artist-nav">
+          {extraNavItems.map((item) => (
+            <Link key={item.href} href={item.href} className={`artist-nav-link${isActive(item.href) ? " active" : ""}`}>
+              <span className="artist-nav-icon" aria-hidden>
+                {item.icon}
+              </span>
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </div>
         <div className="artist-sidebar-footer">
           <button type="button" className="artist-ghost-btn" onClick={() => signOut({ callbackUrl: "/login" })}>
             Logout
@@ -72,7 +83,7 @@ export default function ArtistShell({ children }: PropsWithChildren<{ email?: st
       </div>
 
       <nav className="artist-bottom-nav">
-        {navItems.map((item) => (
+        {mainNavItems.map((item) => (
           <Link key={item.href} href={item.href} className={`artist-bottom-link${isActive(item.href) ? " active" : ""}`}>
             <span className="artist-bottom-icon" aria-hidden>
               {item.icon}

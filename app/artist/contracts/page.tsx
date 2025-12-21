@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PageTitle } from "@/components/ui/PageTitle";
+import { Card, CardHeader } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Chip } from "@/components/ui/Chip";
 
 type Contract = {
   id: string;
@@ -47,32 +51,27 @@ export default function ArtistContractsPage() {
   };
 
   return (
-    <div className="space-y-3">
-      <div className="artist-card">
-        <div className="artist-section-title">Contracts</div>
-        <div className="artist-section-sub">View and download your agreements.</div>
-      </div>
+    <div className="space-y-4">
+      <PageTitle title="Contracts" description="View and download your agreements." />
 
-      {loading && <div className="artist-card artist-placeholder">Loading contracts...</div>}
-      {error && <div className="artist-card artist-placeholder">Error: {error}</div>}
-      {downloadError && <div className="artist-card artist-placeholder">Download error: {downloadError}</div>}
+      {loading && <Card className="artist-placeholder">Loading contracts...</Card>}
+      {error && <Card className="artist-placeholder">Error: {error}</Card>}
+      {downloadError && <Card className="artist-placeholder">Download error: {downloadError}</Card>}
 
       {!loading && !error && contracts.length === 0 && (
-        <div className="artist-card artist-placeholder">No contracts yet. You will see agreements here once available.</div>
+        <EmptyState title="No contracts yet" description="You will see agreements here once available." />
       )}
 
       {contracts.length > 0 && (
-        <div className="artist-card">
-          <div className="artist-section-sub" style={{ marginBottom: 12 }}>
-            Latest contracts appear first.
-          </div>
+        <Card className="space-y-3">
+          <CardHeader title="Your contracts" subtitle="Latest first." />
           <div className="artist-grid">
             {contracts.map((c) => (
               <div key={c.id} className="artist-media-card">
                 <div className="artist-section-title" style={{ fontSize: 15 }}>
                   {c.filename || "Contract"}
                 </div>
-                <div className="artist-chip">{c.contractType || "contract"}</div>
+                <Chip label={c.contractType || "contract"} />
                 <div className="text-xs text-slate-500">{c.createdAt ? new Date(c.createdAt).toLocaleString() : ""}</div>
                 <div className="artist-media-actions">
                   <button type="button" className="artist-btn-ghost" onClick={() => handleDownload(c.id)}>
@@ -82,7 +81,7 @@ export default function ArtistContractsPage() {
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );

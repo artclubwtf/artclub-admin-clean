@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Card, CardHeader } from "@/components/ui/Card";
+import { PageTitle } from "@/components/ui/PageTitle";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Chip } from "@/components/ui/Chip";
+import { FilePreview } from "@/components/ui/FilePreview";
 
 type MediaKind = "artwork" | "social" | "other";
 
@@ -128,21 +133,14 @@ export default function ArtistMediaPage() {
     }
   };
 
-  const filteredMedia = useMemo(() => {
-    return media;
-  }, [media]);
-
-  const isImage = (mime?: string) => (mime || "").startsWith("image/");
-  const isPdf = (mime?: string) => (mime || "").toLowerCase().includes("pdf");
+  const filteredMedia = useMemo(() => media, [media]);
 
   return (
     <div className="space-y-4">
-      <div className="artist-card space-y-3">
-        <div className="artist-upload-actions">
-          <div>
-            <div className="artist-section-title">Media</div>
-            <div className="artist-section-sub">Upload and organize your files.</div>
-          </div>
+      <PageTitle
+        title="Media"
+        description="Upload, preview, and pick files for submissions or messages."
+        actions={
           <div className="artist-segmented">
             {kindOptions.map((opt) => (
               <button
@@ -155,7 +153,26 @@ export default function ArtistMediaPage() {
               </button>
             ))}
           </div>
-        </div>
+        }
+      />
+
+      <Card className="space-y-3">
+        <CardHeader
+          title="Upload"
+          subtitle="Tap upload or drop files. Max 20MB each."
+          action={
+            <select
+              value={uploadKind}
+              onChange={(e) => setUploadKind(e.target.value as MediaKind)}
+              className="artist-ghost-btn"
+              style={{ padding: "9px 12px" }}
+            >
+              <option value="artwork">Artwork</option>
+              <option value="social">Social</option>
+              <option value="other">Other</option>
+            </select>
+          }
+        />
 
         <div
           className={`artist-dropzone${dragging ? " dragging" : ""}`}
@@ -175,21 +192,9 @@ export default function ArtistMediaPage() {
         >
           <div className="artist-upload-actions">
             <div className="artist-section-sub">Drop files here or choose from your device.</div>
-            <div className="artist-media-actions">
-              <select
-                value={uploadKind}
-                onChange={(e) => setUploadKind(e.target.value as MediaKind)}
-                className="artist-ghost-btn"
-                style={{ padding: "9px 12px" }}
-              >
-                <option value="artwork">Artwork</option>
-                <option value="social">Social</option>
-                <option value="other">Other</option>
-              </select>
-              <button type="button" className="artist-btn" onClick={() => inputRef.current?.click()} disabled={uploading}>
-                {uploading ? "Uploading..." : "Upload"}
-              </button>
-            </div>
+            <button type="button" className="artist-btn" onClick={() => inputRef.current?.click()} disabled={uploading}>
+              {uploading ? "Uploading..." : "Upload"}
+            </button>
           </div>
           <input
             ref={inputRef}
@@ -207,32 +212,30 @@ export default function ArtistMediaPage() {
         {message && <div className="artist-placeholder">Success: {message}</div>}
         {error && <div className="artist-placeholder">Error: {error}</div>}
         {downloadError && <div className="artist-placeholder">Download error: {downloadError}</div>}
-      </div>
+      </Card>
 
-      <div className="artist-card space-y-3">
-        <div className="artist-section-title">Library</div>
-        <div className="artist-section-sub">Newest first. Filtered by {kindFilter === "all" ? "all kinds" : kindFilter}.</div>
+      <Card className="space-y-3">
+        <CardHeader
+          title="Library"
+          subtitle={`Newest first · ${kindFilter === "all" ? "all kinds" : kindFilter}`}
+          action={
+            <button type="button" className="artist-btn-ghost" onClick={loadMedia} disabled={loading}>
+              Refresh
+            </button>
+          }
+        />
 
         {loading ? (
           <div className="artist-placeholder">Loading your media...</div>
         ) : filteredMedia.length === 0 ? (
-          <div className="artist-placeholder">No media yet. Upload files to get started.</div>
+          <EmptyState title="No media yet" description="Upload files to see them here." />
         ) : (
           <div className="artist-grid">
             {filteredMedia.map((item) => (
               <div key={item.id} className="artist-media-card">
-                <div className="artist-media-preview">
-                  {isImage(item.mimeType) && item.url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.url} alt={item.filename || "media"} className="h-full w-full object-cover" />
-                  ) : isPdf(item.mimeType) ? (
-                    <div className="text-sm font-semibold text-slate-700">PDF · {item.filename}</div>
-                  ) : (
-                    <div className="text-sm text-slate-500">{item.filename || item.s3Key}</div>
-                  )}
-                </div>
+                <FilePreview mimeType={item.mimeType} url={item.url} filename={item.filename || item.s3Key} height={140} />
                 <div className="artist-media-meta">
-                  <div className="artist-chip">{item.kind}</div>
+                  <Chip label={item.kind} />
                   <div className="text-xs text-slate-500">{formatDate(item.createdAt)}</div>
                 </div>
                 <div className="text-sm font-semibold text-slate-900">{item.filename || "Untitled"}</div>
@@ -251,7 +254,7 @@ export default function ArtistMediaPage() {
             ))}
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }
