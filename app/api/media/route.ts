@@ -1,14 +1,10 @@
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
-import { Readable } from "stream";
 import { connectMongo } from "@/lib/mongodb";
 import { MediaModel, mediaKinds } from "@/models/Media";
 import { getS3ObjectUrl, uploadToS3 } from "@/lib/s3";
 
-const MAX_SIZE_BYTES = 500 * 1024 * 1024; // 500MB per file
-
-// Allow longer processing for large uploads
-export const maxDuration = 300;
+const MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB per file
 
 function sanitizeFilename(name: string) {
   const trimmed = name.trim() || "upload";
@@ -76,9 +72,8 @@ export async function POST(req: Request) {
       const contentType = file.type || "application/octet-stream";
       const timestamp = Date.now();
       const key = `media/${encodeURIComponent(kunstlerId)}/${timestamp}-${filename}`;
-      const webStream = file.stream() as unknown as ReadableStream;
-      const stream = Readable.fromWeb(webStream);
-      const uploaded = await uploadToS3(key, stream, contentType, filename, file.size);
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const uploaded = await uploadToS3(key, buffer, contentType, filename);
       uploads.push({
         artistId: new Types.ObjectId(kunstlerId),
         kind: kindRaw,

@@ -32,6 +32,13 @@ export async function middleware(req: NextRequest) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
 
+      if (pathname.startsWith("/api/uploads")) {
+        if (token.role === "team" || token.role === "artist") {
+          return NextResponse.next();
+        }
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+
       const isArtistApi = pathname === "/api/artist" || pathname.startsWith("/api/artist/");
       if (isArtistApi) {
         if (token.role !== "artist") {

@@ -192,6 +192,17 @@ type FileUploadStatus = {
   success: string | null;
 };
 
+type UploadOverlay = {
+  percent: number;
+  loaded: number;
+  total: number;
+  etaSeconds: number | null;
+  fileCount: number;
+  startedAt: number;
+  phase: "sending" | "processing";
+  currentFileName?: string;
+};
+
 const stageOptions = ["Idea", "In Review", "Offer", "Under Contract"] as const;
 type Stage = (typeof stageOptions)[number];
 type TabKey = "overview" | "media" | "artworks" | "publicProfile" | "contracts" | "payout" | "orders" | "messages";
@@ -220,6 +231,18 @@ const parseProductIdFromGid = (gid?: string | null) => {
   if (!gid) return null;
   const parts = gid.split("/");
   return parts[parts.length - 1] || gid;
+};
+
+const formatBytes = (size?: number | null) => {
+  if (!size) return "—";
+  const units = ["B", "KB", "MB", "GB"];
+  let val = size;
+  let idx = 0;
+  while (val >= 1024 && idx < units.length - 1) {
+    val /= 1024;
+    idx += 1;
+  }
+  return `${val.toFixed(val >= 10 || idx === 0 ? 0 : 1)} ${units[idx]}`;
 };
 
 async function fetchShopifyProductsForMetaobject(metaobjectId: string) {
@@ -327,6 +350,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [mediaKind, setMediaKind] = useState("artwork");
   const [mediaFiles, setMediaFiles] = useState<FileList | null>(null);
+  const [uploadOverlay, setUploadOverlay] = useState<UploadOverlay | null>(null);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [shopifyProducts, setShopifyProducts] = useState<ShopifyProduct[]>([]);
   const [shopifyProductsLoading, setShopifyProductsLoading] = useState(false);
@@ -347,6 +371,8 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [artworkSuccessAdminUrl, setArtworkSuccessAdminUrl] = useState<string | null>(null);
   const [artworkGalleryUploading, setArtworkGalleryUploading] = useState(false);
   const artworkUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadRequestRef = useRef<XMLHttpRequest | null>(null);
+  const uploadCanceledRef = useRef(false);
   const [previewMedia, setPreviewMedia] = useState<MediaItem | null>(null);
   const [draggingArtworkUpload, setDraggingArtworkUpload] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -1298,6 +1324,167 @@ export default function ArtistDetailClient({ artistId }: Props) {
     return null;
   })();
 
+  const normalizeMediaFromComplete = (item: any): MediaItem => ({
+    _id: item.id || item._id,
+    artistId: item.artistId,
+    kind: item.kind,
+    filename: item.filename,
+    mimeType: item.mimeType,
+    sizeBytes: item.sizeBytes,
+    s3Key: item.s3Key,
+    url: item.url,
+    createdAt: item.createdAt,
+  });
+
+  const uploadFilesDirect = async (files: File[], kind: string) => {
+    uploadCanceledRef.current = false;
+    const uploaded: MediaItem[] = [];
+
+    for (const file of files) {
+      const startedAt = Date.now();
+      const updateOverlay = (opts: Partial<UploadOverlay>) => {
+        setUploadOverlay((prev) => {
+          const base: UploadOverlay =
+            prev ??
+            ({
+              percent: 0,
+              loaded: 0,
+              total: file.size,
+              etaSeconds: null,
+              fileCount: files.length,
+              startedAt,
+              phase: "sending",
+              currentFileName: file.name,
+            } satisfies UploadOverlay);
+          return { ...base, ...opts, currentFileName: file.name };
+        });
+      };
+
+      updateOverlay({
+        percent: 0,
+        loaded: 0,
+        total: file.size,
+        etaSeconds: null,
+        phase: "sending",
+        currentFileName: file.name,
+      });
+
+      const presignRes = await fetch("/api/uploads/presign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          artistId,
+          kind,
+          filename: file.name || "upload",
+          contentType: file.type || "application/octet-stream",
+          size: file.size,
+        }),
+      });
+      const presignJson = (await presignRes.json().catch(() => null)) as any;
+      if (!presignRes.ok) {
+        throw new Error(presignJson?.error?.message || presignJson?.error || "Presign failed");
+      }
+
+      const { uploadUrl, headers, key } = presignJson as {
+        uploadUrl: string;
+        headers?: Record<string, string>;
+        key: string;
+      };
+
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        uploadRequestRef.current = xhr;
+        xhr.open("PUT", uploadUrl);
+        if (headers) {
+          Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+        }
+        xhr.responseType = "text";
+        xhr.timeout = 10 * 60 * 1000;
+
+        xhr.upload.onprogress = (event) => {
+          if (!event.lengthComputable) return;
+          const percent = Math.min(100, Math.round((event.loaded / event.total) * 100));
+          const elapsedSeconds = Math.max((Date.now() - startedAt) / 1000, 0.1);
+          const speed = event.loaded / elapsedSeconds;
+          const etaSeconds = speed > 0 ? (event.total - event.loaded) / speed : null;
+          updateOverlay({
+            percent,
+            loaded: event.loaded,
+            total: event.total,
+            etaSeconds,
+            phase: percent >= 100 ? "processing" : "sending",
+          });
+        };
+
+        xhr.upload.onload = () => {
+          updateOverlay({ percent: 100, phase: "processing", etaSeconds: 0, loaded: file.size, total: file.size });
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`Upload failed with status ${xhr.status}`));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Upload failed (network error)"));
+        xhr.ontimeout = () => reject(new Error("Upload timed out"));
+        xhr.onabort = () => {
+          uploadCanceledRef.current = true;
+          reject(new Error("Upload canceled"));
+        };
+
+        xhr.send(file);
+      });
+
+      const completeRes = await fetch("/api/uploads/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          artistId,
+          kind,
+          filename: file.name || "upload",
+          contentType: file.type || "application/octet-stream",
+          size: file.size,
+          key,
+        }),
+      });
+      const completeJson = (await completeRes.json().catch(() => null)) as any;
+      if (!completeRes.ok || !completeJson?.media) {
+        throw new Error(completeJson?.error || "Failed to finalize upload");
+      }
+
+      const normalized = normalizeMediaFromComplete(completeJson.media);
+      uploaded.push(normalized);
+      uploadRequestRef.current = null;
+      setUploadOverlay((prev) =>
+        prev
+          ? {
+              ...prev,
+              percent: 100,
+              loaded: file.size,
+              total: file.size,
+              phase: "processing",
+              etaSeconds: 0,
+              currentFileName: file.name,
+            }
+          : prev,
+      );
+    }
+
+    return uploaded;
+  };
+
+  const cancelUpload = () => {
+    uploadCanceledRef.current = true;
+    uploadRequestRef.current?.abort();
+    uploadRequestRef.current = null;
+    setUploadingMedia(false);
+    setArtworkGalleryUploading(false);
+    setUploadOverlay(null);
+    setMediaError("Upload canceled.");
+  };
+
   const handleUploadMedia = async (e: FormEvent) => {
     e.preventDefault();
     setMediaError(null);
@@ -1307,26 +1494,19 @@ export default function ArtistDetailClient({ artistId }: Props) {
     }
     setUploadingMedia(true);
     try {
-      const formData = new FormData();
-      formData.append("kunstlerId", artistId);
-      formData.append("kind", mediaKind);
-      Array.from(mediaFiles).forEach((file) => formData.append("files", file));
-
-      const res = await fetch("/api/media", {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) {
-        const payload = await res.json().catch(() => null);
-        throw new Error(parseErrorMessage(payload));
+      const uploaded = await uploadFilesDirect(Array.from(mediaFiles), mediaKind);
+      if (uploaded.length) {
+        setMedia((prev) => [...uploaded, ...prev]);
       }
-      const json = await res.json();
-      setMedia((prev) => [...json.media, ...prev]);
       setMediaFiles(null);
     } catch (err: any) {
-      setMediaError(err?.message ?? "Upload failed");
+      if (!uploadCanceledRef.current) {
+        setMediaError(err?.message ?? "Upload failed");
+      }
     } finally {
       setUploadingMedia(false);
+      uploadRequestRef.current = null;
+      setTimeout(() => setUploadOverlay(null), 400);
     }
   };
 
@@ -1337,21 +1517,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
     setArtworkSuccessAdminUrl(null);
     setArtworkGalleryUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("kunstlerId", artistId);
-      formData.append("kind", "artwork");
-      Array.from(files).forEach((file) => formData.append("files", file));
-
-      const res = await fetch("/api/media", {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) {
-        const payload = await res.json().catch(() => null);
-        throw new Error(parseErrorMessage(payload));
-      }
-      const json = await res.json();
-      const uploaded: MediaItem[] = Array.isArray(json.media) ? json.media : [];
+      const uploaded = await uploadFilesDirect(Array.from(files), "artwork");
       const uploadedIds = uploaded.map((item) => item._id).filter(Boolean) as string[];
       if (uploaded.length) {
         setMedia((prev) => [...uploaded, ...prev]);
@@ -1368,11 +1534,14 @@ export default function ArtistDetailClient({ artistId }: Props) {
           return next;
         });
       }
-      await refreshMediaList();
     } catch (err: any) {
-      setMediaError(err?.message ?? "Upload failed");
+      if (!uploadCanceledRef.current) {
+        setMediaError(err?.message ?? "Upload failed");
+      }
     } finally {
       setArtworkGalleryUploading(false);
+      uploadRequestRef.current = null;
+      setTimeout(() => setUploadOverlay(null), 400);
       if (artworkUploadInputRef.current) {
         artworkUploadInputRef.current.value = "";
       }
@@ -4105,6 +4274,57 @@ export default function ArtistDetailClient({ artistId }: Props) {
 
   return (
     <>
+      {uploadOverlay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl rounded-2xl bg-white p-4 shadow-2xl">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-lg font-semibold text-slate-900">
+                  {uploadOverlay.phase === "processing" ? "Finishing upload…" : "Uploading…"}
+                </div>
+                <div className="text-xs text-slate-600">
+                  {uploadOverlay.phase === "processing"
+                    ? uploadOverlay.currentFileName
+                      ? `Finishing ${uploadOverlay.currentFileName}`
+                      : "Saving to storage…"
+                    : `${uploadOverlay.fileCount} file${uploadOverlay.fileCount === 1 ? "" : "s"} · ${formatBytes(uploadOverlay.total)}${
+                        uploadOverlay.currentFileName ? ` · ${uploadOverlay.currentFileName}` : ""
+                      }`}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={cancelUpload}
+                className="rounded border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300"
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div className="mt-4 h-3 w-full overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-slate-800 transition-[width]"
+                style={{ width: `${Math.min(100, Math.max(0, uploadOverlay.percent))}%` }}
+              />
+            </div>
+            <div className="mt-2 flex items-center justify-between text-xs text-slate-600">
+              <span>{Math.round(uploadOverlay.percent)}%</span>
+              <span>
+                {uploadOverlay.loaded > 0 ? formatBytes(uploadOverlay.loaded) : "0 B"} /{" "}
+                {uploadOverlay.total > 0 ? formatBytes(uploadOverlay.total) : "—"}
+              </span>
+              <span>
+                {uploadOverlay.phase === "processing"
+                  ? "Finishing on server…"
+                  : uploadOverlay.etaSeconds !== null
+                    ? `~${Math.max(1, Math.round(uploadOverlay.etaSeconds))}s left`
+                    : "Calculating time..."}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       <section className="page space-y-6">
         <div className="flex items-center justify-between">
           <div>

@@ -103,6 +103,18 @@ export async function uploadToS3(
   };
 }
 
+export async function createPresignedPutUrl(key: string, contentType: string, expiresInSeconds = 15 * 60) {
+  const cfg = resolveConfig();
+  const s3 = getClient();
+  const command = new PutObjectCommand({
+    Bucket: cfg.bucket,
+    Key: key,
+    ContentType: contentType,
+  });
+  const uploadUrl = await getSignedUrl(s3, command, { expiresIn: expiresInSeconds });
+  return { uploadUrl, expiresIn: expiresInSeconds };
+}
+
 export async function downloadFromS3(key: string) {
   const cfg = resolveConfig();
   const s3 = getClient();
@@ -123,7 +135,7 @@ export async function downloadFromS3(key: string) {
   };
 }
 
-export async function getS3ObjectUrl(key: string) {
+export async function getS3ObjectUrl(key: string, expiresInSeconds = 60 * 60) {
   const cfg = resolveConfig();
   if (cfg.publicBaseUrl) return `${cfg.publicBaseUrl}/${key}`;
   const s3 = getClient();
@@ -133,6 +145,6 @@ export async function getS3ObjectUrl(key: string) {
       Bucket: cfg.bucket,
       Key: key,
     }),
-    { expiresIn: 60 * 60 },
+    { expiresIn: expiresInSeconds },
   );
 }

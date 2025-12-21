@@ -28,6 +28,7 @@ type UploadOverlay = {
   fileCount: number;
   startedAt: number;
   phase: "sending" | "processing";
+  currentFileName?: string;
 };
 
 const kindOptions: Array<{ value: MediaKind | "all"; label: string }> = [
@@ -77,9 +78,11 @@ export default function ArtistMediaPage() {
   const [uploadOverlay, setUploadOverlay] = useState<UploadOverlay | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [artistId, setArtistId] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const uploadRequestRef = useRef<XMLHttpRequest | null>(null);
+  const uploadCanceledRef = useRef(false);
 
   const loadMedia = async () => {
     setLoading(true);
@@ -102,145 +105,211 @@ export default function ArtistMediaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kindFilter]);
 
+  useEffect(() => {
+    const loadArtist = async () => {
+      try {
+        const res = await fetch("/api/artist/me", { cache: "no-store" });
+        const payload = (await res.json().catch(() => null)) as { id?: string; error?: string } | null;
+        if (!res.ok || !payload?.id) throw new Error(payload?.error || "Artist not found");
+        setArtistId(payload.id);
+      } catch (err: any) {
+        console.error("Failed to load artist", err);
+        setError(err?.message ?? "Failed to load artist");
+      }
+    };
+    loadArtist();
+  }, []);
+
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    if (!artistId) {
+      setError("Artist ID missing. Please reload.");
+      return;
+    }
+
+    uploadCanceledRef.current = false;
     const selected = Array.from(files);
-    const totalBytes = selected.reduce((sum, file) => sum + file.size, 0);
     const startedAt = Date.now();
-    let success = false;
+    let successCount = 0;
 
     setUploading(true);
     setError(null);
     setMessage(null);
-    setUploadOverlay({
-      percent: 0,
-      loaded: 0,
-      total: totalBytes,
-      etaSeconds: null,
-      fileCount: selected.length,
-      startedAt,
-      phase: "sending",
-    });
 
-    const formData = new FormData();
-    formData.append("kind", uploadKind);
-    selected.forEach((file) => formData.append("files", file));
+    const uploadOne = (file: File) =>
+      new Promise<MediaItem>((resolve, reject) => {
+        const startTime = Date.now();
 
-    const sendWithProgress = () =>
-      new Promise<{ media?: MediaItem[]; error?: string }>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        uploadRequestRef.current = xhr;
-        xhr.open("POST", "/api/artist/media");
-        xhr.responseType = "json";
-        xhr.timeout = 5 * 60 * 1000; // 5 minutes
-
-        xhr.upload.onprogress = (event) => {
+        const updateOverlay = (opts: Partial<UploadOverlay>) => {
           setUploadOverlay((prev) => {
-            const base =
+            const base: UploadOverlay =
               prev ??
               ({
                 percent: 0,
                 loaded: 0,
-                total: event.lengthComputable ? event.total : totalBytes,
+                total: file.size,
                 etaSeconds: null,
                 fileCount: selected.length,
                 startedAt,
                 phase: "sending",
+                currentFileName: file.name,
               } satisfies UploadOverlay);
-            if (!event.lengthComputable) return base;
-            const percent = Math.min(100, Math.round((event.loaded / event.total) * 100));
-            const elapsedSeconds = Math.max((Date.now() - startedAt) / 1000, 0.1);
-            const speed = event.loaded / elapsedSeconds;
-            const etaSeconds = speed > 0 ? (event.total - event.loaded) / speed : null;
-            return {
-              ...base,
-              percent,
-              loaded: event.loaded,
-              total: event.total,
-              etaSeconds,
-              phase: percent >= 100 ? "processing" : "sending",
-            };
+            return { ...base, ...opts };
           });
         };
 
-        xhr.upload.onload = () => {
-          setUploadOverlay((prev) => (prev ? { ...prev, percent: 100, phase: "processing", etaSeconds: 0 } : prev));
+        updateOverlay({
+          percent: 0,
+          loaded: 0,
+          total: file.size,
+          etaSeconds: null,
+          phase: "sending",
+          currentFileName: file.name,
+        });
+
+        const doPresign = async () => {
+          const res = await fetch("/api/uploads/presign", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              artistId,
+              kind: uploadKind,
+              filename: file.name || "upload",
+              contentType: file.type || "application/octet-stream",
+              size: file.size,
+            }),
+          });
+          const json = (await res.json().catch(() => null)) as any;
+          if (!res.ok) {
+            throw new Error(json?.error?.message || json?.error || "Presign failed");
+          }
+          return json as {
+            key: string;
+            uploadUrl: string;
+            headers?: Record<string, string>;
+            expiresIn: number;
+            previewUrl?: string;
+          };
         };
 
-        xhr.onload = () => {
-          const status = xhr.status;
-          const header = xhr.getResponseHeader("content-type") || "";
-          let payload: any = xhr.response;
-
-          if (!payload && header.includes("application/json")) {
-            try {
-              payload = JSON.parse(xhr.responseText);
-            } catch {
-              payload = null;
+        const doUpload = (uploadUrl: string, headers?: Record<string, string>) =>
+          new Promise<void>((resolveUpload, rejectUpload) => {
+            const xhr = new XMLHttpRequest();
+            uploadRequestRef.current = xhr;
+            xhr.open("PUT", uploadUrl);
+            if (headers) {
+              Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
             }
+            xhr.responseType = "text";
+            xhr.timeout = 10 * 60 * 1000; // 10 minutes
+
+            xhr.upload.onprogress = (event) => {
+              if (!event.lengthComputable) return;
+              const percent = Math.min(100, Math.round((event.loaded / event.total) * 100));
+              const elapsedSeconds = Math.max((Date.now() - startTime) / 1000, 0.1);
+              const speed = event.loaded / elapsedSeconds;
+              const etaSeconds = speed > 0 ? (event.total - event.loaded) / speed : null;
+              updateOverlay({
+                percent,
+                loaded: event.loaded,
+                total: event.total,
+                etaSeconds,
+                phase: percent >= 100 ? "processing" : "sending",
+                currentFileName: file.name,
+              });
+            };
+
+            xhr.upload.onload = () => {
+              updateOverlay({ percent: 100, phase: "processing", etaSeconds: 0, loaded: file.size, total: file.size });
+            };
+
+            xhr.onload = () => {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                resolveUpload();
+              } else {
+                rejectUpload(new Error(`Upload failed with status ${xhr.status}`));
+              }
+            };
+            xhr.onerror = () => rejectUpload(new Error("Upload failed (network error)"));
+            xhr.ontimeout = () => rejectUpload(new Error("Upload timed out"));
+            xhr.onabort = () => {
+              uploadCanceledRef.current = true;
+              rejectUpload(new Error("Upload canceled"));
+            };
+
+            xhr.send(file);
+          });
+
+        const doComplete = async (payload: { key: string }) => {
+          const res = await fetch("/api/uploads/complete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              artistId,
+              kind: uploadKind,
+              filename: file.name || "upload",
+              contentType: file.type || "application/octet-stream",
+              size: file.size,
+              key: payload.key,
+            }),
+          });
+          const json = (await res.json().catch(() => null)) as any;
+          if (!res.ok || !json?.media) {
+            throw new Error(json?.error || "Failed to finalize upload");
           }
-
-          if (status >= 200 && status < 300) {
-            resolve((payload as { media?: MediaItem[]; error?: string }) || {});
-            return;
-          }
-
-          const serverError =
-            (payload as { error?: string } | null)?.error ||
-            (typeof payload === "string" ? payload : "") ||
-            (xhr.responseText || "").slice(0, 180);
-
-          let message = serverError || `Upload failed (status ${status || "network"})`;
-          if (status === 413) {
-            message = "Upload rejected: request is larger than the server limit (413). Please keep files under the configured max or restart the server after changing the limit.";
-          } else if (status === 401 || status === 403) {
-            message = "Not authorized to upload. Please log in again.";
-          }
-
-          reject(new Error(message));
+          return json.media as MediaItem;
         };
 
-        xhr.onerror = () => reject(new Error("Upload failed (network error)"));
-        xhr.ontimeout = () =>
-          reject(
-            new Error(
-              "Upload timed out while finishing on the server. If the file is very large, please retry with a stable connection.",
-            ),
-          );
-        xhr.onabort = () => reject(new Error("Upload canceled"));
-        xhr.send(formData);
+        (async () => {
+          try {
+            const presigned = await doPresign();
+            await doUpload(presigned.uploadUrl, presigned.headers);
+            const media = await doComplete({ key: presigned.key });
+            resolve(media);
+          } catch (err) {
+            reject(err);
+          } finally {
+            uploadRequestRef.current = null;
+          }
+        })();
       });
 
     try {
-      const payload = await sendWithProgress();
-      const uploaded = Array.isArray(payload?.media) ? payload.media : [];
-      setMedia((prev) => [...uploaded, ...prev]);
-      setMessage(`Uploaded ${uploaded.length} file${uploaded.length === 1 ? "" : "s"}`);
-      setUploadOverlay((prev) =>
-        prev
-          ? {
-              ...prev,
-              percent: 100,
-              loaded: prev.total || totalBytes,
-              etaSeconds: 0,
-              phase: "processing",
-            }
-          : null,
-      );
-      success = true;
+      const uploadedItems: MediaItem[] = [];
+      for (const file of selected) {
+        // eslint-disable-next-line no-await-in-loop
+        const mediaItem = await uploadOne(file);
+        uploadedItems.push(mediaItem);
+        setMedia((prev) => [mediaItem, ...prev]);
+        successCount += 1;
+        setUploadOverlay((prev) =>
+          prev
+            ? {
+                ...prev,
+                percent: 100,
+                loaded: file.size,
+                total: file.size,
+                phase: "processing",
+                etaSeconds: 0,
+              }
+            : null,
+        );
+      }
+      setMessage(`Uploaded ${successCount} file${successCount === 1 ? "" : "s"}`);
     } catch (err: any) {
-      setError(err?.message ?? "Upload failed");
+      if (!uploadCanceledRef.current) {
+        setError(err?.message ?? "Upload failed");
+      }
       setUploadOverlay(null);
     } finally {
       setUploading(false);
       uploadRequestRef.current = null;
-      if (success) {
-        setTimeout(() => setUploadOverlay(null), 900);
-      }
+      setTimeout(() => setUploadOverlay(null), 400);
     }
   };
 
   const cancelUpload = () => {
+    uploadCanceledRef.current = true;
     uploadRequestRef.current?.abort();
     uploadRequestRef.current = null;
     setUploading(false);
@@ -292,8 +361,12 @@ export default function ArtistMediaPage() {
                 </div>
                 <div className="artist-upload-sub">
                   {uploadOverlay.phase === "processing"
-                    ? "Saving to storage…"
-                    : `${uploadOverlay.fileCount} file${uploadOverlay.fileCount === 1 ? "" : "s"} · ${formatBytes(uploadOverlay.total)}`}
+                    ? uploadOverlay.currentFileName
+                      ? `Finishing ${uploadOverlay.currentFileName}`
+                      : "Saving to storage…"
+                    : `${uploadOverlay.fileCount} file${uploadOverlay.fileCount === 1 ? "" : "s"} · ${formatBytes(uploadOverlay.total)}${
+                        uploadOverlay.currentFileName ? ` · ${uploadOverlay.currentFileName}` : ""
+                      }`}
                 </div>
               </div>
               <button type="button" className="artist-btn-ghost" onClick={cancelUpload} disabled={!uploading}>
