@@ -7,7 +7,7 @@ import { connectMongo } from "@/lib/mongodb";
 import { getS3ObjectUrl, uploadToS3 } from "@/lib/s3";
 import { MediaModel, mediaKinds } from "@/models/Media";
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);

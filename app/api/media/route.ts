@@ -4,7 +4,7 @@ import { connectMongo } from "@/lib/mongodb";
 import { MediaModel, mediaKinds } from "@/models/Media";
 import { getS3ObjectUrl, uploadToS3 } from "@/lib/s3";
 
-const MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB per file
+const MAX_SIZE_BYTES = 500 * 1024 * 1024; // 500MB per file
 
 function sanitizeFilename(name: string) {
   const trimmed = name.trim() || "upload";

@@ -346,6 +346,70 @@
   justify-content: space-between;
 }
 
+.artist-upload-modal {
+  position: fixed;
+  inset: 0;
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--bg) 55%, rgba(0, 0, 0, 0.45));
+  backdrop-filter: blur(8px);
+  z-index: 50;
+}
+
+.artist-upload-modal-card {
+  width: min(520px, 100%);
+  background: var(--surface);
+  border-radius: 16px;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+  border: 1px solid color-mix(in srgb, var(--surface) 80%, transparent);
+  padding: 16px;
+}
+
+.artist-upload-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.artist-upload-title {
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.artist-upload-sub {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.artist-progress-bar {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.artist-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, transparent));
+  transition: width 160ms ease;
+}
+
+.artist-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .artist-chip {
   display: inline-flex;
   align-items: center;
