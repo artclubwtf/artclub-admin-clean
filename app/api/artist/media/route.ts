@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { Types } from "mongoose";
+import { Readable } from "stream";
 
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
@@ -84,11 +85,10 @@ export async function POST(req: Request) {
       if (file.size > MAX_FILE_SIZE) {
         return NextResponse.json({ error: `File too large: ${file.name}` }, { status: 400 });
       }
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
       const safeName = file.name || "upload";
       const key = `artist/${artistId}/${Date.now()}-${safeName.replace(/\s+/g, "-")}`;
-      const uploaded = await uploadToS3(key, buffer, file.type || "application/octet-stream", safeName);
+      const stream = Readable.fromWeb(file.stream());
+      const uploaded = await uploadToS3(key, stream, file.type || "application/octet-stream", safeName, file.size);
 
       const created = await MediaModel.create({
         artistId,

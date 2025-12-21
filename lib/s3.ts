@@ -1,5 +1,6 @@
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { Readable } from "stream";
 
 type S3Config = {
   region: string;
@@ -58,15 +59,29 @@ async function streamToBuffer(stream: any): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-export async function uploadToS3(key: string, body: Buffer, contentType: string, filename?: string) {
+type UploadBody = Buffer | Uint8Array | Readable | ReadableStream;
+
+export async function uploadToS3(
+  key: string,
+  body: UploadBody,
+  contentType: string,
+  filename?: string,
+  contentLength?: number,
+) {
   const cfg = resolveConfig();
   const s3 = getClient();
+
+  const nodeBody = body instanceof Readable ? body : body instanceof ReadableStream ? Readable.fromWeb(body) : body;
+  const size =
+    typeof (nodeBody as any)?.length === "number" ? (nodeBody as any).length : typeof contentLength === "number" ? contentLength : undefined;
+
   await s3.send(
     new PutObjectCommand({
       Bucket: cfg.bucket,
       Key: key,
-      Body: body,
+      Body: nodeBody as any,
       ContentType: contentType,
+      ContentLength: size,
     }),
   );
   const url = cfg.publicBaseUrl
@@ -82,7 +97,7 @@ export async function uploadToS3(key: string, body: Buffer, contentType: string,
   return {
     key,
     url,
-    sizeBytes: body.length,
+    sizeBytes: size,
     mimeType: contentType,
     filename,
   };

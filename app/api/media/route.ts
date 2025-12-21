@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
+import { Readable } from "stream";
 import { connectMongo } from "@/lib/mongodb";
 import { MediaModel, mediaKinds } from "@/models/Media";
 import { getS3ObjectUrl, uploadToS3 } from "@/lib/s3";
@@ -72,11 +73,11 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: `File too large: ${file.name}` }, { status: 400 });
       }
       const filename = sanitizeFilename(file.name || "upload");
-      const buffer = Buffer.from(await file.arrayBuffer());
       const contentType = file.type || "application/octet-stream";
       const timestamp = Date.now();
       const key = `media/${encodeURIComponent(kunstlerId)}/${timestamp}-${filename}`;
-      const uploaded = await uploadToS3(key, buffer, contentType, filename);
+      const stream = Readable.fromWeb(file.stream());
+      const uploaded = await uploadToS3(key, stream, contentType, filename, file.size);
       uploads.push({
         artistId: new Types.ObjectId(kunstlerId),
         kind: kindRaw,

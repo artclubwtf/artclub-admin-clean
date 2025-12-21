@@ -27,6 +27,7 @@ type UploadOverlay = {
   etaSeconds: number | null;
   fileCount: number;
   startedAt: number;
+  phase: "sending" | "processing";
 };
 
 const kindOptions: Array<{ value: MediaKind | "all"; label: string }> = [
@@ -118,6 +119,7 @@ export default function ArtistMediaPage() {
       etaSeconds: null,
       fileCount: selected.length,
       startedAt,
+      phase: "sending",
     });
 
     const formData = new FormData();
@@ -130,6 +132,7 @@ export default function ArtistMediaPage() {
         uploadRequestRef.current = xhr;
         xhr.open("POST", "/api/artist/media");
         xhr.responseType = "json";
+        xhr.timeout = 5 * 60 * 1000; // 5 minutes
 
         xhr.upload.onprogress = (event) => {
           setUploadOverlay((prev) => {
@@ -142,6 +145,7 @@ export default function ArtistMediaPage() {
                 etaSeconds: null,
                 fileCount: selected.length,
                 startedAt,
+                phase: "sending",
               } satisfies UploadOverlay);
             if (!event.lengthComputable) return base;
             const percent = Math.min(100, Math.round((event.loaded / event.total) * 100));
@@ -154,8 +158,13 @@ export default function ArtistMediaPage() {
               loaded: event.loaded,
               total: event.total,
               etaSeconds,
+              phase: percent >= 100 ? "processing" : "sending",
             };
           });
+        };
+
+        xhr.upload.onload = () => {
+          setUploadOverlay((prev) => (prev ? { ...prev, percent: 100, phase: "processing", etaSeconds: 0 } : prev));
         };
 
         xhr.onload = () => {
@@ -192,6 +201,12 @@ export default function ArtistMediaPage() {
         };
 
         xhr.onerror = () => reject(new Error("Upload failed (network error)"));
+        xhr.ontimeout = () =>
+          reject(
+            new Error(
+              "Upload timed out while finishing on the server. If the file is very large, please retry with a stable connection.",
+            ),
+          );
         xhr.onabort = () => reject(new Error("Upload canceled"));
         xhr.send(formData);
       });
@@ -208,6 +223,7 @@ export default function ArtistMediaPage() {
               percent: 100,
               loaded: prev.total || totalBytes,
               etaSeconds: 0,
+              phase: "processing",
             }
           : null,
       );
@@ -271,9 +287,13 @@ export default function ArtistMediaPage() {
           <div className="artist-upload-modal-card">
             <div className="artist-upload-modal-header">
               <div>
-                <div className="artist-upload-title">Uploading…</div>
+                <div className="artist-upload-title">
+                  {uploadOverlay.phase === "processing" ? "Finishing upload…" : "Uploading…"}
+                </div>
                 <div className="artist-upload-sub">
-                  {uploadOverlay.fileCount} file{uploadOverlay.fileCount === 1 ? "" : "s"} · {formatBytes(uploadOverlay.total)}
+                  {uploadOverlay.phase === "processing"
+                    ? "Saving to storage…"
+                    : `${uploadOverlay.fileCount} file${uploadOverlay.fileCount === 1 ? "" : "s"} · ${formatBytes(uploadOverlay.total)}`}
                 </div>
               </div>
               <button type="button" className="artist-btn-ghost" onClick={cancelUpload} disabled={!uploading}>
@@ -293,7 +313,13 @@ export default function ArtistMediaPage() {
                 {uploadOverlay.loaded > 0 ? formatBytes(uploadOverlay.loaded) : "0 B"} /{" "}
                 {uploadOverlay.total > 0 ? formatBytes(uploadOverlay.total) : "—"}
               </span>
-              <span>{uploadOverlay.etaSeconds !== null ? `~${formatEta(uploadOverlay.etaSeconds)} left` : "Calculating time..."}</span>
+              <span>
+                {uploadOverlay.phase === "processing"
+                  ? "Finishing on server…"
+                  : uploadOverlay.etaSeconds !== null
+                    ? `~${formatEta(uploadOverlay.etaSeconds)} left`
+                    : "Calculating time..."}
+              </span>
             </div>
           </div>
         </div>
