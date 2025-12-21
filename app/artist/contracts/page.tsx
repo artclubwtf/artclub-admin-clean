@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PageTitle } from "@/components/ui/PageTitle";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { Chip } from "@/components/ui/Chip";
+import { ApRow, ApSection, ApSectionHeader } from "@/components/artist/ApElements";
 
 type Contract = {
   id: string;
@@ -54,35 +52,37 @@ export default function ArtistContractsPage() {
     <div className="space-y-4">
       <PageTitle title="Contracts" description="View and download your agreements." />
 
-      {loading && <Card className="artist-placeholder">Loading contracts...</Card>}
-      {error && <Card className="artist-placeholder">Error: {error}</Card>}
-      {downloadError && <Card className="artist-placeholder">Download error: {downloadError}</Card>}
+      <ApSection>
+        <ApSectionHeader title="Your contracts" subtitle="Latest first." />
 
-      {!loading && !error && contracts.length === 0 && (
-        <EmptyState title="No contracts yet" description="You will see agreements here once available." />
-      )}
+        {loading && <div className="ap-note">Loading contracts...</div>}
+        {error && <div className="ap-note">Error: {error}</div>}
+        {downloadError && <div className="ap-note">Download error: {downloadError}</div>}
 
-      {contracts.length > 0 && (
-        <Card className="space-y-3">
-          <CardHeader title="Your contracts" subtitle="Latest first." />
-          <div className="artist-grid">
+        {!loading && !error && contracts.length === 0 ? (
+          <div className="ap-note">No contracts yet. You will see agreements here once available.</div>
+        ) : null}
+
+        {contracts.length > 0 && (
+          <div className="ap-rows">
             {contracts.map((c) => (
-              <div key={c.id} className="artist-media-card">
-                <div className="artist-section-title" style={{ fontSize: 15 }}>
-                  {c.filename || "Contract"}
-                </div>
-                <Chip label={c.contractType || "contract"} />
-                <div className="text-xs text-slate-500">{c.createdAt ? new Date(c.createdAt).toLocaleString() : ""}</div>
-                <div className="artist-media-actions">
-                  <button type="button" className="artist-btn-ghost" onClick={() => handleDownload(c.id)}>
-                    Download
-                  </button>
-                </div>
-              </div>
+              <ApRow
+                key={c.id}
+                title={c.filename || "Contract"}
+                subtitle={c.contractType || "contract"}
+                meta={
+                  <>
+                    <div className="ap-text-muted text-xs">{c.createdAt ? new Date(c.createdAt).toLocaleString() : ""}</div>
+                    <button type="button" className="ap-btn-ghost" onClick={() => handleDownload(c.id)}>
+                      Download
+                    </button>
+                  </>
+                }
+              />
             ))}
           </div>
-        </Card>
-      )}
+        )}
+      </ApSection>
     </div>
   );
 }

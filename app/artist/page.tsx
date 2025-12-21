@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+
+import { ApRow, ApSection, ApSectionHeader } from "@/components/artist/ApElements";
 
 type ArtistProfile = {
   id: string;
@@ -25,6 +26,14 @@ const stageHints: Record<string, string> = {
   "In Review": "Hang tight. You’ll hear from the team soon.",
   Offer: "Review contract details and share your media.",
   "Under Contract": "Keep media up to date and track payouts.",
+};
+
+const requestTone = (status: string) => {
+  const key = status.toLowerCase();
+  if (["approved", "completed", "resolved"].includes(key)) return "success";
+  if (["pending", "submitted", "in_review"].includes(key)) return "info";
+  if (["rejected", "error", "failed"].includes(key)) return "warn";
+  return "neutral";
 };
 
 export default function ArtistOverviewPage() {
@@ -84,76 +93,62 @@ export default function ArtistOverviewPage() {
   }, [profile?.stage]);
 
   return (
-    <div className="artist-card space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="artist-section-title">{profile?.name || "Artist Overview"}</div>
-          <div className="artist-section-sub">
-            {profile?.stage ? `Stage: ${profile.stage}` : "Loading your artist details..."}
+    <div className="space-y-4">
+      <ApSection>
+        <ApSectionHeader
+          title={profile?.name || "Artist Overview"}
+          subtitle="Profile summary and next steps"
+          action={profile?.stage ? <span className="ap-pill">Stage: {profile.stage}</span> : null}
+        />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="ap-section-subtitle">
+            {profile?.shopifyMetaobjectId ? "Linked to Shopify" : "You can sync your work when ready."}
           </div>
+          {profile?.heroImageUrl && (
+            <div
+              className="h-14 w-14 overflow-hidden rounded-full border"
+              style={{ borderColor: "var(--ap-border)" }}
+              aria-hidden
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={profile.heroImageUrl} alt="" className="h-full w-full object-cover" />
+            </div>
+          )}
         </div>
-        {profile?.heroImageUrl && (
-          <div className="h-14 w-14 overflow-hidden rounded-full shadow" aria-hidden>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={profile.heroImageUrl} alt="" className="h-full w-full object-cover" />
+
+        {error && <div className="ap-note">Error: {error}</div>}
+        {loading && !error && <div className="ap-note">Loading your profile...</div>}
+        {!loading && !error && <div className="ap-note">Next steps: {nextStep}</div>}
+      </ApSection>
+
+      <ApSection>
+        <ApSectionHeader title="Quick actions" subtitle="Jump to the most common tasks" />
+        <div className="ap-rows">
+          <ApRow title="Media" subtitle="Upload, preview, and pick files" href="/artist/media" icon="🖼️" chevron />
+          <ApRow title="Artworks" subtitle="Submit new pieces and track status" href="/artist/artworks" icon="🎨" chevron />
+          <ApRow title="Contracts" subtitle="See and download agreements" href="/artist/contracts" icon="📄" chevron />
+          <ApRow title="Payout" subtitle="View bank and tax info" href="/artist/payout" icon="💸" chevron />
+          <ApRow title="Messages" subtitle="Chat with the Artclub team" href="/artist/messages" icon="💬" chevron />
+        </div>
+      </ApSection>
+
+      <ApSection>
+        <ApSectionHeader title="Requests" subtitle="Track your submitted requests" />
+        {requests.length === 0 ? (
+          <div className="ap-note">No requests yet.</div>
+        ) : (
+          <div className="ap-rows">
+            {requests.map((r) => (
+              <ApRow
+                key={r.id}
+                title={r.type}
+                subtitle={r.createdAt ? new Date(r.createdAt).toLocaleString() : ""}
+                meta={<span className="ap-badge" data-tone={requestTone(r.status)}>{r.status}</span>}
+              />
+            ))}
           </div>
         )}
-      </div>
-
-      {error && <div className="artist-placeholder">Error: {error}</div>}
-      {loading && !error && <div className="artist-placeholder">Loading your profile...</div>}
-      {!loading && !error && (
-        <>
-          <div className="artist-placeholder">Next steps: {nextStep}</div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Link href="/artist/media" className="artist-card">
-              <div className="artist-section-title">Your media</div>
-              <div className="artist-section-sub">Upload files and keep assets organized.</div>
-              <div className="artist-placeholder">Coming next: uploads & previews.</div>
-            </Link>
-            <Link href="/artist/artworks" className="artist-card">
-              <div className="artist-section-title">Your artworks</div>
-              <div className="artist-section-sub">Prepare drafts and view statuses.</div>
-              <div className="artist-placeholder">Coming next: drafts & statuses.</div>
-            </Link>
-            <Link href="/artist/contracts" className="artist-card">
-              <div className="artist-section-title">Contracts</div>
-              <div className="artist-section-sub">View agreements when ready.</div>
-              <div className="artist-placeholder">Coming next: contract list.</div>
-            </Link>
-            <Link href="/artist/payout" className="artist-card">
-              <div className="artist-section-title">Payout</div>
-              <div className="artist-section-sub">Track upcoming payouts and details.</div>
-              <div className="artist-placeholder">Coming next: payout history.</div>
-            </Link>
-            <Link href="/artist/messages" className="artist-card">
-              <div className="artist-section-title">Messages</div>
-              <div className="artist-section-sub">Stay in touch with the team.</div>
-              <div className="artist-placeholder">Coming next: inbox & replies.</div>
-            </Link>
-          </div>
-
-          <div className="artist-card space-y-2">
-            <div className="artist-section-title">Requests</div>
-            <div className="artist-section-sub">Track your submitted requests.</div>
-            {requests.length === 0 ? (
-              <div className="artist-placeholder">No requests yet.</div>
-            ) : (
-              <ul className="space-y-2">
-                {requests.map((r) => (
-                  <li key={r.id} className="rounded-lg bg-white/60 p-3 shadow-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-semibold text-slate-900">{r.type}</div>
-                      <span className="artist-chip">{r.status}</span>
-                    </div>
-                    <div className="text-xs text-slate-500">{r.createdAt ? new Date(r.createdAt).toLocaleString() : ""}</div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </>
-      )}
+      </ApSection>
     </div>
   );
 }

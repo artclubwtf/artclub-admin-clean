@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { ApSection, ApSectionHeader, ApRow } from "@/components/artist/ApElements";
+
 type Request = {
   id: string;
   type: string;
@@ -25,20 +27,20 @@ type ShopifyProduct = {
   adminUrl?: string | null;
 };
 
-const statusStyles: Record<string, string> = {
-  submitted: "bg-blue-100 text-blue-800",
-  in_review: "bg-amber-100 text-amber-800",
-  approved: "bg-green-100 text-green-800",
-  rejected: "bg-rose-100 text-rose-800",
-  applied: "bg-emerald-100 text-emerald-800",
-};
-
 const statusLabels: Record<string, string> = {
   submitted: "Submitted",
   in_review: "In review",
   approved: "Approved",
   rejected: "Rejected",
   applied: "Applied to Shopify",
+};
+
+const statusTone = (status: string) => {
+  const key = status.toLowerCase();
+  if (key === "approved" || key === "applied") return "success";
+  if (key === "rejected") return "warn";
+  if (key === "submitted" || key === "in_review") return "info";
+  return "neutral";
 };
 
 export default function ArtistArtworksPage() {
@@ -93,106 +95,117 @@ export default function ArtistArtworksPage() {
 
   return (
     <div className="space-y-4">
-      <div className="artist-card space-y-2">
-        <div className="artist-section-title">Artworks</div>
-        <div className="artist-section-sub">
-          Submit new artworks for review. The team will process your submission and publish to Shopify.
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/artist/artworks/new" className="artist-btn inline-flex w-auto">
-            Submit new artwork
-          </Link>
-          <button type="button" className="artist-btn-ghost" onClick={() => { loadRequests(); loadProducts(); }}>
-            Refresh
-          </button>
-        </div>
-      </div>
+      <ApSection>
+        <ApSectionHeader
+          title="Artworks"
+          subtitle="Submit new artworks for review. The team will process your submission and publish to Shopify."
+          action={
+            <div className="flex flex-wrap gap-2">
+              <Link href="/artist/artworks/new" className="ap-btn">
+                Submit new artwork
+              </Link>
+              <button
+                type="button"
+                className="ap-btn-ghost"
+                onClick={() => {
+                  loadRequests();
+                  loadProducts();
+                }}
+              >
+                Refresh
+              </button>
+            </div>
+          }
+        />
+        <div className="ap-note">Keep uploads concise and add a short description so the team can process quickly.</div>
+      </ApSection>
 
-      <div className="artist-card space-y-3">
-        <div className="font-semibold text-slate-900">Your submissions</div>
-        <div className="text-sm text-slate-600">Track artwork requests and their status.</div>
-
-        {error && <div className="artist-placeholder">Error: {error}</div>}
-        {loadingRequests && <div className="artist-placeholder">Loading submissions...</div>}
-
-        {artworkRequests.length === 0 && !loadingRequests ? (
-          <div className="artist-placeholder">No submissions yet. Tap “Submit new artwork”.</div>
-        ) : (
+      <ApSection>
+        <ApSectionHeader title="Status" subtitle="Track submissions and Shopify products" />
+        <div className="space-y-4">
           <div className="space-y-2">
-            {artworkRequests.map((req) => {
-              const statusClass = statusStyles[req.status] || "bg-slate-100 text-slate-700";
-              const title = req.payload?.title || "Untitled artwork";
-              const offering = req.payload?.offering === "original_plus_prints" ? "Original + prints" : "Print only";
-              const images = req.payload?.mediaIds?.length ?? 0;
-              const statusLabel = statusLabels[req.status] || req.status;
+            <div className="ap-section-title">Your submissions</div>
+            <div className="ap-section-subtitle">Track artwork requests and their status.</div>
 
-              return (
-                <div key={req.id} className="artist-subtle-card">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="font-semibold text-slate-900">{title}</div>
-                      <div className="text-sm text-slate-600">{offering}</div>
-                    </div>
-                    <div className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClass}`}>{statusLabel}</div>
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-600">
-                    <span>{images} image(s)</span>
-                    <span>•</span>
-                    <span>{formatDate(req.createdAt)}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+            {error && <div className="ap-note">Error: {error}</div>}
+            {loadingRequests && <div className="ap-note">Loading submissions...</div>}
 
-      <div className="artist-card space-y-3">
-        <div className="font-semibold text-slate-900">In Shopify</div>
-        <div className="text-sm text-slate-600">Products already created for you.</div>
+            {artworkRequests.length === 0 && !loadingRequests ? (
+              <div className="ap-note">No submissions yet. Tap “Submit new artwork”.</div>
+            ) : (
+              <div className="ap-rows">
+                {artworkRequests.map((req) => {
+                  const title = req.payload?.title || "Untitled artwork";
+                  const offering = req.payload?.offering === "original_plus_prints" ? "Original + prints" : "Print only";
+                  const images = req.payload?.mediaIds?.length ?? 0;
+                  const statusLabel = statusLabels[req.status] || req.status;
 
-        {productError && <div className="artist-placeholder">Error: {productError}</div>}
-        {loadingProducts && <div className="artist-placeholder">Loading Shopify products...</div>}
-
-        {products.length === 0 && !loadingProducts ? (
-          <div className="artist-placeholder">No products yet. Once approved, your artworks show up here.</div>
-        ) : (
-          <div className="artist-grid">
-            {products.map((p) => (
-              <div key={p.id} className="artist-media-card">
-                <div className="artist-media-preview" style={{ height: 160 }}>
-                  {p.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.imageUrl} alt={p.title} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="text-xs text-slate-500">No image</div>
-                  )}
-                </div>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1">
-                    <div className="font-semibold text-slate-900">{p.title}</div>
-                    <div className="text-xs text-slate-500">{p.price ? `${p.price} ${p.currency || "EUR"}` : "No price yet"}</div>
-                  </div>
-                  <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                    {p.status || "draft"}
-                  </div>
-                </div>
-                {p.adminUrl && (
-                  <a
-                    href={p.adminUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="artist-btn-ghost text-center"
-                    style={{ width: "100%" }}
-                  >
-                    Open in Shopify
-                  </a>
-                )}
+                  return (
+                    <ApRow
+                      key={req.id}
+                      title={title}
+                      subtitle={`${offering} • ${formatDate(req.createdAt)}`}
+                      meta={
+                        <>
+                          <span className="ap-text-muted text-xs">{images} image(s)</span>
+                          <span className="ap-badge" data-tone={statusTone(req.status)}>
+                            {statusLabel}
+                          </span>
+                        </>
+                      }
+                    />
+                  );
+                })}
               </div>
-            ))}
+            )}
           </div>
-        )}
-      </div>
+
+          <div className="ap-divider" />
+
+          <div className="space-y-2">
+            <div className="ap-section-title">In Shopify</div>
+            <div className="ap-section-subtitle">Products already created for you.</div>
+
+            {productError && <div className="ap-note">Error: {productError}</div>}
+            {loadingProducts && <div className="ap-note">Loading Shopify products...</div>}
+
+            {products.length === 0 && !loadingProducts ? (
+              <div className="ap-note">No products yet. Once approved, your artworks show up here.</div>
+            ) : (
+              <div className="ap-grid">
+                {products.map((p) => (
+                  <div key={p.id} className="ap-media-tile">
+                    <div className="ap-media-thumb" style={{ height: 160 }}>
+                      {p.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.imageUrl} alt={p.title} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="ap-text-muted text-xs">No image</div>
+                      )}
+                    </div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <div className="font-semibold text-slate-900 dark:text-slate-100">{p.title}</div>
+                        <div className="ap-text-muted text-xs">
+                          {p.price ? `${p.price} ${p.currency || "EUR"}` : "No price yet"}
+                        </div>
+                      </div>
+                      <span className="ap-badge" data-tone="neutral">
+                        {p.status || "draft"}
+                      </span>
+                    </div>
+                    {p.adminUrl && (
+                      <a href={p.adminUrl} target="_blank" rel="noreferrer" className="ap-btn-ghost" style={{ width: "100%" }}>
+                        Open in Shopify
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </ApSection>
     </div>
   );
 }

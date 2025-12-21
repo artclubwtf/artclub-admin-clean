@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import ArtistShell from "@/components/artist/ArtistShell";
-import "./artist.css";
+import "../styles/artist-portal.css";
 
 export const metadata = {
   title: "Artist Portal | Artclub",
@@ -10,7 +10,7 @@ export const metadata = {
 
 export default function ArtistLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="artist-app">
+    <div className="ap-shell">
       <ArtistShell>{children}</ArtistShell>
     </div>
   );

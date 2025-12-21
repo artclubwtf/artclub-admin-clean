@@ -2,9 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PageTitle } from "@/components/ui/PageTitle";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { FilePreview } from "@/components/ui/FilePreview";
+import { ApSection, ApSectionHeader } from "@/components/artist/ApElements";
 
 type MediaItem = {
   id: string;
@@ -112,86 +111,88 @@ export default function ArtistMessagesPage() {
     <div className="space-y-4">
       <PageTitle title="Messages" description="Chat with the Artclub team. Attach files from your media." />
 
-      {error && <Card className="artist-placeholder">Error: {error}</Card>}
-      {loading && <Card className="artist-placeholder">Loading messages...</Card>}
+      <ApSection>
+        <ApSectionHeader title="Conversation" subtitle="Stay in touch with the team." />
 
-      <Card className="space-y-3" style={{ maxHeight: 520, overflowY: "auto" }}>
-        {messages.length === 0 && !loading ? (
-          <EmptyState title="No messages yet" description="Say hello or ask a question." />
-        ) : (
-          messages.map((m) => (
-            <div
-              key={m.id}
-              className={`flex ${m.senderRole === "artist" ? "justify-end" : "justify-start"}`}
-            >
-              <div
-                className="rounded-2xl px-3 py-2 shadow-sm"
-                style={{
-                  background: m.senderRole === "artist" ? "var(--accent)" : "color-mix(in srgb, var(--surface) 92%, transparent)",
-                  color: m.senderRole === "artist" ? "#fff" : "var(--text)",
-                  maxWidth: "82%",
-                }}
-              >
-                {m.text && <div className="text-sm whitespace-pre-wrap">{m.text}</div>}
-                {m.attachments?.length ? (
-                  <div className="mt-2 space-y-1">
-                    {m.attachments.map((att) => (
-                      <a
-                        key={att.id}
-                        href={att.url || "#"}
-                        target={att.url ? "_blank" : undefined}
-                        rel="noreferrer"
-                        className="block rounded bg-white/20 px-2 py-1 text-xs underline"
-                      >
-                        {att.mimeType || "File"} · {att.filename || att.id}
-                      </a>
-                    ))}
+        {error && <div className="ap-note">Error: {error}</div>}
+        {loading && <div className="ap-note">Loading messages...</div>}
+
+        <div className="ap-chat-shell">
+          <div className="ap-chat-thread">
+            {messages.length === 0 && !loading ? (
+              <div className="ap-empty-row">No messages yet. Say hello or ask a question.</div>
+            ) : (
+              messages.map((m) => (
+                <div key={m.id} className={`ap-chat-row ${m.senderRole === "artist" ? "justify-end" : "justify-start"}`}>
+                  <div className="ap-chat-bubble" data-role={m.senderRole}>
+                    {m.text && <div className="text-sm whitespace-pre-wrap">{m.text}</div>}
+                    {m.attachments?.length ? (
+                      <div className="mt-2 space-y-1">
+                        {m.attachments.map((att) => (
+                          <a
+                            key={att.id}
+                            href={att.url || "#"}
+                            target={att.url ? "_blank" : undefined}
+                            rel="noreferrer"
+                            className="block rounded border bg-transparent px-2 py-1 text-xs underline"
+                            style={{ borderColor: "var(--ap-border)" }}
+                          >
+                            {att.mimeType || "File"} · {att.filename || att.id}
+                          </a>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="ap-chat-meta">{formatTime(m.createdAt)}</div>
                   </div>
-                ) : null}
-                <div className="mt-1 text-[10px] opacity-70">{formatTime(m.createdAt)}</div>
+                </div>
+              ))
+            )}
+            <div ref={endRef} />
+          </div>
+
+          <div className="ap-composer">
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={3}
+              placeholder="Type your message..."
+            />
+
+            <div className="space-y-2">
+              <div className="ap-section-title" style={{ fontSize: 14 }}>
+                Attach from your media
+              </div>
+              <div className="ap-grid">
+                {availableMedia.map((m) => {
+                  const checked = selectedMediaIds.includes(m.id);
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => toggleMedia(m.id)}
+                      className={`ap-media-tile${checked ? " selected" : ""}`}
+                      style={{ alignItems: "flex-start" }}
+                    >
+                      <div className="ap-media-thumb" style={{ height: 100 }}>
+                        <FilePreview mimeType={m.mimeType} url={m.url} filename={m.filename || "media"} height={100} />
+                      </div>
+                      <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{m.filename || "Untitled"}</div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
-          ))
-        )}
-        <div ref={endRef} />
-      </Card>
 
-      <Card className="space-y-3">
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={3}
-          className="w-full rounded border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-          placeholder="Type your message..."
-        />
+            {selectedMedia.length > 0 && <div className="ap-note">Attachments: {selectedMedia.length} selected</div>}
 
-        <div className="space-y-2">
-          <div className="text-xs font-semibold text-slate-600">Attach from your media</div>
-          <div className="artist-grid">
-            {availableMedia.map((m) => {
-              const checked = selectedMediaIds.includes(m.id);
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => toggleMedia(m.id)}
-                  className={`artist-media-card ${checked ? "ring-2 ring-slate-900" : ""}`}
-                  style={{ alignItems: "flex-start" }}
-                >
-                  <FilePreview mimeType={m.mimeType} url={m.url} filename={m.filename || "media"} height={100} />
-                  <div className="text-sm font-semibold text-slate-900">{m.filename || "Untitled"}</div>
-                </button>
-              );
-            })}
+            <div className="ap-composer-actions">
+              <button type="button" className="ap-btn" onClick={handleSend} disabled={sending}>
+                {sending ? "Sending..." : "Send"}
+              </button>
+            </div>
           </div>
         </div>
-
-        {selectedMedia.length > 0 && <div className="artist-placeholder">Attachments: {selectedMedia.length} selected</div>}
-
-        <button type="button" className="artist-btn" onClick={handleSend} disabled={sending}>
-          {sending ? "Sending..." : "Send"}
-        </button>
-      </Card>
+      </ApSection>
     </div>
   );
 }

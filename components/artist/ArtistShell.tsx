@@ -31,64 +31,70 @@ export default function ArtistShell({ children }: PropsWithChildren<{ email?: st
     return pathname.startsWith(href);
   };
 
+  const navItems = [...mainNavItems, ...extraNavItems];
+  const current = navItems.find((item) => isActive(item.href));
+
   return (
-    <div className="artist-shell">
-      <aside className="artist-sidebar">
-        <div className="artist-logo">
-          <span className="artist-logo-dot" />
+    <div className="ap-layout">
+      <aside className="ap-sidebar">
+        <div className="ap-logo">
+          <span className="ap-logo-mark" />
           <div>
-            <div className="artist-logo-text">Artclub</div>
-            <div className="artist-logo-sub">Artist Portal</div>
+            <div className="ap-logo-text">Artclub</div>
+            <div className="ap-logo-sub">Artist Portal</div>
           </div>
         </div>
-        <nav className="artist-nav">
+        <nav className="ap-nav">
           {mainNavItems.map((item) => (
-            <Link key={item.href} href={item.href} className={`artist-nav-link${isActive(item.href) ? " active" : ""}`}>
-              <span className="artist-nav-icon" aria-hidden>
+            <Link key={item.href} href={item.href} className={`ap-nav-link${isActive(item.href) ? " active" : ""}`}>
+              <span className="ap-nav-icon" aria-hidden>
                 {item.icon}
               </span>
               <span>{item.label}</span>
             </Link>
           ))}
         </nav>
-        <div className="artist-nav">
+        <div className="ap-nav-label">More</div>
+        <nav className="ap-nav">
           {extraNavItems.map((item) => (
-            <Link key={item.href} href={item.href} className={`artist-nav-link${isActive(item.href) ? " active" : ""}`}>
-              <span className="artist-nav-icon" aria-hidden>
+            <Link key={item.href} href={item.href} className={`ap-nav-link${isActive(item.href) ? " active" : ""}`}>
+              <span className="ap-nav-icon" aria-hidden>
                 {item.icon}
               </span>
               <span>{item.label}</span>
             </Link>
           ))}
         </div>
-        <div className="artist-sidebar-footer">
-          <button type="button" className="artist-ghost-btn" onClick={() => signOut({ callbackUrl: "/login" })}>
+        <div className="ap-sidebar-footer">
+          <button type="button" className="ap-btn-ghost" onClick={() => signOut({ callbackUrl: "/login" })}>
             Logout
           </button>
         </div>
       </aside>
 
-      <div className="artist-main">
-        <header className="artist-header">
+      <div className="ap-main">
+        <header className="ap-header">
           <div>
-            <div className="artist-header-title">Artist Portal</div>
-            <div className="artist-header-sub">Stay up to date and manage your work.</div>
+            <div className="ap-title-eyebrow">Artist Portal</div>
+            <div className="ap-title">{current?.label || "Welcome"}</div>
           </div>
-          <button type="button" className="artist-ghost-btn" onClick={() => signOut({ callbackUrl: "/login" })}>
-            Logout
-          </button>
+          <div className="ap-header-actions">
+            <button type="button" className="ap-icon-btn" onClick={() => signOut({ callbackUrl: "/login" })}>
+              Logout
+            </button>
+          </div>
         </header>
 
-        <main className="artist-content">{children}</main>
+        <main className="ap-content">{children}</main>
       </div>
 
-      <nav className="artist-bottom-nav">
-        {mainNavItems.map((item) => (
-          <Link key={item.href} href={item.href} className={`artist-bottom-link${isActive(item.href) ? " active" : ""}`}>
-            <span className="artist-bottom-icon" aria-hidden>
+      <nav className="ap-bottom-nav">
+        {navItems.map((item) => (
+          <Link key={item.href} href={item.href} className={`ap-bottom-link${isActive(item.href) ? " active" : ""}`}>
+            <span className="ap-bottom-icon" aria-hidden>
               {item.icon}
             </span>
-            <span className="artist-bottom-label">{item.label}</span>
+            <span className="ap-bottom-label">{item.label}</span>
           </Link>
         ))}
       </nav>

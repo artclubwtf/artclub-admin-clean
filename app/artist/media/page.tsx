@@ -1,11 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { PageTitle } from "@/components/ui/PageTitle";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { Chip } from "@/components/ui/Chip";
 import { FilePreview } from "@/components/ui/FilePreview";
+import { PageTitle } from "@/components/ui/PageTitle";
+import { ApSection, ApSectionHeader } from "@/components/artist/ApElements";
 
 type MediaKind = "artwork" | "social" | "other";
 
@@ -141,7 +139,7 @@ export default function ArtistMediaPage() {
         title="Media"
         description="Upload, preview, and pick files for submissions or messages."
         actions={
-          <div className="artist-segmented">
+          <div className="ap-segmented">
             {kindOptions.map((opt) => (
               <button
                 key={opt.value}
@@ -156,17 +154,12 @@ export default function ArtistMediaPage() {
         }
       />
 
-      <Card className="space-y-3">
-        <CardHeader
+      <ApSection>
+        <ApSectionHeader
           title="Upload"
           subtitle="Tap upload or drop files. Max 20MB each."
           action={
-            <select
-              value={uploadKind}
-              onChange={(e) => setUploadKind(e.target.value as MediaKind)}
-              className="artist-ghost-btn"
-              style={{ padding: "9px 12px" }}
-            >
+            <select value={uploadKind} onChange={(e) => setUploadKind(e.target.value as MediaKind)} className="ap-btn-ghost">
               <option value="artwork">Artwork</option>
               <option value="social">Social</option>
               <option value="other">Other</option>
@@ -175,7 +168,7 @@ export default function ArtistMediaPage() {
         />
 
         <div
-          className={`artist-dropzone${dragging ? " dragging" : ""}`}
+          className={`ap-upload${dragging ? " dragging" : ""}`}
           onDragOver={(e) => {
             e.preventDefault();
             setDragging(true);
@@ -190,9 +183,9 @@ export default function ArtistMediaPage() {
             handleFiles(e.dataTransfer?.files || null);
           }}
         >
-          <div className="artist-upload-actions">
-            <div className="artist-section-sub">Drop files here or choose from your device.</div>
-            <button type="button" className="artist-btn" onClick={() => inputRef.current?.click()} disabled={uploading}>
+          <div className="ap-upload-actions">
+            <div className="ap-section-subtitle">Drop files here or choose from your device.</div>
+            <button type="button" className="ap-btn" onClick={() => inputRef.current?.click()} disabled={uploading}>
               {uploading ? "Uploading..." : "Upload"}
             </button>
           </div>
@@ -204,49 +197,51 @@ export default function ArtistMediaPage() {
             onChange={(e) => handleFiles(e.target.files)}
             accept="image/*,.pdf,video/*"
           />
-          <div className="artist-placeholder" style={{ marginTop: 10 }}>
+          <div className="ap-note" style={{ marginTop: 10 }}>
             Max 20MB per file. Supported: images, pdf, video.
           </div>
         </div>
 
-        {message && <div className="artist-placeholder">Success: {message}</div>}
-        {error && <div className="artist-placeholder">Error: {error}</div>}
-        {downloadError && <div className="artist-placeholder">Download error: {downloadError}</div>}
-      </Card>
+        {message && <div className="ap-note">Success: {message}</div>}
+        {error && <div className="ap-note">Error: {error}</div>}
+        {downloadError && <div className="ap-note">Download error: {downloadError}</div>}
+      </ApSection>
 
-      <Card className="space-y-3">
-        <CardHeader
+      <ApSection>
+        <ApSectionHeader
           title="Library"
           subtitle={`Newest first · ${kindFilter === "all" ? "all kinds" : kindFilter}`}
           action={
-            <button type="button" className="artist-btn-ghost" onClick={loadMedia} disabled={loading}>
+            <button type="button" className="ap-btn-ghost" onClick={loadMedia} disabled={loading}>
               Refresh
             </button>
           }
         />
 
         {loading ? (
-          <div className="artist-placeholder">Loading your media...</div>
+          <div className="ap-note">Loading your media...</div>
         ) : filteredMedia.length === 0 ? (
-          <EmptyState title="No media yet" description="Upload files to see them here." />
+          <div className="ap-note">No media yet. Upload files to see them here.</div>
         ) : (
-          <div className="artist-grid">
+          <div className="ap-grid">
             {filteredMedia.map((item) => (
-              <div key={item.id} className="artist-media-card">
-                <FilePreview mimeType={item.mimeType} url={item.url} filename={item.filename || item.s3Key} height={140} />
-                <div className="artist-media-meta">
-                  <Chip label={item.kind} />
-                  <div className="text-xs text-slate-500">{formatDate(item.createdAt)}</div>
+              <div key={item.id} className="ap-media-tile">
+                <div className="ap-media-thumb">
+                  <FilePreview mimeType={item.mimeType} url={item.url} filename={item.filename || item.s3Key} height={140} />
                 </div>
-                <div className="text-sm font-semibold text-slate-900">{item.filename || "Untitled"}</div>
-                <div className="text-xs text-slate-500">
+                <div className="ap-media-meta">
+                  <span className="ap-pill">{item.kind}</span>
+                  <div className="ap-text-muted text-xs">{formatDate(item.createdAt)}</div>
+                </div>
+                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{item.filename || "Untitled"}</div>
+                <div className="ap-text-muted text-xs">
                   {item.mimeType || "unknown"} · {formatBytes(item.sizeBytes)}
                 </div>
-                <div className="artist-media-actions">
-                  <button type="button" className="artist-btn-ghost" onClick={() => handleDownload(item)}>
+                <div className="ap-media-actions">
+                  <button type="button" className="ap-btn-ghost" onClick={() => handleDownload(item)}>
                     Download
                   </button>
-                  <button type="button" className="artist-btn-ghost" onClick={() => handleDelete(item.id)}>
+                  <button type="button" className="ap-btn-ghost" onClick={() => handleDelete(item.id)}>
                     Delete
                   </button>
                 </div>
@@ -254,7 +249,7 @@ export default function ArtistMediaPage() {
             ))}
           </div>
         )}
-      </Card>
+      </ApSection>
     </div>
   );
 }
