@@ -87,7 +87,8 @@ export async function POST(req: Request) {
       }
       const safeName = file.name || "upload";
       const key = `artist/${artistId}/${Date.now()}-${safeName.replace(/\s+/g, "-")}`;
-      const stream = Readable.fromWeb(file.stream());
+      const webStream = file.stream() as unknown as ReadableStream;
+      const stream = Readable.fromWeb(webStream);
       const uploaded = await uploadToS3(key, stream, file.type || "application/octet-stream", safeName, file.size);
 
       const created = await MediaModel.create({

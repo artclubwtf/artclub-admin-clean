@@ -76,7 +76,8 @@ export async function POST(req: Request) {
       const contentType = file.type || "application/octet-stream";
       const timestamp = Date.now();
       const key = `media/${encodeURIComponent(kunstlerId)}/${timestamp}-${filename}`;
-      const stream = Readable.fromWeb(file.stream());
+      const webStream = file.stream() as unknown as ReadableStream;
+      const stream = Readable.fromWeb(webStream);
       const uploaded = await uploadToS3(key, stream, contentType, filename, file.size);
       uploads.push({
         artistId: new Types.ObjectId(kunstlerId),
