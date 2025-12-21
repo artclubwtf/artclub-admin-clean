@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ComponentProps, PropsWithChildren, ReactNode } from "react";
+import type { ComponentProps, PropsWithChildren, ReactNode, JSX } from "react";
 
 function cx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
