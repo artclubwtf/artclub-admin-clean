@@ -198,6 +198,13 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
+.artist-subtle-card {
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), var(--shadow);
+}
+
 .artist-bottom-nav {
   position: fixed;
   bottom: 0;
