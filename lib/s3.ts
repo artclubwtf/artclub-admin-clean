@@ -1,4 +1,12 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+  UploadPartCommand,
+  type CompletedPart,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Readable } from "stream";
 
@@ -146,4 +154,48 @@ export async function getS3ObjectUrl(key: string, expiresInSeconds = 60 * 60) {
     }),
     { expiresIn: expiresInSeconds },
   );
+}
+
+export async function createMultipartUpload(key: string, contentType: string) {
+  const cfg = resolveConfig();
+  const s3 = getClient();
+  const command = new CreateMultipartUploadCommand({
+    Bucket: cfg.bucket,
+    Key: key,
+    ContentType: contentType,
+  });
+  const res = await s3.send(command);
+  if (!res.UploadId) throw new Error("Failed to create multipart upload");
+  return { uploadId: res.UploadId, bucket: cfg.bucket, key };
+}
+
+export async function getMultipartPartUrl(key: string, uploadId: string, partNumber: number, expiresInSeconds = 15 * 60) {
+  const cfg = resolveConfig();
+  const s3 = getClient();
+  const command = new UploadPartCommand({
+    Bucket: cfg.bucket,
+    Key: key,
+    UploadId: uploadId,
+    PartNumber: partNumber,
+  });
+  const url = await getSignedUrl(s3, command, { expiresIn: expiresInSeconds });
+  return { url, expiresIn: expiresInSeconds };
+}
+
+export async function completeMultipartUpload(key: string, uploadId: string, parts: CompletedPart[]) {
+  const cfg = resolveConfig();
+  const s3 = getClient();
+  const command = new CompleteMultipartUploadCommand({
+    Bucket: cfg.bucket,
+    Key: key,
+    UploadId: uploadId,
+    MultipartUpload: { Parts: parts },
+  });
+  const res = await s3.send(command);
+  return {
+    location: res.Location,
+    bucket: res.Bucket,
+    key: res.Key,
+    etag: res.ETag,
+  };
 }

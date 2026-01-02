@@ -2,8 +2,10 @@ import { compare } from "bcryptjs";
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 
+import { authCredentialsSchema } from "@/lib/authSchemas";
 import { connectMongo } from "@/lib/mongodb";
-import { UserModel } from "@/models/User";
+import { normalizeShopDomain } from "@/lib/shopDomain";
+import { UserModel, type UserRole } from "@/models/User";
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
@@ -17,13 +19,18 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const email = credentials?.email?.toString().trim().toLowerCase();
-        const password = credentials?.password?.toString() ?? "";
+        const parsed = authCredentialsSchema.safeParse(credentials ?? {});
+        if (!parsed.success) return null;
 
-        if (!email || !password) return null;
+        const email = parsed.data.email.toLowerCase();
+        const password = parsed.data.password;
+        const shopDomain = parsed.data.shopDomain ? normalizeShopDomain(parsed.data.shopDomain) : undefined;
 
         await connectMongo();
-        const user = await UserModel.findOne({ email }).lean();
+        const filter: Record<string, unknown> = { email, role: { $in: ["team", "artist"] } };
+        if (shopDomain) filter.shopDomain = shopDomain;
+
+        const user = await UserModel.findOne(filter).lean();
         if (!user || !user.isActive) return null;
 
         const isValid = await compare(password, user.passwordHash);
@@ -44,7 +51,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = (user as { id?: string }).id ?? token.sub;
         token.email = (user as { email?: string }).email ?? token.email;
-        const role = (user as { role?: "team" | "artist" }).role;
+        const role = (user as { role?: UserRole }).role;
         if (role) token.role = role;
         token.artistId = (user as { artistId?: string }).artistId;
         token.mustChangePassword = (user as { mustChangePassword?: boolean }).mustChangePassword;
@@ -58,7 +65,7 @@ export const authOptions: NextAuthOptions = {
           token.artistId = session.artistId as string;
         }
         if ("role" in session && session.role) {
-          token.role = session.role as "team" | "artist";
+          token.role = session.role as UserRole;
         }
       }
 
@@ -67,7 +74,7 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         session.user.id = (token.id as string) ?? token.sub ?? "";
-        session.user.role = (token.role as "team" | "artist") ?? "artist";
+        session.user.role = (token.role as UserRole) ?? "artist";
         session.user.email = (token.email as string) ?? session.user.email;
         if (token.artistId) session.user.artistId = token.artistId as string;
         session.user.mustChangePassword = token.mustChangePassword as boolean | undefined;

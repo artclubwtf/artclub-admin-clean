@@ -5,7 +5,7 @@ declare module "next-auth" {
   interface Session {
     user?: DefaultSession["user"] & {
       id: string;
-      role: "team" | "artist";
+      role: "team" | "artist" | "customer";
       artistId?: string;
       mustChangePassword?: boolean;
     };
@@ -13,7 +13,7 @@ declare module "next-auth" {
 
   interface User {
     id: string;
-    role: "team" | "artist";
+    role: "team" | "artist" | "customer";
     artistId?: string;
     mustChangePassword?: boolean;
   }
@@ -22,7 +22,7 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT extends DefaultJWT {
     id?: string;
-    role?: "team" | "artist";
+    role?: "team" | "artist" | "customer";
     artistId?: string;
     mustChangePassword?: boolean;
   }

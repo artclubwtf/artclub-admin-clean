@@ -3,6 +3,7 @@ import { Types } from "mongoose";
 import { NextResponse } from "next/server";
 
 import { connectMongo } from "@/lib/mongodb";
+import { resolveShopDomain } from "@/lib/shopDomain";
 import { ArtistModel } from "@/models/Artist";
 import { UserModel } from "@/models/User";
 
@@ -28,6 +29,11 @@ export async function POST(req: Request) {
       );
     }
 
+    const shopDomain = resolveShopDomain();
+    if (!shopDomain) {
+      return NextResponse.json({ error: "Missing Shopify shop domain" }, { status: 500 });
+    }
+
     await connectMongo();
     const artist = await ArtistModel.findById(artistId).select({ _id: 1 }).lean();
     if (!artist) {
@@ -44,6 +50,7 @@ export async function POST(req: Request) {
       email: emailRaw,
       role: "artist",
       artistId,
+      shopDomain,
       passwordHash,
       mustChangePassword: true,
       isActive: true,

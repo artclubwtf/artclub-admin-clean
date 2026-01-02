@@ -1,0 +1,58 @@
+import { NextResponse } from "next/server";
+import { Types } from "mongoose";
+import { z } from "zod";
+
+import { connectMongo } from "@/lib/mongodb";
+import { createMultipartUpload, getS3ObjectUrl } from "@/lib/s3";
+import { mediaKinds } from "@/models/Media";
+
+const schema = z.object({
+  artistId: z.string().trim().min(1, "artistId required"),
+  kind: z.enum(mediaKinds),
+  filename: z.string().trim().min(1, "filename required"),
+  contentType: z.string().trim().min(1, "contentType required"),
+  size: z.number().int().positive("size must be > 0"),
+});
+
+function slugFilename(name: string) {
+  const trimmed = name.trim() || "upload";
+  const base = trimmed.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 180);
+  return base || "upload";
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json().catch(() => null);
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    }
+    const { artistId, filename, kind, contentType } = parsed.data;
+    if (!Types.ObjectId.isValid(artistId)) {
+      return NextResponse.json({ error: "Invalid artistId" }, { status: 400 });
+    }
+
+    await connectMongo();
+
+    const safeName = slugFilename(filename);
+    const key = `artist/${encodeURIComponent(artistId)}/${Date.now()}-${safeName}`;
+    const { uploadId } = await createMultipartUpload(key, contentType);
+
+    const publicBase = process.env.S3_PUBLIC_BASE_URL ? process.env.S3_PUBLIC_BASE_URL.replace(/\/$/, "") : undefined;
+    const previewUrl = publicBase ? `${publicBase}/${key}` : await getS3ObjectUrl(key, 15 * 60).catch(() => undefined);
+
+    return NextResponse.json(
+      {
+        uploadId,
+        key,
+        previewUrl,
+        headers: { "Content-Type": contentType },
+        kind,
+      },
+      { status: 200 },
+    );
+  } catch (err) {
+    console.error("Create multipart upload failed", err);
+    return NextResponse.json({ error: "Failed to create multipart upload" }, { status: 500 });
+  }
+}

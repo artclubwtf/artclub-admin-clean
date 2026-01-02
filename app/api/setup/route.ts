@@ -1,6 +1,7 @@
 import { hash } from "bcryptjs";
 import { NextResponse } from "next/server";
 
+import { resolveShopDomain } from "@/lib/shopDomain";
 import { connectMongo } from "@/lib/mongodb";
 import { UserModel } from "@/models/User";
 
@@ -41,6 +42,11 @@ export async function POST(req: Request) {
       );
     }
 
+    const shopDomain = resolveShopDomain();
+    if (!shopDomain) {
+      return NextResponse.json({ error: "Missing Shopify shop domain" }, { status: 500 });
+    }
+
     await connectMongo();
     const existingCount = await UserModel.countDocuments();
     if (existingCount > 0) {
@@ -51,6 +57,7 @@ export async function POST(req: Request) {
     const user = await UserModel.create({
       email,
       role: "team",
+      shopDomain,
       passwordHash,
       mustChangePassword: false,
     });
