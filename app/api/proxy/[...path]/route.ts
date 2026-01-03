@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
 import { GET as authMeGET } from "@/app/api/auth/me/route";
 import { POST as authLoginPOST } from "@/app/api/auth/login/route";
@@ -43,14 +43,15 @@ function withProxyHeaders(res: Response) {
 
 type ProxyParams = { path?: string[] };
 
-export async function GET(req: Request, { params }: { params: ProxyParams }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<ProxyParams> }) {
   try {
     const url = new URL(req.url);
     if (!verifyProxySignature(url)) {
       return withProxyHeaders(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
     }
 
-    const path = `/${(params.path || []).join("/")}`;
+    const resolvedParams = await params;
+    const path = `/${(resolvedParams.path || []).join("/")}`;
     if (path === "/session") {
       const res = await authMeGET(req);
       return withProxyHeaders(res);
@@ -63,14 +64,15 @@ export async function GET(req: Request, { params }: { params: ProxyParams }) {
   }
 }
 
-export async function POST(req: Request, { params }: { params: ProxyParams }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<ProxyParams> }) {
   try {
     const url = new URL(req.url);
     if (!verifyProxySignature(url)) {
       return withProxyHeaders(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
     }
 
-    const path = `/${(params.path || []).join("/")}`;
+    const resolvedParams = await params;
+    const path = `/${(resolvedParams.path || []).join("/")}`;
     if (path === "/login") {
       const res = await authLoginPOST(req);
       return withProxyHeaders(res);
