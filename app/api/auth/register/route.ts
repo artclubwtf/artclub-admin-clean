@@ -8,8 +8,17 @@ import {
 } from "@/lib/customerSessions";
 import { connectMongo } from "@/lib/mongodb";
 import { rateLimit, getClientIp } from "@/lib/rateLimit";
+import { createCustomer, findCustomerByEmail } from "@/lib/shopify.customers";
 import { resolveShopDomain } from "@/lib/shopDomain";
 import { UserModel } from "@/models/User";
+
+function splitName(value: string) {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { firstName: undefined, lastName: undefined };
+  const [firstName, ...rest] = parts;
+  const lastName = rest.join(" ").trim();
+  return { firstName, lastName: lastName || undefined };
+}
 
 export async function POST(req: Request) {
   try {
@@ -48,25 +57,73 @@ export async function POST(req: Request) {
       role: "customer",
       name,
       shopDomain,
+      shopifyCustomerGid: null,
       passwordHash,
       mustChangePassword: false,
       isActive: true,
     });
 
+    let shopifyCustomerGid: string | null = null;
+    let warning: string | undefined;
+
+    try {
+      const { firstName, lastName } = splitName(name);
+      const existingCustomer = await findCustomerByEmail(email);
+      if (existingCustomer?.id) {
+        shopifyCustomerGid = existingCustomer.id;
+        if (process.env.NODE_ENV !== "production") {
+          console.log("linked customer gid", shopifyCustomerGid);
+        }
+      } else {
+        const createdCustomer = await createCustomer({ email, firstName, lastName });
+        shopifyCustomerGid = createdCustomer.id;
+        if (process.env.NODE_ENV !== "production") {
+          console.log("created customer gid", shopifyCustomerGid);
+        }
+      }
+
+      await UserModel.updateOne({ _id: user._id }, { shopifyCustomerGid });
+    } catch (err) {
+      warning = "Shopify customer sync failed";
+      shopifyCustomerGid = null;
+      try {
+        await UserModel.updateOne({ _id: user._id }, { shopifyCustomerGid: null });
+      } catch (updateErr) {
+        console.error("Failed to store Shopify customer gid", updateErr);
+      }
+      console.error("Failed to sync Shopify customer", err);
+    }
+
     const session = await createCustomerSession(user._id.toString());
 
-    const res = NextResponse.json(
-      {
-        ok: true,
-        user: {
-          id: user._id.toString(),
-          email: user.email,
-          role: user.role,
-          name: user.name,
-          shopDomain: user.shopDomain,
-          createdAt: user.createdAt,
-        },
+    const payload: {
+      ok: true;
+      user: {
+        id: string;
+        email: string;
+        role: string;
+        name?: string;
+        shopDomain?: string;
+        shopifyCustomerGid: string | null;
+        createdAt?: Date;
+      };
+      warning?: string;
+    } = {
+      ok: true,
+      user: {
+        id: user._id.toString(),
+        email: user.email,
+        role: user.role,
+        name: user.name,
+        shopDomain: user.shopDomain,
+        shopifyCustomerGid,
+        createdAt: user.createdAt,
       },
+    };
+    if (warning) payload.warning = warning;
+
+    const res = NextResponse.json(
+      payload,
       { status: 201 },
     );
     setCustomerSessionCookie(res, session.token);

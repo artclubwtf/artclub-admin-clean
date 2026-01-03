@@ -50,6 +50,7 @@ export async function POST(req: Request) {
         role: user.role,
         name: user.name,
         shopDomain: user.shopDomain,
+        shopifyCustomerGid: user.shopifyCustomerGid ?? null,
         createdAt: user.createdAt,
       },
     });

@@ -37,6 +37,7 @@ export async function GET(req: Request) {
         role: user.role,
         name: user.name,
         shopDomain: user.shopDomain,
+        shopifyCustomerGid: user.shopifyCustomerGid ?? null,
         createdAt: user.createdAt,
       },
     });
