@@ -96,6 +96,7 @@ export async function POST(req: Request) {
 
     const session = await createCustomerSession(user._id.toString());
 
+    const safeName = user.name ?? undefined;
     const payload: {
       ok: true;
       user: {
@@ -114,7 +115,7 @@ export async function POST(req: Request) {
         id: user._id.toString(),
         email: user.email,
         role: user.role,
-        name: user.name,
+        name: safeName,
         shopDomain: user.shopDomain,
         shopifyCustomerGid,
         createdAt: user.createdAt,
