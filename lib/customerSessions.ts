@@ -7,6 +7,11 @@ import { CustomerSessionModel } from "@/models/CustomerSession";
 export const CUSTOMER_SESSION_COOKIE = "ac_customer_session";
 export const CUSTOMER_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+function getCookieDomain() {
+  if (process.env.NODE_ENV !== "production") return undefined;
+  return process.env.COOKIE_DOMAIN || ".artclub.wtf";
+}
+
 function parseCookies(header: string | null) {
   if (!header) return {} as Record<string, string>;
   return header.split(";").reduce<Record<string, string>>((acc, part) => {
@@ -23,6 +28,7 @@ export function getCustomerSessionToken(req: Request): string | null {
 }
 
 export function setCustomerSessionCookie(res: NextResponse, token: string) {
+  const domain = getCookieDomain();
   res.cookies.set({
     name: CUSTOMER_SESSION_COOKIE,
     value: token,
@@ -30,11 +36,13 @@ export function setCustomerSessionCookie(res: NextResponse, token: string) {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
+    domain,
     maxAge: Math.floor(CUSTOMER_SESSION_TTL_MS / 1000),
   });
 }
 
 export function clearCustomerSessionCookie(res: NextResponse) {
+  const domain = getCookieDomain();
   res.cookies.set({
     name: CUSTOMER_SESSION_COOKIE,
     value: "",
@@ -42,6 +50,7 @@ export function clearCustomerSessionCookie(res: NextResponse) {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
+    domain,
     maxAge: 0,
   });
 }
