@@ -1,10 +1,9 @@
-import { createHmac, timingSafeEqual } from "crypto";
 import { NextResponse, type NextRequest } from "next/server";
 
-import { GET as authMeGET } from "@/app/api/auth/me/route";
-import { POST as authLoginPOST } from "@/app/api/auth/login/route";
-import { POST as authLogoutPOST } from "@/app/api/auth/logout/route";
-import { POST as authRegisterPOST } from "@/app/api/auth/register/route";
+import { customerLoginSchema, customerRegisterSchema } from "@/lib/authSchemas";
+import { getCustomerUserBySessionToken, loginCustomer, registerCustomer } from "@/lib/customerAuth";
+import { deleteCustomerSession } from "@/lib/customerSessions";
+import { verifyShopifyProxySignature } from "@/lib/shopifyProxySignature.mjs";
 
 function mustEnv(name: string): string {
   const value = process.env[name];
@@ -12,83 +11,126 @@ function mustEnv(name: string): string {
   return value;
 }
 
-function buildMessage(params: URLSearchParams) {
-  const entries = Array.from(params.entries()).filter(([key]) => key !== "signature");
-  entries.sort(([aKey, aValue], [bKey, bValue]) => {
-    if (aKey === bKey) return aValue.localeCompare(bValue);
-    return aKey.localeCompare(bKey);
-  });
-  return entries.map(([key, value]) => `${key}=${value}`).join("&");
-}
-
-function signaturesMatch(a: string, b: string) {
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
-}
-
-function verifyProxySignature(url: URL) {
-  const signature = url.searchParams.get("signature");
-  if (!signature) return false;
-  const secret = mustEnv("SHOPIFY_API_SECRET");
-  const message = buildMessage(url.searchParams);
-  const digest = createHmac("sha256", secret).update(message).digest("hex");
-  return signaturesMatch(digest, signature.toLowerCase());
-}
-
 function withProxyHeaders(res: Response) {
   res.headers.set("Cache-Control", "no-store");
-  res.headers.set("Vary", "Cookie");
+  res.headers.set("Vary", "Accept, Origin");
   return res;
 }
 
-type ProxyParams = { path?: string[] };
+function proxyJson(body: Record<string, unknown>, init?: ResponseInit) {
+  const res = NextResponse.json(body, init);
+  return withProxyHeaders(res);
+}
+
+type ProxyParams = { path: string[] };
 
 export async function GET(req: NextRequest, { params }: { params: Promise<ProxyParams> }) {
   try {
     const url = new URL(req.url);
-    if (!verifyProxySignature(url)) {
-      return withProxyHeaders(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
+    const secret = mustEnv("SHOPIFY_API_SECRET");
+    if (!verifyShopifyProxySignature(url.searchParams, secret)) {
+      return proxyJson({ ok: false, error: "invalid_proxy_signature" }, { status: 401 });
     }
 
     const resolvedParams = await params;
-    const path = `/${(resolvedParams.path || []).join("/")}`;
-    if (path === "/session") {
-      const res = await authMeGET(req);
-      return withProxyHeaders(res);
+    const path = resolvedParams.path.join("/");
+    if (path === "session") {
+      const token = url.searchParams.get("ac_session");
+      if (!token) {
+        return proxyJson({ ok: false, error: "missing_session" }, { status: 401 });
+      }
+
+      const user = await getCustomerUserBySessionToken(token);
+      if (!user) {
+        return proxyJson({ ok: false, error: "unauthorized" }, { status: 401 });
+      }
+
+      return proxyJson({ ok: true, user });
     }
 
-    return withProxyHeaders(NextResponse.json({ error: "Not found" }, { status: 404 }));
+    return proxyJson({ ok: false, error: "not_found" }, { status: 404 });
   } catch (err) {
     console.error("Proxy GET failed", err);
-    return withProxyHeaders(NextResponse.json({ error: "Internal Server Error" }, { status: 500 }));
+    return proxyJson({ ok: false, error: "internal_server_error" }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<ProxyParams> }) {
   try {
     const url = new URL(req.url);
-    if (!verifyProxySignature(url)) {
-      return withProxyHeaders(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
+    const secret = mustEnv("SHOPIFY_API_SECRET");
+    if (!verifyShopifyProxySignature(url.searchParams, secret)) {
+      return proxyJson({ ok: false, error: "invalid_proxy_signature" }, { status: 401 });
     }
 
     const resolvedParams = await params;
-    const path = `/${(resolvedParams.path || []).join("/")}`;
-    if (path === "/login") {
-      const res = await authLoginPOST(req);
-      return withProxyHeaders(res);
+    const path = resolvedParams.path.join("/");
+    if (path === "login") {
+      const body = await req.json().catch(() => null);
+      const parsed = customerLoginSchema.safeParse(body);
+      if (!parsed.success) {
+        const first = parsed.error.issues?.[0];
+        return proxyJson({ ok: false, error: first?.message || "Invalid payload" }, { status: 400 });
+      }
+
+      const result = await loginCustomer({
+        email: parsed.data.email,
+        password: parsed.data.password,
+      });
+      if (!result) {
+        return proxyJson({ ok: false, error: "invalid_credentials" }, { status: 401 });
+      }
+
+      return proxyJson({ ok: true, token: result.token, user: result.user });
     }
-    if (path === "/register") {
-      const res = await authRegisterPOST(req);
-      return withProxyHeaders(res);
+    if (path === "register") {
+      const body = await req.json().catch(() => null);
+      const parsed = customerRegisterSchema.safeParse(body);
+      if (!parsed.success) {
+        const first = parsed.error.issues?.[0];
+        return proxyJson({ ok: false, error: first?.message || "Invalid payload" }, { status: 400 });
+      }
+
+      try {
+        const result = await registerCustomer({
+          email: parsed.data.email,
+          password: parsed.data.password,
+          name: parsed.data.name,
+        });
+
+        const payload: Record<string, unknown> = {
+          ok: true,
+          token: result.token,
+          user: result.user,
+        };
+        if (result.warning) payload.warning = result.warning;
+
+        return proxyJson(payload);
+      } catch (err: unknown) {
+        if (err instanceof Error && err.message === "email_exists") {
+          return proxyJson({ ok: false, error: "email_exists" }, { status: 409 });
+        }
+        if (err instanceof Error && err.message === "missing_shop_domain") {
+          return proxyJson({ ok: false, error: "missing_shop_domain" }, { status: 500 });
+        }
+        if (err && typeof err === "object" && "code" in err && (err as { code?: number }).code === 11000) {
+          return proxyJson({ ok: false, error: "email_exists" }, { status: 409 });
+        }
+        throw err;
+      }
     }
-    if (path === "/logout") {
-      const res = await authLogoutPOST(req);
-      return withProxyHeaders(res);
+    if (path === "logout") {
+      const token = url.searchParams.get("ac_session");
+      if (!token) {
+        return proxyJson({ ok: false, error: "missing_session" }, { status: 400 });
+      }
+      await deleteCustomerSession(token);
+      return proxyJson({ ok: true });
     }
 
-    return withProxyHeaders(NextResponse.json({ error: "Not found" }, { status: 404 }));
+    return proxyJson({ ok: false, error: "not_found" }, { status: 404 });
   } catch (err) {
     console.error("Proxy POST failed", err);
-    return withProxyHeaders(NextResponse.json({ error: "Internal Server Error" }, { status: 500 }));
+    return proxyJson({ ok: false, error: "internal_server_error" }, { status: 500 });
   }
 }

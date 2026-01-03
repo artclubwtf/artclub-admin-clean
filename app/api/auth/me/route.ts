@@ -1,12 +1,7 @@
 import { NextResponse } from "next/server";
 
-import {
-  clearCustomerSessionCookie,
-  getCustomerSession,
-  getCustomerSessionToken,
-} from "@/lib/customerSessions";
-import { connectMongo } from "@/lib/mongodb";
-import { UserModel } from "@/models/User";
+import { getCustomerUserBySessionToken } from "@/lib/customerAuth";
+import { clearCustomerSessionCookie, getCustomerSessionToken } from "@/lib/customerSessions";
 
 export async function GET(req: Request) {
   try {
@@ -15,32 +10,14 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const session = await getCustomerSession(token);
-    if (!session) {
+    const user = await getCustomerUserBySessionToken(token);
+    if (!user) {
       const res = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       clearCustomerSessionCookie(res);
       return res;
     }
 
-    await connectMongo();
-    const user = await UserModel.findById(session.userId).lean();
-    if (!user || !user.isActive || user.role !== "customer") {
-      const res = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      clearCustomerSessionCookie(res);
-      return res;
-    }
-
-    return NextResponse.json({
-      user: {
-        id: user._id.toString(),
-        email: user.email,
-        role: user.role,
-        name: user.name,
-        shopDomain: user.shopDomain,
-        shopifyCustomerGid: user.shopifyCustomerGid ?? null,
-        createdAt: user.createdAt,
-      },
-    });
+    return NextResponse.json({ user });
   } catch (err) {
     console.error("Failed to load customer session", err);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

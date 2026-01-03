@@ -1,14 +1,9 @@
-import { compare } from "bcryptjs";
 import { NextResponse } from "next/server";
 
 import { customerLoginSchema } from "@/lib/authSchemas";
-import {
-  createCustomerSession,
-  setCustomerSessionCookie,
-} from "@/lib/customerSessions";
-import { connectMongo } from "@/lib/mongodb";
+import { loginCustomer } from "@/lib/customerAuth";
+import { setCustomerSessionCookie } from "@/lib/customerSessions";
 import { rateLimit, getClientIp } from "@/lib/rateLimit";
-import { UserModel } from "@/models/User";
 
 export async function POST(req: Request) {
   try {
@@ -27,34 +22,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: first?.message || "Invalid payload" }, { status: 400 });
     }
 
-    const email = parsed.data.email.toLowerCase();
-    const password = parsed.data.password;
-
-    await connectMongo();
-    const user = await UserModel.findOne({ email, role: "customer" }).lean();
-    if (!user || !user.isActive) {
+    const result = await loginCustomer({
+      email: parsed.data.email,
+      password: parsed.data.password,
+    });
+    if (!result) {
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
 
-    const isValid = await compare(password, user.passwordHash);
-    if (!isValid) {
-      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
-    }
-
-    const session = await createCustomerSession(user._id.toString());
     const res = NextResponse.json({
       ok: true,
-      user: {
-        id: user._id.toString(),
-        email: user.email,
-        role: user.role,
-        name: user.name,
-        shopDomain: user.shopDomain,
-        shopifyCustomerGid: user.shopifyCustomerGid ?? null,
-        createdAt: user.createdAt,
-      },
+      user: result.user,
     });
-    setCustomerSessionCookie(res, session.token);
+    setCustomerSessionCookie(res, result.token);
     return res;
   } catch (err) {
     console.error("Failed to login customer", err);
