@@ -3,7 +3,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { customerLoginSchema, customerRegisterSchema } from "@/lib/authSchemas";
 import { getCustomerUserBySessionToken, loginCustomer, registerCustomer } from "@/lib/customerAuth";
 import { deleteCustomerSession } from "@/lib/customerSessions";
-import { verifyShopifyProxySignature } from "@/lib/shopifyProxySignature.mjs";
+import {
+  buildShopifyProxySignatureMessage,
+  compareShopifyProxySignatures,
+  computeShopifyProxySignatureFromMessage,
+  getShopifyProxyProvidedSignature,
+} from "@/lib/shopifyProxySignature.mjs";
 
 function mustEnv(name: string): string {
   const value = process.env[name];
@@ -24,20 +29,73 @@ function proxyJson(body: Record<string, unknown>, init?: ResponseInit) {
 
 type ProxyParams = { path: string[] };
 
+function shortSignature(value: string | null) {
+  if (!value) return "none";
+  return value.length > 12 ? `${value.slice(0, 12)}...` : value;
+}
+
+function logInvalidSignature(details: {
+  path: string;
+  shop: string | null;
+  timestamp: string | null;
+  provided: string | null;
+  computed: string;
+  canonicalLength: number;
+}) {
+  console.warn("Invalid app proxy signature", {
+    path: details.path,
+    shop: details.shop,
+    timestamp: details.timestamp,
+    provided: shortSignature(details.provided),
+    computed: shortSignature(details.computed),
+    canonicalLength: details.canonicalLength,
+  });
+}
+
+function shouldSkipSignature() {
+  return process.env.AC_PROXY_SKIP_SIGNATURE === "1";
+}
+
+function verifySignatureOrLog(url: URL) {
+  if (shouldSkipSignature()) {
+    console.warn("App proxy signature verification skipped");
+    return true;
+  }
+
+  const secret = mustEnv("SHOPIFY_API_SECRET");
+  const params = url.searchParams;
+  const provided = getShopifyProxyProvidedSignature(params);
+  const canonical = buildShopifyProxySignatureMessage(params);
+  const computed = computeShopifyProxySignatureFromMessage(canonical, secret);
+  const ok = provided ? compareShopifyProxySignatures(computed, provided) : false;
+
+  if (!ok) {
+    logInvalidSignature({
+      path: url.pathname,
+      shop: params.get("shop"),
+      timestamp: params.get("timestamp"),
+      provided,
+      computed,
+      canonicalLength: canonical.length,
+    });
+  }
+
+  return ok;
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<ProxyParams> }) {
   try {
     const url = new URL(req.url);
-    const secret = mustEnv("SHOPIFY_API_SECRET");
-    if (!verifyShopifyProxySignature(url.searchParams, secret)) {
-      return proxyJson({ ok: false, error: "invalid_proxy_signature" }, { status: 401 });
+    if (!verifySignatureOrLog(url)) {
+      return proxyJson({ ok: false, error: "invalid_signature" }, { status: 401 });
     }
 
     const resolvedParams = await params;
     const path = resolvedParams.path.join("/");
     if (path === "session") {
-      const token = url.searchParams.get("ac_session");
+      const token = url.searchParams.get("token");
       if (!token) {
-        return proxyJson({ ok: false, error: "missing_session" }, { status: 401 });
+        return proxyJson({ ok: false, error: "missing_token" }, { status: 401 });
       }
 
       const user = await getCustomerUserBySessionToken(token);
@@ -58,9 +116,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<ProxyP
 export async function POST(req: NextRequest, { params }: { params: Promise<ProxyParams> }) {
   try {
     const url = new URL(req.url);
-    const secret = mustEnv("SHOPIFY_API_SECRET");
-    if (!verifyShopifyProxySignature(url.searchParams, secret)) {
-      return proxyJson({ ok: false, error: "invalid_proxy_signature" }, { status: 401 });
+    if (!verifySignatureOrLog(url)) {
+      return proxyJson({ ok: false, error: "invalid_signature" }, { status: 401 });
     }
 
     const resolvedParams = await params;
@@ -120,9 +177,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<Proxy
       }
     }
     if (path === "logout") {
-      const token = url.searchParams.get("ac_session");
+      const body = await req.json().catch(() => null);
+      const tokenValue = body && typeof body === "object" && "token" in body ? body.token : null;
+      const token = typeof tokenValue === "string" ? tokenValue : null;
       if (!token) {
-        return proxyJson({ ok: false, error: "missing_session" }, { status: 400 });
+        return proxyJson({ ok: false, error: "missing_token" }, { status: 400 });
       }
       await deleteCustomerSession(token);
       return proxyJson({ ok: true });
