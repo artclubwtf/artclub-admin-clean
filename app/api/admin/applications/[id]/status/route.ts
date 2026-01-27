@@ -36,7 +36,7 @@ function normalizeUrl(value?: string | null): string | null {
   return `https://${trimmed}`;
 }
 
-function pickDisplayName(application: { personal?: { fullName?: string; email?: string } | null }) {
+function pickDisplayName(application: { personal?: { fullName?: string | null; email?: string | null } | null }) {
   const name = application.personal?.fullName?.trim();
   if (name) return name;
   const email = application.personal?.email?.trim();
