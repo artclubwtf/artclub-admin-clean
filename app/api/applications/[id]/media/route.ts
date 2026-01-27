@@ -145,11 +145,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         ownerType: created.ownerType,
         ownerId: created.ownerId?.toString(),
         kind: created.kind,
-        filename: created.filename,
-        mimeType: created.mimeType,
+        filename: created.filename ?? undefined,
+        mimeType: created.mimeType ?? undefined,
         sizeBytes: created.sizeBytes,
         s3Key: created.s3Key,
-        url: created.url,
+        url: created.url ?? undefined,
         createdAt: created.createdAt,
       });
     }
