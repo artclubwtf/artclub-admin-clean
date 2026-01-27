@@ -3,7 +3,7 @@
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 const TERMS_VERSION = "v1";
@@ -77,7 +77,7 @@ function parseErrorMessage(payload: any) {
   return "Unexpected error";
 }
 
-export default function ApplyPage() {
+function ApplyPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initRef = useRef(false);
@@ -731,5 +731,21 @@ export default function ApplyPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ApplyPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="ac-shell">
+          <div className="ac-card" style={{ maxWidth: 640, margin: "40px auto" }}>
+            <p className="text-sm text-slate-600">Loading application...</p>
+          </div>
+        </div>
+      }
+    >
+      <ApplyPageContent />
+    </Suspense>
   );
 }

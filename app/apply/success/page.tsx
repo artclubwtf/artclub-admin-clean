@@ -3,13 +3,13 @@
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 const LAST_APPLICATION_KEY = "ac_application_last_id";
 
-export default function ApplySuccessPage() {
+function ApplySuccessContent() {
   const searchParams = useSearchParams();
   const [applicationId, setApplicationId] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -74,5 +74,21 @@ export default function ApplySuccessPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ApplySuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="ac-shell">
+          <div className="ac-card" style={{ maxWidth: 640, margin: "40px auto" }}>
+            <p className="text-sm text-slate-600">Loading your link...</p>
+          </div>
+        </div>
+      }
+    >
+      <ApplySuccessContent />
+    </Suspense>
   );
 }
