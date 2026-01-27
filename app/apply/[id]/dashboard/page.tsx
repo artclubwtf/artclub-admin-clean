@@ -18,6 +18,7 @@ type MediaItem = {
   id: string;
   filename?: string;
   url?: string;
+  previewUrl?: string;
   mimeType?: string;
   kind?: string;
   createdAt?: string;
@@ -69,6 +70,16 @@ function isImage(mime?: string, filename?: string) {
   return /\.(jpg|jpeg|png|gif|webp|avif|heic)$/i.test(filename || "");
 }
 
+function isVideo(mime?: string, filename?: string) {
+  if (mime && mime.startsWith("video/")) return true;
+  return /\.(mp4|mov|webm|m4v)$/i.test(filename || "");
+}
+
+function isPdf(mime?: string, filename?: string) {
+  if (mime === "application/pdf") return true;
+  return /\.pdf$/i.test(filename || "");
+}
+
 function ApplyDashboardContent() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -88,6 +99,7 @@ function ApplyDashboardContent() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
 
   const [artworks, setArtworks] = useState<ArtworkItem[]>([]);
   const [artworksLoading, setArtworksLoading] = useState(false);
@@ -316,8 +328,8 @@ function ApplyDashboardContent() {
 
   if (!applicationId) {
     return (
-      <div className="ac-shell">
-        <div className="ac-card" style={{ maxWidth: 720, margin: "40px auto" }}>
+      <div className="ap-shell">
+        <div className="ap-card" style={{ maxWidth: 720, margin: "40px auto" }}>
           <h1 className="text-xl font-semibold text-slate-900">Application not found</h1>
           <p className="mt-2 text-sm text-slate-600">We could not locate your application. Please check your link.</p>
         </div>
@@ -327,8 +339,8 @@ function ApplyDashboardContent() {
 
   if (!tokenReady) {
     return (
-      <div className="ac-shell">
-        <div className="ac-card" style={{ maxWidth: 720, margin: "40px auto" }}>
+      <div className="ap-shell">
+        <div className="ap-card" style={{ maxWidth: 720, margin: "40px auto" }}>
           <p className="text-sm text-slate-600">Loading dashboard...</p>
         </div>
       </div>
@@ -337,8 +349,8 @@ function ApplyDashboardContent() {
 
   if (!token) {
     return (
-      <div className="ac-shell">
-        <div className="ac-card" style={{ maxWidth: 720, margin: "40px auto" }}>
+      <div className="ap-shell">
+        <div className="ap-card" style={{ maxWidth: 720, margin: "40px auto" }}>
           <h1 className="text-xl font-semibold text-slate-900">Missing access token</h1>
           <p className="mt-2 text-sm text-slate-600">
             Use the dashboard link provided after submission so we can verify your application.
@@ -350,8 +362,8 @@ function ApplyDashboardContent() {
 
   if (loading) {
     return (
-      <div className="ac-shell">
-        <div className="ac-card" style={{ maxWidth: 720, margin: "40px auto" }}>
+      <div className="ap-shell">
+        <div className="ap-card" style={{ maxWidth: 720, margin: "40px auto" }}>
           <p className="text-sm text-slate-600">Loading dashboard...</p>
         </div>
       </div>
@@ -361,103 +373,137 @@ function ApplyDashboardContent() {
   const selectedMedia = media.filter((item) => selectedMediaIds.includes(item.id));
 
   return (
-    <div className="ac-shell">
-      <div className="ac-card" style={{ maxWidth: 960, margin: "40px auto" }}>
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Application</p>
-        <h1 className="mt-2 text-2xl font-semibold text-slate-900">Light dashboard</h1>
-        <p className="mt-2 text-sm text-slate-600">Upload as many artworks as you can. Je mehr Werke, desto besser.</p>
+    <div className="ap-shell">
+      <div className="ap-card">
+        <div className="ap-eyebrow">Application</div>
+        <h1 className="ap-title">Light dashboard</h1>
+        <p className="ap-subtitle">
+          Upload as many artworks as possible. The more you share, the easier it is to review your style.
+        </p>
 
-        <div className="mt-4 flex flex-wrap items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-          <span>Status: {statusLabel(application?.status)}</span>
+        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+          Status: {statusLabel(application?.status)}
         </div>
-        {loadError ? <div className="mt-2 text-sm font-semibold text-red-600">{loadError}</div> : null}
+        {loadError ? <div className="text-sm font-semibold text-red-600">{loadError}</div> : null}
+      </div>
 
-        <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <div className="text-sm font-semibold text-slate-900">Upload artworks</div>
-          <div className="mt-1 text-sm text-slate-600">
-            Recommended: as many as possible. The more works you share, the easier it is to review your style.
-          </div>
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <label className="btnPrimary">
-              {uploading ? "Uploading..." : "Upload artworks"}
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                className="sr-only"
-                onChange={(event) => {
-                  void handleUpload(event.target.files);
-                  event.currentTarget.value = "";
-                }}
-                disabled={uploading}
-              />
-            </label>
-            <span className="text-xs text-slate-500">{media.length} upload(s)</span>
-          </div>
-          {uploadError ? <div className="mt-2 text-xs font-semibold text-red-600">{uploadError}</div> : null}
-          {uploadSuccess ? <div className="mt-2 text-xs font-semibold text-emerald-700">{uploadSuccess}</div> : null}
+      <div className="ap-card">
+        <div className="ap-card-title">Upload artworks</div>
+        <p className="ap-note">Recommended: as many as possible. Supported: JPG, PNG, HEIC, WEBP, MP4, PDF. Max 20MB.</p>
+        <div
+          className={`ap-dropzone ${dragActive ? "ap-dropzone-active" : ""}`}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragActive(true);
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            setDragActive(false);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragActive(false);
+            void handleUpload(event.dataTransfer.files);
+          }}
+        >
+          <label className="btnPrimary">
+            {uploading ? "Uploading..." : "Upload artworks"}
+            <input
+              type="file"
+              accept="image/*,video/*,application/pdf"
+              multiple
+              className="sr-only"
+              onChange={(event) => {
+                void handleUpload(event.target.files);
+                event.currentTarget.value = "";
+              }}
+              disabled={uploading}
+            />
+          </label>
+          <span className="text-xs text-slate-500">Drag & drop files here</span>
+          <span className="text-xs text-slate-500">{media.length} upload(s)</span>
         </div>
+        {uploadError ? <div className="text-xs font-semibold text-red-600">{uploadError}</div> : null}
+        {uploadSuccess ? <div className="text-xs font-semibold text-emerald-700">{uploadSuccess}</div> : null}
+      </div>
 
-        <div className="mt-8">
-          <h2 className="text-lg font-semibold text-slate-900">Uploaded media</h2>
-          <p className="mt-1 text-sm text-slate-600">Select images to create a draft artwork.</p>
+      <div className="ap-card">
+        <div className="ap-card-title">Uploaded media</div>
+        <p className="ap-note">Select media to create a draft artwork.</p>
 
-          {mediaError ? <div className="mt-2 text-sm text-red-600">{mediaError}</div> : null}
+        {mediaError ? <div className="text-sm text-red-600">{mediaError}</div> : null}
 
-          {mediaLoading ? (
-            <div className="mt-4 text-sm text-slate-600">Loading media...</div>
-          ) : media.length === 0 ? (
-            <div className="mt-4 text-sm text-slate-600">No uploads yet. Add your first artwork image above.</div>
-          ) : (
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {media.map((item) => {
-                const selected = selectedMediaIds.includes(item.id);
-                return (
-                  <div
-                    key={item.id}
-                    className={`rounded-lg border ${selected ? "border-slate-900" : "border-slate-200"} bg-white p-3`}
+        {mediaLoading ? (
+          <div className="text-sm text-slate-600">Loading media...</div>
+        ) : media.length === 0 ? (
+          <div className="text-sm text-slate-600">No uploads yet. Add your first artwork image above.</div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {media.map((item) => {
+              const selected = selectedMediaIds.includes(item.id);
+              const previewSrc = item.previewUrl || item.url;
+              const showImage = !!previewSrc && isImage(item.mimeType, item.filename);
+              const showVideo = !!previewSrc && isVideo(item.mimeType, item.filename);
+              const showPdf = isPdf(item.mimeType, item.filename);
+              return (
+                <div
+                  key={item.id}
+                  className={`rounded-2xl border ${selected ? "border-slate-900" : "border-slate-200"} bg-white p-3`}
+                >
+                  <button
+                    type="button"
+                    className="flex w-full flex-col items-start gap-3"
+                    onClick={() => toggleMedia(item.id)}
                   >
-                    <button
-                      type="button"
-                      className="flex w-full flex-col items-start gap-3"
-                      onClick={() => toggleMedia(item.id)}
-                    >
-                      <div className="h-32 w-full overflow-hidden rounded-md bg-slate-100">
-                        {isImage(item.mimeType, item.filename) && item.url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={item.url} alt={item.filename || "Artwork"} className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">
-                            {item.filename || "Media"}
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-sm font-semibold text-slate-900">{item.filename || "Untitled"}</div>
-                      <div className="text-xs text-slate-500">{selected ? "Selected" : "Click to select"}</div>
-                    </button>
-                    <div className="mt-3 flex items-center justify-between gap-2">
-                      <button type="button" className="btnGhost" onClick={() => toggleMedia(item.id)}>
-                        {selected ? "Deselect" : "Select"}
-                      </button>
-                      <button type="button" className="btnGhost" onClick={() => handleDeleteMedia(item.id)}>
-                        Remove
-                      </button>
+                    <div className="h-32 w-full overflow-hidden rounded-xl bg-slate-100">
+                      {showImage ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={previewSrc} alt={item.filename || "Artwork"} className="h-full w-full object-cover" />
+                      ) : showVideo ? (
+                        <video
+                          className="h-full w-full object-cover"
+                          src={previewSrc}
+                          controls
+                          preload="metadata"
+                          onClick={(event) => event.stopPropagation()}
+                        />
+                      ) : showPdf ? (
+                        <div className="flex h-full w-full flex-col items-center justify-center text-xs text-slate-500">
+                          <span className="text-sm font-semibold text-slate-700">PDF</span>
+                          <span>{item.filename || "Document"}</span>
+                        </div>
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">
+                          {item.filename || "Media"}
+                        </div>
+                      )}
                     </div>
+                    <div className="text-sm font-semibold text-slate-900">{item.filename || "Untitled"}</div>
+                    <div className="text-xs text-slate-500">{selected ? "Selected" : "Click to select"}</div>
+                  </button>
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <button type="button" className="btnGhost" onClick={() => toggleMedia(item.id)}>
+                      {selected ? "Deselect" : "Select"}
+                    </button>
+                    <button type="button" className="btnGhost" onClick={() => handleDeleteMedia(item.id)}>
+                      Remove
+                    </button>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
-        <div className="mt-10 rounded-lg border border-slate-200 bg-white p-4">
-          <h2 className="text-lg font-semibold text-slate-900">Create artwork draft</h2>
-          <p className="mt-1 text-sm text-slate-600">Use the selected media to create a draft artwork entry.</p>
+      <div className="ap-card">
+        <div className="ap-card-title">Create artwork draft</div>
+        <p className="ap-note">Use the selected media to create a draft artwork entry.</p>
 
-          {artworkError ? <div className="mt-3 text-sm text-red-600">{artworkError}</div> : null}
-          {artworkSuccess ? <div className="mt-3 text-sm text-emerald-700">{artworkSuccess}</div> : null}
+        {artworkError ? <div className="text-sm text-red-600">{artworkError}</div> : null}
+        {artworkSuccess ? <div className="text-sm text-emerald-700">{artworkSuccess}</div> : null}
 
-          <div className="mt-4 grid gap-4">
+        <div className="grid gap-4">
             <label className="field">
               Title
               <input
@@ -520,7 +566,7 @@ function ApplyDashboardContent() {
               </label>
             ) : null}
 
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+            <div className="ap-dropzone text-sm text-slate-600">
               Selected media: {selectedMedia.length}
               {selectedMedia.length ? (
                 <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-700">
@@ -541,45 +587,40 @@ function ApplyDashboardContent() {
           </div>
         </div>
 
-        <div className="mt-10">
-          <h2 className="text-lg font-semibold text-slate-900">Submitted artworks</h2>
-          {artworksError ? <div className="mt-2 text-sm text-red-600">{artworksError}</div> : null}
+      <div className="ap-card">
+        <div className="ap-card-title">Submitted artworks</div>
+        {artworksError ? <div className="text-sm text-red-600">{artworksError}</div> : null}
 
-          {artworksLoading ? (
-            <div className="mt-4 text-sm text-slate-600">Loading artworks...</div>
-          ) : artworks.length === 0 ? (
-            <div className="mt-4 text-sm text-slate-600">No artwork drafts yet.</div>
-          ) : (
-            <div className="mt-4 space-y-3">
-              {artworks.map((artwork) => (
-                <div key={artwork.id} className="rounded-lg border border-slate-200 bg-white p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">{artwork.title}</div>
-                      <div className="text-xs text-slate-500">
-                        {formatOffering(artwork.offering)} · {artwork.mediaIds.length} image(s)
-                      </div>
-                    </div>
-                    <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                      {artwork.status || "draft"}
+        {artworksLoading ? (
+          <div className="text-sm text-slate-600">Loading artworks...</div>
+        ) : artworks.length === 0 ? (
+          <div className="text-sm text-slate-600">No artwork drafts yet.</div>
+        ) : (
+          <div className="space-y-3">
+            {artworks.map((artwork) => (
+              <div key={artwork.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">{artwork.title}</div>
+                    <div className="text-xs text-slate-500">
+                      {formatOffering(artwork.offering)} · {artwork.mediaIds.length} image(s)
                     </div>
                   </div>
-                  {artwork.shortDescription ? (
-                    <p className="mt-2 text-sm text-slate-600">{artwork.shortDescription}</p>
-                  ) : null}
-                  {(artwork.widthCm || artwork.heightCm || artwork.originalPriceEur) && (
-                    <div className="mt-2 text-xs text-slate-500">
-                      {artwork.widthCm && artwork.heightCm
-                        ? `Size: ${artwork.widthCm}cm × ${artwork.heightCm}cm`
-                        : ""}
-                      {artwork.originalPriceEur ? ` · Original €${artwork.originalPriceEur}` : ""}
-                    </div>
-                  )}
+                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    {artwork.status || "draft"}
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+                {artwork.shortDescription ? <p className="mt-2 text-sm text-slate-600">{artwork.shortDescription}</p> : null}
+                {(artwork.widthCm || artwork.heightCm || artwork.originalPriceEur) && (
+                  <div className="mt-2 text-xs text-slate-500">
+                    {artwork.widthCm && artwork.heightCm ? `Size: ${artwork.widthCm}cm × ${artwork.heightCm}cm` : ""}
+                    {artwork.originalPriceEur ? ` · Original €${artwork.originalPriceEur}` : ""}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -589,8 +630,8 @@ export default function ApplyDashboardPage() {
   return (
     <Suspense
       fallback={
-        <div className="ac-shell">
-          <div className="ac-card" style={{ maxWidth: 720, margin: "40px auto" }}>
+        <div className="ap-shell">
+          <div className="ap-card" style={{ maxWidth: 720, margin: "40px auto" }}>
             <p className="text-sm text-slate-600">Loading dashboard...</p>
           </div>
         </div>

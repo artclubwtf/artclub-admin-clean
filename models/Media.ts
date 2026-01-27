@@ -29,6 +29,7 @@ const mediaSchema = new Schema(
     sizeBytes: { type: Number },
     s3Key: { type: String, required: true },
     url: { type: String },
+    previewUrl: { type: String },
   },
   { timestamps: true },
 );

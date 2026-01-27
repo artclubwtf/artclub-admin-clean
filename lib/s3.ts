@@ -40,6 +40,12 @@ function resolveConfig(): S3Config {
   return cachedConfig;
 }
 
+export function getPublicS3Url(key: string) {
+  const base = process.env.S3_PUBLIC_BASE_URL?.replace(/\/$/, "");
+  if (!base) return undefined;
+  return `${base}/${key}`;
+}
+
 function getClient() {
   if (!client) {
     const cfg = resolveConfig();

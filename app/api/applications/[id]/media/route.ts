@@ -3,7 +3,7 @@ import { Types } from "mongoose";
 
 import { connectMongo } from "@/lib/mongodb";
 import { getApplicationTokenFromRequest, verifyApplicationToken } from "@/lib/applicationAuth";
-import { getS3ObjectUrl, uploadToS3 } from "@/lib/s3";
+import { getPublicS3Url, getS3ObjectUrl, uploadToS3 } from "@/lib/s3";
 import { ArtistApplicationModel } from "@/models/ArtistApplication";
 import { MediaModel, mediaKinds } from "@/models/Media";
 
@@ -63,6 +63,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const payload = await Promise.all(
     media.map(async (m) => {
       const signedUrl = await getS3ObjectUrl(m.s3Key).catch(() => m.url);
+      const previewUrl = m.previewUrl || signedUrl || m.url;
       return {
         id: m._id.toString(),
         ownerType: m.ownerType,
@@ -73,6 +74,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         sizeBytes: m.sizeBytes,
         s3Key: m.s3Key,
         url: signedUrl || m.url,
+        previewUrl,
         createdAt: m.createdAt,
       };
     }),
@@ -115,6 +117,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       sizeBytes?: number;
       s3Key: string;
       url?: string;
+      previewUrl?: string;
       createdAt?: Date;
     }>;
 
@@ -129,6 +132,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const buffer = Buffer.from(arrayBuffer);
       const uploaded = await uploadToS3(key, buffer, file.type || "application/octet-stream", safeName);
 
+      const previewUrl = getPublicS3Url(uploaded.key);
       const created = await MediaModel.create({
         ownerType: "application",
         ownerId: new Types.ObjectId(id),
@@ -138,6 +142,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         sizeBytes: uploaded.sizeBytes,
         s3Key: uploaded.key,
         url: uploaded.url,
+        previewUrl,
       });
 
       uploads.push({
@@ -150,6 +155,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         sizeBytes: created.sizeBytes ?? undefined,
         s3Key: created.s3Key,
         url: created.url ?? undefined,
+        previewUrl: created.previewUrl ?? undefined,
         createdAt: created.createdAt,
       });
     }

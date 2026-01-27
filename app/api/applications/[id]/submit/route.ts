@@ -81,10 +81,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!hasText(application.shopify?.text_1)) {
     errors["shopify.text_1"] = "Main text is required";
   }
-  if (!hasText(application.shopify?.kategorieCollectionGid)) {
-    errors["shopify.kategorieCollectionGid"] = "Category is required";
-  }
-
   const profileImages = application.profileImages || {};
   const hasProfileImage = [profileImages.titelbildGid, profileImages.bild1Gid, profileImages.bild2Gid, profileImages.bild3Gid].some(
     (value) => hasText(value),

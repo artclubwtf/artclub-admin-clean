@@ -4,7 +4,7 @@ import { Types } from "mongoose";
 
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
-import { getS3ObjectUrl, uploadToS3 } from "@/lib/s3";
+import { getPublicS3Url, getS3ObjectUrl, uploadToS3 } from "@/lib/s3";
 import { MediaModel, mediaKinds } from "@/models/Media";
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
@@ -42,6 +42,7 @@ export async function GET(req: Request) {
         sizeBytes: m.sizeBytes,
         s3Key: m.s3Key,
         url: signedUrl || m.url,
+        previewUrl: m.previewUrl || signedUrl || m.url,
         createdAt: m.createdAt,
       };
     }),
@@ -87,6 +88,7 @@ export async function POST(req: Request) {
       const buffer = Buffer.from(arrayBuffer);
       const uploaded = await uploadToS3(key, buffer, file.type || "application/octet-stream", safeName);
 
+      const previewUrl = getPublicS3Url(uploaded.key);
       const created = await MediaModel.create({
         artistId,
         kind,
@@ -95,6 +97,7 @@ export async function POST(req: Request) {
         sizeBytes: uploaded.sizeBytes,
         s3Key: uploaded.key,
         url: uploaded.url,
+        previewUrl,
       });
 
       uploads.push({
@@ -106,6 +109,7 @@ export async function POST(req: Request) {
         sizeBytes: created.sizeBytes,
         s3Key: created.s3Key,
         url: created.url,
+        previewUrl: created.previewUrl ?? undefined,
         createdAt: created.createdAt,
       });
     }

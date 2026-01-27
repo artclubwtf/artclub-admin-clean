@@ -47,13 +47,11 @@ function ApplySuccessContent() {
     applicationId && token ? `/apply/${encodeURIComponent(applicationId)}/dashboard?token=${encodeURIComponent(token)}` : null;
 
   return (
-    <div className="ac-shell">
-      <div className="ac-card" style={{ maxWidth: 640, margin: "40px auto" }}>
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Application</p>
-        <h1 className="mt-2 text-2xl font-semibold text-slate-900">Application submitted</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Thank you for applying. Save your dashboard link so you can return without creating an account.
-        </p>
+    <div className="ap-shell">
+      <div className="ap-card" style={{ maxWidth: 640, margin: "40px auto" }}>
+        <div className="ap-eyebrow">Application</div>
+        <h1 className="ap-title">Application submitted</h1>
+        <p className="ap-subtitle">Save your dashboard link so you can return without creating an account.</p>
 
         {loading ? (
           <p className="mt-6 text-sm text-slate-600">Loading your link...</p>
@@ -62,9 +60,9 @@ function ApplySuccessContent() {
             <Link href={dashboardUrl} className="btnPrimary">
               Open light dashboard
             </Link>
-            <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+            <div className="ap-dropzone">
               <div className="font-semibold text-slate-700">Save this link</div>
-              <div className="mt-1 break-all">{dashboardUrl}</div>
+              <div className="mt-1 break-all text-xs text-slate-600">{dashboardUrl}</div>
             </div>
           </div>
         ) : (
@@ -79,8 +77,8 @@ export default function ApplySuccessPage() {
   return (
     <Suspense
       fallback={
-        <div className="ac-shell">
-          <div className="ac-card" style={{ maxWidth: 640, margin: "40px auto" }}>
+        <div className="ap-shell">
+          <div className="ap-card" style={{ maxWidth: 640, margin: "40px auto" }}>
             <p className="text-sm text-slate-600">Loading your link...</p>
           </div>
         </div>

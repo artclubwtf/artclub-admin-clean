@@ -9,6 +9,12 @@ import { ApplicationArtworkModel } from "@/models/ApplicationArtwork";
 import { ArtistApplicationModel } from "@/models/ArtistApplication";
 import { MediaModel } from "@/models/Media";
 
+type ApplicationPatchPayload = {
+  shopify?: {
+    kategorieCollectionGid?: string | null;
+  };
+};
+
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== "team") {
@@ -36,6 +42,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const media = await Promise.all(
     mediaDocs.map(async (m) => {
       const signedUrl = await getS3ObjectUrl(m.s3Key).catch(() => m.url);
+      const previewUrl = m.previewUrl || signedUrl || m.url || null;
       return {
         id: m._id.toString(),
         kind: m.kind,
@@ -44,6 +51,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         sizeBytes: m.sizeBytes ?? null,
         s3Key: m.s3Key,
         url: signedUrl || m.url || null,
+        previewUrl,
         createdAt: m.createdAt,
       };
     }),
@@ -88,6 +96,68 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       },
       media,
       artworks: artworkPayload,
+    },
+    { status: 200 },
+  );
+}
+
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== "team") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+  if (!Types.ObjectId.isValid(id)) {
+    return NextResponse.json({ error: "Invalid application id" }, { status: 400 });
+  }
+
+  const body = (await req.json().catch(() => null)) as ApplicationPatchPayload | null;
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  }
+
+  const rawCategory = body.shopify?.kategorieCollectionGid;
+  if (rawCategory !== undefined && rawCategory !== null && typeof rawCategory !== "string") {
+    return NextResponse.json({ error: "Invalid category value" }, { status: 400 });
+  }
+
+  const setUpdates: Record<string, unknown> = {};
+  const unsetUpdates: Record<string, "" | 1> = {};
+
+  if (rawCategory !== undefined) {
+    const trimmed = typeof rawCategory === "string" ? rawCategory.trim() : "";
+    if (!trimmed) {
+      unsetUpdates["shopify.kategorieCollectionGid"] = "";
+    } else {
+      setUpdates["shopify.kategorieCollectionGid"] = trimmed;
+    }
+  }
+
+  if (Object.keys(setUpdates).length === 0 && Object.keys(unsetUpdates).length === 0) {
+    return NextResponse.json({ error: "No updatable fields provided" }, { status: 400 });
+  }
+
+  await connectMongo();
+  const application = await ArtistApplicationModel.findByIdAndUpdate(
+    id,
+    {
+      ...(Object.keys(setUpdates).length ? { $set: setUpdates } : {}),
+      ...(Object.keys(unsetUpdates).length ? { $unset: unsetUpdates } : {}),
+    },
+    { new: true },
+  ).lean();
+
+  if (!application) {
+    return NextResponse.json({ error: "Application not found" }, { status: 404 });
+  }
+
+  return NextResponse.json(
+    {
+      application: {
+        id: application._id.toString(),
+        shopify: application.shopify || {},
+      },
     },
     { status: 200 },
   );

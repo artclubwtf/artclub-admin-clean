@@ -3,7 +3,7 @@ import { Types } from "mongoose";
 import { z } from "zod";
 
 import { connectMongo } from "@/lib/mongodb";
-import { completeMultipartUpload, getS3ObjectUrl } from "@/lib/s3";
+import { completeMultipartUpload, getPublicS3Url, getS3ObjectUrl } from "@/lib/s3";
 import { MediaModel, mediaKinds } from "@/models/Media";
 
 const schema = z.object({
@@ -48,9 +48,9 @@ export async function POST(req: Request) {
       parts.map((p) => ({ ETag: p.ETag, PartNumber: p.PartNumber })),
     );
 
-    const base = process.env.S3_PUBLIC_BASE_URL ? process.env.S3_PUBLIC_BASE_URL.replace(/\/$/, "") : undefined;
-    const url = base ? `${base}/${key}` : undefined;
-    const previewUrl = url || (await getS3ObjectUrl(key, 15 * 60).catch(() => undefined));
+    const previewUrl = getPublicS3Url(key);
+    const signedUrl = await getS3ObjectUrl(key, 15 * 60).catch(() => undefined);
+    const responseUrl = previewUrl || signedUrl;
 
     const created = await MediaModel.create({
       artistId: new Types.ObjectId(artistId),
@@ -59,7 +59,8 @@ export async function POST(req: Request) {
       mimeType: contentType,
       sizeBytes: size,
       s3Key: key,
-      url,
+      url: previewUrl,
+      previewUrl,
     });
 
     return NextResponse.json(
@@ -72,7 +73,8 @@ export async function POST(req: Request) {
           mimeType: created.mimeType,
           sizeBytes: created.sizeBytes,
           s3Key: created.s3Key,
-          url: created.url ?? previewUrl,
+          url: created.url ?? responseUrl,
+          previewUrl: created.previewUrl ?? responseUrl,
           createdAt: created.createdAt,
         },
       },

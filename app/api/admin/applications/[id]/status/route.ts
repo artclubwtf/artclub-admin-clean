@@ -213,6 +213,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           sizeBytes: m.sizeBytes ?? undefined,
           s3Key: m.s3Key,
           url: m.url ?? undefined,
+          previewUrl: m.previewUrl ?? undefined,
         }));
       if (inserts.length) {
         await MediaModel.insertMany(inserts);

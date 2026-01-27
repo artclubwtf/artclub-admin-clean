@@ -9,8 +9,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 const TERMS_VERSION = "v1";
 const LAST_APPLICATION_KEY = "ac_application_last_id";
 const AUTOSAVE_DELAY_MS = 800;
+const TERMS_PDF_URL = process.env.NEXT_PUBLIC_TERMS_PDF_URL || "";
 
-const steps = ["Personal data", "Shopify fields", "Profile images", "Legal", "Submit"] as const;
+const steps = ["Personal", "Shopify fields", "Profile images", "Legal", "Submit"] as const;
 
 type PersonalState = {
   fullName: string;
@@ -82,6 +83,7 @@ function ApplyPageContent() {
   const searchParams = useSearchParams();
   const initRef = useRef(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resolvingRef = useRef<Set<string>>(new Set());
 
   const [currentStep, setCurrentStep] = useState(0);
   const [applicationId, setApplicationId] = useState<string | null>(null);
@@ -118,6 +120,7 @@ function ApplyPageContent() {
   });
 
   const [uploadState, setUploadState] = useState<Record<ProfileImageKey, UploadState>>(getUploadStateDefaults);
+  const [dragKey, setDragKey] = useState<ProfileImageKey | null>(null);
 
   const [stepErrors, setStepErrors] = useState<string[]>([]);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -180,6 +183,15 @@ function ApplyPageContent() {
     return saveDraft(draftPayload);
   }, [draftPayload, saveDraft]);
 
+  const resolveShopifyPreview = useCallback(async (gid: string) => {
+    const res = await fetch(`/api/shopify/files/resolve?ids=${encodeURIComponent(gid)}`, { cache: "no-store" });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok || !payload) return null;
+    const files = Array.isArray(payload.files) ? payload.files : [];
+    const match = files.find((file: any) => file?.id === gid);
+    return match?.previewImage || match?.url || null;
+  }, []);
+
   useEffect(() => {
     if (!autosaveEnabled || !applicationId || !applicationToken) return undefined;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -190,6 +202,53 @@ function ApplyPageContent() {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, [autosaveEnabled, applicationId, applicationToken, draftPayload, saveDraft]);
+
+  useEffect(() => {
+    const gidToKey = new Map<string, ProfileImageKey>();
+    for (const field of profileImageFields) {
+      const gid = profileImages[field.key];
+      if (gid) gidToKey.set(gid, field.key);
+    }
+
+    const missing = Array.from(gidToKey.entries())
+      .filter(([gid, key]) => {
+        const hasPreview = Boolean(uploadState[key]?.previewUrl);
+        return !hasPreview && !resolvingRef.current.has(gid);
+      })
+      .map(([gid]) => gid);
+
+    if (!missing.length) return;
+
+    missing.forEach((gid) => resolvingRef.current.add(gid));
+
+    const run = async () => {
+      try {
+        const res = await fetch(`/api/shopify/files/resolve?ids=${encodeURIComponent(missing.join(","))}`, {
+          cache: "no-store",
+        });
+        const payload = await res.json().catch(() => null);
+        if (!res.ok || !payload) return;
+        const files = Array.isArray(payload.files) ? payload.files : [];
+        if (!files.length) return;
+
+        setUploadState((prev) => {
+          const next = { ...prev };
+          for (const file of files) {
+            const key = gidToKey.get(file?.id);
+            if (!key) continue;
+            const previewUrl = file.previewImage || file.url || null;
+            if (!previewUrl) continue;
+            next[key] = { ...next[key], previewUrl };
+          }
+          return next;
+        });
+      } finally {
+        missing.forEach((gid) => resolvingRef.current.delete(gid));
+      }
+    };
+
+    void run();
+  }, [profileImages, uploadState]);
 
   useEffect(() => {
     if (autosaveEnabled || initializing) return;
@@ -330,7 +389,6 @@ function ApplyPageContent() {
       if (!shopify.quote.trim()) errors.push("Quote is required.");
       if (!shopify.einleitung_1.trim()) errors.push("Intro text is required.");
       if (!shopify.text_1.trim()) errors.push("Main text is required.");
-      if (!shopify.kategorieCollectionGid.trim()) errors.push("Category collection GID is required.");
     }
 
     if (stepIndex === 2) {
@@ -387,11 +445,15 @@ function ApplyPageContent() {
         throw new Error(parseErrorMessage(payload));
       }
       const gid = payload?.fileIdGid as string | undefined;
-      const previewUrl = typeof payload?.url === "string" ? payload.url : null;
+      const payloadPreviewUrl = typeof payload?.url === "string" ? payload.url : null;
+      let resolvedUrl: string | null = null;
 
       if (gid) {
         setProfileImages((prev) => ({ ...prev, [key]: gid }));
+        resolvedUrl = await resolveShopifyPreview(gid);
       }
+
+      const finalPreviewUrl = resolvedUrl || payloadPreviewUrl || null;
 
       setUploadState((prev) => ({
         ...prev,
@@ -400,7 +462,7 @@ function ApplyPageContent() {
           uploading: false,
           error: null,
           success: payload?.filename ? `Uploaded: ${payload.filename}` : "Upload successful",
-          previewUrl,
+          previewUrl: finalPreviewUrl,
         },
       }));
     } catch (err: any) {
@@ -471,8 +533,8 @@ function ApplyPageContent() {
 
   if (initializing) {
     return (
-      <div className="ac-shell">
-        <div className="ac-card" style={{ maxWidth: 640, margin: "40px auto" }}>
+      <div className="ap-shell">
+        <div className="ap-card" style={{ maxWidth: 640, margin: "40px auto" }}>
           <p className="text-sm text-slate-600">Loading application...</p>
         </div>
       </div>
@@ -481,8 +543,8 @@ function ApplyPageContent() {
 
   if (initError) {
     return (
-      <div className="ac-shell">
-        <div className="ac-card" style={{ maxWidth: 640, margin: "40px auto" }}>
+      <div className="ap-shell">
+        <div className="ap-card" style={{ maxWidth: 640, margin: "40px auto" }}>
           <h1 className="text-xl font-semibold text-slate-900">Unable to start application</h1>
           <p className="mt-2 text-sm text-slate-600">{initError}</p>
         </div>
@@ -491,47 +553,59 @@ function ApplyPageContent() {
   }
 
   return (
-    <div className="ac-shell">
-      <div className="ac-card" style={{ maxWidth: 720, margin: "40px auto" }}>
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Apply</p>
-        <h1 className="mt-2 text-2xl font-semibold text-slate-900">Artist application</h1>
-        <p className="mt-2 text-sm text-slate-600">Complete the steps below. Your progress saves automatically.</p>
-
-        <div className="mt-6 space-y-2">
-          <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            <span>
-              Step {currentStep + 1} of {steps.length}
-            </span>
-            <span>{steps[currentStep]}</span>
-          </div>
-          <div className="h-2 w-full rounded-full bg-slate-200">
-            <div className="h-2 rounded-full bg-slate-900" style={{ width: `${progressValue}%` }} />
-          </div>
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>Status: {applicationStatus || "draft"}</span>
-            {saveStatus === "saving" ? (
-              <span>Saving...</span>
-            ) : saveStatus === "saved" ? (
-              <span>Saved {lastSavedAt ? lastSavedAt.toLocaleTimeString() : ""}</span>
-            ) : saveStatus === "error" ? (
-              <span className="text-red-600">Save failed</span>
-            ) : (
-              <span />
-            )}
-          </div>
-          {saveError ? <div className="text-xs font-semibold text-red-600">{saveError}</div> : null}
+    <div className="ap-shell">
+      <div className="ap-header">
+        <div>
+          <div className="ap-eyebrow">Application</div>
+          <h1 className="ap-title">Artist application</h1>
+          <p className="ap-subtitle">Complete the steps below. Your progress saves automatically.</p>
         </div>
+        <div className="ap-save">
+          {saveStatus === "saving" ? <span>Saving...</span> : null}
+          {saveStatus === "saved" ? <span>Saved {lastSavedAt ? lastSavedAt.toLocaleTimeString() : ""}</span> : null}
+          {saveStatus === "error" ? <span className="text-red-600">Save failed</span> : null}
+        </div>
+      </div>
 
-        {stepErrors.length > 0 ? (
-          <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            {stepErrors.map((error) => (
-              <div key={error}>{error}</div>
-            ))}
-          </div>
-        ) : null}
+      <div className="ap-progress">
+        <div className="ap-progress-meta">
+          <span>
+            Step {currentStep + 1} / {steps.length}
+          </span>
+          <span>Status: {applicationStatus || "draft"}</span>
+        </div>
+        <div className="ap-progress-bar">
+          <span style={{ width: `${progressValue}%` }} />
+        </div>
+      </div>
+
+      <div className="ap-stepper">
+        {steps.map((step, index) => {
+          const className = ["ap-pill"];
+          if (index === currentStep) className.push("ap-pill-active");
+          if (index < currentStep) className.push("ap-pill-done");
+          return (
+            <div key={step} className={className.join(" ")}>
+              {step}
+            </div>
+          );
+        })}
+      </div>
+
+      {saveError ? <div className="ap-alert">Save failed: {saveError}</div> : null}
+      {stepErrors.length > 0 ? (
+        <div className="ap-alert">
+          {stepErrors.map((error) => (
+            <div key={error}>{error}</div>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="ap-card">
+        <div className="ap-card-title">{steps[currentStep]}</div>
 
         {currentStep === 0 ? (
-          <div className="mt-6 grid gap-4">
+          <div className="grid gap-4">
             <label className="field">
               Full name
               <input
@@ -583,7 +657,7 @@ function ApplyPageContent() {
         ) : null}
 
         {currentStep === 1 ? (
-          <div className="mt-6 grid gap-4">
+          <div className="grid gap-4">
             <label className="field">
               Instagram URL
               <input
@@ -620,37 +694,56 @@ function ApplyPageContent() {
                 rows={4}
               />
             </label>
-            <label className="field">
-              Category collection GID
-              <input
-                type="text"
-                value={shopify.kategorieCollectionGid}
-                onChange={(e) => setShopify((prev) => ({ ...prev, kategorieCollectionGid: e.target.value }))}
-                placeholder="gid://shopify/Collection/..."
-              />
-            </label>
+            <p className="ap-note">We'll assign the right category after review.</p>
+            <details className="ap-advanced">
+              <summary className="text-sm font-semibold text-slate-700">Optional: add a category collection GID</summary>
+              <div className="mt-3">
+                <label className="field">
+                  Category collection GID (optional)
+                  <input
+                    type="text"
+                    value={shopify.kategorieCollectionGid}
+                    onChange={(e) => setShopify((prev) => ({ ...prev, kategorieCollectionGid: e.target.value }))}
+                    placeholder="gid://shopify/Collection/..."
+                  />
+                </label>
+              </div>
+            </details>
           </div>
         ) : null}
 
         {currentStep === 2 ? (
-          <div className="mt-6 grid gap-4">
+          <div className="grid gap-4">
             {profileImageFields.map((field) => {
               const state = uploadState[field.key];
               const currentGid = profileImages[field.key];
+              const isDragActive = dragKey === field.key;
               return (
-                <div key={field.key} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div
+                  key={field.key}
+                  className={`ap-dropzone ${isDragActive ? "ap-dropzone-active" : ""}`}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setDragKey(field.key);
+                  }}
+                  onDragLeave={(event) => {
+                    event.preventDefault();
+                    if (dragKey === field.key) setDragKey(null);
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    setDragKey(null);
+                    const file = event.dataTransfer.files?.[0];
+                    if (file) {
+                      void handleUpload(field.key, file);
+                    }
+                  }}
+                >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="text-sm font-semibold text-slate-900">{field.label}</div>
                       <div className="text-xs text-slate-500">{field.helper}</div>
                       {currentGid ? <div className="mt-2 text-xs text-slate-600">GID: {currentGid}</div> : null}
-                      {state.previewUrl ? (
-                        <img
-                          src={state.previewUrl}
-                          alt={state.filename || field.label}
-                          className="mt-3 h-24 w-32 rounded-md object-cover"
-                        />
-                      ) : null}
                     </div>
                     <label className="btnGhost">
                       {state.uploading ? "Uploading..." : currentGid ? "Replace" : "Upload"}
@@ -669,8 +762,16 @@ function ApplyPageContent() {
                       />
                     </label>
                   </div>
-                  {state.error ? <div className="mt-2 text-xs font-semibold text-red-600">{state.error}</div> : null}
-                  {state.success ? <div className="mt-2 text-xs font-semibold text-emerald-700">{state.success}</div> : null}
+                  <div className="text-xs text-slate-500">Drag & drop or click to upload. JPG, PNG, HEIC, WEBP - Max 20MB.</div>
+                  {state.previewUrl ? (
+                    <img
+                      src={state.previewUrl}
+                      alt={state.filename || field.label}
+                      className="h-28 w-40 rounded-md object-cover"
+                    />
+                  ) : null}
+                  {state.error ? <div className="text-xs font-semibold text-red-600">{state.error}</div> : null}
+                  {state.success ? <div className="text-xs font-semibold text-emerald-700">{state.success}</div> : null}
                 </div>
               );
             })}
@@ -678,7 +779,7 @@ function ApplyPageContent() {
         ) : null}
 
         {currentStep === 3 ? (
-          <div className="mt-6 grid gap-4">
+          <div className="grid gap-4">
             <label className="field">
               Accepted name
               <input
@@ -688,6 +789,14 @@ function ApplyPageContent() {
                 placeholder="Your full name"
               />
             </label>
+            <div className="ap-note">
+              <p>By submitting, you confirm you are the rights holder for the submitted works.</p>
+              {TERMS_PDF_URL ? (
+                <a href={TERMS_PDF_URL} target="_blank" rel="noreferrer" className="text-sm text-slate-600 underline">
+                  Download terms (PDF)
+                </a>
+              ) : null}
+            </div>
             <label className="flex items-start gap-3 text-sm text-slate-700">
               <input
                 type="checkbox"
@@ -700,9 +809,9 @@ function ApplyPageContent() {
         ) : null}
 
         {currentStep === 4 ? (
-          <div className="mt-6 space-y-3 text-sm text-slate-600">
+          <div className="space-y-3 text-sm text-slate-600">
             <p>Review your application and submit when ready.</p>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+            <div className="ap-dropzone">
               <div className="font-semibold text-slate-900">Summary</div>
               <div className="mt-2">Name: {personal.fullName || "—"}</div>
               <div>Email: {personal.email || "—"}</div>
@@ -712,21 +821,21 @@ function ApplyPageContent() {
             {submitError ? <div className="text-sm font-semibold text-red-600">{submitError}</div> : null}
           </div>
         ) : null}
+      </div>
 
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
-          <button type="button" className="btnGhost" onClick={handleBack} disabled={currentStep === 0}>
-            Back
+      <div className="ap-actions">
+        <button type="button" className="btnGhost" onClick={handleBack} disabled={currentStep === 0}>
+          Back
+        </button>
+        {currentStep < steps.length - 1 ? (
+          <button type="button" className="btnPrimary" onClick={handleNext}>
+            Next
           </button>
-          {currentStep < steps.length - 1 ? (
-            <button type="button" className="btnPrimary" onClick={handleNext}>
-              Next
-            </button>
-          ) : (
-            <button type="button" className="btnPrimary" onClick={handleSubmit} disabled={submitting}>
-              {submitting ? "Submitting..." : "Submit application"}
-            </button>
-          )}
-        </div>
+        ) : (
+          <button type="button" className="btnPrimary" onClick={handleSubmit} disabled={submitting}>
+            {submitting ? "Submitting..." : "Submit application"}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -736,8 +845,8 @@ export default function ApplyPage() {
   return (
     <Suspense
       fallback={
-        <div className="ac-shell">
-          <div className="ac-card" style={{ maxWidth: 640, margin: "40px auto" }}>
+        <div className="ap-shell">
+          <div className="ap-card" style={{ maxWidth: 640, margin: "40px auto" }}>
             <p className="text-sm text-slate-600">Loading application...</p>
           </div>
         </div>

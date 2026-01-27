@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import { connectMongo } from "@/lib/mongodb";
 import { MediaModel, mediaKinds } from "@/models/Media";
-import { getS3ObjectUrl, uploadToS3 } from "@/lib/s3";
+import { getPublicS3Url, getS3ObjectUrl, uploadToS3 } from "@/lib/s3";
 
 const MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB per file
 
@@ -30,7 +30,7 @@ export async function GET(req: Request) {
         if (doc.url) return doc;
         try {
           const signedUrl = await getS3ObjectUrl(doc.s3Key);
-          return { ...doc, url: signedUrl };
+          return { ...doc, url: signedUrl, previewUrl: doc.previewUrl || signedUrl };
         } catch {
           return doc;
         }
@@ -74,6 +74,7 @@ export async function POST(req: Request) {
       const key = `media/${encodeURIComponent(kunstlerId)}/${timestamp}-${filename}`;
       const buffer = Buffer.from(await file.arrayBuffer());
       const uploaded = await uploadToS3(key, buffer, contentType, filename);
+      const previewUrl = getPublicS3Url(uploaded.key);
       uploads.push({
         artistId: new Types.ObjectId(kunstlerId),
         kind: kindRaw,
@@ -82,6 +83,7 @@ export async function POST(req: Request) {
         sizeBytes: uploaded.sizeBytes,
         s3Key: uploaded.key,
         url: uploaded.url,
+        previewUrl,
       });
     }
 
