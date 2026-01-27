@@ -35,12 +35,11 @@ const mediaSchema = new Schema(
 
 mediaSchema.pre(
   "validate",
-  function (this: { ownerType?: string; ownerId?: Types.ObjectId; artistId?: Types.ObjectId }, next) {
+  function (this: { ownerType?: string; ownerId?: Types.ObjectId; artistId?: Types.ObjectId }) {
     if (!this.ownerType) this.ownerType = "artist";
     if (!this.ownerId && this.ownerType === "artist" && this.artistId) {
       this.ownerId = this.artistId;
     }
-    next();
   },
 );
 
