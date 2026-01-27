@@ -458,9 +458,7 @@ function ApplyPageContent() {
         return;
       }
 
-      router.replace(
-        `/apply/success?applicationId=${encodeURIComponent(applicationId)}&token=${encodeURIComponent(applicationToken)}`,
-      );
+      router.replace(`/apply/${encodeURIComponent(applicationId)}/dashboard?token=${encodeURIComponent(applicationToken)}`);
     } catch (err) {
       console.error("Failed to submit application", err);
       setSubmitError("Something went wrong. Please try again.");

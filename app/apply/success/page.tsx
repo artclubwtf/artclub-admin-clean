@@ -44,9 +44,7 @@ function ApplySuccessContent() {
   }, [searchParams]);
 
   const dashboardUrl =
-    applicationId && token
-      ? `/apply/dashboard?applicationId=${encodeURIComponent(applicationId)}&token=${encodeURIComponent(token)}`
-      : null;
+    applicationId && token ? `/apply/${encodeURIComponent(applicationId)}/dashboard?token=${encodeURIComponent(token)}` : null;
 
   return (
     <div className="ac-shell">
