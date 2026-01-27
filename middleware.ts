@@ -22,7 +22,9 @@ export async function middleware(req: NextRequest) {
       pathname === "/api/setup" ||
       pathname.startsWith("/api/setup/") ||
       pathname === "/api/account/change-password" ||
-      pathname.startsWith("/api/account/change-password/");
+      pathname.startsWith("/api/account/change-password/") ||
+      pathname.startsWith("/api/applications") ||
+      pathname === "/api/shopify/files/upload";
 
     if (allowedApi) return NextResponse.next();
 
