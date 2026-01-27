@@ -72,6 +72,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       application: {
         id: application._id.toString(),
         status: application.status,
+        linkedArtistId: application.linkedArtistId?.toString(),
+        shopifyMetaobjectId: application.shopifyMetaobjectId || undefined,
+        createdProductIds: application.createdProductIds || [],
         personal: application.personal || {},
         shopify: application.shopify || {},
         profileImages: application.profileImages || {},

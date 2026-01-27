@@ -26,6 +26,8 @@ const applicationArtworkSchema = new Schema(
       },
     },
     status: { type: String, enum: applicationArtworkStatuses },
+    shopifyProductId: { type: String },
+    shopifyAdminUrl: { type: String },
   },
   { timestamps: true },
 );

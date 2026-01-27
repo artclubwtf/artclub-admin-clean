@@ -1,4 +1,4 @@
-import { InferSchemaType, Model, Schema, model, models } from "mongoose";
+import { InferSchemaType, Model, Schema, model, models, Types } from "mongoose";
 
 export const artistApplicationStatuses = ["draft", "submitted", "in_review", "accepted", "rejected"] as const;
 
@@ -7,6 +7,9 @@ const artistApplicationSchema = new Schema(
     status: { type: String, enum: artistApplicationStatuses, default: "draft" },
     applicationTokenHash: { type: String, required: true },
     expiresAt: { type: Date },
+    linkedArtistId: { type: Types.ObjectId, ref: "Artist" },
+    shopifyMetaobjectId: { type: String },
+    createdProductIds: { type: [String], default: [] },
     personal: {
       fullName: { type: String },
       email: { type: String },
