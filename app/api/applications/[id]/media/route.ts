@@ -147,7 +147,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         kind: created.kind,
         filename: created.filename ?? undefined,
         mimeType: created.mimeType ?? undefined,
-        sizeBytes: created.sizeBytes,
+        sizeBytes: created.sizeBytes ?? undefined,
         s3Key: created.s3Key,
         url: created.url ?? undefined,
         createdAt: created.createdAt,
