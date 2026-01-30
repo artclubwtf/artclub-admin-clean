@@ -8,6 +8,7 @@ const artistApplicationSchema = new Schema(
     applicationTokenHash: { type: String, required: true },
     expiresAt: { type: Date },
     linkedArtistId: { type: Types.ObjectId, ref: "Artist" },
+    linkedUserId: { type: Types.ObjectId, ref: "User" },
     shopifyMetaobjectId: { type: String },
     createdProductIds: { type: [String], default: [] },
     personal: {
@@ -40,6 +41,7 @@ const artistApplicationSchema = new Schema(
     submittedAt: { type: Date },
     reviewedAt: { type: Date },
     acceptedAt: { type: Date },
+    rejectedAt: { type: Date },
     admin: {
       reviewerNote: { type: String },
       decisionNote: { type: String },
@@ -49,6 +51,7 @@ const artistApplicationSchema = new Schema(
 );
 
 artistApplicationSchema.index({ applicationTokenHash: 1 });
+artistApplicationSchema.index({ "personal.email": 1 });
 
 type ArtistApplication = InferSchemaType<typeof artistApplicationSchema>;
 

@@ -91,6 +91,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         submittedAt: application.submittedAt,
         reviewedAt: application.reviewedAt,
         acceptedAt: application.acceptedAt,
+        rejectedAt: application.rejectedAt,
         createdAt: application.createdAt,
         updatedAt: application.updatedAt,
       },

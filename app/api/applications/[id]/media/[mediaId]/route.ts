@@ -40,6 +40,9 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   const result = await loadApplication(req, id);
   if ("error" in result) return result.error;
+  if (result.application.status === "rejected") {
+    return NextResponse.json({ error: "Registration is locked" }, { status: 403 });
+  }
 
   await connectMongo();
   const deleted = await MediaModel.findOneAndDelete({

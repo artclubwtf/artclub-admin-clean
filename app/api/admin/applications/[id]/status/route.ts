@@ -1,9 +1,12 @@
+import { hash } from "bcryptjs";
+import { randomBytes } from "crypto";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
+import { resolveShopDomain } from "@/lib/shopDomain";
 import { downloadFromS3 } from "@/lib/s3";
 import { upsertArtistMetaobject } from "@/lib/shopify";
 import { createDraftArtworkProduct } from "@/lib/shopifyArtworks";
@@ -11,8 +14,10 @@ import { ApplicationArtworkModel } from "@/models/ApplicationArtwork";
 import { ArtistApplicationModel } from "@/models/ArtistApplication";
 import { ArtistModel } from "@/models/Artist";
 import { MediaModel } from "@/models/Media";
+import { UserModel } from "@/models/User";
 
-const allowedStatuses = ["in_review", "accepted", "rejected"] as const;
+const allowedStatuses = ["accepted", "rejected"] as const;
+const PASSWORD_HASH_ROUNDS = 12;
 
 type StatusPayload = {
   status?: (typeof allowedStatuses)[number];
@@ -22,7 +27,7 @@ type StatusPayload = {
 function isValidTransition(current: string, next: StatusPayload["status"]) {
   if (!next) return false;
   if (current === next) return true;
-  if (current === "submitted" && next === "in_review") return true;
+  if (current === "submitted" && (next === "accepted" || next === "rejected")) return true;
   if (current === "in_review" && (next === "accepted" || next === "rejected")) return true;
   return false;
 }
@@ -42,6 +47,10 @@ function pickDisplayName(application: { personal?: { fullName?: string | null; e
   const email = application.personal?.email?.trim();
   if (email) return email;
   return "New Artist";
+}
+
+function generateTempPassword() {
+  return randomBytes(9).toString("base64url");
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -74,6 +83,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   const now = new Date();
+
+  let accountInfo: { created: boolean; exists: boolean; email?: string; tempPassword?: string } | null = null;
 
   if (status === "accepted") {
     const displayName = pickDisplayName(application);
@@ -137,6 +148,42 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     };
     await artist.save();
     await application.save();
+
+    const email = application.personal?.email?.toString().trim().toLowerCase() || "";
+    if (email) {
+      accountInfo = { created: false, exists: false, email };
+      let user = null;
+      if (application.linkedUserId && Types.ObjectId.isValid(application.linkedUserId.toString())) {
+        user = await UserModel.findById(application.linkedUserId).lean();
+      }
+      if (!user) {
+        user = await UserModel.findOne({ email }).lean();
+      }
+
+      if (user) {
+        accountInfo.exists = true;
+        application.linkedUserId = user._id;
+      } else {
+        const shopDomain = resolveShopDomain();
+        if (!shopDomain) {
+          throw new Error("Missing Shopify shop domain for user creation");
+        }
+        const tempPassword = generateTempPassword();
+        const passwordHash = await hash(tempPassword, PASSWORD_HASH_ROUNDS);
+        const createdUser = await UserModel.create({
+          email,
+          role: "artist",
+          artistId: artist._id,
+          shopDomain,
+          passwordHash,
+          mustChangePassword: true,
+          isActive: true,
+        });
+        application.linkedUserId = createdUser._id;
+        accountInfo.created = true;
+        accountInfo.tempPassword = tempPassword;
+      }
+    }
 
     const createdProductIds = new Set(application.createdProductIds || []);
     const artworks = await ApplicationArtworkModel.find({ applicationId: application._id });
@@ -225,13 +272,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   application.status = status;
 
-  if (status === "in_review") {
-    application.reviewedAt = application.reviewedAt || now;
-    if (note) {
-      application.admin = { ...application.admin, reviewerNote: note };
-    }
-  }
-
   if (status === "accepted") {
     application.acceptedAt = application.acceptedAt || now;
     application.reviewedAt = application.reviewedAt || now;
@@ -242,6 +282,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   if (status === "rejected") {
     application.reviewedAt = application.reviewedAt || now;
+    application.rejectedAt = now;
     if (note) {
       application.admin = { ...application.admin, decisionNote: note };
     }
@@ -256,11 +297,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         status: application.status,
         reviewedAt: application.reviewedAt,
         acceptedAt: application.acceptedAt,
+        rejectedAt: application.rejectedAt,
         linkedArtistId: application.linkedArtistId?.toString(),
+        linkedUserId: application.linkedUserId?.toString(),
         shopifyMetaobjectId: application.shopifyMetaobjectId || undefined,
         createdProductIds: application.createdProductIds || [],
         admin: application.admin || {},
       },
+      account: accountInfo || undefined,
     },
     { status: 200 },
   );

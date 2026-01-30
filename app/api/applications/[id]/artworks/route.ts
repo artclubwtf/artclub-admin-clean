@@ -63,6 +63,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   const result = await loadApplication(req, id);
   if ("error" in result) return result.error;
+  if (result.application.status === "rejected") {
+    return NextResponse.json({ error: "Registration is locked" }, { status: 403 });
+  }
 
   const artworks = await ApplicationArtworkModel.find({ applicationId: new Types.ObjectId(id) })
     .sort({ createdAt: -1 })

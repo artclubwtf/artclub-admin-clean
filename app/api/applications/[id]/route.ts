@@ -5,6 +5,18 @@ import { connectMongo } from "@/lib/mongodb";
 import { getApplicationTokenFromRequest, verifyApplicationToken } from "@/lib/applicationAuth";
 import { ArtistApplicationModel } from "@/models/ArtistApplication";
 
+const REAPPLY_MONTHS = 6;
+
+function addMonths(date: Date, months: number) {
+  const copy = new Date(date);
+  copy.setMonth(copy.getMonth() + months);
+  return copy;
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function serializeApplication(app: any) {
   return {
     id: app._id.toString(),
@@ -17,6 +29,7 @@ function serializeApplication(app: any) {
     submittedAt: app.submittedAt,
     reviewedAt: app.reviewedAt,
     acceptedAt: app.acceptedAt,
+    rejectedAt: app.rejectedAt,
     createdAt: app.createdAt,
     updatedAt: app.updatedAt,
   };
@@ -32,6 +45,14 @@ function applyString(
   const value = source[key];
   if (typeof value === "string") {
     updates[path] = value;
+  }
+}
+
+function applyEmail(updates: Record<string, unknown>, source: Record<string, unknown> | null, key: string, path: string) {
+  if (!source) return;
+  const value = source[key];
+  if (typeof value === "string") {
+    updates[path] = value.trim().toLowerCase();
   }
 }
 
@@ -93,7 +114,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const legal = (body.legal && typeof body.legal === "object" ? body.legal : null) as Record<string, unknown> | null;
 
   applyString(updates, personal, "fullName", "personal.fullName");
-  applyString(updates, personal, "email", "personal.email");
+  applyEmail(updates, personal, "email", "personal.email");
   applyString(updates, personal, "phone", "personal.phone");
   applyString(updates, personal, "city", "personal.city");
   applyString(updates, personal, "country", "personal.country");
@@ -114,6 +135,31 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No updatable fields provided" }, { status: 400 });
+  }
+
+  const incomingEmail = typeof personal?.email === "string" ? personal.email.trim().toLowerCase() : "";
+  if (incomingEmail) {
+    const existing = await ArtistApplicationModel.findOne({
+      _id: { $ne: result.application._id },
+      "personal.email": { $regex: `^${escapeRegex(incomingEmail)}$`, $options: "i" },
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (existing?.status === "submitted" || existing?.status === "in_review") {
+      return NextResponse.json({ error: "We’re reviewing your registration." }, { status: 403 });
+    }
+
+    if (existing?.status === "rejected") {
+      const rejectedBase = existing.rejectedAt || existing.updatedAt || existing.createdAt || new Date();
+      const reapplyAfter = addMonths(new Date(rejectedBase), REAPPLY_MONTHS);
+      if (reapplyAfter.getTime() > Date.now()) {
+        return NextResponse.json(
+          { error: `Re-register available after ${reapplyAfter.toDateString()}.`, reapplyAfter },
+          { status: 403 },
+        );
+      }
+    }
   }
 
   result.application.set(updates);

@@ -17,7 +17,7 @@ type ApplicationListItem = {
   updatedAt?: string | null;
 };
 
-const statusOptions = ["", "draft", "submitted", "in_review", "accepted", "rejected"] as const;
+const statusOptions = ["", "draft", "submitted", "accepted", "rejected"] as const;
 
 type StatusFilter = (typeof statusOptions)[number];
 
@@ -41,10 +41,10 @@ export default function AdminApplicationsPage() {
       const qs = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : "";
       const res = await fetch(`/api/admin/applications${qs}`, { cache: "no-store" });
       const payload = (await res.json().catch(() => null)) as { applications?: ApplicationListItem[]; error?: string } | null;
-      if (!res.ok) throw new Error(payload?.error || "Failed to load applications");
+      if (!res.ok) throw new Error(payload?.error || "Failed to load registrations");
       setApplications(Array.isArray(payload?.applications) ? payload.applications : []);
     } catch (err: any) {
-      setError(err?.message ?? "Failed to load applications");
+      setError(err?.message ?? "Failed to load registrations");
     } finally {
       setLoading(false);
     }
@@ -74,8 +74,8 @@ export default function AdminApplicationsPage() {
     <main className="p-6 space-y-4">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Applications</h1>
-          <p className="text-sm text-slate-600">Review incoming artist applications.</p>
+          <h1 className="text-2xl font-semibold">Registrations</h1>
+          <p className="text-sm text-slate-600">Review incoming artist registrations.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <select
@@ -105,7 +105,7 @@ export default function AdminApplicationsPage() {
 
       <div className="card space-y-3">
         <div className="cardHeader">
-          <h2 className="text-lg font-semibold">Applications</h2>
+          <h2 className="text-lg font-semibold">Registrations</h2>
           {loading ? (
             <span className="text-xs text-slate-500">Loading...</span>
           ) : (
@@ -113,7 +113,7 @@ export default function AdminApplicationsPage() {
           )}
         </div>
 
-        {filtered.length === 0 && !loading && <p className="text-sm text-slate-600">No applications found.</p>}
+        {filtered.length === 0 && !loading && <p className="text-sm text-slate-600">No registrations found.</p>}
 
         <ul className="grid gap-3">
           {filtered.map((app) => (
@@ -121,10 +121,11 @@ export default function AdminApplicationsPage() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="font-semibold text-slate-900">
-                    {app.personal?.fullName || app.personal?.email || "Unnamed applicant"}
+                    {app.personal?.fullName || app.personal?.email || "Unnamed registrant"}
                   </div>
                   <div className="text-xs text-slate-500">
-                    {app.personal?.email || "No email"} · {app.status.replace(/_/g, " ")}
+                    {app.personal?.email || "No email"} ·{" "}
+                    {(app.status === "in_review" ? "submitted" : app.status).replace(/_/g, " ")}
                   </div>
                 </div>
                 <Link href={`/admin/applications/${app.id}`} className="btnGhost">

@@ -51,6 +51,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const result = await loadApplication(req, id);
   if ("error" in result) return result.error;
+  if (result.application.status === "rejected") {
+    return NextResponse.json({ error: "Registration is locked" }, { status: 403 });
+  }
 
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const accepted = body?.accepted === true;

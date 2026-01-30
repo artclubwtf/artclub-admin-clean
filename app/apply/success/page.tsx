@@ -49,8 +49,8 @@ function ApplySuccessContent() {
   return (
     <div className="ap-shell">
       <div className="ap-card" style={{ maxWidth: 640, margin: "40px auto" }}>
-        <div className="ap-eyebrow">Application</div>
-        <h1 className="ap-title">Application submitted</h1>
+        <div className="ap-eyebrow">Registration</div>
+        <h1 className="ap-title">Registration submitted</h1>
         <p className="ap-subtitle">Save your dashboard link so you can return without creating an account.</p>
 
         {loading ? (

@@ -41,6 +41,7 @@ type ApplicationDetail = {
     submittedAt?: string;
     reviewedAt?: string;
     acceptedAt?: string;
+    rejectedAt?: string;
     createdAt?: string;
     updatedAt?: string;
   };
@@ -115,7 +116,6 @@ export default function AdminApplicationDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
-  const [reviewNote, setReviewNote] = useState("");
   const [decisionNote, setDecisionNote] = useState("");
   const [profilePreviews, setProfilePreviews] = useState<Record<string, string>>({});
   const [categoryQuery, setCategoryQuery] = useState("");
@@ -125,6 +125,10 @@ export default function AdminApplicationDetailPage() {
   const [categorySaving, setCategorySaving] = useState(false);
   const [categoryMessage, setCategoryMessage] = useState<string | null>(null);
   const [categoryLabel, setCategoryLabel] = useState<string | null>(null);
+  const [accountInfo, setAccountInfo] = useState<{ email: string; tempPassword?: string; exists?: boolean } | null>(null);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [lightboxMedia, setLightboxMedia] = useState<MediaItem | null>(null);
+  const [lightboxArtwork, setLightboxArtwork] = useState<ArtworkItem | null>(null);
 
   const load = async () => {
     if (!applicationId) return;
@@ -134,13 +138,13 @@ export default function AdminApplicationDetailPage() {
       const res = await fetch(`/api/admin/applications/${encodeURIComponent(applicationId)}`, { cache: "no-store" });
       const payload = (await res.json().catch(() => null)) as ApplicationDetail | { error?: string } | null;
       if (!res.ok || !payload || "error" in payload) {
-        throw new Error((payload as { error?: string })?.error || "Failed to load application");
+        throw new Error((payload as { error?: string })?.error || "Failed to load registration");
       }
       const typed = payload as ApplicationDetail;
       setData(typed);
       setCategoryLabel(typed.application?.shopify?.kategorieCollectionGid || null);
     } catch (err: any) {
-      setError(err?.message || "Failed to load application");
+      setError(err?.message || "Failed to load registration");
     } finally {
       setLoading(false);
     }
@@ -151,7 +155,7 @@ export default function AdminApplicationDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applicationId]);
 
-  const handleStatusChange = async (status: "in_review" | "accepted" | "rejected", note: string) => {
+  const handleStatusChange = async (status: "accepted" | "rejected", note: string) => {
     if (!applicationId) return;
     setActionError(null);
     setActionMessage(null);
@@ -162,9 +166,19 @@ export default function AdminApplicationDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status, note: note.trim() || undefined }),
       });
-      const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+      const payload = (await res.json().catch(() => null)) as
+        | { error?: string; account?: { email?: string; tempPassword?: string; created?: boolean; exists?: boolean } }
+        | null;
       if (!res.ok) throw new Error(payload?.error || "Failed to update status");
       setActionMessage(`Status updated to ${status.replace(/_/g, " ")}.`);
+      if (status === "accepted" && payload?.account?.email) {
+        setAccountInfo({
+          email: payload.account.email,
+          tempPassword: payload.account.tempPassword,
+          exists: payload.account.exists ?? false,
+        });
+        setShowAccountModal(true);
+      }
       await load();
     } catch (err: any) {
       setActionError(err?.message || "Failed to update status");
@@ -217,9 +231,13 @@ export default function AdminApplicationDetailPage() {
   };
 
   const application = data?.application;
-  const canMoveToReview = application?.status === "submitted";
-  const canDecide = application?.status === "in_review";
+  const canDecide = application?.status === "submitted" || application?.status === "in_review";
   const panelStyle: CSSProperties = { ["--shadow" as any]: "0 1px 2px rgba(15, 23, 42, 0.04)" };
+  const displayStatus = application?.status === "in_review" ? "submitted" : application?.status;
+  const mediaById = useMemo(() => {
+    const items = data?.media || [];
+    return new Map(items.map((item) => [item.id, item]));
+  }, [data?.media]);
 
   useEffect(() => {
     if (!application?.profileImages) {
@@ -316,7 +334,7 @@ export default function AdminApplicationDetailPage() {
     return (
       <main className="p-6">
         <div className="card">
-          <h1 className="text-xl font-semibold">Application not found</h1>
+          <h1 className="text-xl font-semibold">Registration not found</h1>
         </div>
       </main>
     );
@@ -325,7 +343,7 @@ export default function AdminApplicationDetailPage() {
   if (loading) {
     return (
       <main className="p-6">
-        <div className="card">Loading application...</div>
+        <div className="card">Loading registration...</div>
       </main>
     );
   }
@@ -333,81 +351,57 @@ export default function AdminApplicationDetailPage() {
   if (error || !application) {
     return (
       <main className="p-6">
-        <div className="card text-red-600">Error: {error || "Application not found"}</div>
+        <div className="card text-red-600">Error: {error || "Registration not found"}</div>
       </main>
     );
   }
 
   return (
     <main className="p-6 space-y-4" style={panelStyle}>
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold">Application review</h1>
-          <p className="text-sm text-slate-600">Review applicant data, uploads, and decide the next step.</p>
+      <div className="card sticky top-4 z-10">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Registration</div>
+            <h1 className="text-2xl font-semibold text-slate-900">Registration review</h1>
+            <div className="mt-1 text-sm text-slate-600">
+              {application.personal?.fullName || "Unnamed registrant"} · {application.personal?.email || "No email"} ·{" "}
+              {application.personal?.city || "City"} · {formatDate(application.submittedAt)}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              {displayStatus?.replace(/_/g, " ") || "draft"}
+            </div>
+            <button
+              className="btnGhost"
+              onClick={() => handleStatusChange("accepted", decisionNote)}
+              disabled={!canDecide || acting}
+            >
+              Accept &amp; create account
+            </button>
+            <button
+              className="btnGhost"
+              onClick={() => handleStatusChange("rejected", decisionNote)}
+              disabled={!canDecide || acting}
+            >
+              Reject
+            </button>
+          </div>
         </div>
-        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-          Status: {application.status.replace(/_/g, " ")}
+        <div className="mt-3">
+          <textarea
+            className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
+            rows={2}
+            value={decisionNote}
+            onChange={(e) => setDecisionNote(e.target.value)}
+            placeholder="Decision note (optional)"
+            disabled={!canDecide || acting}
+          />
         </div>
-      </header>
+      </div>
 
       {actionError && <div className="card text-red-600">Action error: {actionError}</div>}
       {actionMessage && <div className="card text-emerald-700">{actionMessage}</div>}
-
-      <div className="card space-y-4">
-        <div className="cardHeader">
-          <h2 className="text-lg font-semibold">Actions</h2>
-        </div>
-        <div className="grid gap-4">
-          <div className="rounded border border-slate-200 p-3">
-            <div className="text-sm font-semibold text-slate-900">Move to in review</div>
-            <p className="text-xs text-slate-500">Mark the application as in review.</p>
-            <textarea
-              className="mt-3 w-full rounded border border-slate-200 px-3 py-2 text-sm"
-              rows={2}
-              value={reviewNote}
-              onChange={(e) => setReviewNote(e.target.value)}
-              placeholder="Optional review note"
-              disabled={!canMoveToReview || acting}
-            />
-            <button
-              className="btnGhost mt-3"
-              onClick={() => handleStatusChange("in_review", reviewNote)}
-              disabled={!canMoveToReview || acting}
-            >
-              {acting ? "Working..." : "Move to in review"}
-            </button>
-          </div>
-
-          <div className="rounded border border-slate-200 p-3">
-            <div className="text-sm font-semibold text-slate-900">Decision</div>
-            <p className="text-xs text-slate-500">Accept or reject once review is complete.</p>
-            <textarea
-              className="mt-3 w-full rounded border border-slate-200 px-3 py-2 text-sm"
-              rows={3}
-              value={decisionNote}
-              onChange={(e) => setDecisionNote(e.target.value)}
-              placeholder="Optional decision note"
-              disabled={!canDecide || acting}
-            />
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                className="btnGhost"
-                onClick={() => handleStatusChange("accepted", decisionNote)}
-                disabled={!canDecide || acting}
-              >
-                Accept
-              </button>
-              <button
-                className="btnGhost"
-                onClick={() => handleStatusChange("rejected", decisionNote)}
-                disabled={!canDecide || acting}
-              >
-                Reject
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="card space-y-3">
@@ -503,21 +497,21 @@ export default function AdminApplicationDetailPage() {
           <div className="cardHeader">
             <h2 className="text-lg font-semibold">Profile images</h2>
           </div>
-          <div className="space-y-2 text-sm text-slate-700">
-            {profileImageRows.map((row) => (
-              <div key={row.label}>
-                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{row.label}</div>
-                <div className="break-all">{row.gid || "—"}</div>
-                {row.gid && profilePreviews[row.gid] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={profilePreviews[row.gid]}
-                    alt={row.label}
-                    className="mt-2 h-20 w-28 rounded-md object-cover"
-                  />
-                ) : null}
-              </div>
-            ))}
+          <div className="grid gap-3 sm:grid-cols-2">
+            {profileImageRows.map((row) => {
+              const previewUrl = row.gid ? profilePreviews[row.gid] : null;
+              return (
+                <div key={row.label} className="rounded border border-slate-200 bg-white p-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{row.label}</div>
+                  {previewUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={previewUrl} alt={row.label} className="mt-2 h-28 w-full rounded-md object-cover" />
+                  ) : (
+                    <div className="mt-2 text-xs text-slate-500">No image uploaded</div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -559,6 +553,7 @@ export default function AdminApplicationDetailPage() {
             <div>Submitted: {formatDate(application.submittedAt)}</div>
             <div>Reviewed: {formatDate(application.reviewedAt)}</div>
             <div>Accepted: {formatDate(application.acceptedAt)}</div>
+            <div>Rejected: {formatDate(application.rejectedAt)}</div>
             <div>Created: {formatDate(application.createdAt)}</div>
             <div>Updated: {formatDate(application.updatedAt)}</div>
           </div>
@@ -587,10 +582,14 @@ export default function AdminApplicationDetailPage() {
           <span className="text-xs text-slate-500">{data?.media.length || 0} files</span>
         </div>
         {data?.media.length ? (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
             {data.media.map((item) => (
               <div key={item.id} className="rounded border border-slate-200 bg-white p-3">
-                <div className="h-32 w-full overflow-hidden rounded-md bg-slate-100">
+                <button
+                  type="button"
+                  className="h-32 w-full overflow-hidden rounded-md bg-slate-100"
+                  onClick={() => setLightboxMedia(item)}
+                >
                   {(() => {
                     const previewSrc = item.previewUrl || item.url;
                     if (previewSrc && isImage(item.mimeType, item.filename)) {
@@ -598,7 +597,7 @@ export default function AdminApplicationDetailPage() {
                       return <img src={previewSrc} alt={item.filename || "Media"} className="h-full w-full object-cover" />;
                     }
                     if (previewSrc && isVideo(item.mimeType, item.filename)) {
-                      return <video className="h-full w-full object-cover" src={previewSrc} controls preload="metadata" />;
+                      return <video className="h-full w-full object-cover" src={previewSrc} muted />;
                     }
                     if (isPdf(item.mimeType, item.filename)) {
                       return (
@@ -614,7 +613,7 @@ export default function AdminApplicationDetailPage() {
                       </div>
                     );
                   })()}
-                </div>
+                </button>
                 <div className="mt-2 text-sm font-semibold text-slate-900">{item.filename || "Untitled"}</div>
                 <div className="text-xs text-slate-500">{item.kind || "media"}</div>
               </div>
@@ -631,38 +630,155 @@ export default function AdminApplicationDetailPage() {
           <span className="text-xs text-slate-500">{data?.artworks.length || 0} drafts</span>
         </div>
         {data?.artworks.length ? (
-          <div className="space-y-3">
+          <div className="grid gap-2">
             {data.artworks.map((artwork) => (
-              <div key={artwork.id} className="rounded border border-slate-200 bg-white p-3">
+              <button
+                key={artwork.id}
+                type="button"
+                className="rounded border border-slate-200 bg-white px-4 py-3 text-left"
+                onClick={() => setLightboxArtwork(artwork)}
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <div className="text-sm font-semibold text-slate-900">{artwork.title}</div>
                     <div className="text-xs text-slate-500">
-                      {formatOffering(artwork.offering)} · {artwork.mediaIds.length} image(s)
+                      {formatOffering(artwork.offering)} | {artwork.mediaIds.length} image(s)
                     </div>
                   </div>
                   <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                     {artwork.status || "draft"}
                   </div>
                 </div>
-                {artwork.shortDescription ? (
-                  <p className="mt-2 text-sm text-slate-600">{artwork.shortDescription}</p>
-                ) : null}
-                {(artwork.widthCm || artwork.heightCm || artwork.originalPriceEur) && (
-                  <div className="mt-2 text-xs text-slate-500">
-                    {artwork.widthCm && artwork.heightCm
-                      ? `Size: ${artwork.widthCm}cm × ${artwork.heightCm}cm`
-                      : ""}
-                    {artwork.originalPriceEur ? ` · Original €${artwork.originalPriceEur}` : ""}
-                  </div>
-                )}
-              </div>
+                <div className="mt-2 text-xs text-slate-500">
+                  {artwork.widthCm && artwork.heightCm ? `Size: ${artwork.widthCm}cm x ${artwork.heightCm}cm` : "Size: —"}
+                  {artwork.originalPriceEur ? ` | Original €${artwork.originalPriceEur}` : ""}
+                </div>
+              </button>
             ))}
           </div>
         ) : (
           <p className="text-sm text-slate-600">No artwork drafts yet.</p>
         )}
       </div>
+
+      {showAccountModal && accountInfo ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5">
+            <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Account</div>
+            <h2 className="mt-2 text-xl font-semibold text-slate-900">Artist account</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              {accountInfo.exists
+                ? "An account with this email already exists."
+                : "Artist account created. This password is shown once; store it now."}
+            </p>
+            <div className="mt-4 space-y-2 rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              <div>Email: {accountInfo.email}</div>
+              {accountInfo.tempPassword ? <div>Temp password: {accountInfo.tempPassword}</div> : null}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {accountInfo.tempPassword ? (
+                <button
+                  type="button"
+                  className="btnGhost"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(accountInfo.tempPassword || "");
+                    } catch (err) {
+                      console.error("Failed to copy", err);
+                    }
+                  }}
+                >
+                  Copy password
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="btnGhost"
+                onClick={() => {
+                  setShowAccountModal(false);
+                  setAccountInfo(null);
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {lightboxMedia ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4" onClick={() => setLightboxMedia(null)}>
+          <div className="w-full max-w-3xl rounded-xl border border-slate-200 bg-white p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold text-slate-900">{lightboxMedia.filename || "Media"}</div>
+                <div className="text-xs text-slate-500">{lightboxMedia.mimeType || "File"}</div>
+              </div>
+              <button type="button" className="btnGhost" onClick={() => setLightboxMedia(null)}>
+                Close
+              </button>
+            </div>
+            <div className="mt-3">
+              {(() => {
+                const previewSrc = lightboxMedia.previewUrl || lightboxMedia.url;
+                if (previewSrc && isImage(lightboxMedia.mimeType, lightboxMedia.filename)) {
+                  // eslint-disable-next-line @next/next/no-img-element
+                  return <img src={previewSrc} alt={lightboxMedia.filename || "Preview"} className="max-h-[70vh] w-full object-contain" />;
+                }
+                if (previewSrc && isVideo(lightboxMedia.mimeType, lightboxMedia.filename)) {
+                  return <video src={previewSrc} controls className="max-h-[70vh] w-full object-contain" />;
+                }
+                if (previewSrc && isPdf(lightboxMedia.mimeType, lightboxMedia.filename)) {
+                  return (
+                    <div className="rounded border border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
+                      <div className="font-semibold">PDF</div>
+                      <a href={previewSrc} target="_blank" rel="noreferrer" className="text-xs underline">
+                        Open / Download
+                      </a>
+                    </div>
+                  );
+                }
+                return <div className="text-sm text-slate-600">Preview not available.</div>;
+              })()}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {lightboxArtwork ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4" onClick={() => setLightboxArtwork(null)}>
+          <div className="w-full max-w-4xl rounded-xl border border-slate-200 bg-white p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold text-slate-900">{lightboxArtwork.title}</div>
+                <div className="text-xs text-slate-500">{formatOffering(lightboxArtwork.offering)}</div>
+              </div>
+              <button type="button" className="btnGhost" onClick={() => setLightboxArtwork(null)}>
+                Close
+              </button>
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+              {lightboxArtwork.mediaIds.map((id) => {
+                const item = mediaById.get(id);
+                if (!item) return null;
+                const previewSrc = item.previewUrl || item.url;
+                if (previewSrc && isImage(item.mimeType, item.filename)) {
+                  // eslint-disable-next-line @next/next/no-img-element
+                  return <img key={id} src={previewSrc} alt={item.filename || "Artwork"} className="h-40 w-full rounded-md object-cover" />;
+                }
+                if (previewSrc && isVideo(item.mimeType, item.filename)) {
+                  return <video key={id} src={previewSrc} className="h-40 w-full rounded-md object-cover" muted />;
+                }
+                return (
+                  <div key={id} className="flex h-40 items-center justify-center rounded-md border border-slate-200 text-xs text-slate-500">
+                    {item.filename || "File"}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

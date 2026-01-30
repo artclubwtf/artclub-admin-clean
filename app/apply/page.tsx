@@ -166,7 +166,7 @@ function ApplyPageContent() {
         setLastSavedAt(new Date());
         return true;
       } catch (err) {
-        console.error("Failed to save application", err);
+        console.error("Failed to save registration", err);
         setSaveStatus("error");
         setSaveError("Failed to save");
         return false;
@@ -322,7 +322,7 @@ function ApplyPageContent() {
         const res = await fetch("/api/applications/create", { method: "POST" });
         const payload = await res.json().catch(() => null);
         if (!res.ok) {
-          throw new Error(payload?.error || "Failed to create application");
+          throw new Error(payload?.error || "Failed to create registration");
         }
         const id = payload?.applicationId as string | undefined;
         const token = payload?.token as string | undefined;
@@ -366,8 +366,8 @@ function ApplyPageContent() {
         await createApplication();
         setInitializing(false);
       } catch (err: any) {
-        console.error("Failed to initialize application", err);
-        setInitError(err?.message || "Failed to initialize application");
+        console.error("Failed to initialize registration", err);
+        setInitError(err?.message || "Failed to initialize registration");
         setInitializing(false);
       }
     };
@@ -481,7 +481,7 @@ function ApplyPageContent() {
   const handleSubmit = async () => {
     setSubmitError(null);
     if (!applicationId || !applicationToken) {
-      setSubmitError("Missing application token.");
+      setSubmitError("Missing registration token.");
       return;
     }
 
@@ -522,7 +522,7 @@ function ApplyPageContent() {
 
       router.replace(`/apply/${encodeURIComponent(applicationId)}/dashboard?token=${encodeURIComponent(applicationToken)}`);
     } catch (err) {
-      console.error("Failed to submit application", err);
+      console.error("Failed to submit registration", err);
       setSubmitError("Something went wrong. Please try again.");
     } finally {
       setSubmitting(false);
@@ -535,7 +535,7 @@ function ApplyPageContent() {
     return (
       <div className="ap-shell">
         <div className="ap-card" style={{ maxWidth: 640, margin: "40px auto" }}>
-          <p className="text-sm text-slate-600">Loading application...</p>
+          <p className="text-sm text-slate-600">Loading registration...</p>
         </div>
       </div>
     );
@@ -545,7 +545,7 @@ function ApplyPageContent() {
     return (
       <div className="ap-shell">
         <div className="ap-card" style={{ maxWidth: 640, margin: "40px auto" }}>
-          <h1 className="text-xl font-semibold text-slate-900">Unable to start application</h1>
+          <h1 className="text-xl font-semibold text-slate-900">Unable to start registration</h1>
           <p className="mt-2 text-sm text-slate-600">{initError}</p>
         </div>
       </div>
@@ -556,8 +556,8 @@ function ApplyPageContent() {
     <div className="ap-shell">
       <div className="ap-header">
         <div>
-          <div className="ap-eyebrow">Application</div>
-          <h1 className="ap-title">Artist application</h1>
+          <div className="ap-eyebrow">Registration</div>
+          <h1 className="ap-title">Artist registration</h1>
           <p className="ap-subtitle">Complete the steps below. Your progress saves automatically.</p>
         </div>
         <div className="ap-save">
@@ -572,7 +572,7 @@ function ApplyPageContent() {
           <span>
             Step {currentStep + 1} / {steps.length}
           </span>
-          <span>Status: {applicationStatus || "draft"}</span>
+          <span>Status: {(applicationStatus === "in_review" ? "submitted" : applicationStatus) || "draft"}</span>
         </div>
         <div className="ap-progress-bar">
           <span style={{ width: `${progressValue}%` }} />
@@ -810,7 +810,7 @@ function ApplyPageContent() {
 
         {currentStep === 4 ? (
           <div className="space-y-3 text-sm text-slate-600">
-            <p>Review your application and submit when ready.</p>
+            <p>Review your registration and submit when ready.</p>
             <div className="ap-dropzone">
               <div className="font-semibold text-slate-900">Summary</div>
               <div className="mt-2">Name: {personal.fullName || "—"}</div>
@@ -833,7 +833,7 @@ function ApplyPageContent() {
           </button>
         ) : (
           <button type="button" className="btnPrimary" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Submitting..." : "Submit application"}
+            {submitting ? "Submitting..." : "Submit registration"}
           </button>
         )}
       </div>
@@ -847,7 +847,7 @@ export default function ApplyPage() {
       fallback={
         <div className="ap-shell">
           <div className="ap-card" style={{ maxWidth: 640, margin: "40px auto" }}>
-            <p className="text-sm text-slate-600">Loading application...</p>
+          <p className="text-sm text-slate-600">Loading registration...</p>
           </div>
         </div>
       }

@@ -18,7 +18,13 @@ export async function GET(req: Request) {
   const q = qRaw.trim();
 
   const filter: Record<string, unknown> = {};
-  if (status) filter.status = status;
+  if (status) {
+    if (status === "submitted") {
+      filter.status = { $in: ["submitted", "in_review"] };
+    } else {
+      filter.status = status;
+    }
+  }
   if (q) {
     const or: Record<string, unknown>[] = [
       { "personal.fullName": { $regex: q, $options: "i" } },
@@ -35,7 +41,7 @@ export async function GET(req: Request) {
 
   const payload = applications.map((app) => ({
     id: app._id.toString(),
-    status: app.status,
+    status: app.status === "in_review" ? "submitted" : app.status,
     personal: {
       fullName: app.personal?.fullName ?? null,
       email: app.personal?.email ?? null,
