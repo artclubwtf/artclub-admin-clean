@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
+import { Types } from "mongoose";
 
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
@@ -48,7 +49,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ key: st
   draft.effectiveAt = now;
   draft.changelog = changelog;
   if (!draft.createdByUserId) {
-    draft.createdByUserId = session.user.id as string;
+    const userId = session.user.id;
+    if (userId && Types.ObjectId.isValid(userId)) {
+      draft.createdByUserId = new Types.ObjectId(userId);
+    }
   }
   await draft.save();
 
