@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
+import { getSession, signIn } from "next-auth/react";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -11,7 +12,7 @@ const LAST_APPLICATION_KEY = "ac_application_last_id";
 const AUTOSAVE_DELAY_MS = 800;
 const TERMS_PDF_URL = process.env.NEXT_PUBLIC_TERMS_PDF_URL || "";
 
-const steps = ["Personal", "Shopify fields", "Profile images", "Legal", "Submit"] as const;
+const baseSteps = ["Personal", "Shopify fields", "Profile images", "Legal", "Submit"] as const;
 
 type PersonalState = {
   fullName: string;
@@ -85,6 +86,15 @@ function ApplyPageContent() {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resolvingRef = useRef<Set<string>>(new Set());
 
+  const [sessionUser, setSessionUser] = useState<any | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
+  const pendingRegistrationId = (sessionUser as { pendingRegistrationId?: string } | undefined)?.pendingRegistrationId;
+  const isPendingArtist =
+    !!sessionUser && sessionUser.role === "artist" && !sessionUser.artistId && pendingRegistrationId;
+  const [accountStepVisible, setAccountStepVisible] = useState(true);
+  const steps = useMemo(() => (accountStepVisible ? ["Create account", ...baseSteps] : [...baseSteps]), [accountStepVisible]);
+  const needsAccount = accountStepVisible;
+
   const [currentStep, setCurrentStep] = useState(0);
   const [applicationId, setApplicationId] = useState<string | null>(null);
   const [applicationToken, setApplicationToken] = useState<string | null>(null);
@@ -100,6 +110,13 @@ function ApplyPageContent() {
     city: "",
     country: "",
   });
+
+  const [accountEmail, setAccountEmail] = useState("");
+  const [accountPassword, setAccountPassword] = useState("");
+  const [accountFullName, setAccountFullName] = useState("");
+  const [accountMode, setAccountMode] = useState<"signup" | "login">("signup");
+  const [accountError, setAccountError] = useState<string | null>(null);
+  const [accountLoading, setAccountLoading] = useState(false);
   const [shopify, setShopify] = useState<ShopifyState>({
     instagramUrl: "",
     quote: "",
@@ -144,7 +161,8 @@ function ApplyPageContent() {
 
   const saveDraft = useCallback(
     async (payload: typeof draftPayload) => {
-      if (!applicationId || !applicationToken) return false;
+      if (!applicationId) return false;
+      if (!applicationToken && !isPendingArtist) return false;
       setSaveError(null);
       setSaveStatus("saving");
       try {
@@ -152,7 +170,7 @@ function ApplyPageContent() {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
-            "x-application-token": applicationToken,
+            ...(applicationToken ? { "x-application-token": applicationToken } : {}),
           },
           body: JSON.stringify(payload),
         });
@@ -172,7 +190,7 @@ function ApplyPageContent() {
         return false;
       }
     },
-    [applicationId, applicationToken],
+    [applicationId, applicationToken, isPendingArtist],
   );
 
   const saveNow = useCallback(async () => {
@@ -184,16 +202,17 @@ function ApplyPageContent() {
   }, [draftPayload, saveDraft]);
 
   const resolveShopifyPreview = useCallback(async (gid: string) => {
-    const res = await fetch(`/api/shopify/files/resolve?ids=${encodeURIComponent(gid)}`, { cache: "no-store" });
+    const res = await fetch(`/api/shopify/resolve-media?ids=${encodeURIComponent(gid)}`, { cache: "no-store" });
     const payload = await res.json().catch(() => null);
     if (!res.ok || !payload) return null;
-    const files = Array.isArray(payload.files) ? payload.files : [];
-    const match = files.find((file: any) => file?.id === gid);
-    return match?.previewImage || match?.url || null;
+    const items = Array.isArray(payload.items) ? payload.items : [];
+    const match = items.find((file: any) => file?.id === gid);
+    return match?.url || null;
   }, []);
 
   useEffect(() => {
-    if (!autosaveEnabled || !applicationId || !applicationToken) return undefined;
+    if (!autosaveEnabled || !applicationId) return undefined;
+    if (!applicationToken && !isPendingArtist) return undefined;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
       void saveDraft(draftPayload);
@@ -223,12 +242,12 @@ function ApplyPageContent() {
 
     const run = async () => {
       try {
-        const res = await fetch(`/api/shopify/files/resolve?ids=${encodeURIComponent(missing.join(","))}`, {
+        const res = await fetch(`/api/shopify/resolve-media?ids=${encodeURIComponent(missing.join(","))}`, {
           cache: "no-store",
         });
         const payload = await res.json().catch(() => null);
         if (!res.ok || !payload) return;
-        const files = Array.isArray(payload.files) ? payload.files : [];
+        const files = Array.isArray(payload.items) ? payload.items : [];
         if (!files.length) return;
 
         setUploadState((prev) => {
@@ -236,7 +255,7 @@ function ApplyPageContent() {
           for (const file of files) {
             const key = gidToKey.get(file?.id);
             if (!key) continue;
-            const previewUrl = file.previewImage || file.url || null;
+            const previewUrl = file.url || null;
             if (!previewUrl) continue;
             next[key] = { ...next[key], previewUrl };
           }
@@ -252,13 +271,39 @@ function ApplyPageContent() {
 
   useEffect(() => {
     if (autosaveEnabled || initializing) return;
-    if (applicationId && applicationToken) {
+    if (applicationId && (applicationToken || isPendingArtist)) {
       setAutosaveEnabled(true);
     }
-  }, [autosaveEnabled, initializing, applicationId, applicationToken]);
+  }, [autosaveEnabled, initializing, applicationId, applicationToken, isPendingArtist]);
+
+  useEffect(() => {
+    if (isPendingArtist && accountStepVisible) {
+      setAccountStepVisible(false);
+      setCurrentStep(0);
+    }
+  }, [isPendingArtist, accountStepVisible]);
+
+  useEffect(() => {
+    let active = true;
+    const run = async () => {
+      try {
+        const session = await getSession();
+        if (active) {
+          setSessionUser(session?.user ?? null);
+        }
+      } finally {
+        if (active) setSessionLoading(false);
+      }
+    };
+    void run();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (initRef.current) return;
+    if (sessionLoading) return;
     initRef.current = true;
 
     const init = async () => {
@@ -268,9 +313,9 @@ function ApplyPageContent() {
       const queryApplicationId = searchParams.get("applicationId");
       const queryToken = searchParams.get("token");
 
-      const tryLoadApplication = async (id: string, token: string) => {
+      const tryLoadApplication = async (id: string, token?: string | null) => {
         const res = await fetch(`/api/applications/${encodeURIComponent(id)}`, {
-          headers: { "x-application-token": token },
+          headers: token ? { "x-application-token": token } : undefined,
           cache: "no-store",
         });
         if (!res.ok) return false;
@@ -279,7 +324,7 @@ function ApplyPageContent() {
         if (!application) return false;
 
         setApplicationId(id);
-        setApplicationToken(token);
+        if (token) setApplicationToken(token);
         setApplicationStatus(application.status || null);
 
         setPersonal({
@@ -308,11 +353,13 @@ function ApplyPageContent() {
           accepted: Boolean(application.legal?.termsVersion && String(application.legal.termsVersion).trim()),
         }));
 
-        try {
-          localStorage.setItem(id, token);
-          localStorage.setItem(LAST_APPLICATION_KEY, id);
-        } catch (err) {
-          console.warn("Failed to persist application token", err);
+        if (token) {
+          try {
+            localStorage.setItem(id, token);
+            localStorage.setItem(LAST_APPLICATION_KEY, id);
+          } catch (err) {
+            console.warn("Failed to persist application token", err);
+          }
         }
 
         return true;
@@ -343,10 +390,18 @@ function ApplyPageContent() {
       };
 
       try {
+        if (isPendingArtist && pendingRegistrationId) {
+          const ok = await tryLoadApplication(pendingRegistrationId);
+          if (ok) {
+            setInitializing(false);
+            return;
+          }
+        }
+
         const queryReady = queryApplicationId && queryToken;
         if (queryReady) {
           const ok = await tryLoadApplication(queryApplicationId, queryToken);
-          if (!ok) {
+          if (!ok && !needsAccount && !isPendingArtist) {
             await createApplication();
           }
           setInitializing(false);
@@ -363,7 +418,9 @@ function ApplyPageContent() {
           }
         }
 
-        await createApplication();
+        if (!needsAccount && !isPendingArtist) {
+          await createApplication();
+        }
         setInitializing(false);
       } catch (err: any) {
         console.error("Failed to initialize registration", err);
@@ -373,32 +430,33 @@ function ApplyPageContent() {
     };
 
     void init();
-  }, [searchParams]);
+  }, [searchParams, sessionLoading, isPendingArtist, pendingRegistrationId, needsAccount]);
 
   const validateStep = (stepIndex: number) => {
     const errors: string[] = [];
+    const baseIndex = needsAccount ? stepIndex - 1 : stepIndex;
 
-    if (stepIndex === 0) {
+    if (baseIndex === 0) {
       if (!personal.fullName.trim()) errors.push("Full name is required.");
       if (!personal.email.trim()) errors.push("Email is required.");
       if (personal.email && !personal.email.includes("@")) errors.push("Email looks invalid.");
     }
 
-    if (stepIndex === 1) {
+    if (baseIndex === 1) {
       if (!shopify.instagramUrl.trim()) errors.push("Instagram is required.");
       if (!shopify.quote.trim()) errors.push("Quote is required.");
       if (!shopify.einleitung_1.trim()) errors.push("Intro text is required.");
       if (!shopify.text_1.trim()) errors.push("Main text is required.");
     }
 
-    if (stepIndex === 2) {
+    if (baseIndex === 2) {
       const hasImage = [profileImages.titelbildGid, profileImages.bild1Gid, profileImages.bild2Gid, profileImages.bild3Gid].some(
         (value) => value.trim(),
       );
       if (!hasImage) errors.push("Please upload at least one profile image.");
     }
 
-    if (stepIndex === 3) {
+    if (baseIndex === 3) {
       if (!legal.accepted) errors.push("Please accept the terms.");
       if (!legal.acceptedName.trim()) errors.push("Name is required.");
     }
@@ -409,6 +467,10 @@ function ApplyPageContent() {
 
   const handleNext = async () => {
     setStepErrors([]);
+    if (needsAccount && currentStep === 0) {
+      await handleAccountContinue();
+      return;
+    }
     if (!validateStep(currentStep)) return;
     const saved = await saveNow();
     if (!saved) return;
@@ -478,15 +540,122 @@ function ApplyPageContent() {
     }
   };
 
-  const handleSubmit = async () => {
-    setSubmitError(null);
-    if (!applicationId || !applicationToken) {
-      setSubmitError("Missing registration token.");
+  const handleAccountContinue = async () => {
+    setAccountError(null);
+    if (!accountEmail.trim() || !accountEmail.includes("@")) {
+      setAccountError("A valid email is required.");
+      return;
+    }
+    if (!accountPassword || accountPassword.length < 8) {
+      setAccountError("Password must be at least 8 characters.");
+      return;
+    }
+    if (accountMode === "signup" && accountFullName.trim().length < 2) {
+      setAccountError("Full name is required.");
       return;
     }
 
-    if (!validateStep(3)) {
-      setCurrentStep(3);
+    setAccountLoading(true);
+    try {
+      const endpoint = accountMode === "signup" ? "/api/artist-onboarding/signup" : "/api/artist-onboarding/login";
+      const payload =
+        accountMode === "signup"
+          ? { email: accountEmail, password: accountPassword, fullName: accountFullName }
+          : { email: accountEmail, password: accountPassword };
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        setAccountError(parseErrorMessage(body?.error || body) || "Unable to continue.");
+        return;
+      }
+
+      await signIn("credentials", {
+        email: accountEmail,
+        password: accountPassword,
+        redirect: false,
+      });
+      const refreshedSession = await getSession();
+      setSessionUser(refreshedSession?.user ?? null);
+
+      if (body?.redirectTo === "/artist") {
+        router.replace("/artist");
+        return;
+      }
+
+      const registrationId = body?.registrationId as string | undefined;
+      if (registrationId) {
+        const loaded = await fetch(`/api/applications/${encodeURIComponent(registrationId)}`, { cache: "no-store" });
+        if (loaded.ok) {
+          const data = await loaded.json().catch(() => null);
+          const application = data?.application;
+          if (application) {
+            setApplicationId(registrationId);
+            setApplicationStatus(application.status || "draft");
+            setPersonal({
+              fullName: application.personal?.fullName ?? accountFullName ?? "",
+              email: application.personal?.email ?? accountEmail,
+              phone: application.personal?.phone ?? "",
+              city: application.personal?.city ?? "",
+              country: application.personal?.country ?? "",
+            });
+            setShopify({
+              instagramUrl: application.shopify?.instagramUrl ?? "",
+              quote: application.shopify?.quote ?? "",
+              einleitung_1: application.shopify?.einleitung_1 ?? "",
+              text_1: application.shopify?.text_1 ?? "",
+              kategorieCollectionGid: application.shopify?.kategorieCollectionGid ?? "",
+            });
+            setProfileImages({
+              titelbildGid: application.profileImages?.titelbildGid ?? "",
+              bild1Gid: application.profileImages?.bild1Gid ?? "",
+              bild2Gid: application.profileImages?.bild2Gid ?? "",
+              bild3Gid: application.profileImages?.bild3Gid ?? "",
+            });
+            setLegal((prev) => ({
+              ...prev,
+              acceptedName: application.legal?.acceptedName ?? "",
+              accepted: Boolean(application.legal?.termsVersion && String(application.legal.termsVersion).trim()),
+            }));
+          }
+        } else {
+          setApplicationId(registrationId);
+          setApplicationStatus("draft");
+        }
+      } else {
+        setAccountError("Unable to locate a registration for this account.");
+        return;
+      }
+
+      setPersonal((prev) => ({
+        ...prev,
+        fullName: prev.fullName || accountFullName,
+        email: prev.email || accountEmail,
+      }));
+
+      setAccountStepVisible(false);
+      setCurrentStep(0);
+    } catch (err: any) {
+      setAccountError(err?.message || "Unable to continue.");
+    } finally {
+      setAccountLoading(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    setSubmitError(null);
+    if (!applicationId) {
+      setSubmitError("Missing registration.");
+      return;
+    }
+
+    const legalStepIndex = needsAccount ? 4 : 3;
+    if (!validateStep(legalStepIndex)) {
+      setCurrentStep(legalStepIndex);
       return;
     }
 
@@ -499,7 +668,7 @@ function ApplyPageContent() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-application-token": applicationToken,
+          ...(applicationToken ? { "x-application-token": applicationToken } : {}),
         },
         body: JSON.stringify({
           accepted: legal.accepted,
@@ -520,7 +689,10 @@ function ApplyPageContent() {
         return;
       }
 
-      router.replace(`/apply/${encodeURIComponent(applicationId)}/dashboard?token=${encodeURIComponent(applicationToken)}`);
+      const dashboardUrl = applicationToken
+        ? `/apply/${encodeURIComponent(applicationId)}/dashboard?token=${encodeURIComponent(applicationToken)}`
+        : `/apply/${encodeURIComponent(applicationId)}/dashboard`;
+      router.replace(dashboardUrl);
     } catch (err) {
       console.error("Failed to submit registration", err);
       setSubmitError("Something went wrong. Please try again.");
@@ -604,7 +776,61 @@ function ApplyPageContent() {
       <div className="ap-card">
         <div className="ap-card-title">{steps[currentStep]}</div>
 
-        {currentStep === 0 ? (
+        {needsAccount && currentStep === 0 ? (
+          <div className="grid gap-4">
+            <div className="ap-note">
+              Create your account to save progress and return later. Already have an account? Switch to login.
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className={accountMode === "signup" ? "btnPrimary" : "btnGhost"}
+                onClick={() => setAccountMode("signup")}
+              >
+                Sign up
+              </button>
+              <button
+                type="button"
+                className={accountMode === "login" ? "btnPrimary" : "btnGhost"}
+                onClick={() => setAccountMode("login")}
+              >
+                Log in
+              </button>
+            </div>
+            <label className="field">
+              Email
+              <input
+                type="email"
+                value={accountEmail}
+                onChange={(e) => setAccountEmail(e.target.value)}
+                placeholder="you@example.com"
+              />
+            </label>
+            <label className="field">
+              Password
+              <input
+                type="password"
+                value={accountPassword}
+                onChange={(e) => setAccountPassword(e.target.value)}
+                placeholder="At least 8 characters"
+              />
+            </label>
+            {accountMode === "signup" ? (
+              <label className="field">
+                Full name
+                <input
+                  type="text"
+                  value={accountFullName}
+                  onChange={(e) => setAccountFullName(e.target.value)}
+                  placeholder="Your full name"
+                />
+              </label>
+            ) : null}
+            {accountError ? <div className="text-sm font-semibold text-red-600">{accountError}</div> : null}
+          </div>
+        ) : null}
+
+        {currentStep === (needsAccount ? 1 : 0) ? (
           <div className="grid gap-4">
             <label className="field">
               Full name
@@ -656,7 +882,7 @@ function ApplyPageContent() {
           </div>
         ) : null}
 
-        {currentStep === 1 ? (
+        {currentStep === (needsAccount ? 2 : 1) ? (
           <div className="grid gap-4">
             <label className="field">
               Instagram URL
@@ -712,7 +938,7 @@ function ApplyPageContent() {
           </div>
         ) : null}
 
-        {currentStep === 2 ? (
+        {currentStep === (needsAccount ? 3 : 2) ? (
           <div className="grid gap-4">
             {profileImageFields.map((field) => {
               const state = uploadState[field.key];
@@ -778,7 +1004,7 @@ function ApplyPageContent() {
           </div>
         ) : null}
 
-        {currentStep === 3 ? (
+        {currentStep === (needsAccount ? 4 : 3) ? (
           <div className="grid gap-4">
             <label className="field">
               Accepted name
@@ -808,7 +1034,7 @@ function ApplyPageContent() {
           </div>
         ) : null}
 
-        {currentStep === 4 ? (
+        {currentStep === (needsAccount ? 5 : 4) ? (
           <div className="space-y-3 text-sm text-slate-600">
             <p>Review your registration and submit when ready.</p>
             <div className="ap-dropzone">
@@ -828,8 +1054,8 @@ function ApplyPageContent() {
           Back
         </button>
         {currentStep < steps.length - 1 ? (
-          <button type="button" className="btnPrimary" onClick={handleNext}>
-            Next
+          <button type="button" className="btnPrimary" onClick={handleNext} disabled={accountLoading && needsAccount && currentStep === 0}>
+            {needsAccount && currentStep === 0 ? (accountLoading ? "Working..." : "Continue") : "Next"}
           </button>
         ) : (
           <button type="button" className="btnPrimary" onClick={handleSubmit} disabled={submitting}>

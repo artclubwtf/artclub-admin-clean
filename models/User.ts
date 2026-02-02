@@ -10,6 +10,8 @@ const userSchema = new Schema(
     shopDomain: { type: String, required: true, lowercase: true, trim: true },
     shopifyCustomerGid: { type: String, trim: true },
     artistId: { type: Schema.Types.ObjectId, ref: "Artist" },
+    pendingRegistrationId: { type: Schema.Types.ObjectId, ref: "ArtistApplication" },
+    onboardingStatus: { type: String, enum: ["pending", "accepted", "rejected"] },
     passwordHash: { type: String, required: true },
     mustChangePassword: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },

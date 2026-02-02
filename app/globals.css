@@ -157,6 +157,66 @@ a:hover {
   }
 }
 
+.md-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.md-preview h1,
+.md-preview h2,
+.md-preview h3 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.md-preview h1 {
+  font-size: 20px;
+}
+
+.md-preview h2 {
+  font-size: 18px;
+}
+
+.md-preview h3 {
+  font-size: 16px;
+}
+
+.md-preview p {
+  line-height: 1.5;
+}
+
+.md-preview ul {
+  padding-left: 18px;
+  list-style: disc;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.md-preview a {
+  color: color-mix(in srgb, var(--text) 70%, #2563eb 30%);
+  text-decoration: underline;
+}
+
+.md-preview code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  background: var(--surface2);
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--hairline);
+}
+
+.md-preview pre {
+  background: var(--surface2);
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--hairline);
+  overflow: auto;
+}
+
 .ac-button {
   display: inline-flex;
   align-items: center;

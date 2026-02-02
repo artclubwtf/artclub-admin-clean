@@ -1,12 +1,9 @@
-import { hash } from "bcryptjs";
-import { randomBytes } from "crypto";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
-import { resolveShopDomain } from "@/lib/shopDomain";
 import { downloadFromS3 } from "@/lib/s3";
 import { upsertArtistMetaobject } from "@/lib/shopify";
 import { createDraftArtworkProduct } from "@/lib/shopifyArtworks";
@@ -17,8 +14,6 @@ import { MediaModel } from "@/models/Media";
 import { UserModel } from "@/models/User";
 
 const allowedStatuses = ["accepted", "rejected"] as const;
-const PASSWORD_HASH_ROUNDS = 12;
-
 type StatusPayload = {
   status?: (typeof allowedStatuses)[number];
   note?: string;
@@ -47,10 +42,6 @@ function pickDisplayName(application: { personal?: { fullName?: string | null; e
   const email = application.personal?.email?.trim();
   if (email) return email;
   return "New Artist";
-}
-
-function generateTempPassword() {
-  return randomBytes(9).toString("base64url");
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -83,8 +74,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   const now = new Date();
-
-  let accountInfo: { created: boolean; exists: boolean; email?: string; tempPassword?: string } | null = null;
 
   if (status === "accepted") {
     const displayName = pickDisplayName(application);
@@ -151,37 +140,22 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     const email = application.personal?.email?.toString().trim().toLowerCase() || "";
     if (email) {
-      accountInfo = { created: false, exists: false, email };
       let user = null;
       if (application.linkedUserId && Types.ObjectId.isValid(application.linkedUserId.toString())) {
-        user = await UserModel.findById(application.linkedUserId).lean();
+        user = await UserModel.findById(application.linkedUserId);
       }
       if (!user) {
-        user = await UserModel.findOne({ email }).lean();
+        user = await UserModel.findOne({
+          $or: [{ pendingRegistrationId: application._id }, { email }],
+        });
       }
 
       if (user) {
-        accountInfo.exists = true;
+        user.artistId = artist._id;
+        user.pendingRegistrationId = null as any;
+        user.onboardingStatus = "accepted";
+        await user.save();
         application.linkedUserId = user._id;
-      } else {
-        const shopDomain = resolveShopDomain();
-        if (!shopDomain) {
-          throw new Error("Missing Shopify shop domain for user creation");
-        }
-        const tempPassword = generateTempPassword();
-        const passwordHash = await hash(tempPassword, PASSWORD_HASH_ROUNDS);
-        const createdUser = await UserModel.create({
-          email,
-          role: "artist",
-          artistId: artist._id,
-          shopDomain,
-          passwordHash,
-          mustChangePassword: true,
-          isActive: true,
-        });
-        application.linkedUserId = createdUser._id;
-        accountInfo.created = true;
-        accountInfo.tempPassword = tempPassword;
       }
     }
 
@@ -286,6 +260,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (note) {
       application.admin = { ...application.admin, decisionNote: note };
     }
+    const email = application.personal?.email?.toString().trim().toLowerCase() || "";
+    if (email) {
+      const user = await UserModel.findOne({
+        $or: [{ pendingRegistrationId: application._id }, { email }],
+      });
+      if (user) {
+        user.onboardingStatus = "rejected";
+        await user.save();
+        application.linkedUserId = user._id;
+      }
+    }
   }
 
   await application.save();
@@ -304,7 +289,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         createdProductIds: application.createdProductIds || [],
         admin: application.admin || {},
       },
-      account: accountInfo || undefined,
     },
     { status: 200 },
   );

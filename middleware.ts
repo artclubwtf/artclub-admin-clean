@@ -25,7 +25,9 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith("/api/account/change-password/") ||
       pathname.startsWith("/api/applications") ||
       pathname === "/api/shopify/files/upload" ||
-      pathname === "/api/shopify/files/resolve";
+      pathname === "/api/shopify/files/resolve" ||
+      pathname === "/api/shopify/resolve-media" ||
+      pathname.startsWith("/api/artist-onboarding");
 
     if (allowedApi) return NextResponse.next();
 
@@ -44,7 +46,7 @@ export async function middleware(req: NextRequest) {
 
       const isArtistApi = pathname === "/api/artist" || pathname.startsWith("/api/artist/");
       if (isArtistApi) {
-        if (token.role !== "artist") {
+        if (token.role !== "artist" || !token.artistId) {
           return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
         return NextResponse.next();
@@ -78,6 +80,11 @@ export async function middleware(req: NextRequest) {
       if (token.role !== "artist") {
         const fallback = token.role === "team" ? "/admin" : "/login";
         return NextResponse.redirect(new URL(fallback, req.url));
+      }
+
+      const pendingRegistrationId = (token as { pendingRegistrationId?: string }).pendingRegistrationId;
+      if (!token.artistId && pendingRegistrationId) {
+        return NextResponse.redirect(new URL(`/apply/${pendingRegistrationId}/dashboard`, req.url));
       }
 
       if (token.mustChangePassword && !pathname.startsWith("/artist/change-password")) {

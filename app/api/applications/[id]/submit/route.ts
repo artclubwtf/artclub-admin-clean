@@ -1,6 +1,8 @@
+import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 
+import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
 import { getApplicationTokenFromRequest, verifyApplicationToken } from "@/lib/applicationAuth";
 import { ArtistApplicationModel } from "@/models/ArtistApplication";
@@ -22,9 +24,7 @@ function getRequestIp(req: Request) {
 
 async function loadApplication(req: Request, id: string) {
   const token = getApplicationTokenFromRequest(req);
-  if (!token) {
-    return { error: NextResponse.json({ error: "missing_token" }, { status: 401 }) } as const;
-  }
+  const session = await getServerSession(authOptions);
 
   await connectMongo();
   const application = await ArtistApplicationModel.findById(id);
@@ -32,11 +32,18 @@ async function loadApplication(req: Request, id: string) {
     return { error: NextResponse.json({ error: "Application not found" }, { status: 404 }) } as const;
   }
 
-  if (application.expiresAt && application.expiresAt.getTime() <= Date.now()) {
-    return { error: NextResponse.json({ error: "token_expired" }, { status: 401 }) } as const;
+  if (token) {
+    if (application.expiresAt && application.expiresAt.getTime() <= Date.now()) {
+      return { error: NextResponse.json({ error: "token_expired" }, { status: 401 }) } as const;
+    }
+    if (verifyApplicationToken(token, application.applicationTokenHash)) {
+      return { application } as const;
+    }
   }
 
-  if (!verifyApplicationToken(token, application.applicationTokenHash)) {
+  const pendingRegistrationId = (session as any)?.user?.pendingRegistrationId as string | undefined;
+  const isPendingArtist = session?.user?.role === "artist" && pendingRegistrationId && pendingRegistrationId === id;
+  if (!isPendingArtist) {
     return { error: NextResponse.json({ error: "invalid_token" }, { status: 401 }) } as const;
   }
 

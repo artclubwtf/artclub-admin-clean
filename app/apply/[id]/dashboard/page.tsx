@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
+import { getSession } from "next-auth/react";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 
@@ -31,6 +32,12 @@ type ApplicationData = {
     termsVersion?: string;
     acceptedAt?: string;
     acceptedName?: string;
+  };
+  profileImages?: {
+    titelbildGid?: string;
+    bild1Gid?: string;
+    bild2Gid?: string;
+    bild3Gid?: string;
   };
 };
 
@@ -122,6 +129,8 @@ function ApplyDashboardContent() {
 
   const [token, setToken] = useState<string | null>(null);
   const [tokenReady, setTokenReady] = useState(false);
+  const [sessionAvailable, setSessionAvailable] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [application, setApplication] = useState<ApplicationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -134,6 +143,7 @@ function ApplyDashboardContent() {
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [lightboxItem, setLightboxItem] = useState<MediaItem | null>(null);
+  const [profilePreviews, setProfilePreviews] = useState<Record<string, string>>({});
 
   const [artworks, setArtworks] = useState<ArtworkItem[]>([]);
   const [artworksLoading, setArtworksLoading] = useState(false);
@@ -166,13 +176,71 @@ function ApplyDashboardContent() {
     setTokenReady(true);
   }, [applicationId, searchParams]);
 
+  useEffect(() => {
+    let active = true;
+    const run = async () => {
+      try {
+        const session = await getSession();
+        if (active) {
+          setSessionAvailable(Boolean(session?.user));
+        }
+      } finally {
+        if (active) setSessionChecked(true);
+      }
+    };
+    void run();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const authHeaders = useMemo(() => {
     if (!token) return {} as Record<string, string>;
     return { "x-application-token": token };
   }, [token]);
 
+  useEffect(() => {
+    const gids = [
+      application?.profileImages?.titelbildGid,
+      application?.profileImages?.bild1Gid,
+      application?.profileImages?.bild2Gid,
+      application?.profileImages?.bild3Gid,
+    ]
+      .filter((gid): gid is string => typeof gid === "string" && gid.trim().length > 0)
+      .filter((gid) => !profilePreviews[gid]);
+
+    if (!gids.length) return;
+
+    let active = true;
+    const run = async () => {
+      try {
+        const res = await fetch(`/api/shopify/resolve-media?ids=${encodeURIComponent(gids.join(","))}`, { cache: "no-store" });
+        const payload = await res.json().catch(() => null);
+        if (!res.ok || !payload) return;
+        const items = Array.isArray(payload.items) ? payload.items : [];
+        if (!items.length || !active) return;
+        setProfilePreviews((prev) => {
+          const next = { ...prev };
+          for (const item of items) {
+            if (item?.id && item?.url) {
+              next[item.id] = item.url;
+            }
+          }
+          return next;
+        });
+      } catch (err) {
+        console.error("Failed to resolve profile images", err);
+      }
+    };
+
+    void run();
+    return () => {
+      active = false;
+    };
+  }, [application?.profileImages, profilePreviews]);
+
   const loadApplication = useCallback(async () => {
-    if (!applicationId || !token) return;
+    if (!applicationId) return;
     setLoadError(null);
     try {
       const res = await fetch(`/api/applications/${encodeURIComponent(applicationId)}`, {
@@ -190,7 +258,7 @@ function ApplyDashboardContent() {
   }, [applicationId, token, authHeaders]);
 
   const loadMedia = useCallback(async () => {
-    if (!applicationId || !token) return;
+    if (!applicationId) return;
     setMediaLoading(true);
     setMediaError(null);
     try {
@@ -211,7 +279,7 @@ function ApplyDashboardContent() {
   }, [applicationId, token, authHeaders]);
 
   const loadArtworks = useCallback(async () => {
-    if (!applicationId || !token) return;
+    if (!applicationId) return;
     setArtworksLoading(true);
     setArtworksError(null);
     try {
@@ -232,7 +300,7 @@ function ApplyDashboardContent() {
   }, [applicationId, token, authHeaders]);
 
   useEffect(() => {
-    if (!applicationId || !token) {
+    if (!applicationId || (!token && !sessionAvailable)) {
       setLoading(false);
       return;
     }
@@ -246,11 +314,11 @@ function ApplyDashboardContent() {
     return () => {
       active = false;
     };
-  }, [applicationId, token, loadApplication, loadMedia, loadArtworks]);
+  }, [applicationId, token, sessionAvailable, loadApplication, loadMedia, loadArtworks]);
 
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    if (!applicationId || !token) return;
+    if (!applicationId || (!token && !sessionAvailable)) return;
 
     setUploadError(null);
     setUploadSuccess(null);
@@ -284,7 +352,7 @@ function ApplyDashboardContent() {
   };
 
   const handleDeleteMedia = async (mediaId: string) => {
-    if (!applicationId || !token) return;
+    if (!applicationId || (!token && !sessionAvailable)) return;
     try {
       const res = await fetch(`/api/applications/${encodeURIComponent(applicationId)}/media/${encodeURIComponent(mediaId)}`, {
         method: "DELETE",
@@ -314,7 +382,7 @@ function ApplyDashboardContent() {
   };
 
   const handleCreateArtwork = async () => {
-    if (!applicationId || !token) return;
+    if (!applicationId || (!token && !sessionAvailable)) return;
     setArtworkError(null);
     setArtworkSuccess(null);
 
@@ -379,7 +447,7 @@ function ApplyDashboardContent() {
     );
   }
 
-  if (!tokenReady) {
+  if (!tokenReady || !sessionChecked) {
     return (
       <div className="ap-shell">
         <div className="ap-card" style={{ maxWidth: 720, margin: "40px auto" }}>
@@ -389,7 +457,7 @@ function ApplyDashboardContent() {
     );
   }
 
-  if (!token) {
+  if (!token && !sessionAvailable) {
     return (
       <div className="ap-shell">
         <div className="ap-card" style={{ maxWidth: 720, margin: "40px auto" }}>
@@ -462,6 +530,30 @@ function ApplyDashboardContent() {
               <div>Accepted name: {application?.legal?.acceptedName || "—"}</div>
               <div>Accepted at: {application?.legal?.acceptedAt ? formatDate(application.legal.acceptedAt) : "—"}</div>
               <div>Terms version: {application?.legal?.termsVersion || "—"}</div>
+            </div>
+          </details>
+          <details className="ap-advanced">
+            <summary className="text-sm font-semibold text-slate-800">Profile images</summary>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {[
+                { label: "Titelbild", gid: application?.profileImages?.titelbildGid },
+                { label: "Bild 1", gid: application?.profileImages?.bild1Gid },
+                { label: "Bild 2", gid: application?.profileImages?.bild2Gid },
+                { label: "Bild 3", gid: application?.profileImages?.bild3Gid },
+              ].map((item) => {
+                const previewUrl = item.gid ? profilePreviews[item.gid] : null;
+                return (
+                  <div key={item.label} className="rounded border border-slate-200 bg-white p-3">
+                    <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{item.label}</div>
+                    {previewUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={previewUrl} alt={item.label} className="mt-2 h-24 w-full rounded-md object-cover" />
+                    ) : (
+                      <div className="mt-2 text-xs text-slate-500">No image uploaded</div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </details>
         </div>

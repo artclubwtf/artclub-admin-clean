@@ -125,8 +125,6 @@ export default function AdminApplicationDetailPage() {
   const [categorySaving, setCategorySaving] = useState(false);
   const [categoryMessage, setCategoryMessage] = useState<string | null>(null);
   const [categoryLabel, setCategoryLabel] = useState<string | null>(null);
-  const [accountInfo, setAccountInfo] = useState<{ email: string; tempPassword?: string; exists?: boolean } | null>(null);
-  const [showAccountModal, setShowAccountModal] = useState(false);
   const [lightboxMedia, setLightboxMedia] = useState<MediaItem | null>(null);
   const [lightboxArtwork, setLightboxArtwork] = useState<ArtworkItem | null>(null);
 
@@ -166,19 +164,9 @@ export default function AdminApplicationDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status, note: note.trim() || undefined }),
       });
-      const payload = (await res.json().catch(() => null)) as
-        | { error?: string; account?: { email?: string; tempPassword?: string; created?: boolean; exists?: boolean } }
-        | null;
+      const payload = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) throw new Error(payload?.error || "Failed to update status");
       setActionMessage(`Status updated to ${status.replace(/_/g, " ")}.`);
-      if (status === "accepted" && payload?.account?.email) {
-        setAccountInfo({
-          email: payload.account.email,
-          tempPassword: payload.account.tempPassword,
-          exists: payload.account.exists ?? false,
-        });
-        setShowAccountModal(true);
-      }
       await load();
     } catch (err: any) {
       setActionError(err?.message || "Failed to update status");
@@ -262,19 +250,19 @@ export default function AdminApplicationDetailPage() {
     let active = true;
     const run = async () => {
       try {
-        const res = await fetch(`/api/shopify/files/resolve?ids=${encodeURIComponent(missing.join(","))}`, {
+        const res = await fetch(`/api/shopify/resolve-media?ids=${encodeURIComponent(missing.join(","))}`, {
           cache: "no-store",
         });
         const payload = await res.json().catch(() => null);
         if (!res.ok || !payload) return;
-        const files = Array.isArray(payload.files) ? payload.files : [];
+        const files = Array.isArray(payload.items) ? payload.items : [];
         if (!files.length) return;
         if (!active) return;
         setProfilePreviews((prev) => {
           const next = { ...prev };
           for (const file of files) {
             if (!file?.id) continue;
-            const url = file.previewImage || file.url;
+            const url = file.url;
             if (url) {
               next[file.id] = url;
             }
@@ -377,7 +365,7 @@ export default function AdminApplicationDetailPage() {
               onClick={() => handleStatusChange("accepted", decisionNote)}
               disabled={!canDecide || acting}
             >
-              Accept &amp; create account
+              Accept
             </button>
             <button
               className="btnGhost"
@@ -513,6 +501,18 @@ export default function AdminApplicationDetailPage() {
               );
             })}
           </div>
+          <details className="mt-2 rounded border border-slate-200 bg-white p-3 text-xs text-slate-600">
+            <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Advanced GIDs
+            </summary>
+            <div className="mt-2 space-y-1 break-all">
+              {profileImageRows.map((row) => (
+                <div key={row.label}>
+                  {row.label}: {row.gid || "—"}
+                </div>
+              ))}
+            </div>
+          </details>
         </div>
 
         <div className="card space-y-3">
@@ -660,51 +660,6 @@ export default function AdminApplicationDetailPage() {
           <p className="text-sm text-slate-600">No artwork drafts yet.</p>
         )}
       </div>
-
-      {showAccountModal && accountInfo ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5">
-            <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Account</div>
-            <h2 className="mt-2 text-xl font-semibold text-slate-900">Artist account</h2>
-            <p className="mt-2 text-sm text-slate-600">
-              {accountInfo.exists
-                ? "An account with this email already exists."
-                : "Artist account created. This password is shown once; store it now."}
-            </p>
-            <div className="mt-4 space-y-2 rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-              <div>Email: {accountInfo.email}</div>
-              {accountInfo.tempPassword ? <div>Temp password: {accountInfo.tempPassword}</div> : null}
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {accountInfo.tempPassword ? (
-                <button
-                  type="button"
-                  className="btnGhost"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(accountInfo.tempPassword || "");
-                    } catch (err) {
-                      console.error("Failed to copy", err);
-                    }
-                  }}
-                >
-                  Copy password
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="btnGhost"
-                onClick={() => {
-                  setShowAccountModal(false);
-                  setAccountInfo(null);
-                }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {lightboxMedia ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4" onClick={() => setLightboxMedia(null)}>

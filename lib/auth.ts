@@ -42,6 +42,8 @@ export const authOptions: NextAuthOptions = {
           role: user.role,
           artistId: user.artistId?.toString(),
           mustChangePassword: user.mustChangePassword,
+          pendingRegistrationId: user.pendingRegistrationId?.toString(),
+          onboardingStatus: user.onboardingStatus,
         };
       },
     }),
@@ -55,6 +57,8 @@ export const authOptions: NextAuthOptions = {
         if (role) token.role = role;
         token.artistId = (user as { artistId?: string }).artistId;
         token.mustChangePassword = (user as { mustChangePassword?: boolean }).mustChangePassword;
+        token.pendingRegistrationId = (user as { pendingRegistrationId?: string }).pendingRegistrationId;
+        token.onboardingStatus = (user as { onboardingStatus?: string }).onboardingStatus;
       }
 
       if (trigger === "update" && session) {
@@ -67,6 +71,12 @@ export const authOptions: NextAuthOptions = {
         if ("role" in session && session.role) {
           token.role = session.role as UserRole;
         }
+        if ("pendingRegistrationId" in session && session.pendingRegistrationId) {
+          token.pendingRegistrationId = session.pendingRegistrationId as string;
+        }
+        if ("onboardingStatus" in session && session.onboardingStatus) {
+          token.onboardingStatus = session.onboardingStatus as string;
+        }
       }
 
       return token;
@@ -78,6 +88,12 @@ export const authOptions: NextAuthOptions = {
         session.user.email = (token.email as string) ?? session.user.email;
         if (token.artistId) session.user.artistId = token.artistId as string;
         session.user.mustChangePassword = token.mustChangePassword as boolean | undefined;
+        if (token.pendingRegistrationId) {
+          (session.user as { pendingRegistrationId?: string }).pendingRegistrationId = token.pendingRegistrationId as string;
+        }
+        if (token.onboardingStatus) {
+          (session.user as { onboardingStatus?: string }).onboardingStatus = token.onboardingStatus as string;
+        }
       }
       return session;
     },
