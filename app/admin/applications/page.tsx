@@ -17,7 +17,7 @@ type ApplicationListItem = {
   updatedAt?: string | null;
 };
 
-const statusOptions = ["", "draft", "submitted", "accepted", "rejected"] as const;
+const statusOptions = ["", "submitted", "accepted", "rejected"] as const;
 
 type StatusFilter = (typeof statusOptions)[number];
 
@@ -125,7 +125,7 @@ export default function AdminApplicationsPage() {
                   </div>
                   <div className="text-xs text-slate-500">
                     {app.personal?.email || "No email"} ·{" "}
-                    {(app.status === "in_review" ? "submitted" : app.status).replace(/_/g, " ")}
+                    {(app.status || "draft").replace(/_/g, " ")}
                   </div>
                 </div>
                 <Link href={`/admin/applications/${app.id}`} className="btnGhost">

@@ -867,7 +867,7 @@ function ApplyPageContent() {
           <span>
             Step {currentStep + 1} / {steps.length}
           </span>
-          <span>Status: {(applicationStatus === "in_review" ? "submitted" : applicationStatus) || "draft"}</span>
+          <span>Status: {(applicationStatus || "draft").replace(/_/g, " ")}</span>
         </div>
         <div className="ap-progress-bar">
           <span style={{ width: `${progressValue}%` }} />

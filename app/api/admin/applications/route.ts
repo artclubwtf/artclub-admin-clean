@@ -41,7 +41,7 @@ export async function GET(req: Request) {
 
   const payload = applications.map((app) => ({
     id: app._id.toString(),
-    status: app.status === "in_review" ? "submitted" : app.status,
+    status: app.status,
     personal: {
       fullName: app.personal?.fullName ?? null,
       email: app.personal?.email ?? null,

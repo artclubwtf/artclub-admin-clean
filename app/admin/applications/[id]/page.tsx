@@ -235,7 +235,7 @@ export default function AdminApplicationDetailPage() {
   const application = data?.application;
   const canDecide = application?.status === "submitted" || application?.status === "in_review";
   const panelStyle: CSSProperties = { ["--shadow" as any]: "0 1px 2px rgba(15, 23, 42, 0.04)" };
-  const displayStatus = application?.status === "in_review" ? "submitted" : application?.status;
+  const displayStatus = application?.status;
   const termsVersionLabel = application?.legal?.termsVersionNumber
     ? `v${application.legal.termsVersionNumber}`
     : application?.legal?.termsVersion || "—";

@@ -89,8 +89,7 @@ function formatOffering(value?: string) {
 
 function statusLabel(value?: string | null) {
   if (!value) return "draft";
-  const normalized = value === "in_review" ? "submitted" : value;
-  return normalized.replace(/_/g, " ");
+  return value.replace(/_/g, " ");
 }
 
 function addMonths(date: Date, months: number) {
