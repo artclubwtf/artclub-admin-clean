@@ -31,6 +31,15 @@ const artistApplicationSchema = new Schema(
       bild2Gid: { type: String },
       bild3Gid: { type: String },
     },
+    intents: {
+      exhibitAtEvents: { type: Boolean, default: true },
+      rentOriginals: { type: Boolean, default: false },
+      licensePrintRights: { type: Boolean, default: false },
+      presentOnly: { type: Boolean, default: false },
+      sellOriginals: { type: Boolean, default: true },
+      sellPrints: { type: Boolean, default: true },
+      notes: { type: String },
+    },
     legal: {
       termsVersion: { type: String },
       acceptedAt: { type: Date },

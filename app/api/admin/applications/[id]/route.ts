@@ -86,6 +86,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         personal: application.personal || {},
         shopify: application.shopify || {},
         profileImages: application.profileImages || {},
+        intents: application.intents || {},
         legal: application.legal || {},
         admin: application.admin || {},
         submittedAt: application.submittedAt,

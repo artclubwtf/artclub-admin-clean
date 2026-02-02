@@ -27,6 +27,15 @@ type ApplicationDetail = {
       bild2Gid?: string;
       bild3Gid?: string;
     };
+    intents?: {
+      exhibitAtEvents?: boolean;
+      rentOriginals?: boolean;
+      licensePrintRights?: boolean;
+      presentOnly?: boolean;
+      sellOriginals?: boolean;
+      sellPrints?: boolean;
+      notes?: string;
+    };
     legal?: {
       termsVersion?: string;
       acceptedAt?: string;
@@ -390,6 +399,42 @@ export default function AdminApplicationDetailPage() {
 
       {actionError && <div className="card text-red-600">Action error: {actionError}</div>}
       {actionMessage && <div className="card text-emerald-700">{actionMessage}</div>}
+
+      <div className="card space-y-3">
+        <div className="cardHeader">
+          <h2 className="text-lg font-semibold">Intent & preferences</h2>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { key: "exhibitAtEvents", label: "Exhibit at events" },
+            { key: "sellOriginals", label: "Sell originals" },
+            { key: "sellPrints", label: "Sell prints" },
+            { key: "licensePrintRights", label: "License print rights" },
+            { key: "rentOriginals", label: "Rent originals" },
+            { key: "presentOnly", label: "Present only" },
+          ].map((item) => {
+            const value = Boolean((application.intents as Record<string, boolean | undefined> | undefined)?.[item.key]);
+            return (
+              <span
+                key={item.key}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                  value ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-500"
+                }`}
+              >
+                {item.label}: {value ? "Enabled" : "Disabled"}
+              </span>
+            );
+          })}
+        </div>
+        {application.intents?.notes ? (
+          <div className="text-sm text-slate-700">
+            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Notes</div>
+            <div className="mt-1 whitespace-pre-wrap">{application.intents.notes}</div>
+          </div>
+        ) : (
+          <div className="text-xs text-slate-500">No notes provided.</div>
+        )}
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="card space-y-3">

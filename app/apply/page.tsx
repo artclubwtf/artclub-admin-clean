@@ -37,6 +37,16 @@ type ProfileImagesState = {
   bild3Gid: string;
 };
 
+type IntentsState = {
+  exhibitAtEvents: boolean;
+  rentOriginals: boolean;
+  licensePrintRights: boolean;
+  presentOnly: boolean;
+  sellOriginals: boolean;
+  sellPrints: boolean;
+  notes: string;
+};
+
 type LegalState = {
   accepted: boolean;
   acceptedName: string;
@@ -128,6 +138,15 @@ function ApplyPageContent() {
     bild2Gid: "",
     bild3Gid: "",
   });
+  const [intents, setIntents] = useState<IntentsState>({
+    exhibitAtEvents: true,
+    rentOriginals: false,
+    licensePrintRights: false,
+    presentOnly: false,
+    sellOriginals: true,
+    sellPrints: true,
+    notes: "",
+  });
   const [legal, setLegal] = useState<LegalState>({
     accepted: false,
     acceptedName: "",
@@ -149,12 +168,13 @@ function ApplyPageContent() {
       personal,
       shopify,
       profileImages,
+      intents,
       legal: {
         termsVersion: legal.accepted ? legal.termsVersion : "",
         acceptedName: legal.acceptedName,
       },
     }),
-    [personal, shopify, profileImages, legal.accepted, legal.termsVersion, legal.acceptedName],
+    [personal, shopify, profileImages, intents, legal.accepted, legal.termsVersion, legal.acceptedName],
   );
 
   const saveDraft = useCallback(
@@ -351,6 +371,16 @@ function ApplyPageContent() {
           bild1Gid: application.profileImages?.bild1Gid ?? "",
           bild2Gid: application.profileImages?.bild2Gid ?? "",
           bild3Gid: application.profileImages?.bild3Gid ?? "",
+        });
+        const loadedIntents = application.intents || {};
+        setIntents({
+          exhibitAtEvents: typeof loadedIntents.exhibitAtEvents === "boolean" ? loadedIntents.exhibitAtEvents : true,
+          rentOriginals: typeof loadedIntents.rentOriginals === "boolean" ? loadedIntents.rentOriginals : false,
+          licensePrintRights: typeof loadedIntents.licensePrintRights === "boolean" ? loadedIntents.licensePrintRights : false,
+          presentOnly: typeof loadedIntents.presentOnly === "boolean" ? loadedIntents.presentOnly : false,
+          sellOriginals: typeof loadedIntents.sellOriginals === "boolean" ? loadedIntents.sellOriginals : true,
+          sellPrints: typeof loadedIntents.sellPrints === "boolean" ? loadedIntents.sellPrints : true,
+          notes: typeof loadedIntents.notes === "string" ? loadedIntents.notes : "",
         });
         setLegal((prev) => ({
           ...prev,
@@ -617,6 +647,16 @@ function ApplyPageContent() {
               bild1Gid: application.profileImages?.bild1Gid ?? "",
               bild2Gid: application.profileImages?.bild2Gid ?? "",
               bild3Gid: application.profileImages?.bild3Gid ?? "",
+            });
+            const loadedIntents = application.intents || {};
+            setIntents({
+              exhibitAtEvents: typeof loadedIntents.exhibitAtEvents === "boolean" ? loadedIntents.exhibitAtEvents : true,
+              rentOriginals: typeof loadedIntents.rentOriginals === "boolean" ? loadedIntents.rentOriginals : false,
+              licensePrintRights: typeof loadedIntents.licensePrintRights === "boolean" ? loadedIntents.licensePrintRights : false,
+              presentOnly: typeof loadedIntents.presentOnly === "boolean" ? loadedIntents.presentOnly : false,
+              sellOriginals: typeof loadedIntents.sellOriginals === "boolean" ? loadedIntents.sellOriginals : true,
+              sellPrints: typeof loadedIntents.sellPrints === "boolean" ? loadedIntents.sellPrints : true,
+              notes: typeof loadedIntents.notes === "string" ? loadedIntents.notes : "",
             });
             setLegal((prev) => ({
               ...prev,
@@ -921,6 +961,68 @@ function ApplyPageContent() {
                 </label>
               </div>
             </details>
+            <div className="ap-advanced">
+              <div className="text-sm font-semibold text-slate-700">What do you want to do with ARTCLUB?</div>
+              <div className="mt-3 grid gap-2 text-sm text-slate-700">
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={intents.exhibitAtEvents}
+                    onChange={(e) => setIntents((prev) => ({ ...prev, exhibitAtEvents: e.target.checked }))}
+                  />
+                  <span>I want to exhibit at ARTCLUB events</span>
+                </label>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={intents.sellOriginals}
+                    onChange={(e) => setIntents((prev) => ({ ...prev, sellOriginals: e.target.checked }))}
+                  />
+                  <span>I want to sell originals</span>
+                </label>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={intents.sellPrints}
+                    onChange={(e) =>
+                      setIntents((prev) => ({
+                        ...prev,
+                        sellPrints: e.target.checked,
+                        licensePrintRights: e.target.checked,
+                      }))
+                    }
+                  />
+                  <span>I want to sell prints (license rights)</span>
+                </label>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={intents.rentOriginals}
+                    onChange={(e) => setIntents((prev) => ({ ...prev, rentOriginals: e.target.checked }))}
+                  />
+                  <span>I want to rent originals</span>
+                </label>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={intents.presentOnly}
+                    onChange={(e) => setIntents((prev) => ({ ...prev, presentOnly: e.target.checked }))}
+                  />
+                  <span>I only want to present (no sell, no rent)</span>
+                </label>
+              </div>
+              <div className="mt-3">
+                <label className="field">
+                  Notes (optional)
+                  <textarea
+                    value={intents.notes}
+                    onChange={(e) => setIntents((prev) => ({ ...prev, notes: e.target.value }))}
+                    placeholder="Anything else you'd like us to know"
+                    rows={3}
+                  />
+                </label>
+              </div>
+            </div>
           </div>
         ) : null}
 

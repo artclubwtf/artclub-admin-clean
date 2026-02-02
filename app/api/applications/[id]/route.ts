@@ -27,6 +27,7 @@ function serializeApplication(app: any) {
     personal: app.personal || {},
     shopify: app.shopify || {},
     profileImages: app.profileImages || {},
+    intents: app.intents || {},
     legal: app.legal || {},
     submittedAt: app.submittedAt,
     reviewedAt: app.reviewedAt,
@@ -55,6 +56,14 @@ function applyEmail(updates: Record<string, unknown>, source: Record<string, unk
   const value = source[key];
   if (typeof value === "string") {
     updates[path] = value.trim().toLowerCase();
+  }
+}
+
+function applyBoolean(updates: Record<string, unknown>, source: Record<string, unknown> | null, key: string, path: string) {
+  if (!source) return;
+  const value = source[key];
+  if (typeof value === "boolean") {
+    updates[path] = value;
   }
 }
 
@@ -119,6 +128,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const profileImages = (body.profileImages && typeof body.profileImages === "object" ? body.profileImages : null) as
     | Record<string, unknown>
     | null;
+  const intents = (body.intents && typeof body.intents === "object" ? body.intents : null) as Record<string, unknown> | null;
   const legal = (body.legal && typeof body.legal === "object" ? body.legal : null) as Record<string, unknown> | null;
 
   applyString(updates, personal, "fullName", "personal.fullName");
@@ -139,6 +149,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   applyString(updates, profileImages, "bild1Gid", "profileImages.bild1Gid");
   applyString(updates, profileImages, "bild2Gid", "profileImages.bild2Gid");
   applyString(updates, profileImages, "bild3Gid", "profileImages.bild3Gid");
+
+  applyBoolean(updates, intents, "exhibitAtEvents", "intents.exhibitAtEvents");
+  applyBoolean(updates, intents, "rentOriginals", "intents.rentOriginals");
+  applyBoolean(updates, intents, "licensePrintRights", "intents.licensePrintRights");
+  applyBoolean(updates, intents, "presentOnly", "intents.presentOnly");
+  applyBoolean(updates, intents, "sellOriginals", "intents.sellOriginals");
+  applyBoolean(updates, intents, "sellPrints", "intents.sellPrints");
+  applyString(updates, intents, "notes", "intents.notes");
 
   applyString(updates, legal, "termsVersion", "legal.termsVersion");
   applyString(updates, legal, "acceptedName", "legal.acceptedName");
