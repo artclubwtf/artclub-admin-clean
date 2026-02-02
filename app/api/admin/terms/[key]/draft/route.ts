@@ -30,7 +30,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ key: s
 
   const hasSummary = typeof body.summaryMarkdown === "string";
   const hasFull = typeof body.fullMarkdown === "string";
-  const hasBlocks = Array.isArray(body.blocks);
+  const blocks = Array.isArray(body.blocks) ? body.blocks : undefined;
+  const hasBlocks = blocks !== undefined;
 
   if (!hasSummary && !hasFull && !hasBlocks) {
     return NextResponse.json({ error: "No draft updates provided" }, { status: 400 });
@@ -54,7 +55,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ key: s
       content: {
         summaryMarkdown: hasSummary ? body.summaryMarkdown : "",
         fullMarkdown: hasFull ? body.fullMarkdown : "",
-        blocks: hasBlocks ? body.blocks : [],
+        blocks: blocks ?? [],
       },
       createdByUserId: session.user.id,
     });
@@ -75,7 +76,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ key: s
 
   if (hasSummary) existingDraft.set("content.summaryMarkdown", body.summaryMarkdown);
   if (hasFull) existingDraft.set("content.fullMarkdown", body.fullMarkdown);
-  if (hasBlocks) existingDraft.set("content.blocks", body.blocks);
+  if (blocks !== undefined) existingDraft.set("content.blocks", blocks);
 
   await existingDraft.save();
 
