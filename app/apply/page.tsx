@@ -89,8 +89,7 @@ function ApplyPageContent() {
   const [sessionUser, setSessionUser] = useState<any | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
   const pendingRegistrationId = (sessionUser as { pendingRegistrationId?: string } | undefined)?.pendingRegistrationId;
-  const isPendingArtist =
-    !!sessionUser && sessionUser.role === "artist" && !sessionUser.artistId && pendingRegistrationId;
+  const isPendingArtist = Boolean(sessionUser && sessionUser.role === "artist" && !sessionUser.artistId && pendingRegistrationId);
   const [accountStepVisible, setAccountStepVisible] = useState(true);
   const steps = useMemo(() => (accountStepVisible ? ["Create account", ...baseSteps] : [...baseSteps]), [accountStepVisible]);
   const needsAccount = accountStepVisible;
