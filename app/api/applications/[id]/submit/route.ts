@@ -32,22 +32,23 @@ async function loadApplication(req: Request, id: string) {
     return { error: NextResponse.json({ error: "Application not found" }, { status: 404 }) } as const;
   }
 
+  const pendingRegistrationId = (session as any)?.user?.pendingRegistrationId as string | undefined;
+  const isPendingArtist = session?.user?.role === "artist" && pendingRegistrationId && pendingRegistrationId === id;
+
   if (token) {
     if (application.expiresAt && application.expiresAt.getTime() <= Date.now()) {
       return { error: NextResponse.json({ error: "token_expired" }, { status: 401 }) } as const;
     }
     if (verifyApplicationToken(token, application.applicationTokenHash)) {
-      return { application } as const;
+      return { application, session, isPendingArtist } as const;
     }
   }
 
-  const pendingRegistrationId = (session as any)?.user?.pendingRegistrationId as string | undefined;
-  const isPendingArtist = session?.user?.role === "artist" && pendingRegistrationId && pendingRegistrationId === id;
   if (!isPendingArtist) {
     return { error: NextResponse.json({ error: "invalid_token" }, { status: 401 }) } as const;
   }
 
-  return { application } as const;
+  return { application, session, isPendingArtist } as const;
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -58,6 +59,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const result = await loadApplication(req, id);
   if ("error" in result) return result.error;
+  if (!result.isPendingArtist) {
+    return NextResponse.json({ error: "Account required" }, { status: 401 });
+  }
   if (result.application.status === "rejected") {
     return NextResponse.json({ error: "Registration is locked" }, { status: 403 });
   }
@@ -70,6 +74,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const termsVersionFromPayload = typeof legalPayload?.termsVersion === "string" ? legalPayload.termsVersion.trim() : "";
 
   const application = result.application;
+  const sessionEmail =
+    typeof result.session?.user?.email === "string" ? result.session.user.email.trim().toLowerCase() : "";
   const errors: Record<string, string> = {};
 
   if (!hasText(application.personal?.fullName)) {
@@ -77,6 +83,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
   if (!hasText(application.personal?.email)) {
     errors["personal.email"] = "Email is required";
+  } else if (sessionEmail && application.personal?.email?.trim().toLowerCase() !== sessionEmail) {
+    errors["personal.email"] = "Email must match your account email";
   }
 
   if (!hasText(application.shopify?.instagramUrl)) {

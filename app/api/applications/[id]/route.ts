@@ -68,22 +68,23 @@ async function loadApplication(req: Request, id: string) {
     return { error: NextResponse.json({ error: "Application not found" }, { status: 404 }) } as const;
   }
 
+  const pendingRegistrationId = (session as any)?.user?.pendingRegistrationId as string | undefined;
+  const isPendingArtist = session?.user?.role === "artist" && pendingRegistrationId && pendingRegistrationId === id;
+
   if (token) {
     if (application.expiresAt && application.expiresAt.getTime() <= Date.now()) {
       return { error: NextResponse.json({ error: "token_expired" }, { status: 401 }) } as const;
     }
     if (verifyApplicationToken(token, application.applicationTokenHash)) {
-      return { application } as const;
+      return { application, session, isPendingArtist } as const;
     }
   }
 
-  const pendingRegistrationId = (session as any)?.user?.pendingRegistrationId as string | undefined;
-  const isPendingArtist = session?.user?.role === "artist" && pendingRegistrationId && pendingRegistrationId === id;
   if (!isPendingArtist) {
     return { error: NextResponse.json({ error: "invalid_token" }, { status: 401 }) } as const;
   }
 
-  return { application } as const;
+  return { application, session, isPendingArtist } as const;
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -121,7 +122,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const legal = (body.legal && typeof body.legal === "object" ? body.legal : null) as Record<string, unknown> | null;
 
   applyString(updates, personal, "fullName", "personal.fullName");
-  applyEmail(updates, personal, "email", "personal.email");
+  if (!result.isPendingArtist) {
+    applyEmail(updates, personal, "email", "personal.email");
+  }
   applyString(updates, personal, "phone", "personal.phone");
   applyString(updates, personal, "city", "personal.city");
   applyString(updates, personal, "country", "personal.country");
@@ -140,11 +143,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   applyString(updates, legal, "termsVersion", "legal.termsVersion");
   applyString(updates, legal, "acceptedName", "legal.acceptedName");
 
+  const sessionEmail = typeof result.session?.user?.email === "string" ? result.session.user.email.trim().toLowerCase() : "";
+  if (result.isPendingArtist && sessionEmail) {
+    const existingEmail =
+      typeof result.application.personal?.email === "string" ? result.application.personal.email.trim().toLowerCase() : "";
+    if (sessionEmail !== existingEmail) {
+      updates["personal.email"] = sessionEmail;
+    }
+  }
+
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No updatable fields provided" }, { status: 400 });
   }
 
-  const incomingEmail = typeof personal?.email === "string" ? personal.email.trim().toLowerCase() : "";
+  const incomingEmail =
+    result.isPendingArtist && sessionEmail ? sessionEmail : typeof personal?.email === "string" ? personal.email.trim().toLowerCase() : "";
   if (incomingEmail) {
     const existing = await ArtistApplicationModel.findOne({
       _id: { $ne: result.application._id },

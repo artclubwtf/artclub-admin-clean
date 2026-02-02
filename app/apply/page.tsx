@@ -114,7 +114,6 @@ function ApplyPageContent() {
   const [accountEmail, setAccountEmail] = useState("");
   const [accountPassword, setAccountPassword] = useState("");
   const [accountFullName, setAccountFullName] = useState("");
-  const [accountMode, setAccountMode] = useState<"signup" | "login">("signup");
   const [accountError, setAccountError] = useState<string | null>(null);
   const [accountLoading, setAccountLoading] = useState(false);
   const [shopify, setShopify] = useState<ShopifyState>({
@@ -282,6 +281,13 @@ function ApplyPageContent() {
       setCurrentStep(0);
     }
   }, [isPendingArtist, accountStepVisible]);
+
+  useEffect(() => {
+    if (!isPendingArtist) return;
+    const sessionEmail = typeof sessionUser?.email === "string" ? sessionUser.email.trim().toLowerCase() : "";
+    if (!sessionEmail) return;
+    setPersonal((prev) => ({ ...prev, email: sessionEmail }));
+  }, [isPendingArtist, sessionUser?.email]);
 
   useEffect(() => {
     let active = true;
@@ -550,18 +556,15 @@ function ApplyPageContent() {
       setAccountError("Password must be at least 8 characters.");
       return;
     }
-    if (accountMode === "signup" && accountFullName.trim().length < 2) {
+    if (accountFullName.trim().length < 2) {
       setAccountError("Full name is required.");
       return;
     }
 
     setAccountLoading(true);
     try {
-      const endpoint = accountMode === "signup" ? "/api/artist-onboarding/signup" : "/api/artist-onboarding/login";
-      const payload =
-        accountMode === "signup"
-          ? { email: accountEmail, password: accountPassword, fullName: accountFullName }
-          : { email: accountEmail, password: accountPassword };
+      const endpoint = "/api/artist-onboarding/signup";
+      const payload = { email: accountEmail, password: accountPassword, fullName: accountFullName };
 
       const res = await fetch(endpoint, {
         method: "POST",
@@ -598,7 +601,7 @@ function ApplyPageContent() {
             setApplicationStatus(application.status || "draft");
             setPersonal({
               fullName: application.personal?.fullName ?? accountFullName ?? "",
-              email: application.personal?.email ?? accountEmail,
+              email: accountEmail,
               phone: application.personal?.phone ?? "",
               city: application.personal?.city ?? "",
               country: application.personal?.country ?? "",
@@ -634,7 +637,7 @@ function ApplyPageContent() {
       setPersonal((prev) => ({
         ...prev,
         fullName: prev.fullName || accountFullName,
-        email: prev.email || accountEmail,
+        email: accountEmail,
       }));
 
       setAccountStepVisible(false);
@@ -779,23 +782,7 @@ function ApplyPageContent() {
         {needsAccount && currentStep === 0 ? (
           <div className="grid gap-4">
             <div className="ap-note">
-              Create your account to save progress and return later. Already have an account? Switch to login.
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={accountMode === "signup" ? "btnPrimary" : "btnGhost"}
-                onClick={() => setAccountMode("signup")}
-              >
-                Sign up
-              </button>
-              <button
-                type="button"
-                className={accountMode === "login" ? "btnPrimary" : "btnGhost"}
-                onClick={() => setAccountMode("login")}
-              >
-                Log in
-              </button>
+              Create your account to save progress and return later. Already have an account? Log in before continuing.
             </div>
             <label className="field">
               Email
@@ -815,17 +802,15 @@ function ApplyPageContent() {
                 placeholder="At least 8 characters"
               />
             </label>
-            {accountMode === "signup" ? (
-              <label className="field">
-                Full name
-                <input
-                  type="text"
-                  value={accountFullName}
-                  onChange={(e) => setAccountFullName(e.target.value)}
-                  placeholder="Your full name"
-                />
-              </label>
-            ) : null}
+            <label className="field">
+              Full name
+              <input
+                type="text"
+                value={accountFullName}
+                onChange={(e) => setAccountFullName(e.target.value)}
+                placeholder="Your full name"
+              />
+            </label>
             {accountError ? <div className="text-sm font-semibold text-red-600">{accountError}</div> : null}
           </div>
         ) : null}
@@ -848,7 +833,9 @@ function ApplyPageContent() {
                 value={personal.email}
                 onChange={(e) => setPersonal((prev) => ({ ...prev, email: e.target.value }))}
                 placeholder="you@example.com"
+                readOnly={isPendingArtist}
               />
+              {isPendingArtist ? <span className="text-xs text-slate-500">This email matches your account.</span> : null}
             </label>
             <label className="field">
               Phone
