@@ -12,6 +12,8 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@artclub/models": "workspace:*",
+    "@artclub/api-client": "workspace:*",
     "@aws-sdk/client-s3": "^3.954.0",
     "@aws-sdk/s3-request-presigner": "^3.954.0",
     "@google-analytics/data": "^5.2.1",

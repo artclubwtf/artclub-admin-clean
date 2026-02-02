@@ -14,6 +14,12 @@ importers:
 
   apps/admin:
     dependencies:
+      '@artclub/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
+      '@artclub/models':
+        specifier: workspace:*
+        version: link:../../packages/models
       '@aws-sdk/client-s3':
         specifier: ^3.954.0
         version: 3.981.0
@@ -75,6 +81,18 @@ importers:
       typescript:
         specifier: ^5
         version: 5.9.3
+
+  packages/api-client:
+    dependencies:
+      '@artclub/models':
+        specifier: workspace:*
+        version: link:../models
+
+  packages/models:
+    dependencies:
+      zod:
+        specifier: ^4.0.0
+        version: 4.3.6
 
 packages:
 
