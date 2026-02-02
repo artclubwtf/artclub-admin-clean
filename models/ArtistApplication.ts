@@ -41,6 +41,11 @@ const artistApplicationSchema = new Schema(
       notes: { type: String },
     },
     legal: {
+      termsDocumentKey: { type: String },
+      termsVersionId: { type: Types.ObjectId, ref: "TermsVersion" },
+      termsVersionNumber: { type: Number },
+      termsEffectiveAt: { type: Date },
+      termsHash: { type: String },
       termsVersion: { type: String },
       acceptedAt: { type: Date },
       acceptedIp: { type: String },

@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
@@ -5,9 +6,8 @@ import { Types } from "mongoose";
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
 import { getApplicationTokenFromRequest, verifyApplicationToken } from "@/lib/applicationAuth";
+import { loadActiveTermsVersion } from "@/lib/terms";
 import { ArtistApplicationModel } from "@/models/ArtistApplication";
-
-const TERMS_VERSION = "v1";
 
 function hasText(value: unknown) {
   return typeof value === "string" && value.trim().length > 0;
@@ -71,7 +71,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const legalPayload = (body?.legal && typeof body.legal === "object" ? body.legal : null) as Record<string, unknown> | null;
 
   const acceptedNameFromPayload = typeof legalPayload?.acceptedName === "string" ? legalPayload.acceptedName.trim() : "";
-  const termsVersionFromPayload = typeof legalPayload?.termsVersion === "string" ? legalPayload.termsVersion.trim() : "";
 
   const application = result.application;
   const sessionEmail =
@@ -119,14 +118,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Validation failed", fieldErrors: errors }, { status: 400 });
   }
 
+  const { document: termsDocument, version: activeTerms } = await loadActiveTermsVersion("artist_registration_terms");
+  if (!activeTerms || activeTerms.status !== "published") {
+    return NextResponse.json({ error: "No published terms configured" }, { status: 500 });
+  }
+
   const now = new Date();
-  const termsVersion = termsVersionFromPayload || application.legal?.termsVersion || TERMS_VERSION;
+  const fullMarkdown = activeTerms.content?.fullMarkdown || "";
+  const termsHash = createHash("sha256").update(fullMarkdown).digest("hex");
 
   application.status = "submitted";
   application.submittedAt = now;
   application.legal = {
     ...application.legal,
-    termsVersion,
+    termsDocumentKey: termsDocument.key,
+    termsVersionId: activeTerms._id,
+    termsVersionNumber: activeTerms.version,
+    termsEffectiveAt: activeTerms.effectiveAt,
+    termsHash,
+    termsVersion: `v${activeTerms.version}`,
     acceptedAt: now,
     acceptedIp: getRequestIp(req),
     acceptedUserAgent: req.headers.get("user-agent") || undefined,

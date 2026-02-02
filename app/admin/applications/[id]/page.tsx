@@ -37,6 +37,11 @@ type ApplicationDetail = {
       notes?: string;
     };
     legal?: {
+      termsDocumentKey?: string;
+      termsVersionId?: string;
+      termsVersionNumber?: number;
+      termsEffectiveAt?: string;
+      termsHash?: string;
       termsVersion?: string;
       acceptedAt?: string;
       acceptedIp?: string;
@@ -231,6 +236,9 @@ export default function AdminApplicationDetailPage() {
   const canDecide = application?.status === "submitted" || application?.status === "in_review";
   const panelStyle: CSSProperties = { ["--shadow" as any]: "0 1px 2px rgba(15, 23, 42, 0.04)" };
   const displayStatus = application?.status === "in_review" ? "submitted" : application?.status;
+  const termsVersionLabel = application?.legal?.termsVersionNumber
+    ? `v${application.legal.termsVersionNumber}`
+    : application?.legal?.termsVersion || "—";
   const mediaById = useMemo(() => {
     const items = data?.media || [];
     return new Map(items.map((item) => [item.id, item]));
@@ -567,7 +575,11 @@ export default function AdminApplicationDetailPage() {
           <div className="space-y-2 text-sm text-slate-700">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Terms version</div>
-              <div>{application.legal?.termsVersion || "—"}</div>
+              <div>{termsVersionLabel}</div>
+            </div>
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Terms effective</div>
+              <div>{formatDate(application.legal?.termsEffectiveAt)}</div>
             </div>
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Accepted at</div>

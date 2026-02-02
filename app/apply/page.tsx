@@ -7,10 +7,10 @@ import { getSession, signIn } from "next-auth/react";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-const TERMS_VERSION = "v1";
+import { renderMarkdownToHtml } from "@/lib/markdown";
+
 const LAST_APPLICATION_KEY = "ac_application_last_id";
 const AUTOSAVE_DELAY_MS = 800;
-const TERMS_PDF_URL = process.env.NEXT_PUBLIC_TERMS_PDF_URL || "";
 
 const baseSteps = ["Personal", "Shopify fields", "Profile images", "Legal", "Submit"] as const;
 
@@ -50,7 +50,16 @@ type IntentsState = {
 type LegalState = {
   accepted: boolean;
   acceptedName: string;
-  termsVersion: string;
+};
+
+type TermsSnapshot = {
+  documentKey: string;
+  title: string;
+  versionId: string;
+  versionNumber: number;
+  effectiveAt?: string | null;
+  summaryMarkdown: string;
+  fullMarkdown: string;
 };
 
 type UploadState = {
@@ -150,8 +159,10 @@ function ApplyPageContent() {
   const [legal, setLegal] = useState<LegalState>({
     accepted: false,
     acceptedName: "",
-    termsVersion: TERMS_VERSION,
   });
+  const [terms, setTerms] = useState<TermsSnapshot | null>(null);
+  const [termsLoading, setTermsLoading] = useState(false);
+  const [termsError, setTermsError] = useState<string | null>(null);
 
   const [uploadState, setUploadState] = useState<Record<ProfileImageKey, UploadState>>(getUploadStateDefaults);
   const [dragKey, setDragKey] = useState<ProfileImageKey | null>(null);
@@ -170,12 +181,18 @@ function ApplyPageContent() {
       profileImages,
       intents,
       legal: {
-        termsVersion: legal.accepted ? legal.termsVersion : "",
         acceptedName: legal.acceptedName,
       },
     }),
-    [personal, shopify, profileImages, intents, legal.accepted, legal.termsVersion, legal.acceptedName],
+    [personal, shopify, profileImages, intents, legal.acceptedName],
   );
+
+  const termsSummaryHtml = useMemo(
+    () => (terms?.summaryMarkdown ? renderMarkdownToHtml(terms.summaryMarkdown) : ""),
+    [terms?.summaryMarkdown],
+  );
+  const termsFullHtml = useMemo(() => (terms?.fullMarkdown ? renderMarkdownToHtml(terms.fullMarkdown) : ""), [terms?.fullMarkdown]);
+  const termsVersionLabel = terms?.versionNumber ? `v${terms.versionNumber}` : "—";
 
   const saveDraft = useCallback(
     async (payload: typeof draftPayload) => {
@@ -327,6 +344,58 @@ function ApplyPageContent() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    const run = async () => {
+      setTermsLoading(true);
+      setTermsError(null);
+      try {
+        const res = await fetch("/api/terms/artist_registration_terms", { cache: "no-store" });
+        const payload = (await res.json().catch(() => null)) as
+          | {
+              document?: { key?: string; title?: string };
+              version?: {
+                id?: string;
+                version?: number;
+                effectiveAt?: string | null;
+                summaryMarkdown?: string;
+                fullMarkdown?: string;
+              };
+              error?: string;
+            }
+          | null;
+        if (!res.ok) {
+          throw new Error(payload?.error || "Failed to load terms");
+        }
+        if (!payload?.document || !payload?.version) {
+          throw new Error("Missing terms content");
+        }
+        if (!active) return;
+        setTerms({
+          documentKey: payload.document.key || "artist_registration_terms",
+          title: payload.document.title || "Terms",
+          versionId: payload.version.id || "",
+          versionNumber: payload.version.version || 0,
+          effectiveAt: payload.version.effectiveAt ?? null,
+          summaryMarkdown: payload.version.summaryMarkdown || "",
+          fullMarkdown: payload.version.fullMarkdown || "",
+        });
+      } catch (err: any) {
+        if (active) {
+          setTermsError(err?.message || "Failed to load terms");
+          setTerms(null);
+        }
+      } finally {
+        if (active) setTermsLoading(false);
+      }
+    };
+
+    void run();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (initRef.current) return;
     if (sessionLoading) return;
     initRef.current = true;
@@ -382,10 +451,15 @@ function ApplyPageContent() {
           sellPrints: typeof loadedIntents.sellPrints === "boolean" ? loadedIntents.sellPrints : true,
           notes: typeof loadedIntents.notes === "string" ? loadedIntents.notes : "",
         });
+        const hasAccepted =
+          Boolean(application.legal?.termsVersionId) ||
+          Boolean(application.legal?.acceptedAt) ||
+          Boolean(application.legal?.termsVersionNumber) ||
+          Boolean(application.legal?.termsVersion && String(application.legal.termsVersion).trim());
         setLegal((prev) => ({
           ...prev,
           acceptedName: application.legal?.acceptedName ?? "",
-          accepted: Boolean(application.legal?.termsVersion && String(application.legal.termsVersion).trim()),
+          accepted: hasAccepted,
         }));
 
         if (token) {
@@ -492,6 +566,9 @@ function ApplyPageContent() {
     }
 
     if (baseIndex === 3) {
+      if (!terms) {
+        errors.push(termsError ? "Terms are unavailable. Please try again later." : "Terms are still loading.");
+      }
       if (!legal.accepted) errors.push("Please accept the terms.");
       if (!legal.acceptedName.trim()) errors.push("Name is required.");
     }
@@ -658,10 +735,15 @@ function ApplyPageContent() {
               sellPrints: typeof loadedIntents.sellPrints === "boolean" ? loadedIntents.sellPrints : true,
               notes: typeof loadedIntents.notes === "string" ? loadedIntents.notes : "",
             });
+            const hasAccepted =
+              Boolean(application.legal?.termsVersionId) ||
+              Boolean(application.legal?.acceptedAt) ||
+              Boolean(application.legal?.termsVersionNumber) ||
+              Boolean(application.legal?.termsVersion && String(application.legal.termsVersion).trim());
             setLegal((prev) => ({
               ...prev,
               acceptedName: application.legal?.acceptedName ?? "",
-              accepted: Boolean(application.legal?.termsVersion && String(application.legal.termsVersion).trim()),
+              accepted: hasAccepted,
             }));
           }
         } else {
@@ -716,7 +798,6 @@ function ApplyPageContent() {
           accepted: legal.accepted,
           legal: {
             acceptedName: legal.acceptedName,
-            termsVersion: legal.termsVersion,
           },
         }),
       });
@@ -1105,19 +1186,36 @@ function ApplyPageContent() {
             </label>
             <div className="ap-note">
               <p>By submitting, you confirm you are the rights holder for the submitted works.</p>
-              {TERMS_PDF_URL ? (
-                <a href={TERMS_PDF_URL} target="_blank" rel="noreferrer" className="text-sm text-slate-600 underline">
-                  Download terms (PDF)
-                </a>
-              ) : null}
             </div>
+            {termsLoading ? <div className="text-sm text-slate-600">Loading terms...</div> : null}
+            {termsError ? <div className="text-sm font-semibold text-red-600">{termsError}</div> : null}
+            {terms ? (
+              <div className="ap-advanced">
+                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Summary</div>
+                {termsSummaryHtml ? (
+                  <div className="mt-3 md-preview" dangerouslySetInnerHTML={{ __html: termsSummaryHtml }} />
+                ) : (
+                  <div className="mt-3 text-sm text-slate-500">No summary available.</div>
+                )}
+              </div>
+            ) : null}
+            {terms ? (
+              <details className="ap-advanced">
+                <summary className="text-sm font-semibold text-slate-700">Full terms</summary>
+                {termsFullHtml ? (
+                  <div className="mt-3 md-preview" dangerouslySetInnerHTML={{ __html: termsFullHtml }} />
+                ) : (
+                  <div className="mt-3 text-sm text-slate-500">No full terms available.</div>
+                )}
+              </details>
+            ) : null}
             <label className="flex items-start gap-3 text-sm text-slate-700">
               <input
                 type="checkbox"
                 checked={legal.accepted}
                 onChange={(e) => setLegal((prev) => ({ ...prev, accepted: e.target.checked }))}
               />
-              <span>I accept the terms (version {legal.termsVersion}).</span>
+              <span>I accept these terms (version {termsVersionLabel}).</span>
             </label>
           </div>
         ) : null}
