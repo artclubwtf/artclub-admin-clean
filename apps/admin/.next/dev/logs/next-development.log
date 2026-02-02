@@ -1,0 +1,27 @@
+[00:00:03.140] Server  ERROR    ⨯ ./apps/artclub-admin-clean/middleware.ts:1:1
+Module not found: Can't resolve 'next-auth/jwt'
+> 1 | import { getToken } from "next-auth/jwt";
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  2 | import type { NextRequest } from "next/server";
+  3 | import { NextResponse } from "next/server";
+  4 |
+
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:00:03.141] Server  ERROR    ⨯ ./apps/artclub-admin-clean/middleware.ts:1:1
+Module not found: Can't resolve 'next-auth/jwt'
+> 1 | import { getToken } from "next-auth/jwt";
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  2 | import type { NextRequest } from "next/server";
+  3 | import { NextResponse } from "next/server";
+  4 |
+
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:00:03.348] Server  LOG      ✓ Ready in 3.1s

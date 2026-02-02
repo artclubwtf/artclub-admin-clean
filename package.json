@@ -1,38 +1,16 @@
 {
-  "name": "artclub-admin-clean",
-  "version": "0.1.0",
+  "name": "artclub-platform",
   "private": true,
-  "engines": {
-    "node": "20.x"
-  },
+  "packageManager": "pnpm@9.15.0",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "@aws-sdk/client-s3": "^3.954.0",
-    "@aws-sdk/s3-request-presigner": "^3.954.0",
-    "@google-analytics/data": "^5.2.1",
-    "@types/bcryptjs": "^2.4.6",
-    "aws": "^0.0.3-2",
-    "bcryptjs": "^3.0.3",
-    "mongoose": "^9.0.2",
-    "next": "16.0.10",
-    "next-auth": "^4.24.13",
-    "react": "19.2.1",
-    "react-dom": "19.2.1",
-    "zod": "^4.2.1"
+    "dev:admin": "pnpm --filter admin dev",
+    "build:admin": "pnpm --filter admin build",
+    "dev:mobile": "pnpm --filter mobile dev",
+    "lint": "turbo lint",
+    "build": "turbo build",
+    "test": "turbo test"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.0.10",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "turbo": "^2.0.0"
   }
 }

@@ -1,0 +1,41 @@
+{
+  "version": 3,
+  "middleware": {
+    "/": {
+      "files": [
+        "server/edge/chunks/apps_artclub-admin-clean_566856e4._.js",
+        "server/edge/chunks/[root-of-the-server]__94f3a753._.js",
+        "server/edge/chunks/turbopack-apps_artclub-admin-clean_apps_admin_edge-wrapper_f8077350.js"
+      ],
+      "name": "middleware",
+      "page": "/",
+      "matchers": [
+        {
+          "regexp": "^(?:\\/(_next\\/data\\/[^/]{1,}))?\\/admin(?:\\/((?:[^\\/#\\?]+?)(?:\\/(?:[^\\/#\\?]+?))*))?(\\\\.json)?[\\/#\\?]?$",
+          "originalSource": "/admin/:path*"
+        },
+        {
+          "regexp": "^(?:\\/(_next\\/data\\/[^/]{1,}))?\\/artist(?:\\/((?:[^\\/#\\?]+?)(?:\\/(?:[^\\/#\\?]+?))*))?(\\\\.json)?[\\/#\\?]?$",
+          "originalSource": "/artist/:path*"
+        },
+        {
+          "regexp": "^(?:\\/(_next\\/data\\/[^/]{1,}))?\\/api(?:\\/((?:[^\\/#\\?]+?)(?:\\/(?:[^\\/#\\?]+?))*))?(\\\\.json)?[\\/#\\?]?$",
+          "originalSource": "/api/:path*"
+        }
+      ],
+      "wasm": [],
+      "assets": [],
+      "env": {
+        "__NEXT_BUILD_ID": "development",
+        "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY": "5Jm7hSxf3f1+cu6emxBNg1mGry6tQMo87/W/cFxvy4s=",
+        "__NEXT_PREVIEW_MODE_ID": "9ffd81922ae2292ad409360ee1de1f95",
+        "__NEXT_PREVIEW_MODE_ENCRYPTION_KEY": "84ee944f6bc43f7d4e6fbf6362d6910f584953b21e777722cb241d1867d7586b",
+        "__NEXT_PREVIEW_MODE_SIGNING_KEY": "9386df13bc99edf8160ff2db332faea604e1a15a4fbd33c8060ab05eeae77fbf"
+      }
+    }
+  },
+  "sortedMiddleware": [
+    "/"
+  ],
+  "functions": {}
+}
