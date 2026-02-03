@@ -2,25 +2,14 @@ import { NextResponse } from "next/server";
 import type { PipelineStage } from "mongoose";
 
 import { connectMongo } from "@/lib/mongodb";
+import { mapCacheToArtworkCard } from "@/lib/mobileCards";
 import { ShopifyArtworkCacheModel } from "@/models/ShopifyArtworkCache";
+import type { ArtworkCard, FeedResponse } from "@artclub/models";
 
 type FeedCursor = {
   savesCount: number;
   lastImportedAt: number;
   productGid: string;
-};
-
-type FeedItem = {
-  id: string;
-  title: string;
-  handle: string;
-  artistName?: string;
-  tags: string[];
-  images: { thumbUrl?: string; mediumUrl?: string };
-  widthCm?: number;
-  heightCm?: number;
-  priceEur?: number | null;
-  isOriginalTagged?: boolean;
 };
 
 function encodeCursor(cursor: FeedCursor): string {
@@ -62,12 +51,6 @@ function buildCursorMatch(cursor: FeedCursor) {
       { savesCountSort: cursor.savesCount, lastImportedAtSort: safeDate, productGid: { $gt: cursor.productGid } },
     ],
   };
-}
-
-function resolveImageUrls(images?: { thumbUrl?: string; mediumUrl?: string; originalUrl?: string }) {
-  const thumbUrl = images?.thumbUrl || images?.mediumUrl || images?.originalUrl;
-  const mediumUrl = images?.mediumUrl || images?.originalUrl || images?.thumbUrl;
-  return { thumbUrl, mediumUrl };
 }
 
 export async function GET(req: Request) {
@@ -115,6 +98,7 @@ export async function GET(req: Request) {
           productGid: 1,
           title: 1,
           handle: 1,
+          artistMetaobjectGid: 1,
           artistName: 1,
           tags: 1,
           images: 1,
@@ -122,8 +106,11 @@ export async function GET(req: Request) {
           heightCm: 1,
           priceEur: 1,
           isOriginalTagged: 1,
+          updatedAtShopify: 1,
+          createdAt: 1,
           savesCountSort: 1,
           lastImportedAtSort: 1,
+          signalsReactions: { $ifNull: ["$signals.reactions", {}] },
         },
       },
     );
@@ -132,6 +119,7 @@ export async function GET(req: Request) {
       productGid: string;
       title: string;
       handle: string;
+      artistMetaobjectGid?: string;
       artistName?: string;
       tags?: string[];
       images?: { thumbUrl?: string; mediumUrl?: string; originalUrl?: string };
@@ -139,26 +127,43 @@ export async function GET(req: Request) {
       heightCm?: number;
       priceEur?: number | null;
       isOriginalTagged?: boolean;
+      updatedAtShopify?: Date;
+      createdAt?: Date;
       savesCountSort?: number;
       lastImportedAtSort?: Date;
+      signalsReactions?: Record<string, number>;
     }>;
 
     const hasMore = docs.length > limit;
     const itemsSlice = hasMore ? docs.slice(0, limit) : docs;
     const nextCursorDoc = hasMore ? itemsSlice[itemsSlice.length - 1] : null;
 
-    const items: FeedItem[] = itemsSlice.map((doc) => ({
-      id: doc.productGid,
-      title: doc.title,
-      handle: doc.handle,
-      artistName: doc.artistName || undefined,
-      tags: Array.isArray(doc.tags) ? doc.tags : [],
-      images: resolveImageUrls(doc.images),
-      widthCm: doc.widthCm,
-      heightCm: doc.heightCm,
-      priceEur: doc.priceEur ?? null,
-      isOriginalTagged: doc.isOriginalTagged,
-    }));
+    const items = itemsSlice
+      .map((doc) =>
+        mapCacheToArtworkCard(
+          {
+            productGid: doc.productGid,
+            title: doc.title,
+            handle: doc.handle,
+            artistMetaobjectGid: doc.artistMetaobjectGid,
+            artistName: doc.artistName,
+            tags: doc.tags,
+            images: doc.images,
+            widthCm: doc.widthCm,
+            heightCm: doc.heightCm,
+            priceEur: doc.priceEur ?? null,
+            isOriginalTagged: doc.isOriginalTagged,
+            lastImportedAt: doc.lastImportedAtSort,
+            updatedAtShopify: doc.updatedAtShopify,
+            createdAt: doc.createdAt,
+          },
+          {
+            signals: { savesCount: doc.savesCountSort ?? 0, reactions: doc.signalsReactions },
+            createdAt: doc.lastImportedAtSort,
+          },
+        ),
+      )
+      .filter(Boolean) as ArtworkCard[];
 
     const nextCursor =
       nextCursorDoc && typeof nextCursorDoc.savesCountSort === "number"
@@ -171,7 +176,13 @@ export async function GET(req: Request) {
           })
         : undefined;
 
-    return NextResponse.json({ items, nextCursor }, { status: 200 });
+    const response: FeedResponse & { nextCursor?: string } = {
+      items,
+      cursor: nextCursor,
+      nextCursor,
+    };
+
+    return NextResponse.json(response, { status: 200 });
   } catch (err) {
     console.error("Failed to load mobile feed", err);
     const message = err instanceof Error ? err.message : "Failed to load feed";

@@ -1845,7 +1845,11 @@ function SavedScreen() {
   const [loadingServer, setLoadingServer] = useState(false);
   const [offlineFallback, setOfflineFallback] = useState(false);
   const [syncingLocal, setSyncingLocal] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<string | null>(null);
+  const serverCursorRef = useRef<string | undefined>(undefined);
+  const hasMoreServerRef = useRef(true);
+  const loadingServerRef = useRef(false);
+  const offlineFallbackRef = useRef(false);
+  const syncingLocalRef = useRef(false);
   const { width } = useWindowDimensions();
   const columns = width >= 720 ? 3 : 2;
   const tileGap = 12;
@@ -1880,10 +1884,13 @@ function SavedScreen() {
   const loadServerSaves = useCallback(
     async (mode: "refresh" | "more") => {
       if (!canUseServer) return;
-      if (mode === "more" && (!hasMoreServer || loadingServer || offlineFallback)) return;
+      if (mode === "more" && (!hasMoreServerRef.current || loadingServerRef.current || offlineFallbackRef.current)) {
+        return;
+      }
+      if (loadingServerRef.current) return;
       setLoadingServer(true);
       try {
-        const cursor = mode === "refresh" ? undefined : serverCursor;
+        const cursor = mode === "refresh" ? undefined : serverCursorRef.current;
         const response = await createMobileApiClient({
           baseUrl,
           useMock: false,
@@ -1894,17 +1901,13 @@ function SavedScreen() {
         setServerCursor(response.nextCursor);
         setHasMoreServer(Boolean(response.nextCursor));
         setOfflineFallback(false);
-        setDebugInfo(
-          `server items=${nextItems.length} cursor=${response.nextCursor ? "yes" : "no"}`
-        );
       } catch {
         setOfflineFallback(true);
-        setDebugInfo("server fetch failed");
       } finally {
         setLoadingServer(false);
       }
     },
-    [baseUrl, canUseServer, hasMoreServer, loadingServer, offlineFallback, serverCursor, token]
+    [baseUrl, canUseServer, token]
   );
 
   const refreshServer = useCallback(async () => {
@@ -1919,8 +1922,28 @@ function SavedScreen() {
     void refreshServer();
   }, [canUseServer, refreshServer]);
 
+  useEffect(() => {
+    serverCursorRef.current = serverCursor;
+  }, [serverCursor]);
+
+  useEffect(() => {
+    hasMoreServerRef.current = hasMoreServer;
+  }, [hasMoreServer]);
+
+  useEffect(() => {
+    loadingServerRef.current = loadingServer;
+  }, [loadingServer]);
+
+  useEffect(() => {
+    offlineFallbackRef.current = offlineFallback;
+  }, [offlineFallback]);
+
+  useEffect(() => {
+    syncingLocalRef.current = syncingLocal;
+  }, [syncingLocal]);
+
   const syncLocalToServer = useCallback(async () => {
-    if (!canUseServer || syncingLocal) return;
+    if (!canUseServer || syncingLocalRef.current) return;
     if (savedIds.length === 0) return;
     setSyncingLocal(true);
     try {
@@ -1936,16 +1959,12 @@ function SavedScreen() {
         await Promise.all(toSync.map((id) => client.toggleSave(id, true)));
       }
       await refreshServer();
-      setDebugInfo(
-        `sync local=${savedIds.length} server=${server.productGids?.length ?? 0} synced=${toSync.length}`
-      );
     } catch {
       // ignore sync errors
-      setDebugInfo("sync failed");
     } finally {
       setSyncingLocal(false);
     }
-  }, [baseUrl, canUseServer, refreshServer, savedIds, syncingLocal, token]);
+  }, [baseUrl, canUseServer, refreshServer, savedIds, token]);
 
   useEffect(() => {
     if (!canUseServer) return;
@@ -1985,15 +2004,6 @@ function SavedScreen() {
 
   return (
     <View style={styles.savedContainer}>
-      <View style={styles.debugOverlay}>
-        <Text style={styles.debugOverlayText}>
-          {`token=${token ? "yes" : "no"} mock=${useMock ? "yes" : "no"} baseUrl=${
-            baseUrl ? "yes" : "no"
-          }\nlocal=${savedIds.length} server=${serverArtworks.length} fallback=${
-            shouldFallbackToLocal ? "yes" : "no"
-          }\n${debugInfo ?? ""}`}
-        </Text>
-      </View>
       {shouldFallbackToLocal && canUseServer ? (
         <View style={styles.offlineBanner}>
           <Text style={styles.offlineBannerText}>Showing cached saves</Text>

@@ -2,32 +2,16 @@ import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 
 import { connectMongo } from "@/lib/mongodb";
+import { mapCacheToArtworkCard } from "@/lib/mobileCards";
 import { getMobileUserFromRequest } from "@/lib/mobileAuth";
 import { ArtworkSignalsModel } from "@/models/ArtworkSignals";
 import { UserSavedModel } from "@/models/UserSaved";
 import { ShopifyArtworkCacheModel } from "@/models/ShopifyArtworkCache";
+import type { ArtworkCard, FeedResponse } from "@artclub/models";
 
 type SavesCursor = {
   createdAt: number;
   id: string;
-};
-
-type FeedItem = {
-  id: string;
-  title: string;
-  handle: string;
-  artistName?: string;
-  tags: string[];
-  images: { thumbUrl?: string; mediumUrl?: string };
-  widthCm?: number;
-  heightCm?: number;
-  priceEur?: number | null;
-  isOriginalTagged?: boolean;
-  signals: {
-    savesCount: number;
-    reactions: Record<string, number>;
-    viewsCount: number;
-  };
 };
 
 type UserSavedDoc = {
@@ -62,16 +46,6 @@ function buildCursorMatch(cursor: SavesCursor, objectId: Types.ObjectId) {
       { createdAt: safeDate, _id: { $lt: objectId } },
     ],
   };
-}
-
-function resolveImageUrls(images?: {
-  thumbUrl?: string | null;
-  mediumUrl?: string | null;
-  originalUrl?: string | null;
-}) {
-  const thumbUrl = images?.thumbUrl || images?.mediumUrl || images?.originalUrl;
-  const mediumUrl = images?.mediumUrl || images?.originalUrl || images?.thumbUrl;
-  return { thumbUrl, mediumUrl };
 }
 
 function normalizeProductGid(value: string) {
@@ -151,32 +125,39 @@ export async function GET(req: Request) {
     });
     const signalsById = new Map(signalsDocs.map((doc) => [normalizeProductGid(doc.productGid), doc]));
 
-    const items: FeedItem[] = itemsSlice
+    const items = itemsSlice
       .map((doc) => {
         const gid = normalizeProductGid(doc.productGid || "");
         const numericId = extractProductNumericId(gid);
         const cache = cacheById.get(gid) || (numericId ? cacheById.get(numericId) : undefined);
-        if (!cache || !cache.productGid || !cache.title || !cache.handle) return null;
+        if (!cache || !cache.productGid) return null;
         const signals = signalsById.get(gid);
-        return {
-          id: cache.productGid,
-          title: cache.title,
-          handle: cache.handle,
-          artistName: cache.artistName || undefined,
-          tags: Array.isArray(cache.tags) ? cache.tags : [],
-          images: resolveImageUrls(cache.images),
-          widthCm: cache.widthCm,
-          heightCm: cache.heightCm,
-          priceEur: cache.priceEur ?? null,
-          isOriginalTagged: cache.isOriginalTagged,
-          signals: {
-            savesCount: signals?.savesCount ?? 0,
-            reactions: signals?.reactions ?? {},
-            viewsCount: signals?.viewsCount ?? 0,
+        return mapCacheToArtworkCard(
+          {
+            productGid: cache.productGid,
+            title: cache.title,
+            handle: cache.handle,
+            artistMetaobjectGid: cache.artistMetaobjectGid,
+            artistName: cache.artistName,
+            tags: cache.tags,
+            images: cache.images,
+            widthCm: cache.widthCm,
+            heightCm: cache.heightCm,
+            priceEur: cache.priceEur ?? null,
+            isOriginalTagged: cache.isOriginalTagged,
+            shortDescription: cache.shortDescription,
+            lastImportedAt: cache.lastImportedAt,
+            updatedAtShopify: cache.updatedAtShopify,
+            createdAt: cache.createdAt,
           },
-        };
+          {
+            signals: { savesCount: signals?.savesCount ?? 0, reactions: signals?.reactions ?? {} },
+            saved: true,
+            createdAt: doc.createdAt || cache.lastImportedAt || cache.updatedAtShopify || cache.createdAt,
+          },
+        );
       })
-      .filter(Boolean) as FeedItem[];
+      .filter(Boolean) as ArtworkCard[];
 
     const nextCursor =
       nextCursorDoc && nextCursorDoc.createdAt
@@ -186,7 +167,13 @@ export async function GET(req: Request) {
           })
         : undefined;
 
-    return NextResponse.json({ items, nextCursor }, { status: 200 });
+    const response: FeedResponse & { nextCursor?: string } = {
+      items,
+      cursor: nextCursor,
+      nextCursor,
+    };
+
+    return NextResponse.json(response, { status: 200 });
   } catch (err) {
     console.error("Failed to load saved artworks", err);
     const message = err instanceof Error ? err.message : "Failed to load saved";

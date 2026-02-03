@@ -1,4 +1,4 @@
-import type { Artwork, FeedItem } from "@artclub/models";
+import type { Artwork, FeedItem, ArtworkCard, FeedResponse as ApiFeedResponse, ArtistCard, ReactionEmoji } from "@artclub/models";
 
 export type MobileApiClientOptions = {
   baseUrl: string;
@@ -11,34 +11,8 @@ export type FeedResponse = {
   nextCursor?: string;
 };
 
-export type ReactionEmoji = "🖤" | "🔥" | "👀" | "😵‍💫";
-
-type ApiFeedItem = {
-  id: string;
-  title: string;
-  handle?: string;
-  artistName?: string;
-  tags?: string[];
-  images?: { thumbUrl?: string; mediumUrl?: string; originalUrl?: string };
-  widthCm?: number;
-  heightCm?: number;
-  priceEur?: number | null;
-  isOriginalTagged?: boolean;
-  shortDescription?: string;
-};
-
-type ApiFeedResponse = {
-  items: ApiFeedItem[];
-  nextCursor?: string;
-};
-
 type ApiArtworkResponse = {
-  artwork: ApiFeedItem;
-  signals?: {
-    savesCount?: number;
-    reactions?: Record<string, number>;
-    viewsCount?: number;
-  };
+  artwork: ArtworkCard;
 };
 
 export type MobileAuthUser = {
@@ -77,18 +51,11 @@ export type EventsIngestResponse = {
   accepted: number;
 };
 
-export type ArtistProfile = {
-  id: string;
-  name: string;
-  avatarUrl?: string | null;
-  bio?: string | null;
-  instagramUrl?: string | null;
-};
+export type ArtistProfile = ArtistCard;
 
 export type ArtistProfileResponse = {
   ok: boolean;
-  artist: ArtistProfile;
-  counts?: { artworks?: number };
+  artist: ArtistCard;
 };
 
 export type ArtistArtworksResponse = {
@@ -203,34 +170,36 @@ function mockFeed(cursor?: string): FeedResponse {
   return { items, nextCursor };
 }
 
-function buildMediaFromImages(images?: {
-  thumbUrl?: string;
-  mediumUrl?: string;
-  originalUrl?: string;
-}): Artwork["media"] {
+function buildMediaFromCardImages(images?: ArtworkCard["images"]): Artwork["media"] {
   const media: Artwork["media"] = [];
-  if (images?.thumbUrl) {
-    media.push({ url: images.thumbUrl, width: 360, type: "image" });
+  if (!images || images.length === 0) return media;
+  const primary = images[0];
+  if (primary.urlThumb) {
+    media.push({
+      url: primary.urlThumb,
+      width: primary.width ? Math.round(primary.width / 3) : undefined,
+      height: primary.height ? Math.round(primary.height / 3) : undefined,
+      type: "image"
+    });
   }
-  if (images?.mediumUrl) {
-    media.push({ url: images.mediumUrl, width: 960, type: "image" });
-  }
-  if (images?.originalUrl) {
-    const duplicate = media.find((item) => item.url === images.originalUrl);
-    if (!duplicate) {
-      media.push({ url: images.originalUrl, type: "image" });
-    }
+  if (primary.urlMedium) {
+    media.push({
+      url: primary.urlMedium,
+      width: primary.width,
+      height: primary.height,
+      type: "image"
+    });
   }
   return media;
 }
 
-function mapFeedItemToArtwork(item: ApiFeedItem): Artwork {
+function mapArtworkCardToArtwork(item: ArtworkCard): Artwork {
   return {
-    id: item.id,
-    title: item.title,
+    id: item.productGid || item.id,
+    title: item.title || "Untitled",
     handle: item.handle,
     artistName: item.artistName,
-    media: buildMediaFromImages(item.images),
+    media: buildMediaFromCardImages(item.images),
     widthCm: item.widthCm,
     heightCm: item.heightCm,
     priceEur: item.priceEur ?? undefined,
@@ -280,8 +249,8 @@ export function createMobileApiClient(opts: MobileApiClientOptions) {
     const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
     const response = await requestJson<ApiFeedResponse>(`${baseUrl}/api/mobile/v1/feed${query}`);
     return {
-      items: response.items.map((item) => ({ artwork: mapFeedItemToArtwork(item) })),
-      nextCursor: response.nextCursor
+      items: response.items.map((item) => ({ artwork: mapArtworkCardToArtwork(item) })),
+      nextCursor: response.cursor || (response as { nextCursor?: string }).nextCursor
     };
   }
 
@@ -290,7 +259,7 @@ export function createMobileApiClient(opts: MobileApiClientOptions) {
     const response = await requestJson<ApiArtworkResponse>(
       `${baseUrl}/api/mobile/v1/artworks/${encodeURIComponent(id)}`
     );
-    return mapFeedItemToArtwork(response.artwork);
+    return mapArtworkCardToArtwork(response.artwork);
   }
 
   async function register(input: { email: string; password: string; name?: string }): Promise<AuthResponse> {
@@ -350,8 +319,8 @@ export function createMobileApiClient(opts: MobileApiClientOptions) {
       token
     );
     return {
-      items: response.items.map((item) => ({ artwork: mapFeedItemToArtwork(item) })),
-      nextCursor: response.nextCursor
+      items: response.items.map((item) => ({ artwork: mapArtworkCardToArtwork(item) })),
+      nextCursor: response.cursor || (response as { nextCursor?: string }).nextCursor
     };
   }
 
@@ -416,9 +385,10 @@ export function createMobileApiClient(opts: MobileApiClientOptions) {
         ok: true,
         artist: {
           id,
-          name: id.replace(/-/g, " ")
-        },
-        counts: { artworks: 0 }
+          handle: id,
+          name: id.replace(/-/g, " "),
+          counts: { artworks: 0, followers: 0 }
+        }
       };
     }
     return requestJson<ArtistProfileResponse>(
@@ -443,8 +413,8 @@ export function createMobileApiClient(opts: MobileApiClientOptions) {
     );
     return {
       ok: true,
-      items: response.items.map((item) => ({ artwork: mapFeedItemToArtwork(item) })),
-      nextCursor: response.nextCursor
+      items: response.items.map((item) => ({ artwork: mapArtworkCardToArtwork(item) })),
+      nextCursor: response.cursor || (response as { nextCursor?: string }).nextCursor
     };
   }
 

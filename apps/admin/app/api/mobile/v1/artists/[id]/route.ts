@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { connectMongo } from "@/lib/mongodb";
 import { ArtistModel } from "@/models/Artist";
 import { ShopifyArtworkCacheModel } from "@/models/ShopifyArtworkCache";
+import type { ArtistCard } from "@artclub/models";
 
 function isMetaobjectId(id: string) {
   return id.startsWith("gid://");
@@ -18,6 +19,13 @@ function buildArtistNameRegex(value: string) {
   if (parts.length === 0) return null;
   const pattern = `^\\s*${parts.join("\\s+")}\\s*$`;
   return new RegExp(pattern, "i");
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -38,6 +46,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     let avatarUrl: string | undefined;
     let bio: string | undefined;
     let instagramUrl: string | undefined;
+    let handle: string | undefined;
+    let tags: string[] | undefined;
 
     if (!resolvedMetaobjectId && artistRegex) {
       const doc = await ShopifyArtworkCacheModel.findOne({ artistName: { $regex: artistRegex } })
@@ -55,6 +65,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       const artist = await ArtistModel.findOne({ "shopifySync.metaobjectId": resolvedMetaobjectId }).lean();
       if (artist) {
         name = artist.publicProfile?.displayName || artist.publicProfile?.name || artist.name || name;
+        handle = artist.shopifySync?.handle || handle;
         avatarUrl =
           artist.publicProfile?.heroImageUrl ||
           artist.publicProfile?.bild_1 ||
@@ -63,6 +74,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
           undefined;
         bio = artist.publicProfile?.bio || artist.publicProfile?.text_1 || artist.publicProfile?.einleitung_1 || undefined;
         instagramUrl = artist.publicProfile?.instagram || undefined;
+        tags = Array.isArray(artist.tags) ? artist.tags : tags;
       }
     }
 
@@ -91,20 +103,18 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       }
     }
 
-    return NextResponse.json(
-      {
-        ok: true,
-        artist: {
-          id: resolvedMetaobjectId || rawId,
-          name: name || rawId,
-          avatarUrl: avatarUrl || undefined,
-          bio: bio || undefined,
-          instagramUrl: instagramUrl || undefined,
-        },
-        counts: { artworks: artworksCount },
-      },
-      { status: 200 },
-    );
+    const artistCard: ArtistCard = {
+      id: resolvedMetaobjectId || rawId,
+      handle: handle || slugify(name || rawId) || rawId,
+      name: name || rawId,
+      avatarUrl: avatarUrl || undefined,
+      tags: tags,
+      counts: { artworks: artworksCount, followers: 0 },
+      bio: bio || undefined,
+      instagramUrl: instagramUrl || undefined,
+    };
+
+    return NextResponse.json({ ok: true, artist: artistCard, counts: artistCard.counts }, { status: 200 });
   } catch (err) {
     console.error("Failed to load artist profile", err);
     const message = err instanceof Error ? err.message : "Failed to load artist";
