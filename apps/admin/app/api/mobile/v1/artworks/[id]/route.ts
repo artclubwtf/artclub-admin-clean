@@ -11,9 +11,9 @@ const defaultReactions = {
   "😵‍💫": 0,
 };
 
-export async function GET(_: Request, { params }: { params: { id: string } }) {
+export async function GET(_: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const id = params.id;
+    const { id } = await context.params;
     if (!id) {
       return NextResponse.json({ error: "id is required" }, { status: 400 });
     }
