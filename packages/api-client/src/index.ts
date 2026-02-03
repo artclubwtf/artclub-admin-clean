@@ -14,3 +14,5 @@ export function createApiClient(opts: ApiClientOptions) {
   }
   return { request };
 }
+
+export { createMobileApiClient } from "./mobile";
