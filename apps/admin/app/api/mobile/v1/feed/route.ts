@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { PipelineStage } from "mongoose";
 
 import { connectMongo } from "@/lib/mongodb";
 import { ShopifyArtworkCacheModel } from "@/models/ShopifyArtworkCache";
@@ -78,7 +79,7 @@ export async function GET(req: Request) {
 
     await connectMongo();
 
-    const pipeline: Record<string, unknown>[] = [
+    const pipeline: PipelineStage[] = [
       {
         $lookup: {
           from: "artwork_signals",
