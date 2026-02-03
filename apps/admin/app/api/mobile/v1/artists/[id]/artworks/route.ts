@@ -98,6 +98,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     const metaobject = isMetaobjectId(rawId);
     const artistRegex = metaobject ? null : buildArtistNameRegex(rawId);
+    let resolvedMetaobjectId: string | null = metaobject ? rawId : null;
+
+    if (!resolvedMetaobjectId && artistRegex) {
+      const doc = await ShopifyArtworkCacheModel.findOne({ artistName: { $regex: artistRegex } })
+        .select({ artistMetaobjectGid: 1 })
+        .lean();
+      if (doc?.artistMetaobjectGid) {
+        resolvedMetaobjectId = doc.artistMetaobjectGid;
+      }
+    }
 
     const pipeline: PipelineStage[] = [
       {
@@ -116,8 +126,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       },
     ];
 
-    if (metaobject) {
-      pipeline.push({ $match: { artistMetaobjectGid: rawId } });
+    if (resolvedMetaobjectId) {
+      pipeline.push({ $match: { artistMetaobjectGid: resolvedMetaobjectId } });
     } else if (artistRegex) {
       pipeline.push({ $match: { artistName: { $regex: artistRegex } } });
     }

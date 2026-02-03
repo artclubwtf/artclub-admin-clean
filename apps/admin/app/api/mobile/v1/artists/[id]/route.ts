@@ -32,14 +32,27 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
     const metaobject = isMetaobjectId(rawId);
     const artistRegex = metaobject ? null : buildArtistNameRegex(rawId);
+    let resolvedMetaobjectId: string | null = metaobject ? rawId : null;
 
     let name = rawId.replace(/-/g, " ").trim();
     let avatarUrl: string | undefined;
     let bio: string | undefined;
     let instagramUrl: string | undefined;
 
-    if (metaobject) {
-      const artist = await ArtistModel.findOne({ "shopifySync.metaobjectId": rawId }).lean();
+    if (!resolvedMetaobjectId && artistRegex) {
+      const doc = await ShopifyArtworkCacheModel.findOne({ artistName: { $regex: artistRegex } })
+        .select({ artistMetaobjectGid: 1, artistName: 1 })
+        .lean();
+      if (doc?.artistMetaobjectGid) {
+        resolvedMetaobjectId = doc.artistMetaobjectGid;
+      }
+      if (doc?.artistName) {
+        name = doc.artistName;
+      }
+    }
+
+    if (resolvedMetaobjectId) {
+      const artist = await ArtistModel.findOne({ "shopifySync.metaobjectId": resolvedMetaobjectId }).lean();
       if (artist) {
         name = artist.publicProfile?.displayName || artist.publicProfile?.name || artist.name || name;
         avatarUrl =
@@ -68,8 +81,10 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     }
 
     let artworksCount = 0;
-    if (metaobject) {
-      artworksCount = await ShopifyArtworkCacheModel.countDocuments({ artistMetaobjectGid: rawId });
+    if (resolvedMetaobjectId) {
+      artworksCount = await ShopifyArtworkCacheModel.countDocuments({
+        artistMetaobjectGid: resolvedMetaobjectId,
+      });
     } else {
       if (artistRegex) {
         artworksCount = await ShopifyArtworkCacheModel.countDocuments({ artistName: { $regex: artistRegex } });
@@ -80,7 +95,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       {
         ok: true,
         artist: {
-          id: metaobject ? rawId : rawId,
+          id: resolvedMetaobjectId || rawId,
           name: name || rawId,
           avatarUrl: avatarUrl || undefined,
           bio: bio || undefined,
