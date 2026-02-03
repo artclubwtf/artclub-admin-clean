@@ -53,9 +53,10 @@ function buildArtistKeyStages(): PipelineStage[] {
   ];
 }
 
-export async function GET(_: Request, { params }: { params: { id: string } }) {
+export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const rawId = decodeURIComponent(params.id || "").trim();
+    const { id } = await params;
+    const rawId = decodeURIComponent(id || "").trim();
     if (!rawId) {
       return NextResponse.json({ error: "artist id is required" }, { status: 400 });
     }
