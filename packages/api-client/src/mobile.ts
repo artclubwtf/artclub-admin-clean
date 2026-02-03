@@ -332,7 +332,7 @@ export function createMobileApiClient(opts: MobileApiClientOptions) {
   async function listSaves(): Promise<SavesResponse> {
     if (opts.useMock) return { productGids: [] };
     if (!token) throw new Error("Missing auth token");
-    return requestJson<SavesResponse>(`${baseUrl}/api/mobile/v1/saves`, undefined, token);
+    return requestJson<SavesResponse>(`${baseUrl}/api/mobile/v1/saves/ids`, undefined, token);
   }
 
   async function getSaves(cursor?: string, limit?: number): Promise<SavesListResponse> {
@@ -355,14 +355,18 @@ export function createMobileApiClient(opts: MobileApiClientOptions) {
     };
   }
 
-  async function toggleSave(productGid: string): Promise<ToggleSaveResponse> {
+  async function toggleSave(productGid: string, saved?: boolean): Promise<ToggleSaveResponse> {
     if (opts.useMock) return { ok: true, saved: true };
     if (!token) throw new Error("Missing auth token");
+    const payload: { productGid: string; saved?: boolean } = { productGid };
+    if (typeof saved === "boolean") {
+      payload.saved = saved;
+    }
     return requestJson<ToggleSaveResponse>(
       `${baseUrl}/api/mobile/v1/saves/toggle`,
       {
         method: "POST",
-        body: JSON.stringify({ productGid })
+        body: JSON.stringify(payload)
       },
       token
     );

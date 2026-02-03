@@ -538,8 +538,19 @@ function AppProvider({ children }: { children: React.ReactNode }) {
     if (!token) return;
     try {
       const response = await client.listSaves();
-      if (Array.isArray(response.productGids)) {
-        setSavedIds(response.productGids);
+      const serverIds = Array.isArray(response.productGids) ? response.productGids : [];
+      const localIds = savedIdsRef.current;
+      const serverSet = new Set(serverIds);
+      const toSync = localIds.filter((id) => !serverSet.has(id));
+      if (toSync.length) {
+        await Promise.allSettled(toSync.map((id) => client.toggleSave(id, true)));
+        const refreshed = await client.listSaves();
+        const refreshedIds = Array.isArray(refreshed.productGids) ? refreshed.productGids : serverIds;
+        setSavedIds(refreshedIds.length ? refreshedIds : localIds);
+        return;
+      }
+      if (serverIds.length || localIds.length === 0) {
+        setSavedIds(serverIds);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load saved");
@@ -1833,6 +1844,8 @@ function SavedScreen() {
   const [loading, setLoading] = useState(false);
   const [loadingServer, setLoadingServer] = useState(false);
   const [offlineFallback, setOfflineFallback] = useState(false);
+  const [syncingLocal, setSyncingLocal] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
   const { width } = useWindowDimensions();
   const columns = width >= 720 ? 3 : 2;
   const tileGap = 12;
@@ -1842,7 +1855,7 @@ function SavedScreen() {
     void refreshSaved();
   }, [refreshSaved]);
 
-  const canUseServer = Boolean(baseUrl) && Boolean(token);
+  const canUseServer = Boolean(baseUrl) && Boolean(token) && !useMock;
 
   useEffect(() => {
     let active = true;
@@ -1867,7 +1880,7 @@ function SavedScreen() {
   const loadServerSaves = useCallback(
     async (mode: "refresh" | "more") => {
       if (!canUseServer) return;
-      if (mode === "more" && (!hasMoreServer || loadingServer)) return;
+      if (mode === "more" && (!hasMoreServer || loadingServer || offlineFallback)) return;
       setLoadingServer(true);
       try {
         const cursor = mode === "refresh" ? undefined : serverCursor;
@@ -1881,13 +1894,17 @@ function SavedScreen() {
         setServerCursor(response.nextCursor);
         setHasMoreServer(Boolean(response.nextCursor));
         setOfflineFallback(false);
+        setDebugInfo(
+          `server items=${nextItems.length} cursor=${response.nextCursor ? "yes" : "no"}`
+        );
       } catch {
         setOfflineFallback(true);
+        setDebugInfo("server fetch failed");
       } finally {
         setLoadingServer(false);
       }
     },
-    [baseUrl, canUseServer, hasMoreServer, loadingServer, serverCursor, token]
+    [baseUrl, canUseServer, hasMoreServer, loadingServer, offlineFallback, serverCursor, token]
   );
 
   const refreshServer = useCallback(async () => {
@@ -1902,7 +1919,42 @@ function SavedScreen() {
     void refreshServer();
   }, [canUseServer, refreshServer]);
 
-  const displayedArtworks = canUseServer && !offlineFallback ? serverArtworks : savedArtworks;
+  const syncLocalToServer = useCallback(async () => {
+    if (!canUseServer || syncingLocal) return;
+    if (savedIds.length === 0) return;
+    setSyncingLocal(true);
+    try {
+      const client = createMobileApiClient({
+        baseUrl,
+        useMock: false,
+        token: token || undefined
+      });
+      const server = await client.listSaves();
+      const serverSet = new Set(server.productGids || []);
+      const toSync = savedIds.filter((id) => !serverSet.has(id));
+      if (toSync.length) {
+        await Promise.all(toSync.map((id) => client.toggleSave(id, true)));
+      }
+      await refreshServer();
+      setDebugInfo(
+        `sync local=${savedIds.length} server=${server.productGids?.length ?? 0} synced=${toSync.length}`
+      );
+    } catch {
+      // ignore sync errors
+      setDebugInfo("sync failed");
+    } finally {
+      setSyncingLocal(false);
+    }
+  }, [baseUrl, canUseServer, refreshServer, savedIds, syncingLocal, token]);
+
+  useEffect(() => {
+    if (!canUseServer) return;
+    void syncLocalToServer();
+  }, [canUseServer, syncLocalToServer]);
+
+  const shouldFallbackToLocal =
+    offlineFallback || !canUseServer || (serverArtworks.length === 0 && savedArtworks.length > 0);
+  const displayedArtworks = shouldFallbackToLocal ? savedArtworks : serverArtworks;
 
   if (!useMock && !token && savedIds.length === 0) {
     return (
@@ -1933,12 +1985,21 @@ function SavedScreen() {
 
   return (
     <View style={styles.savedContainer}>
-      {offlineFallback && canUseServer ? (
+      <View style={styles.debugOverlay}>
+        <Text style={styles.debugOverlayText}>
+          {`token=${token ? "yes" : "no"} mock=${useMock ? "yes" : "no"} baseUrl=${
+            baseUrl ? "yes" : "no"
+          }\nlocal=${savedIds.length} server=${serverArtworks.length} fallback=${
+            shouldFallbackToLocal ? "yes" : "no"
+          }\n${debugInfo ?? ""}`}
+        </Text>
+      </View>
+      {shouldFallbackToLocal && canUseServer ? (
         <View style={styles.offlineBanner}>
-          <Text style={styles.offlineBannerText}>Offline mode: showing cached saves</Text>
+          <Text style={styles.offlineBannerText}>Showing cached saves</Text>
         </View>
       ) : null}
-      {loading || loadingServer ? <ActivityIndicator style={styles.savedLoader} /> : null}
+      {loading || loadingServer || syncingLocal ? <ActivityIndicator style={styles.savedLoader} /> : null}
       <FlatList
         data={displayedArtworks}
         keyExtractor={(item) => item.id}
@@ -1946,11 +2007,13 @@ function SavedScreen() {
         numColumns={columns}
         columnWrapperStyle={columns > 1 ? { gap: tileGap, marginBottom: tileGap } : undefined}
         refreshControl={
-          canUseServer ? (
+          canUseServer && !offlineFallback ? (
             <RefreshControl refreshing={loadingServer} onRefresh={refreshServer} />
           ) : undefined
         }
-        onEndReached={canUseServer ? () => void loadServerSaves("more") : undefined}
+        onEndReached={
+          canUseServer && !offlineFallback ? () => void loadServerSaves("more") : undefined
+        }
         onEndReachedThreshold={0.5}
         renderItem={({ item }) => (
           <Swipeable
@@ -2641,6 +2704,18 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "600"
+  },
+  debugOverlay: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: "rgba(0,0,0,0.08)"
+  },
+  debugOverlayText: {
+    color: "#222222",
+    fontSize: 11,
+    lineHeight: 14
   },
   offlineBanner: {
     marginHorizontal: 20,

@@ -3,6 +3,16 @@ import { NextResponse } from "next/server";
 import { connectMongo } from "@/lib/mongodb";
 import { getMobileUserFromRequest } from "@/lib/mobileAuth";
 import { UserSavedModel } from "@/models/UserSaved";
+import { Types } from "mongoose";
+
+function normalizeProductGid(value: string) {
+  const trimmed = value.trim();
+  return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
+}
+
+type UserSavedIdDoc = {
+  productGid?: string;
+};
 
 export async function GET(req: Request) {
   try {
@@ -16,12 +26,21 @@ export async function GET(req: Request) {
     const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(Math.floor(limitParam), 200) : 200;
 
     await connectMongo();
-    const docs = await UserSavedModel.find({ userId: user.id })
+    const userObjectId = Types.ObjectId.isValid(user.id) ? new Types.ObjectId(user.id) : null;
+    const userIdValues = userObjectId ? [userObjectId, user.id] : [user.id];
+    if (userObjectId) {
+      await UserSavedModel.collection.updateMany(
+        { userId: user.id },
+        { $set: { userId: userObjectId } },
+      );
+    }
+    const docs = (await UserSavedModel.collection
+      .find({ userId: { $in: userIdValues } })
       .sort({ createdAt: -1 })
       .limit(limit)
-      .select({ productGid: 1 })
-      .lean();
-    const productGids = docs.map((doc) => doc.productGid);
+      .project({ productGid: 1 })
+      .toArray()) as UserSavedIdDoc[];
+    const productGids = docs.map((doc) => normalizeProductGid(doc.productGid || "")).filter(Boolean);
 
     return NextResponse.json({ productGids }, { status: 200 });
   } catch (err) {

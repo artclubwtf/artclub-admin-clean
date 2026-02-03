@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { Types, type PipelineStage } from "mongoose";
+import { Types } from "mongoose";
 
 import { connectMongo } from "@/lib/mongodb";
 import { getMobileUserFromRequest } from "@/lib/mobileAuth";
+import { ArtworkSignalsModel } from "@/models/ArtworkSignals";
 import { UserSavedModel } from "@/models/UserSaved";
+import { ShopifyArtworkCacheModel } from "@/models/ShopifyArtworkCache";
 
 type SavesCursor = {
   createdAt: number;
@@ -26,6 +28,12 @@ type FeedItem = {
     reactions: Record<string, number>;
     viewsCount: number;
   };
+};
+
+type UserSavedDoc = {
+  _id: Types.ObjectId;
+  productGid?: string;
+  createdAt?: Date;
 };
 
 function encodeCursor(cursor: SavesCursor): string {
@@ -62,6 +70,16 @@ function resolveImageUrls(images?: { thumbUrl?: string; mediumUrl?: string; orig
   return { thumbUrl, mediumUrl };
 }
 
+function normalizeProductGid(value: string) {
+  const trimmed = value.trim();
+  return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
+}
+
+function extractProductNumericId(gid: string) {
+  const match = /Product\/(\d+)/.exec(gid);
+  return match ? match[1] : null;
+}
+
 export async function GET(req: Request) {
   try {
     const user = await getMobileUserFromRequest(req);
@@ -75,109 +93,86 @@ export async function GET(req: Request) {
     const cursor = decodeCursor(searchParams.get("cursor"));
     const cursorObjectId =
       cursor?.id && Types.ObjectId.isValid(cursor.id) ? new Types.ObjectId(cursor.id) : null;
-
     await connectMongo();
 
-    const pipeline: PipelineStage[] = [
-      { $match: { userId: user.id } },
-    ];
-
-    if (cursor && cursorObjectId) {
-      pipeline.push({ $match: buildCursorMatch(cursor, cursorObjectId) });
+    const userObjectId = Types.ObjectId.isValid(user.id) ? new Types.ObjectId(user.id) : null;
+    const userIdValues = userObjectId ? [userObjectId, user.id] : [user.id];
+    if (userObjectId) {
+      await UserSavedModel.collection.updateMany(
+        { userId: user.id },
+        { $set: { userId: userObjectId } },
+      );
     }
 
-    pipeline.push(
-      { $sort: { createdAt: -1, _id: -1 } },
-      { $limit: limit + 1 },
-      {
-        $lookup: {
-          from: "shopify_artworks_cache",
-          localField: "productGid",
-          foreignField: "productGid",
-          as: "cache",
-        },
-      },
-      { $unwind: { path: "$cache", preserveNullAndEmptyArrays: true } },
-      {
-        $lookup: {
-          from: "artwork_signals",
-          localField: "productGid",
-          foreignField: "productGid",
-          as: "signals",
-        },
-      },
-      { $unwind: { path: "$signals", preserveNullAndEmptyArrays: true } },
-      {
-        $project: {
-          productGid: 1,
-          createdAt: 1,
-          cache: {
-            productGid: "$cache.productGid",
-            title: "$cache.title",
-            handle: "$cache.handle",
-            artistName: "$cache.artistName",
-            tags: "$cache.tags",
-            images: "$cache.images",
-            widthCm: "$cache.widthCm",
-            heightCm: "$cache.heightCm",
-            priceEur: "$cache.priceEur",
-            isOriginalTagged: "$cache.isOriginalTagged",
-          },
-          signals: {
-            savesCount: { $ifNull: ["$signals.savesCount", 0] },
-            reactions: { $ifNull: ["$signals.reactions", {}] },
-            viewsCount: { $ifNull: ["$signals.viewsCount", 0] },
-          },
-        },
-      },
-    );
+    const query: Record<string, unknown> = { userId: { $in: userIdValues } };
+    if (cursor && cursorObjectId) {
+      Object.assign(query, buildCursorMatch(cursor, cursorObjectId));
+    }
 
-    const docs = (await UserSavedModel.aggregate(pipeline).exec()) as Array<{
-      _id: Types.ObjectId;
-      productGid: string;
-      createdAt: Date;
-      cache?: {
-        productGid?: string;
-        title?: string;
-        handle?: string;
-        artistName?: string;
-        tags?: string[];
-        images?: { thumbUrl?: string; mediumUrl?: string; originalUrl?: string };
-        widthCm?: number;
-        heightCm?: number;
-        priceEur?: number | null;
-        isOriginalTagged?: boolean;
-      } | null;
-      signals?: {
-        savesCount?: number;
-        reactions?: Record<string, number>;
-        viewsCount?: number;
-      };
-    }>;
+    const docs = (await UserSavedModel.collection
+      .find(query)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit + 1)
+      .toArray()) as UserSavedDoc[];
 
     const hasMore = docs.length > limit;
     const itemsSlice = hasMore ? docs.slice(0, limit) : docs;
     const nextCursorDoc = hasMore ? itemsSlice[itemsSlice.length - 1] : null;
 
+    const normalizedIds = itemsSlice
+      .map((doc) => normalizeProductGid(doc.productGid || ""))
+      .filter(Boolean);
+    const idVariants = Array.from(
+      new Set([
+        ...normalizedIds,
+        ...normalizedIds.map((id) => (id.endsWith("/") ? id : `${id}/`)),
+      ]),
+    );
+
+    const cacheDocs = await ShopifyArtworkCacheModel.find({
+      $or: [
+        { productGid: { $in: idVariants } },
+        { productNumericId: { $in: normalizedIds.map(extractProductNumericId).filter(Boolean) } },
+      ],
+    }).lean();
+    const signalsDocs = await ArtworkSignalsModel.find({ productGid: { $in: idVariants } }).lean();
+    const cacheById = new Map<string, (typeof cacheDocs)[number]>();
+    cacheDocs.forEach((doc) => {
+      if (doc.productGid) {
+        cacheById.set(normalizeProductGid(doc.productGid), doc);
+      }
+      if (doc.productNumericId) {
+        cacheById.set(doc.productNumericId, doc);
+      }
+    });
+    const signalsById = new Map(signalsDocs.map((doc) => [normalizeProductGid(doc.productGid), doc]));
+
     const items: FeedItem[] = itemsSlice
-      .filter((doc) => doc.cache && doc.cache.productGid && doc.cache.title && doc.cache.handle)
-      .map((doc) => ({
-        id: doc.cache?.productGid ?? doc.productGid,
-        title: doc.cache?.title ?? "",
-        handle: doc.cache?.handle ?? "",
-        artistName: doc.cache?.artistName || undefined,
-        tags: Array.isArray(doc.cache?.tags) ? doc.cache?.tags ?? [] : [],
-        images: resolveImageUrls(doc.cache?.images),
-        widthCm: doc.cache?.widthCm,
-        heightCm: doc.cache?.heightCm,
-        priceEur: doc.cache?.priceEur ?? null,
-        isOriginalTagged: doc.cache?.isOriginalTagged,
-        signals: {
-          savesCount: doc.signals?.savesCount ?? 0,
-          reactions: doc.signals?.reactions ?? {},
-          viewsCount: doc.signals?.viewsCount ?? 0,
-        },
-      }));
+      .map((doc) => {
+        const gid = normalizeProductGid(doc.productGid || "");
+        const numericId = extractProductNumericId(gid);
+        const cache = cacheById.get(gid) || (numericId ? cacheById.get(numericId) : undefined);
+        if (!cache || !cache.productGid || !cache.title || !cache.handle) return null;
+        const signals = signalsById.get(gid);
+        return {
+          id: cache.productGid,
+          title: cache.title,
+          handle: cache.handle,
+          artistName: cache.artistName || undefined,
+          tags: Array.isArray(cache.tags) ? cache.tags : [],
+          images: resolveImageUrls(cache.images),
+          widthCm: cache.widthCm,
+          heightCm: cache.heightCm,
+          priceEur: cache.priceEur ?? null,
+          isOriginalTagged: cache.isOriginalTagged,
+          signals: {
+            savesCount: signals?.savesCount ?? 0,
+            reactions: signals?.reactions ?? {},
+            viewsCount: signals?.viewsCount ?? 0,
+          },
+        };
+      })
+      .filter(Boolean) as FeedItem[];
 
     const nextCursor =
       nextCursorDoc && nextCursorDoc.createdAt
