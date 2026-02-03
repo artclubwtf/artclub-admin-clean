@@ -64,7 +64,11 @@ function buildCursorMatch(cursor: SavesCursor, objectId: Types.ObjectId) {
   };
 }
 
-function resolveImageUrls(images?: { thumbUrl?: string; mediumUrl?: string; originalUrl?: string }) {
+function resolveImageUrls(images?: {
+  thumbUrl?: string | null;
+  mediumUrl?: string | null;
+  originalUrl?: string | null;
+}) {
   const thumbUrl = images?.thumbUrl || images?.mediumUrl || images?.originalUrl;
   const mediumUrl = images?.mediumUrl || images?.originalUrl || images?.thumbUrl;
   return { thumbUrl, mediumUrl };
