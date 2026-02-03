@@ -26,12 +26,23 @@ type GaSnapshot =
     }
   | null;
 
+type MobileFeedCacheStats = {
+  count: number;
+  lastImportedAt: string | null;
+};
+
 export default function AdminDashboardClient() {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ordersSnapshot, setOrdersSnapshot] = useState<OrdersSnapshot | null>(null);
   const [gaSnapshot, setGaSnapshot] = useState<GaSnapshot>(null);
+  const [cacheStats, setCacheStats] = useState<MobileFeedCacheStats | null>(null);
+  const [cacheLoading, setCacheLoading] = useState(false);
+  const [cacheError, setCacheError] = useState<string | null>(null);
+  const [cacheHidden, setCacheHidden] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -59,6 +70,79 @@ export default function AdminDashboardClient() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadCache = async () => {
+      setCacheLoading(true);
+      setCacheError(null);
+      try {
+        const res = await fetch("/api/admin/mobile-feed-cache", { cache: "no-store" });
+        if (res.status === 401 || res.status === 403) {
+          if (active) setCacheHidden(true);
+          return;
+        }
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null);
+          throw new Error(payload?.error || "Failed to load cache stats");
+        }
+        const json = await res.json();
+        if (!active) return;
+        setCacheStats({
+          count: Number(json?.count || 0),
+          lastImportedAt: typeof json?.lastImportedAt === "string" ? json.lastImportedAt : null,
+        });
+      } catch (err: any) {
+        if (!active) return;
+        setCacheError(err?.message ?? "Failed to load cache stats");
+      } finally {
+        if (active) setCacheLoading(false);
+      }
+    };
+
+    loadCache();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncMessage(null);
+    try {
+      const res = await fetch("/api/admin/sync/artworks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ limit: 200 }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || !payload?.ok) {
+        throw new Error(payload?.error || "Failed to sync artworks");
+      }
+      const importedCount = Number(payload.imported || 0);
+      const nextCursorInfo = payload.nextCursor ? ` Next cursor: ${payload.nextCursor}` : "";
+      setSyncMessage({ type: "success", text: `Imported ${importedCount} items.${nextCursorInfo}` });
+
+      setCacheLoading(true);
+      try {
+        const statsRes = await fetch("/api/admin/mobile-feed-cache", { cache: "no-store" });
+        if (statsRes.ok) {
+          const statsJson = await statsRes.json();
+          setCacheStats({
+            count: Number(statsJson?.count || 0),
+            lastImportedAt: typeof statsJson?.lastImportedAt === "string" ? statsJson.lastImportedAt : null,
+          });
+          setCacheError(null);
+        }
+      } finally {
+        setCacheLoading(false);
+      }
+    } catch (err: any) {
+      setSyncMessage({ type: "error", text: err?.message ?? "Failed to sync artworks" });
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -192,6 +276,13 @@ export default function AdminDashboardClient() {
     },
   ];
 
+  const lastSyncLabel = cacheLoading
+    ? "…"
+    : cacheStats?.lastImportedAt
+      ? new Date(cacheStats.lastImportedAt).toLocaleString()
+      : "Never";
+  const cacheCountLabel = cacheLoading ? "…" : cacheStats ? cacheStats.count : "–";
+
   return (
     <div className="admin-dashboard">
       <header className="space-y-1">
@@ -243,6 +334,45 @@ export default function AdminDashboardClient() {
           </tbody>
         </table>
       </div>
+
+      {!cacheHidden && (
+        <div className="card acCard">
+          <div className="cardHeader">
+            <div>
+              <p className="text-sm text-slate-500 m-0">Mobile Feed Cache</p>
+              <strong>Cache status</strong>
+            </div>
+            <button className="ac-button" type="button" onClick={handleSync} disabled={syncing}>
+              {syncing ? (
+                <>
+                  <span className="inline-block h-3 w-3 animate-spin rounded-full border border-slate-400 border-t-transparent" />
+                  Syncing…
+                </>
+              ) : (
+                "Sync now"
+              )}
+            </button>
+          </div>
+
+          {cacheError && <p className="text-sm text-red-600">{cacheError}</p>}
+          {syncMessage && (
+            <p className={`text-sm ${syncMessage.type === "error" ? "text-red-600" : "text-emerald-600"}`}>
+              {syncMessage.text}
+            </p>
+          )}
+
+          <div className="acGrid2">
+            <div className="space-y-1">
+              <p className="text-sm text-slate-500 m-0">Last sync</p>
+              <p className="text-lg font-semibold m-0">{lastSyncLabel}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-slate-500 m-0">Cached artworks</p>
+              <p className="text-lg font-semibold m-0">{cacheCountLabel}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <p className="text-sm text-slate-500">Data refreshes on page load.</p>
     </div>
