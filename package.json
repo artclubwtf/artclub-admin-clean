@@ -6,6 +6,9 @@
     "dev:admin": "pnpm --filter admin dev",
     "build:admin": "pnpm --filter admin build",
     "dev:mobile": "pnpm --filter mobile dev",
+    "ios:dev": "pnpm --filter mobile ios",
+    "ios:build": "cd apps/mobile && eas build -p ios --profile preview",
+    "ios:submit": "cd apps/mobile && eas submit -p ios --latest",
     "lint": "turbo lint",
     "build": "turbo build",
     "test": "turbo test"

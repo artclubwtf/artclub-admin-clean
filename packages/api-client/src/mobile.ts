@@ -62,6 +62,41 @@ type ToggleSaveResponse = {
   saved?: boolean;
 };
 
+export type SavesListResponse = {
+  items: FeedItem[];
+  nextCursor?: string;
+};
+
+export type ReactionsMineResponse = {
+  ok: boolean;
+  reactions: Record<string, ReactionEmoji>;
+};
+
+export type EventsIngestResponse = {
+  ok: boolean;
+  accepted: number;
+};
+
+export type ArtistProfile = {
+  id: string;
+  name: string;
+  avatarUrl?: string | null;
+  bio?: string | null;
+  instagramUrl?: string | null;
+};
+
+export type ArtistProfileResponse = {
+  ok: boolean;
+  artist: ArtistProfile;
+  counts?: { artworks?: number };
+};
+
+export type ArtistArtworksResponse = {
+  ok: boolean;
+  items: FeedItem[];
+  nextCursor?: string;
+};
+
 const MOCK_PAGE_SIZE = 10;
 const MOCK_TOTAL = 30;
 
@@ -300,6 +335,26 @@ export function createMobileApiClient(opts: MobileApiClientOptions) {
     return requestJson<SavesResponse>(`${baseUrl}/api/mobile/v1/saves`, undefined, token);
   }
 
+  async function getSaves(cursor?: string, limit?: number): Promise<SavesListResponse> {
+    if (opts.useMock) return { items: [], nextCursor: undefined };
+    if (!token) throw new Error("Missing auth token");
+    const params = new URLSearchParams();
+    if (cursor) params.set("cursor", cursor);
+    if (typeof limit === "number" && Number.isFinite(limit)) {
+      params.set("limit", String(Math.max(1, Math.floor(limit))));
+    }
+    const query = params.toString();
+    const response = await requestJson<ApiFeedResponse>(
+      `${baseUrl}/api/mobile/v1/saves${query ? `?${query}` : ""}`,
+      undefined,
+      token
+    );
+    return {
+      items: response.items.map((item) => ({ artwork: mapFeedItemToArtwork(item) })),
+      nextCursor: response.nextCursor
+    };
+  }
+
   async function toggleSave(productGid: string): Promise<ToggleSaveResponse> {
     if (opts.useMock) return { ok: true, saved: true };
     if (!token) throw new Error("Missing auth token");
@@ -325,5 +380,83 @@ export function createMobileApiClient(opts: MobileApiClientOptions) {
     );
   }
 
-  return { getFeed, getArtwork, register, login, getMe, listSaves, toggleSave, postReaction };
+  async function getMyReactions(ids: string[]): Promise<ReactionsMineResponse> {
+    if (opts.useMock) return { ok: true, reactions: {} };
+    if (!token) throw new Error("Missing auth token");
+    if (!Array.isArray(ids) || ids.length === 0) return { ok: true, reactions: {} };
+    const query = `?ids=${encodeURIComponent(ids.join(","))}`;
+    return requestJson<ReactionsMineResponse>(
+      `${baseUrl}/api/mobile/v1/reactions/mine${query}`,
+      undefined,
+      token
+    );
+  }
+
+  async function postEvents(
+    events: Array<{ eventName: string; productGid?: string; metadata?: Record<string, unknown>; ts?: number }>
+  ): Promise<EventsIngestResponse> {
+    if (opts.useMock) return { ok: true, accepted: events.length };
+    return requestJson<EventsIngestResponse>(
+      `${baseUrl}/api/mobile/v1/events`,
+      {
+        method: "POST",
+        body: JSON.stringify({ events })
+      },
+      token
+    );
+  }
+
+  async function getArtist(id: string): Promise<ArtistProfileResponse> {
+    if (opts.useMock) {
+      return {
+        ok: true,
+        artist: {
+          id,
+          name: id.replace(/-/g, " ")
+        },
+        counts: { artworks: 0 }
+      };
+    }
+    return requestJson<ArtistProfileResponse>(
+      `${baseUrl}/api/mobile/v1/artists/${encodeURIComponent(id)}`
+    );
+  }
+
+  async function getArtistArtworks(
+    id: string,
+    cursor?: string,
+    limit?: number
+  ): Promise<ArtistArtworksResponse> {
+    if (opts.useMock) return { ok: true, items: [], nextCursor: undefined };
+    const params = new URLSearchParams();
+    if (cursor) params.set("cursor", cursor);
+    if (typeof limit === "number" && Number.isFinite(limit)) {
+      params.set("limit", String(Math.max(1, Math.floor(limit))));
+    }
+    const query = params.toString();
+    const response = await requestJson<ApiFeedResponse>(
+      `${baseUrl}/api/mobile/v1/artists/${encodeURIComponent(id)}/artworks${query ? `?${query}` : ""}`
+    );
+    return {
+      ok: true,
+      items: response.items.map((item) => ({ artwork: mapFeedItemToArtwork(item) })),
+      nextCursor: response.nextCursor
+    };
+  }
+
+  return {
+    getFeed,
+    getArtwork,
+    register,
+    login,
+    getMe,
+    listSaves,
+    getSaves,
+    toggleSave,
+    postReaction,
+    getMyReactions,
+    postEvents,
+    getArtist,
+    getArtistArtworks
+  };
 }
