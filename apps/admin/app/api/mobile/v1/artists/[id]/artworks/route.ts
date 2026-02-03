@@ -51,48 +51,17 @@ function isMetaobjectId(id: string) {
   return id.startsWith("gid://");
 }
 
-function normalizeArtistName(value: string) {
-  return value
-    .trim()
+function buildArtistNameRegex(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parts = trimmed
     .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "");
-}
-
-function buildArtistKeyStages(): PipelineStage[] {
-  return [
-    {
-      $addFields: {
-        artistKey: {
-          $toLower: {
-            $trim: { input: { $ifNull: ["$artistName", ""] } },
-          },
-        },
-      },
-    },
-    {
-      $addFields: {
-        artistKey: {
-          $regexReplace: {
-            input: "$artistKey",
-            regex: /\s+/g,
-            replacement: "-",
-          },
-        },
-      },
-    },
-    {
-      $addFields: {
-        artistKey: {
-          $regexReplace: {
-            input: "$artistKey",
-            regex: /[^a-z0-9-]+/g,
-            replacement: "",
-          },
-        },
-      },
-    },
-  ];
+    .replace(/[^a-z0-9\s-]/g, "")
+    .split(/[\s-]+/)
+    .filter(Boolean);
+  if (parts.length === 0) return null;
+  const pattern = `^\\s*${parts.join("\\s+")}\\s*$`;
+  return new RegExp(pattern, "i");
 }
 
 function buildCursorMatch(cursor: ArtistCursor) {
@@ -128,7 +97,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     await connectMongo();
 
     const metaobject = isMetaobjectId(rawId);
-    const normalizedId = metaobject ? rawId : normalizeArtistName(rawId);
+    const artistRegex = metaobject ? null : buildArtistNameRegex(rawId);
 
     const pipeline: PipelineStage[] = [
       {
@@ -149,8 +118,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     if (metaobject) {
       pipeline.push({ $match: { artistMetaobjectGid: rawId } });
-    } else {
-      pipeline.push(...buildArtistKeyStages(), { $match: { artistKey: normalizedId } });
+    } else if (artistRegex) {
+      pipeline.push({ $match: { artistName: { $regex: artistRegex } } });
     }
 
     if (cursor) {

@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import type { PipelineStage } from "mongoose";
-
 import { connectMongo } from "@/lib/mongodb";
 import { ArtistModel } from "@/models/Artist";
 import { ShopifyArtworkCacheModel } from "@/models/ShopifyArtworkCache";
@@ -9,48 +7,17 @@ function isMetaobjectId(id: string) {
   return id.startsWith("gid://");
 }
 
-function normalizeArtistName(value: string) {
-  return value
-    .trim()
+function buildArtistNameRegex(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parts = trimmed
     .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "");
-}
-
-function buildArtistKeyStages(): PipelineStage[] {
-  return [
-    {
-      $addFields: {
-        artistKey: {
-          $toLower: {
-            $trim: { input: { $ifNull: ["$artistName", ""] } },
-          },
-        },
-      },
-    },
-    {
-      $addFields: {
-        artistKey: {
-          $regexReplace: {
-            input: "$artistKey",
-            regex: /\s+/g,
-            replacement: "-",
-          },
-        },
-      },
-    },
-    {
-      $addFields: {
-        artistKey: {
-          $regexReplace: {
-            input: "$artistKey",
-            regex: /[^a-z0-9-]+/g,
-            replacement: "",
-          },
-        },
-      },
-    },
-  ];
+    .replace(/[^a-z0-9\s-]/g, "")
+    .split(/[\s-]+/)
+    .filter(Boolean);
+  if (parts.length === 0) return null;
+  const pattern = `^\\s*${parts.join("\\s+")}\\s*$`;
+  return new RegExp(pattern, "i");
 }
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -64,7 +31,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     await connectMongo();
 
     const metaobject = isMetaobjectId(rawId);
-    const normalizedId = metaobject ? rawId : normalizeArtistName(rawId);
+    const artistRegex = metaobject ? null : buildArtistNameRegex(rawId);
 
     let name = rawId.replace(/-/g, " ").trim();
     let avatarUrl: string | undefined;
@@ -75,23 +42,28 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       const artist = await ArtistModel.findOne({ "shopifySync.metaobjectId": rawId }).lean();
       if (artist) {
         name = artist.publicProfile?.displayName || artist.publicProfile?.name || artist.name || name;
-        avatarUrl = artist.publicProfile?.heroImageUrl || artist.publicProfile?.bild_1 || undefined;
-        bio = artist.publicProfile?.bio || undefined;
+        avatarUrl =
+          artist.publicProfile?.heroImageUrl ||
+          artist.publicProfile?.bild_1 ||
+          artist.publicProfile?.bild_2 ||
+          artist.publicProfile?.bild_3 ||
+          undefined;
+        bio = artist.publicProfile?.bio || artist.publicProfile?.text_1 || artist.publicProfile?.einleitung_1 || undefined;
         instagramUrl = artist.publicProfile?.instagram || undefined;
       }
     }
 
     if (!name || name === rawId) {
-      const pipeline: PipelineStage[] = [];
-      if (metaobject) {
-        pipeline.push({ $match: { artistMetaobjectGid: rawId } });
-      } else {
-        pipeline.push(...buildArtistKeyStages(), { $match: { artistKey: normalizedId } });
-      }
-      pipeline.push({ $limit: 1 }, { $project: { artistName: 1 } });
-      const docs = await ShopifyArtworkCacheModel.aggregate(pipeline).exec();
-      if (docs[0]?.artistName) {
-        name = docs[0].artistName;
+      const match = metaobject
+        ? { artistMetaobjectGid: rawId }
+        : artistRegex
+          ? { artistName: { $regex: artistRegex } }
+          : null;
+      if (match) {
+        const doc = await ShopifyArtworkCacheModel.findOne(match).select({ artistName: 1 }).lean();
+        if (doc?.artistName) {
+          name = doc.artistName;
+        }
       }
     }
 
@@ -99,20 +71,16 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     if (metaobject) {
       artworksCount = await ShopifyArtworkCacheModel.countDocuments({ artistMetaobjectGid: rawId });
     } else {
-      const pipeline = [
-        ...buildArtistKeyStages(),
-        { $match: { artistKey: normalizedId } },
-        { $count: "total" },
-      ];
-      const result = await ShopifyArtworkCacheModel.aggregate(pipeline).exec();
-      artworksCount = result[0]?.total ?? 0;
+      if (artistRegex) {
+        artworksCount = await ShopifyArtworkCacheModel.countDocuments({ artistName: { $regex: artistRegex } });
+      }
     }
 
     return NextResponse.json(
       {
         ok: true,
         artist: {
-          id: metaobject ? rawId : normalizedId || rawId,
+          id: metaobject ? rawId : rawId,
           name: name || rawId,
           avatarUrl: avatarUrl || undefined,
           bio: bio || undefined,
