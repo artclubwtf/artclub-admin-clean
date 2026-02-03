@@ -4,12 +4,17 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
   useWindowDimensions
 } from "react-native";
@@ -20,6 +25,7 @@ import {
   DefaultTheme,
   NavigationContainer,
   NavigationProp,
+  LinkingOptions,
   useNavigation
 } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -44,31 +50,67 @@ type FeedResponse = {
   nextCursor?: string;
 };
 
+type FeedCachePayload = {
+  items: FeedItem[];
+  nextCursor?: string;
+  savedAt: number;
+};
+
+type MobileUser = {
+  id: string;
+  email: string;
+  name?: string;
+};
+
+type AuthMode = "login" | "register";
+type ReactionEmoji = "🖤" | "🔥" | "👀" | "😵‍💫";
+
 type AppContextValue = {
   baseUrl: string;
   useMock: boolean;
   setUseMock: (value: boolean) => void;
+  token?: string;
+  user?: MobileUser;
+  authModalVisible: boolean;
+  authMode: AuthMode;
+  authBusy: boolean;
+  authError?: string;
+  showAuth: (mode?: AuthMode) => void;
+  hideAuth: () => void;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, name?: string) => Promise<void>;
   feedItems: FeedItem[];
   refreshFeed: () => void;
   loadMore: () => void;
+  refreshSaved: () => void;
   isLoading: boolean;
   isRefreshing: boolean;
   error?: string;
   savedIds: string[];
   isSaved: (id: string) => boolean;
-  toggleSaved: (id: string) => void;
+  toggleSaved: (id: string) => Promise<void>;
+  reactedByArtwork: Record<string, ReactionEmoji>;
+  openReactionPicker: (artwork: Artwork) => void;
+  closeReactionPicker: () => void;
+  submitReaction: (emoji: ReactionEmoji) => Promise<void>;
+  reactionTarget?: Artwork | null;
   getArtwork: (id: string) => Promise<Artwork | null>;
+  getArtworkForShare: (id: string) => Promise<Artwork | null>;
   cacheArtwork: (artwork: Artwork) => void;
 };
 
 const STORAGE_KEYS = {
   saved: "artclub:saved-artworks",
-  useMock: "artclub:use-mock"
+  useMock: "artclub:use-mock",
+  feedCache: "artclub:feed-cache:v1",
+  token: "artclub:auth-token",
+  user: "artclub:auth-user"
 };
 
 const DEFAULT_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? "";
 const ENV_USE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK;
 const DEFAULT_USE_MOCK = ENV_USE_MOCK ? ENV_USE_MOCK === "true" : !DEFAULT_BASE_URL;
+const WEB_PRODUCT_BASE_URL = "https://www.artclub.wtf/products";
 
 const AppContext = React.createContext<AppContextValue | null>(null);
 
@@ -92,8 +134,23 @@ function useAppContext() {
   return context;
 }
 
+const linking: LinkingOptions<RootStackParamList> = {
+  prefixes: ["artclub://"],
+  config: {
+    screens: {
+      ArtworkDetail: "artwork/:id"
+    }
+  }
+};
+
 function AppProvider({ children }: { children: React.ReactNode }) {
   const [useMock, setUseMock] = useState(DEFAULT_USE_MOCK);
+  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<MobileUser | null>(null);
+  const [authModalVisible, setAuthModalVisible] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState<string | undefined>(undefined);
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
@@ -101,8 +158,12 @@ function AppProvider({ children }: { children: React.ReactNode }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [ready, setReady] = useState(false);
+  const [reactionTarget, setReactionTarget] = useState<Artwork | null>(null);
+  const [reactedByArtwork, setReactedByArtwork] = useState<Record<string, ReactionEmoji>>({});
 
   const artworkCacheRef = useRef<Map<string, Artwork>>(new Map());
+  const feedItemsRef = useRef<FeedItem[]>([]);
+  const savedIdsRef = useRef<string[]>([]);
   const nextCursorRef = useRef<string | undefined>(undefined);
   const loadingRef = useRef(false);
 
@@ -110,9 +171,10 @@ function AppProvider({ children }: { children: React.ReactNode }) {
     () =>
       createMobileApiClient({
         baseUrl: DEFAULT_BASE_URL,
-        useMock
+        useMock,
+        token: token || undefined
       }),
-    [useMock]
+    [useMock, token]
   );
 
   const cacheArtwork = useCallback((artwork: Artwork) => {
@@ -123,9 +185,12 @@ function AppProvider({ children }: { children: React.ReactNode }) {
     let active = true;
     async function loadStored() {
       try {
-        const [storedSaved, storedMock] = await Promise.all([
+        const [storedSaved, storedMock, storedFeed, storedToken, storedUser] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEYS.saved),
-          AsyncStorage.getItem(STORAGE_KEYS.useMock)
+          AsyncStorage.getItem(STORAGE_KEYS.useMock),
+          AsyncStorage.getItem(STORAGE_KEYS.feedCache),
+          AsyncStorage.getItem(STORAGE_KEYS.token),
+          AsyncStorage.getItem(STORAGE_KEYS.user)
         ]);
 
         if (!active) return;
@@ -139,6 +204,31 @@ function AppProvider({ children }: { children: React.ReactNode }) {
 
         if (storedMock !== null) {
           setUseMock(storedMock === "true");
+        }
+
+        if (storedToken) {
+          setToken(storedToken);
+        }
+
+        if (storedUser) {
+          try {
+            const parsed = JSON.parse(storedUser) as MobileUser;
+            if (parsed?.id && parsed?.email) {
+              setUser(parsed);
+            }
+          } catch {
+            // ignore parse errors
+          }
+        }
+
+        if (storedFeed) {
+          const parsed = JSON.parse(storedFeed) as Partial<FeedCachePayload>;
+          if (Array.isArray(parsed.items)) {
+            setFeedItems(parsed.items);
+            setNextCursor(parsed.nextCursor);
+            nextCursorRef.current = parsed.nextCursor;
+            parsed.items.forEach((item) => cacheArtwork(item.artwork));
+          }
         }
       } catch {
         // ignore storage failures
@@ -154,9 +244,35 @@ function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    feedItemsRef.current = feedItems;
+  }, [feedItems]);
+
+  useEffect(() => {
+    savedIdsRef.current = savedIds;
+  }, [savedIds]);
+
+  useEffect(() => {
     if (!ready) return;
     AsyncStorage.setItem(STORAGE_KEYS.saved, JSON.stringify(savedIds)).catch(() => undefined);
   }, [ready, savedIds]);
+
+  useEffect(() => {
+    if (!ready) return;
+    if (token) {
+      AsyncStorage.setItem(STORAGE_KEYS.token, token).catch(() => undefined);
+    } else {
+      AsyncStorage.removeItem(STORAGE_KEYS.token).catch(() => undefined);
+    }
+  }, [ready, token]);
+
+  useEffect(() => {
+    if (!ready) return;
+    if (user) {
+      AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(user)).catch(() => undefined);
+    } else {
+      AsyncStorage.removeItem(STORAGE_KEYS.user).catch(() => undefined);
+    }
+  }, [ready, user]);
 
   useEffect(() => {
     if (!ready) return;
@@ -165,12 +281,160 @@ function AppProvider({ children }: { children: React.ReactNode }) {
 
   const isSaved = useCallback((id: string) => savedIds.includes(id), [savedIds]);
 
-  const toggleSaved = useCallback((id: string) => {
-    setSavedIds((prev) => {
-      if (prev.includes(id)) return prev.filter((item) => item !== id);
-      return [id, ...prev];
-    });
+  const showAuth = useCallback((mode: AuthMode = "login") => {
+    setAuthMode(mode);
+    setAuthError(undefined);
+    setAuthModalVisible(true);
   }, []);
+
+  const hideAuth = useCallback(() => {
+    setAuthModalVisible(false);
+    setAuthError(undefined);
+  }, []);
+
+  const refreshSaved = useCallback(async () => {
+    if (useMock) return;
+    if (!token) return;
+    try {
+      const response = await client.listSaves();
+      if (Array.isArray(response.productGids)) {
+        setSavedIds(response.productGids);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load saved");
+    }
+  }, [client, token, useMock]);
+
+  const login = useCallback(
+    async (email: string, password: string) => {
+      setAuthBusy(true);
+      setAuthError(undefined);
+      try {
+        const result = await client.login({ email, password });
+        setToken(result.token);
+        setUser(result.user);
+        setAuthModalVisible(false);
+        await refreshSaved();
+      } catch (err) {
+        setAuthError(err instanceof Error ? err.message : "Login failed");
+      } finally {
+        setAuthBusy(false);
+      }
+    },
+    [client, refreshSaved]
+  );
+
+  const register = useCallback(
+    async (email: string, password: string, name?: string) => {
+      setAuthBusy(true);
+      setAuthError(undefined);
+      try {
+        const result = await client.register({ email, password, name });
+        setToken(result.token);
+        setUser(result.user);
+        setAuthModalVisible(false);
+        await refreshSaved();
+      } catch (err) {
+        setAuthError(err instanceof Error ? err.message : "Registration failed");
+      } finally {
+        setAuthBusy(false);
+      }
+    },
+    [client, refreshSaved]
+  );
+
+  useEffect(() => {
+    if (!ready) return;
+    if (useMock) return;
+    if (!token) {
+      setUser(null);
+      return;
+    }
+    let active = true;
+    (async () => {
+      try {
+        const response = await client.getMe();
+        if (!active) return;
+        if (response?.user) {
+          setUser(response.user);
+          await refreshSaved();
+        } else {
+          setUser(null);
+          setToken(null);
+        }
+      } catch {
+        if (!active) return;
+        setUser(null);
+        setToken(null);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [client, ready, refreshSaved, token, useMock]);
+
+  const toggleSaved = useCallback(
+    async (id: string) => {
+      if (!useMock && !token) {
+        showAuth("login");
+        return;
+      }
+      const wasSaved = savedIdsRef.current.includes(id);
+      setSavedIds((prev) => {
+        if (wasSaved) return prev.filter((item) => item !== id);
+        return [id, ...prev];
+      });
+
+      if (useMock) return;
+      try {
+        await client.toggleSave(id);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to save");
+        setSavedIds((prev) => {
+          if (wasSaved) return [id, ...prev];
+          return prev.filter((item) => item !== id);
+        });
+      }
+    },
+    [client, showAuth, token, useMock]
+  );
+
+  const openReactionPicker = useCallback(
+    (artwork: Artwork) => {
+      if (!useMock && !token) {
+        showAuth("login");
+        return;
+      }
+      setReactionTarget(artwork);
+    },
+    [showAuth, token, useMock]
+  );
+
+  const closeReactionPicker = useCallback(() => {
+    setReactionTarget(null);
+  }, []);
+
+  const submitReaction = useCallback(
+    async (emoji: ReactionEmoji) => {
+      if (!reactionTarget) return;
+      const artworkId = reactionTarget.id;
+      setReactionTarget(null);
+      setReactedByArtwork((prev) => ({ ...prev, [artworkId]: emoji }));
+
+      if (useMock) return;
+      try {
+        await client.postReaction(artworkId, emoji);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to react");
+        setReactedByArtwork((prev) => {
+          const next = { ...prev };
+          delete next[artworkId];
+          return next;
+        });
+      }
+    },
+    [client, reactionTarget, useMock]
+  );
 
   const getArtwork = useCallback(
     async (id: string) => {
@@ -186,6 +450,24 @@ function AppProvider({ children }: { children: React.ReactNode }) {
         return artwork;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load artwork");
+        return null;
+      }
+    },
+    [cacheArtwork, client, useMock]
+  );
+
+  const getArtworkForShare = useCallback(
+    async (id: string) => {
+      const cached = artworkCacheRef.current.get(id);
+      if (cached) return cached;
+      if (!useMock && !DEFAULT_BASE_URL) {
+        return null;
+      }
+      try {
+        const artwork = await client.getArtwork(id);
+        cacheArtwork(artwork);
+        return artwork;
+      } catch {
         return null;
       }
     },
@@ -210,14 +492,40 @@ function AppProvider({ children }: { children: React.ReactNode }) {
       try {
         const cursor = mode === "refresh" ? undefined : currentCursor;
         const response = (await client.getFeed(cursor)) as FeedResponse;
-        setFeedItems((prev) =>
-          mode === "refresh" ? response.items : [...prev, ...response.items]
-        );
+        let mergedItems: FeedItem[] = [];
+        setFeedItems((prev) => {
+          mergedItems = mode === "refresh" ? response.items : [...prev, ...response.items];
+          return mergedItems;
+        });
         setNextCursor(response.nextCursor);
         nextCursorRef.current = response.nextCursor;
         response.items.forEach((item) => cacheArtwork(item.artwork));
+        if (mergedItems.length) {
+          const cachePayload: FeedCachePayload = {
+            items: mergedItems,
+            nextCursor: response.nextCursor,
+            savedAt: Date.now()
+          };
+          AsyncStorage.setItem(STORAGE_KEYS.feedCache, JSON.stringify(cachePayload)).catch(() => undefined);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load feed");
+        if (mode === "refresh" && feedItemsRef.current.length === 0) {
+          const cached = await AsyncStorage.getItem(STORAGE_KEYS.feedCache).catch(() => null);
+          if (cached) {
+            try {
+              const parsed = JSON.parse(cached) as Partial<FeedCachePayload>;
+              if (Array.isArray(parsed.items)) {
+                setFeedItems(parsed.items);
+                setNextCursor(parsed.nextCursor);
+                nextCursorRef.current = parsed.nextCursor;
+                parsed.items.forEach((item) => cacheArtwork(item.artwork));
+              }
+            } catch {
+              // ignore cache parse errors
+            }
+          }
+        }
       } finally {
         loadingRef.current = false;
         setIsLoading(false);
@@ -237,7 +545,6 @@ function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!ready) return;
-    setFeedItems([]);
     setNextCursor(undefined);
     nextCursorRef.current = undefined;
     void loadFeed("refresh");
@@ -248,35 +555,91 @@ function AppProvider({ children }: { children: React.ReactNode }) {
       baseUrl: DEFAULT_BASE_URL,
       useMock,
       setUseMock,
+      token: token || undefined,
+      user: user || undefined,
+      authModalVisible,
+      authMode,
+      authBusy,
+      authError,
+      showAuth,
+      hideAuth,
+      login,
+      register,
       feedItems,
       refreshFeed,
       loadMore,
+      refreshSaved,
       isLoading,
       isRefreshing,
       error,
       savedIds,
       isSaved,
       toggleSaved,
+      reactedByArtwork,
+      openReactionPicker,
+      closeReactionPicker,
+      submitReaction,
+      reactionTarget,
       getArtwork,
+      getArtworkForShare,
       cacheArtwork
     }),
     [
       useMock,
+      token,
+      user,
+      authModalVisible,
+      authMode,
+      authBusy,
+      authError,
+      showAuth,
+      hideAuth,
+      login,
+      register,
       feedItems,
       refreshFeed,
       loadMore,
+      refreshSaved,
       isLoading,
       isRefreshing,
       error,
       savedIds,
       isSaved,
       toggleSaved,
+      reactedByArtwork,
+      openReactionPicker,
+      closeReactionPicker,
+      submitReaction,
+      reactionTarget,
       getArtwork,
+      getArtworkForShare,
       cacheArtwork
     ]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+}
+
+function getFeedMediaSources(artwork: Artwork) {
+  const media = Array.isArray(artwork.media) ? artwork.media : [];
+  const placeholder = media[0]?.url;
+  const main = media[1]?.url ?? media[0]?.url;
+  return { placeholder, main };
+}
+
+function buildShareLinks(artwork: Artwork) {
+  const deepLink = `artclub://artwork/${encodeURIComponent(artwork.id)}`;
+  const handle = artwork.handle ? artwork.handle.trim() : "";
+  const webUrl = handle ? `${WEB_PRODUCT_BASE_URL}/${encodeURIComponent(handle)}` : undefined;
+  return { deepLink, webUrl };
+}
+
+function buildShareMessage(artwork: Artwork, deepLink: string, webUrl?: string) {
+  const title = artwork.title || "Artwork";
+  const byline = artwork.artistName ? ` — ${artwork.artistName}` : "";
+  const parts = [`${title}${byline}`, deepLink];
+  if (webUrl) parts.push(webUrl);
+  return { title, message: parts.join("\n") };
 }
 
 function FeedScreen() {
@@ -288,22 +651,34 @@ function FeedScreen() {
     refreshFeed,
     loadMore,
     toggleSaved,
-    isSaved
+    isSaved,
+    getArtworkForShare,
+    openReactionPicker,
+    reactedByArtwork
   } = useAppContext();
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [listHeight, setListHeight] = useState(height);
-  const [reactedIds, setReactedIds] = useState<Record<string, boolean>>({});
 
-  const toggleReacted = useCallback((id: string) => {
-    setReactedIds((prev) => ({ ...prev, [id]: !prev[id] }));
-  }, []);
+  const handleShare = useCallback(
+    async (artwork: Artwork) => {
+      const resolved = await getArtworkForShare(artwork.id);
+      const shareTarget = resolved || artwork;
+      const { deepLink, webUrl } = buildShareLinks(shareTarget);
+      const payload = buildShareMessage(shareTarget, deepLink, webUrl);
+      await Share.share({ title: payload.title, message: payload.message, url: deepLink });
+    },
+    [getArtworkForShare]
+  );
 
   const prefetchAround = useCallback(
     (index: number) => {
-      for (let offset = 1; offset <= 2; offset += 1) {
-        const url = feedItems[index + offset]?.artwork.media[0]?.url;
+      for (let offset = 1; offset <= 5; offset += 1) {
+        const artwork = feedItems[index + offset]?.artwork;
+        if (!artwork) continue;
+        const { main } = getFeedMediaSources(artwork);
+        const url = main;
         if (url) {
           void Image.prefetch(url);
         }
@@ -323,10 +698,10 @@ function FeedScreen() {
   const renderItem = useCallback(
     ({ item }: { item: FeedItem }) => {
       const artwork = item.artwork;
-      const imageUrl =
-        artwork.media[0]?.url || "https://picsum.photos/seed/placeholder/1200/1600";
+      const { main, placeholder } = getFeedMediaSources(artwork);
+      const imageUrl = main || "https://picsum.photos/seed/placeholder/1200/1600";
       const saved = isSaved(artwork.id);
-      const reacted = Boolean(reactedIds[artwork.id]);
+      const reactedEmoji = reactedByArtwork[artwork.id];
 
       return (
         <Pressable
@@ -335,10 +710,11 @@ function FeedScreen() {
         >
           <Image
             source={{ uri: imageUrl }}
+            placeholder={placeholder ? { uri: placeholder } : undefined}
             style={styles.feedImage}
             contentFit="cover"
             transition={180}
-            cachePolicy="memory-disk"
+            cachePolicy="disk"
           />
           <View style={styles.feedOverlay} />
           <View
@@ -357,7 +733,7 @@ function FeedScreen() {
               <Pressable
                 onPress={(event) => {
                   event.stopPropagation?.();
-                  toggleSaved(artwork.id);
+                  void toggleSaved(artwork.id);
                 }}
                 style={[styles.actionButton, saved && styles.actionButtonActive]}
               >
@@ -368,20 +744,39 @@ function FeedScreen() {
               <Pressable
                 onPress={(event) => {
                   event.stopPropagation?.();
-                  toggleReacted(artwork.id);
+                  openReactionPicker(artwork);
                 }}
-                style={[styles.actionButton, reacted && styles.actionButtonActive]}
+                style={[styles.actionButton, reactedEmoji && styles.actionButtonActive]}
               >
-                <Text style={[styles.actionText, reacted && styles.actionTextActive]}>
-                  {reacted ? "Reacted" : "React"}
+                <Text style={[styles.actionText, reactedEmoji && styles.actionTextActive]}>
+                  {reactedEmoji ? `${reactedEmoji} Reacted` : "React"}
                 </Text>
+              </Pressable>
+              <Pressable
+                onPress={(event) => {
+                  event.stopPropagation?.();
+                  void handleShare(artwork);
+                }}
+                style={styles.actionButton}
+              >
+                <Text style={styles.actionText}>Share</Text>
               </Pressable>
             </View>
           </View>
         </Pressable>
       );
     },
-    [insets.bottom, insets.top, isSaved, listHeight, navigation, reactedIds, toggleSaved, toggleReacted]
+    [
+      handleShare,
+      insets.bottom,
+      insets.top,
+      isSaved,
+      listHeight,
+      navigation,
+      openReactionPicker,
+      reactedByArtwork,
+      toggleSaved
+    ]
   );
 
   if (error && feedItems.length === 0) {
@@ -428,12 +823,18 @@ function ArtworkDetailScreen({
   route: { params: { id: string } };
 }) {
   const { id } = route.params;
-  const { getArtwork, toggleSaved, isSaved } = useAppContext();
+  const { getArtwork, toggleSaved, isSaved, openReactionPicker, reactedByArtwork } = useAppContext();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [artwork, setArtwork] = useState<Artwork | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>(undefined);
+  const handleShare = useCallback(async () => {
+    if (!artwork) return;
+    const { deepLink, webUrl } = buildShareLinks(artwork);
+    const payload = buildShareMessage(artwork, deepLink, webUrl);
+    await Share.share({ title: payload.title, message: payload.message, url: deepLink });
+  }, [artwork]);
 
   useEffect(() => {
     let active = true;
@@ -475,16 +876,24 @@ function ArtworkDetailScreen({
   }
 
   const saved = isSaved(artwork.id);
-  const media = artwork.media.length ? artwork.media : [];
+  const reactedEmoji = reactedByArtwork[artwork.id];
+  const media = artwork.media.length ? [...artwork.media] : [];
+  media.sort((a, b) => (b.width ?? 0) - (a.width ?? 0));
+  const seen = new Set<string>();
+  const galleryMedia = media.filter((item) => {
+    if (!item.url || seen.has(item.url)) return false;
+    seen.add(item.url);
+    return true;
+  });
 
   return (
     <ScrollView
       style={styles.detailContainer}
       contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
     >
-      {media.length > 0 ? (
+      {galleryMedia.length > 0 ? (
         <FlatList
-          data={media}
+          data={galleryMedia}
           keyExtractor={(item, index) => `${artwork.id}-${index}`}
           horizontal
           pagingEnabled
@@ -495,7 +904,7 @@ function ArtworkDetailScreen({
               style={{ width, height: Math.min(width * 1.2, 520) }}
               contentFit="cover"
               transition={180}
-              cachePolicy="memory-disk"
+              cachePolicy="disk"
             />
           )}
         />
@@ -527,14 +936,24 @@ function ArtworkDetailScreen({
           <Text style={styles.detailDescription}>{artwork.shortDescription}</Text>
         ) : null}
 
-        <Pressable
-          onPress={() => toggleSaved(artwork.id)}
-          style={[styles.primaryButton, saved && styles.primaryButtonActive]}
-        >
-          <Text style={[styles.primaryButtonText, saved && styles.primaryButtonTextActive]}>
-            {saved ? "Saved" : "Save"}
-          </Text>
-        </Pressable>
+        <View style={styles.detailActions}>
+          <Pressable
+            onPress={() => void toggleSaved(artwork.id)}
+            style={[styles.primaryButton, saved && styles.primaryButtonActive]}
+          >
+            <Text style={[styles.primaryButtonText, saved && styles.primaryButtonTextActive]}>
+              {saved ? "Saved" : "Save"}
+            </Text>
+          </Pressable>
+          <Pressable onPress={() => openReactionPicker(artwork)} style={styles.secondaryButton}>
+            <Text style={styles.secondaryButtonText}>
+              {reactedEmoji ? `${reactedEmoji} Reacted` : "React"}
+            </Text>
+          </Pressable>
+          <Pressable onPress={handleShare} style={styles.secondaryButton}>
+            <Text style={styles.secondaryButtonText}>Share</Text>
+          </Pressable>
+        </View>
       </View>
     </ScrollView>
   );
@@ -542,9 +961,13 @@ function ArtworkDetailScreen({
 
 function SavedScreen() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
-  const { savedIds, getArtwork, toggleSaved } = useAppContext();
+  const { savedIds, getArtwork, toggleSaved, refreshSaved, token, showAuth, useMock } = useAppContext();
   const [savedArtworks, setSavedArtworks] = useState<Artwork[]>([]);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    void refreshSaved();
+  }, [refreshSaved]);
 
   useEffect(() => {
     let active = true;
@@ -565,6 +988,18 @@ function SavedScreen() {
       active = false;
     };
   }, [getArtwork, savedIds]);
+
+  if (!useMock && !token && savedIds.length === 0) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.emptyTitle}>Sign in to save artworks</Text>
+        <Text style={styles.emptyText}>Create an account to keep your saved list across devices.</Text>
+        <Pressable onPress={() => showAuth("login")} style={styles.retryButton}>
+          <Text style={styles.retryButtonText}>Sign In</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   if (savedIds.length === 0) {
     return (
@@ -592,7 +1027,7 @@ function SavedScreen() {
               style={styles.savedImage}
               contentFit="cover"
               transition={160}
-              cachePolicy="memory-disk"
+              cachePolicy="disk"
             />
             <View style={styles.savedInfo}>
               <Text style={styles.savedTitle}>{item.title}</Text>
@@ -603,7 +1038,7 @@ function SavedScreen() {
             <Pressable
               onPress={(event) => {
                 event.stopPropagation?.();
-                toggleSaved(item.id);
+                void toggleSaved(item.id);
               }}
               style={styles.savedRemoveButton}
             >
@@ -617,9 +1052,27 @@ function SavedScreen() {
 }
 
 function ProfileScreen() {
-  const { baseUrl, useMock, setUseMock } = useAppContext();
+  const { baseUrl, useMock, setUseMock, user, showAuth } = useAppContext();
   return (
     <View style={styles.profileContainer}>
+      <View style={styles.profileCard}>
+        <Text style={styles.profileLabel}>Account</Text>
+        {user ? (
+          <Text style={styles.profileValue}>{user.name ? `${user.name} · ${user.email}` : user.email}</Text>
+        ) : (
+          <>
+            <Text style={styles.profileValue}>Not signed in</Text>
+            <View style={styles.profileActions}>
+              <Pressable onPress={() => showAuth("login")} style={styles.secondaryButton}>
+                <Text style={styles.secondaryButtonText}>Login</Text>
+              </Pressable>
+              <Pressable onPress={() => showAuth("register")} style={styles.secondaryButton}>
+                <Text style={styles.secondaryButtonText}>Register</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
+      </View>
       <View style={styles.profileCard}>
         <Text style={styles.profileLabel}>API Base URL</Text>
         <Text style={styles.profileValue}>{baseUrl || "Not set"}</Text>
@@ -635,6 +1088,123 @@ function ProfileScreen() {
         Toggle mock mode to reload the feed with local placeholder data.
       </Text>
     </View>
+  );
+}
+
+function AuthModal() {
+  const {
+    authModalVisible,
+    authMode,
+    authBusy,
+    authError,
+    hideAuth,
+    login,
+    register,
+    showAuth
+  } = useAppContext();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+
+  useEffect(() => {
+    if (authModalVisible) return;
+    setEmail("");
+    setPassword("");
+    setName("");
+  }, [authModalVisible, authMode]);
+
+  const isRegister = authMode === "register";
+
+  const handleSubmit = useCallback(() => {
+    if (authBusy) return;
+    if (isRegister) {
+      void register(email, password, name);
+    } else {
+      void login(email, password);
+    }
+  }, [authBusy, email, isRegister, login, name, password, register]);
+
+  return (
+    <Modal visible={authModalVisible} animationType="slide" transparent onRequestClose={hideAuth}>
+      <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalCard}
+        >
+          <Text style={styles.modalTitle}>{isRegister ? "Create account" : "Welcome back"}</Text>
+          <TextInput
+            placeholder="Email"
+            autoCapitalize="none"
+            keyboardType="email-address"
+            value={email}
+            onChangeText={setEmail}
+            style={styles.modalInput}
+          />
+          {isRegister ? (
+            <TextInput
+              placeholder="Name (optional)"
+              value={name}
+              onChangeText={setName}
+              style={styles.modalInput}
+            />
+          ) : null}
+          <TextInput
+            placeholder="Password"
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+            style={styles.modalInput}
+          />
+          {authError ? <Text style={styles.modalError}>{authError}</Text> : null}
+          <Pressable onPress={handleSubmit} style={styles.primaryButton}>
+            <Text style={styles.primaryButtonText}>{authBusy ? "Please wait..." : "Continue"}</Text>
+          </Pressable>
+          <Pressable onPress={hideAuth} style={styles.modalSecondaryButton}>
+            <Text style={styles.modalSecondaryText}>Cancel</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => showAuth(isRegister ? "login" : "register")}
+            style={styles.modalSwitch}
+          >
+            <Text style={styles.modalSwitchText}>
+              {isRegister ? "Have an account? Login" : "New here? Create account"}
+            </Text>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+}
+
+const reactionEmojis: ReactionEmoji[] = ["🖤", "🔥", "👀", "😵‍💫"];
+
+function ReactionPicker() {
+  const { reactionTarget, closeReactionPicker, submitReaction } = useAppContext();
+
+  if (!reactionTarget) return null;
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={closeReactionPicker}>
+      <Pressable style={styles.modalOverlay} onPress={closeReactionPicker}>
+        <View style={styles.reactionPickerCard}>
+          <Text style={styles.reactionPickerTitle}>React to {reactionTarget.title}</Text>
+          <View style={styles.reactionRow}>
+            {reactionEmojis.map((emoji) => (
+              <Pressable
+                key={emoji}
+                onPress={(event) => {
+                  event.stopPropagation?.();
+                  void submitReaction(emoji);
+                }}
+                style={styles.reactionEmojiButton}
+              >
+                <Text style={styles.reactionEmoji}>{emoji}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -658,7 +1228,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AppProvider>
-        <NavigationContainer theme={NAV_THEME}>
+        <NavigationContainer theme={NAV_THEME} linking={linking}>
           <StatusBar style="dark" />
           <Stack.Navigator
             screenOptions={{
@@ -671,6 +1241,8 @@ export default function App() {
             <Stack.Screen name="ArtworkDetail" component={ArtworkDetailScreen} options={{ title: "" }} />
           </Stack.Navigator>
         </NavigationContainer>
+        <AuthModal />
+        <ReactionPicker />
       </AppProvider>
     </SafeAreaProvider>
   );
@@ -803,6 +1375,11 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: "#111111"
   },
+  detailActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12
+  },
   primaryButtonActive: {
     backgroundColor: "#F1EDE6"
   },
@@ -812,6 +1389,19 @@ const styles = StyleSheet.create({
   },
   primaryButtonTextActive: {
     color: "#111111"
+  },
+  secondaryButton: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.12)",
+    backgroundColor: "rgba(255,255,255,0.7)"
+  },
+  secondaryButtonText: {
+    color: "#111111",
+    fontWeight: "600"
   },
   savedContainer: {
     flex: 1,
@@ -906,10 +1496,93 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between"
   },
+  profileActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 12
+  },
   profileHint: {
     color: "#6B6B6B",
     fontSize: 13,
     lineHeight: 18
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 20,
+    gap: 12
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#111111"
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.12)",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: "#111111",
+    backgroundColor: "#F9F7F4"
+  },
+  modalError: {
+    color: "#B42318",
+    fontSize: 13
+  },
+  modalSecondaryButton: {
+    alignSelf: "flex-start",
+    paddingVertical: 6,
+    paddingHorizontal: 6
+  },
+  modalSecondaryText: {
+    color: "#6B6B6B",
+    fontSize: 14
+  },
+  modalSwitch: {
+    alignSelf: "flex-start",
+    marginTop: 4
+  },
+  modalSwitchText: {
+    color: "#1C1C1C",
+    fontWeight: "600"
+  },
+  reactionPickerCard: {
+    width: "100%",
+    maxWidth: 320,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 18,
+    gap: 16
+  },
+  reactionPickerTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111111",
+    textAlign: "center"
+  },
+  reactionRow: {
+    flexDirection: "row",
+    justifyContent: "space-around"
+  },
+  reactionEmojiButton: {
+    padding: 8,
+    borderRadius: 999,
+    backgroundColor: "#F4F1ED"
+  },
+  reactionEmoji: {
+    fontSize: 24
   },
   tabBar: {
     backgroundColor: "#F7F5F2",

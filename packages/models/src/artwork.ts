@@ -10,6 +10,7 @@ export type ArtworkMedia = {
 export type Artwork = {
   id: string;
   title: string;
+  handle?: string;
   artistName?: string;
   media: ArtworkMedia[];
   widthCm?: number;
