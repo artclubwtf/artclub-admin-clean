@@ -111,6 +111,11 @@ export default function ArtistOverviewPage() {
               <div className="artist-section-sub">Upload files and keep assets organized.</div>
               <div className="artist-placeholder">Coming next: uploads & previews.</div>
             </Link>
+            <Link href="/artist/profile" className="artist-card">
+              <div className="artist-section-title">Your profile</div>
+              <div className="artist-section-sub">Update your public profile details.</div>
+              <div className="artist-placeholder">Submit changes for review.</div>
+            </Link>
             <Link href="/artist/artworks" className="artist-card">
               <div className="artist-section-title">Your artworks</div>
               <div className="artist-section-sub">Prepare drafts and view statuses.</div>

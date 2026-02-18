@@ -13,6 +13,7 @@ type NavItem = {
 
 const mainNavItems: NavItem[] = [
   { label: "Overview", href: "/artist", icon: "🏠" },
+  { label: "Profile", href: "/artist/profile", icon: "👤" },
   { label: "Media", href: "/artist/media", icon: "🖼️" },
   { label: "Artworks", href: "/artist/artworks", icon: "🎨" },
   { label: "Contracts", href: "/artist/contracts", icon: "📄" },

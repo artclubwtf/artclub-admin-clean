@@ -142,6 +142,53 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       shopifyProductId: created.productId,
       shopifyAdminUrl: created.adminUrl || undefined,
     };
+  } else if (action === "approve" && request.type === "profile_update") {
+    if (!request.artistId) {
+      return NextResponse.json({ error: "Request missing artist" }, { status: 400 });
+    }
+
+    const payload = request.payload as
+      | {
+          publicProfile?: {
+            name?: string | null;
+            displayName?: string | null;
+            quote?: string | null;
+            einleitung_1?: string | null;
+            text_1?: string | null;
+            instagram?: string | null;
+            website?: string | null;
+            location?: string | null;
+          };
+        }
+      | undefined;
+
+    const publicProfile = payload?.publicProfile || {};
+    const update: Record<string, unknown> = {};
+
+    if ("name" in publicProfile) {
+      update["publicProfile.name"] = publicProfile.name ?? null;
+      update["publicProfile.displayName"] = publicProfile.displayName ?? publicProfile.name ?? null;
+    }
+    if ("displayName" in publicProfile && !("name" in publicProfile)) {
+      update["publicProfile.displayName"] = publicProfile.displayName ?? null;
+    }
+    if ("quote" in publicProfile) update["publicProfile.quote"] = publicProfile.quote ?? null;
+    if ("einleitung_1" in publicProfile) update["publicProfile.einleitung_1"] = publicProfile.einleitung_1 ?? null;
+    if ("text_1" in publicProfile) {
+      update["publicProfile.text_1"] = publicProfile.text_1 ?? null;
+      update["publicProfile.bio"] = publicProfile.text_1 ?? null;
+    }
+    if ("instagram" in publicProfile) update["publicProfile.instagram"] = publicProfile.instagram ?? null;
+    if ("website" in publicProfile) update["publicProfile.website"] = publicProfile.website ?? null;
+    if ("location" in publicProfile) update["publicProfile.location"] = publicProfile.location ?? null;
+
+    if (Object.keys(update).length === 0) {
+      return NextResponse.json({ error: "Profile update has no changes" }, { status: 400 });
+    }
+
+    await ArtistModel.findByIdAndUpdate(request.artistId, { $set: update }, { new: false });
+    nextStatus = "applied";
+    request.appliedAt = new Date();
   }
 
   request.status = nextStatus;

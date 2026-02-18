@@ -28,6 +28,37 @@ const artworkPayloadSchema = z
     path: ["originalPriceEur"],
   });
 
+const textField = z
+  .preprocess((value) => {
+    if (value === null) return null;
+    if (value === undefined) return undefined;
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    return trimmed === "" ? null : trimmed;
+  }, z.string().nullable().optional());
+
+const profilePayloadSchema = z
+  .object({
+    publicProfile: z
+      .object({
+        name: textField,
+        displayName: textField,
+        quote: textField,
+        einleitung_1: textField,
+        text_1: textField,
+        instagram: textField,
+        website: textField,
+        location: textField,
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .refine((val) => (val.publicProfile ? Object.keys(val.publicProfile).length > 0 : false), {
+    message: "At least one profile field is required",
+    path: ["publicProfile"],
+  });
+
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== "artist" || !session.user.artistId) {
@@ -39,7 +70,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const reqType = body?.type === "artwork_create" ? "artwork_create" : "payout_update";
+  const rawType = typeof body?.type === "string" ? body.type : undefined;
+  const reqType = rawType === "artwork_create" ? "artwork_create" : rawType === "profile_update" ? "profile_update" : "payout_update";
 
   await connectMongo();
 
@@ -84,6 +116,56 @@ export async function POST(req: Request) {
     const created = await RequestModel.create({
       artistId: session.user.artistId,
       type: "artwork_create",
+      status: "submitted",
+      payload,
+      createdByUserId: session.user.id,
+    });
+
+    return NextResponse.json(
+      {
+        request: {
+          id: created._id.toString(),
+          type: created.type,
+          status: created.status,
+          payload: created.payload,
+          createdAt: created.createdAt,
+        },
+      },
+      { status: 201 },
+    );
+  }
+
+  if (reqType === "profile_update") {
+    const rawPayload = body?.payload;
+    if (!rawPayload || typeof rawPayload !== "object") {
+      return NextResponse.json({ error: "Payload is required" }, { status: 400 });
+    }
+
+    const parsed = profilePayloadSchema.safeParse(rawPayload);
+    if (!parsed.success) {
+      const message = parsed.error.issues[0]?.message || "Invalid payload";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    const { publicProfile } = parsed.data;
+    const payload = {
+      publicProfile: publicProfile
+        ? {
+            name: publicProfile.name ?? null,
+            displayName: publicProfile.displayName ?? null,
+            quote: publicProfile.quote ?? null,
+            einleitung_1: publicProfile.einleitung_1 ?? null,
+            text_1: publicProfile.text_1 ?? null,
+            instagram: publicProfile.instagram ?? null,
+            website: publicProfile.website ?? null,
+            location: publicProfile.location ?? null,
+          }
+        : {},
+    };
+
+    const created = await RequestModel.create({
+      artistId: session.user.artistId,
+      type: "profile_update",
       status: "submitted",
       payload,
       createdByUserId: session.user.id,
