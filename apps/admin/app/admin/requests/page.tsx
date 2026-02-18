@@ -93,6 +93,19 @@ export default function AdminRequestsPage() {
 
   const formatDate = (value?: string) => (value ? new Date(value).toLocaleString() : "—");
 
+  const formatValue = (value: unknown) => {
+    if (value === null || value === undefined) return "—";
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      return String(value);
+    }
+    if (Array.isArray(value)) return value.length ? value.join(", ") : "—";
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "—";
+    }
+  };
+
   const renderPayload = (request: RequestItem) => {
     if (request.type === "profile_update") {
       const profile = request.payload?.publicProfile || {};
@@ -103,7 +116,7 @@ export default function AdminRequestsPage() {
           {entries.map(([key, value]) => (
             <div key={key} className="rounded bg-slate-50 px-3 py-2">
               <div className="text-[11px] uppercase tracking-wide text-slate-500">{key}</div>
-              <div className="font-medium text-slate-900">{value ?? "—"}</div>
+              <div className="font-medium text-slate-900">{formatValue(value)}</div>
             </div>
           ))}
         </div>
@@ -119,7 +132,7 @@ export default function AdminRequestsPage() {
           {entries.map(([key, value]) => (
             <div key={key} className="rounded bg-slate-50 px-3 py-2">
               <div className="text-[11px] uppercase tracking-wide text-slate-500">{key}</div>
-              <div className="font-medium text-slate-900">{value ?? "—"}</div>
+              <div className="font-medium text-slate-900">{formatValue(value)}</div>
             </div>
           ))}
         </div>
