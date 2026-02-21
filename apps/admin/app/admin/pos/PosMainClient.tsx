@@ -353,18 +353,18 @@ export default function PosMainClient() {
                     key={item.id}
                     type="button"
                     onClick={() => onAddToCart(item)}
-                    className={`pos-card relative overflow-hidden rounded border border-slate-200 bg-white text-left transition hover:-translate-y-[1px] hover:shadow-sm ${
+                    className={`pos-card relative flex w-full flex-col overflow-hidden rounded border border-slate-200 bg-white text-left transition hover:-translate-y-[1px] hover:shadow-sm ${
                       justAddedId === item.id ? "pos-card-added" : ""
                     }`}
                   >
-                    <div className="relative aspect-[4/3] w-full bg-slate-100">
+                    <div className="relative w-full overflow-hidden bg-slate-100" style={{ height: "180px" }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={item.imageUrl || "https://placehold.co/640x480?text=No+Image"}
                         alt={item.title}
                         loading="lazy"
                         decoding="async"
-                        className="h-full w-full object-cover"
+                        className="absolute inset-0 h-full w-full object-cover"
                         width={640}
                         height={480}
                       />
