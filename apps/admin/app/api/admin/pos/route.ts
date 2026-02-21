@@ -13,6 +13,8 @@ export async function GET(req: Request) {
         { key: "settings", path: "/api/admin/pos/settings" },
         { key: "transactions", path: "/api/admin/pos/transactions" },
         { key: "catalog", path: "/api/admin/pos/catalog" },
+        { key: "checkoutStart", path: "/api/admin/pos/checkout/start" },
+        { key: "checkoutStatus", path: "/api/admin/pos/checkout/status" },
       ],
     },
     { status: 200 },

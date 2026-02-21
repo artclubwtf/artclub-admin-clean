@@ -1,0 +1,267 @@
+import { getServerSession } from "next-auth";
+import { NextResponse } from "next/server";
+import { Types } from "mongoose";
+import { z } from "zod";
+
+import { authOptions } from "@/lib/auth";
+import { connectMongo } from "@/lib/mongodb";
+import { tseFinish, tseStart } from "@/lib/pos/tse";
+import { getTerminalPaymentProvider, mapProviderStatusToTransactionStatus } from "@/lib/pos/terminalPayments";
+import { requireAdmin } from "@/lib/requireAdmin";
+import { POSAuditLogModel } from "@/models/PosAuditLog";
+import { PosItemModel } from "@/models/PosItem";
+import { PosLocationModel } from "@/models/PosLocation";
+import { PosTerminalModel } from "@/models/PosTerminal";
+import { POSTransactionModel, posBuyerTypes } from "@/models/PosTransaction";
+
+const cartLineSchema = z.object({
+  itemId: z.string().trim().min(1, "itemId is required"),
+  qty: z.coerce.number().int().min(1, "qty must be at least 1"),
+});
+
+const buyerSchema = z.object({
+  type: z.enum(posBuyerTypes),
+  name: z.string().trim().min(1, "buyer.name is required"),
+  company: z.string().trim().optional(),
+  email: z.string().trim().email().optional(),
+  phone: z.string().trim().optional(),
+  vatId: z.string().trim().optional(),
+  billingAddress: z.string().trim().optional(),
+  shippingAddress: z.string().trim().optional(),
+});
+
+const startCheckoutSchema = z.object({
+  locationId: z.string().trim().min(1, "locationId is required"),
+  terminalId: z.string().trim().min(1, "terminalId is required"),
+  cart: z.array(cartLineSchema).min(1, "cart must contain at least one line"),
+  buyer: buyerSchema,
+});
+
+type PosItemForCheckout = {
+  _id: Types.ObjectId;
+  title: string;
+  priceGrossCents: number;
+  vatRate: 0 | 7 | 19;
+  currency: "EUR";
+  isActive: boolean;
+};
+
+function ensureObjectId(value: string, field: string) {
+  if (!Types.ObjectId.isValid(value)) {
+    throw new Error(`invalid_${field}`);
+  }
+  return new Types.ObjectId(value);
+}
+
+function toOptionalTrimmed(value?: string) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function computeNetCents(grossCents: number, vatRate: 0 | 7 | 19) {
+  if (vatRate === 0) return grossCents;
+  return Math.round((grossCents * 100) / (100 + vatRate));
+}
+
+function buildTotals(
+  lines: Array<{
+    qty: number;
+    unitGrossCents: number;
+    vatRate: 0 | 7 | 19;
+  }>,
+) {
+  let grossCents = 0;
+  let netCents = 0;
+  let vatCents = 0;
+
+  for (const line of lines) {
+    const lineGross = line.qty * line.unitGrossCents;
+    const lineNet = computeNetCents(lineGross, line.vatRate);
+    grossCents += lineGross;
+    netCents += lineNet;
+    vatCents += lineGross - lineNet;
+  }
+
+  return { grossCents, netCents, vatCents };
+}
+
+export async function POST(req: Request) {
+  const unauthorized = await requireAdmin(req);
+  if (unauthorized) return unauthorized;
+
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id || !Types.ObjectId.isValid(session.user.id)) {
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  }
+
+  const body = (await req.json().catch(() => null)) as unknown;
+  const parsed = startCheckoutSchema.safeParse(body);
+  if (!parsed.success) {
+    const first = parsed.error.issues?.[0];
+    return NextResponse.json({ ok: false, error: first?.message || "invalid_payload" }, { status: 400 });
+  }
+
+  let locationObjectId: Types.ObjectId;
+  let terminalObjectId: Types.ObjectId;
+  let createdTxId: Types.ObjectId | null = null;
+
+  try {
+    locationObjectId = ensureObjectId(parsed.data.locationId, "locationId");
+    terminalObjectId = ensureObjectId(parsed.data.terminalId, "terminalId");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "invalid_payload";
+    return NextResponse.json({ ok: false, error: message }, { status: 400 });
+  }
+
+  try {
+    await connectMongo();
+
+    const [location, terminal] = await Promise.all([
+      PosLocationModel.findById(locationObjectId).lean(),
+      PosTerminalModel.findById(terminalObjectId).lean(),
+    ]);
+
+    if (!location) {
+      return NextResponse.json({ ok: false, error: "location_not_found" }, { status: 404 });
+    }
+    if (!terminal) {
+      return NextResponse.json({ ok: false, error: "terminal_not_found" }, { status: 404 });
+    }
+    if (terminal.locationId.toString() !== location._id.toString()) {
+      return NextResponse.json({ ok: false, error: "terminal_location_mismatch" }, { status: 400 });
+    }
+
+    const mergedCartByItemId = new Map<string, number>();
+    for (const line of parsed.data.cart) {
+      mergedCartByItemId.set(line.itemId, (mergedCartByItemId.get(line.itemId) || 0) + line.qty);
+    }
+
+    const itemIds: Types.ObjectId[] = [];
+    try {
+      for (const itemId of mergedCartByItemId.keys()) {
+        itemIds.push(ensureObjectId(itemId, "itemId"));
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "invalid_payload";
+      return NextResponse.json({ ok: false, error: message }, { status: 400 });
+    }
+
+    const posItems = (await PosItemModel.find({ _id: { $in: itemIds } }).lean()) as PosItemForCheckout[];
+    const itemById = new Map(posItems.map((item) => [item._id.toString(), item]));
+
+    const txItems: Array<{
+      itemId: Types.ObjectId;
+      qty: number;
+      unitGrossCents: number;
+      vatRate: 0 | 7 | 19;
+      titleSnapshot: string;
+    }> = [];
+
+    for (const [itemId, qty] of mergedCartByItemId) {
+      const item = itemById.get(itemId);
+      if (!item) {
+        return NextResponse.json({ ok: false, error: `item_not_found:${itemId}` }, { status: 400 });
+      }
+      if (!item.isActive) {
+        return NextResponse.json({ ok: false, error: `item_inactive:${itemId}` }, { status: 400 });
+      }
+      txItems.push({
+        itemId: item._id,
+        qty,
+        unitGrossCents: item.priceGrossCents,
+        vatRate: item.vatRate,
+        titleSnapshot: item.title,
+      });
+    }
+
+    const totals = buildTotals(txItems);
+    const actorAdminId = new Types.ObjectId(session.user.id);
+
+    const tx = await POSTransactionModel.create({
+      locationId: location._id,
+      terminalId: terminal._id,
+      status: "created",
+      items: txItems,
+      totals,
+      buyer: {
+        type: parsed.data.buyer.type,
+        name: parsed.data.buyer.name.trim(),
+        company: toOptionalTrimmed(parsed.data.buyer.company),
+        email: toOptionalTrimmed(parsed.data.buyer.email),
+        phone: toOptionalTrimmed(parsed.data.buyer.phone),
+        vatId: toOptionalTrimmed(parsed.data.buyer.vatId),
+        billingAddress: toOptionalTrimmed(parsed.data.buyer.billingAddress),
+        shippingAddress: toOptionalTrimmed(parsed.data.buyer.shippingAddress),
+      },
+      payment: {
+        provider: terminal.provider || "mock",
+        method: "card",
+      },
+      createdByAdminId: actorAdminId,
+    });
+    createdTxId = tx._id as Types.ObjectId;
+
+    await POSAuditLogModel.create({
+      actorAdminId,
+      action: "CREATE_TX",
+      txId: tx._id,
+      payload: {
+        locationId: location._id.toString(),
+        terminalId: terminal._id.toString(),
+        itemCount: txItems.length,
+        grossCents: totals.grossCents,
+      },
+    });
+
+    await tseStart(tx, actorAdminId);
+
+    const provider = getTerminalPaymentProvider(terminal.provider);
+    const payment = await provider.createPayment({
+      amountCents: totals.grossCents,
+      currency: "EUR",
+      referenceId: tx._id.toString(),
+      terminalRef: terminal.terminalRef,
+      metadata: {
+        txId: tx._id.toString(),
+        locationId: location._id.toString(),
+        terminalId: terminal._id.toString(),
+      },
+    });
+
+    const status = mapProviderStatusToTransactionStatus(payment.status);
+    const setPayload: Record<string, unknown> = {
+      status,
+      "payment.providerTxId": payment.providerTxId,
+    };
+    if (status === "paid") {
+      setPayload["payment.approvedAt"] = new Date();
+    }
+
+    await POSTransactionModel.updateOne({ _id: tx._id }, { $set: setPayload });
+
+    if (status === "paid") {
+      await tseFinish(tx, actorAdminId);
+    }
+
+    return NextResponse.json(
+      {
+        ok: true,
+        txId: tx._id.toString(),
+        providerTxId: payment.providerTxId,
+        status,
+      },
+      { status: 200 },
+    );
+  } catch (error) {
+    if (createdTxId) {
+      try {
+        await POSTransactionModel.updateOne({ _id: createdTxId }, { $set: { status: "failed" } });
+      } catch {
+        // best-effort failure marking
+      }
+    }
+    console.error("Failed to start POS checkout", error);
+    const message = error instanceof Error ? error.message : "checkout_start_failed";
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
+}
