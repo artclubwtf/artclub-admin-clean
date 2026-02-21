@@ -92,6 +92,13 @@ export async function GET(req: Request) {
                 provider: row.payment.provider,
                 providerTxId: row.payment.providerTxId ?? null,
                 method: row.payment.method,
+                externalRef: row.payment.externalRef
+                  ? {
+                      terminalSlipNo: row.payment.externalRef.terminalSlipNo ?? null,
+                      rrn: row.payment.externalRef.rrn ?? null,
+                      note: row.payment.externalRef.note ?? null,
+                    }
+                  : null,
                 approvedAt: row.payment.approvedAt ?? null,
               }
             : null,

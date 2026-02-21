@@ -2,6 +2,8 @@ import { InferSchemaType, Model, Schema, Types, model, models } from "mongoose";
 
 export const posAuditActions = [
   "CREATE_TX",
+  "PAYMENT_STATUS_UPDATE",
+  "PAYMENT_MARK_PAID",
   "UPDATE_PRICE",
   "CANCEL",
   "REFUND",

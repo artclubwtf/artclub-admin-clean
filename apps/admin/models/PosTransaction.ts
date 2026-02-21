@@ -13,7 +13,7 @@ export const posTransactionStatuses = [
 ] as const;
 
 export const posBuyerTypes = ["b2c", "b2b"] as const;
-export const posPaymentMethods = ["card", "cash", "other"] as const;
+export const posPaymentMethods = ["card", "cash", "other", "terminal_bridge", "terminal_external"] as const;
 
 const isInteger = {
   validator: Number.isInteger,
@@ -58,7 +58,13 @@ const posTransactionPaymentSchema = new Schema(
   {
     provider: { type: String, required: true, trim: true },
     providerTxId: { type: String, trim: true },
-    method: { type: String, enum: posPaymentMethods, required: true },
+    rawStatusPayload: { type: Schema.Types.Mixed },
+    method: { type: String, enum: posPaymentMethods, required: true, default: "terminal_bridge" },
+    externalRef: {
+      terminalSlipNo: { type: String, trim: true },
+      rrn: { type: String, trim: true },
+      note: { type: String, trim: true },
+    },
     tipCents: { type: Number, min: 0, validate: isInteger },
     approvedAt: { type: Date },
   },
@@ -93,6 +99,7 @@ const posTransactionSchema = new Schema(
       contractId: { type: Types.ObjectId, ref: "POSContract" },
       pdfUrl: { type: String, trim: true },
     },
+    lastProviderPollAt: { type: Date },
     tse: {
       provider: { type: String, trim: true },
       txId: { type: String, trim: true },

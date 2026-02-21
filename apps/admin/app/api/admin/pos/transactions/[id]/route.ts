@@ -61,6 +61,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                 provider: tx.payment.provider,
                 providerTxId: tx.payment.providerTxId ?? null,
                 method: tx.payment.method,
+                externalRef: tx.payment.externalRef
+                  ? {
+                      terminalSlipNo: tx.payment.externalRef.terminalSlipNo ?? null,
+                      rrn: tx.payment.externalRef.rrn ?? null,
+                      note: tx.payment.externalRef.note ?? null,
+                    }
+                  : null,
                 tipCents: tx.payment.tipCents ?? null,
                 approvedAt: tx.payment.approvedAt ?? null,
               }

@@ -5,7 +5,14 @@ const posTerminalSchema = new Schema(
     locationId: { type: Types.ObjectId, ref: "POSLocation", required: true },
     provider: { type: String, required: true, trim: true },
     terminalRef: { type: String, required: true, trim: true },
+    name: { type: String, trim: true },
     label: { type: String, required: true, trim: true },
+    host: { type: String, trim: true },
+    port: { type: Number, min: 1, max: 65535, default: 22000 },
+    zvtPassword: { type: String, trim: true },
+    mode: { type: String, enum: ["bridge", "external"], required: true, default: "bridge" },
+    agentId: { type: Types.ObjectId, ref: "POSAgent" },
+    isActive: { type: Boolean, required: true, default: true },
     status: { type: String, required: true, trim: true, default: "offline" },
     lastSeenAt: { type: Date },
   },
@@ -13,6 +20,7 @@ const posTerminalSchema = new Schema(
 );
 
 posTerminalSchema.index({ locationId: 1, status: 1 });
+posTerminalSchema.index({ agentId: 1, status: 1 });
 posTerminalSchema.index({ provider: 1, terminalRef: 1 }, { unique: true });
 posTerminalSchema.index({ lastSeenAt: -1 });
 

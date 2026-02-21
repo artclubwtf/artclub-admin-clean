@@ -7,6 +7,7 @@ type CatalogItemType = "artwork" | "event";
 type DeliveryMethod = "pickup" | "shipping" | "forwarding";
 type EditionType = "unique" | "edition";
 type CustomerType = "b2c" | "b2b";
+type CheckoutPaymentMethod = "terminal_bridge" | "terminal_external";
 
 type CatalogItem = {
   id: string;
@@ -44,9 +45,21 @@ type PosTerminal = {
   locationId: string;
   provider: string;
   terminalRef: string;
+  name: string;
+  host: string | null;
+  port: number;
+  mode: "bridge" | "external";
+  agentId: string | null;
+  isActive: boolean;
   label: string;
   status: string;
   lastSeenAt: string | null;
+};
+
+type ExternalRefForm = {
+  terminalSlipNo: string;
+  rrn: string;
+  note: string;
 };
 
 type BuyerForm = {
@@ -130,6 +143,14 @@ function initialContractForm(): ContractForm {
   };
 }
 
+function initialExternalRefForm(): ExternalRefForm {
+  return {
+    terminalSlipNo: "",
+    rrn: "",
+    note: "",
+  };
+}
+
 function toOptionalString(value: string) {
   const trimmed = value.trim();
   return trimmed || undefined;
@@ -166,6 +187,11 @@ export default function PosMainClient() {
   const [checkoutMessage, setCheckoutMessage] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [checkingOut, setCheckingOut] = useState(false);
+  const [markingPaid, setMarkingPaid] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMethod>("terminal_bridge");
+  const [bridgeFallbackAvailable, setBridgeFallbackAvailable] = useState(false);
+  const [pendingExternalTxId, setPendingExternalTxId] = useState<string | null>(null);
+  const [externalRefForm, setExternalRefForm] = useState<ExternalRefForm>(initialExternalRefForm);
 
   const [justAddedId, setJustAddedId] = useState<string | null>(null);
   const addAnimationTimeoutRef = useRef<number | null>(null);
@@ -267,6 +293,17 @@ export default function PosMainClient() {
     () => locations.find((location) => location.id === selectedTerminal?.locationId) || null,
     [locations, selectedTerminal?.locationId],
   );
+  const isExternalPaymentMode = paymentMethod === "terminal_external" || selectedTerminal?.mode === "external";
+  const checkoutLocked = Boolean(pendingExternalTxId);
+
+  useEffect(() => {
+    if (!selectedTerminal) return;
+    if (selectedTerminal.mode === "external") {
+      setPaymentMethod("terminal_external");
+      return;
+    }
+    setPaymentMethod((prev) => (prev === "terminal_external" ? "terminal_bridge" : prev));
+  }, [selectedTerminal]);
 
   const availableTags = useMemo(() => {
     const tags = new Set<string>();
@@ -323,6 +360,7 @@ export default function PosMainClient() {
   }, [cart]);
 
   const onAddToCart = (item: CatalogItem) => {
+    if (checkoutLocked) return;
     setCart((prev) => {
       const found = prev.find((line) => line.itemId === item.id);
       if (found) {
@@ -355,6 +393,7 @@ export default function PosMainClient() {
   };
 
   const adjustQty = (itemId: string, delta: number) => {
+    if (checkoutLocked) return;
     setCart((prev) =>
       prev
         .map((line) => (line.itemId === itemId ? { ...line, qty: line.qty + delta } : line))
@@ -362,10 +401,14 @@ export default function PosMainClient() {
     );
   };
 
-  const clearCart = () => {
+  const clearCart = (force = false) => {
+    if (checkoutLocked && !force) return;
     setCart([]);
     setCheckoutMessage(null);
     setCheckoutError(null);
+    setPendingExternalTxId(null);
+    setExternalRefForm(initialExternalRefForm());
+    setBridgeFallbackAvailable(false);
   };
 
   const updateBuyer = (key: keyof BuyerForm, value: string | boolean) => {
@@ -475,7 +518,7 @@ export default function PosMainClient() {
 
       const status = payload.status || "payment_pending";
       if (status === "paid") {
-        clearCart();
+        clearCart(true);
         setContractModalOpen(false);
         setCheckoutMessage(`Payment approved. Transaction ${txId} is paid.`);
         return;
@@ -495,6 +538,10 @@ export default function PosMainClient() {
     buyerSignatureDataUrl: string;
   }) => {
     if (cart.length === 0) return;
+    if (checkoutLocked) {
+      setCheckoutError("External terminal payment is pending. Finish it first.");
+      return;
+    }
     if (!selectedTerminal || !selectedLocation) {
       setCheckoutError("No terminal configured. Add a POS terminal in settings.");
       return;
@@ -507,6 +554,7 @@ export default function PosMainClient() {
     setCheckingOut(true);
     setCheckoutError(null);
     setCheckoutMessage(null);
+    setBridgeFallbackAvailable(false);
     try {
       const res = await fetch("/api/admin/pos/checkout/start", {
         method: "POST",
@@ -514,6 +562,7 @@ export default function PosMainClient() {
         body: JSON.stringify({
           locationId: selectedLocation.id,
           terminalId: selectedTerminal.id,
+          paymentMethod: isExternalPaymentMode ? "terminal_external" : "terminal_bridge",
           cart: cart.map((line) => ({
             itemId: line.itemId,
             qty: line.qty,
@@ -546,14 +595,33 @@ export default function PosMainClient() {
       });
 
       const payload = (await res.json().catch(() => null)) as
-        | { ok?: boolean; txId?: string; providerTxId?: string; status?: string; error?: string }
+        | {
+            ok?: boolean;
+            txId?: string;
+            providerTxId?: string;
+            status?: string;
+            provider?: string;
+            fallback?: string;
+            error?: string;
+          }
         | null;
       if (!res.ok || !payload?.ok || !payload.txId) {
+        if (res.status === 409 && payload?.error === "no_bridge_agent_online" && payload.fallback === "terminal_external") {
+          setBridgeFallbackAvailable(true);
+          throw new Error("No bridge agent online. Switch to external terminal checkout.");
+        }
         throw new Error(payload?.error || "Failed to start checkout");
       }
 
+      if (isExternalPaymentMode || payload.provider === "external") {
+        setPendingExternalTxId(payload.txId);
+        setContractModalOpen(false);
+        setCheckoutMessage("External terminal payment started. Confirm payment on device and click Mark as Paid.");
+        return;
+      }
+
       if (payload.status === "paid") {
-        clearCart();
+        clearCart(true);
         setContractModalOpen(false);
         setCheckoutMessage(`Payment approved. Transaction ${payload.txId} is paid.`);
         return;
@@ -569,8 +637,49 @@ export default function PosMainClient() {
     }
   };
 
+  const handleMarkPaid = async () => {
+    if (!pendingExternalTxId) {
+      setCheckoutError("No pending external transaction.");
+      return;
+    }
+
+    setMarkingPaid(true);
+    setCheckoutError(null);
+    try {
+      const res = await fetch("/api/admin/pos/checkout/mark-paid", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          txId: pendingExternalTxId,
+          externalRef: {
+            terminalSlipNo: toOptionalString(externalRefForm.terminalSlipNo),
+            rrn: toOptionalString(externalRefForm.rrn),
+            note: toOptionalString(externalRefForm.note),
+          },
+        }),
+      });
+      const payload = (await res.json().catch(() => null)) as { ok?: boolean; txId?: string; status?: string; error?: string } | null;
+      if (!res.ok || !payload?.ok || !payload.txId) {
+        throw new Error(payload?.error || "Failed to mark transaction as paid");
+      }
+
+      clearCart(true);
+      setContractModalOpen(false);
+      setCheckoutMessage(`External payment approved. Transaction ${payload.txId} is paid.`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to mark transaction as paid";
+      setCheckoutError(message);
+    } finally {
+      setMarkingPaid(false);
+    }
+  };
+
   const handleCheckout = async () => {
     if (cart.length === 0) return;
+    if (checkoutLocked) {
+      setCheckoutError("External terminal payment is pending. Use Mark as Paid first.");
+      return;
+    }
     if (hasArtworkInCart) {
       startContractStep();
       return;
@@ -723,9 +832,10 @@ export default function PosMainClient() {
                     key={item.id}
                     type="button"
                     onClick={() => onAddToCart(item)}
+                    disabled={checkoutLocked || checkingOut || markingPaid}
                     className={`pos-card relative flex w-full flex-col overflow-hidden rounded border border-slate-200 bg-white text-left transition hover:-translate-y-[1px] hover:shadow-sm ${
                       justAddedId === item.id ? "pos-card-added" : ""
-                    }`}
+                    } ${checkoutLocked ? "cursor-not-allowed opacity-60" : ""}`}
                   >
                     <div className="relative w-full overflow-hidden bg-slate-100" style={{ height: "180px" }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -813,6 +923,93 @@ export default function PosMainClient() {
               <p className="text-xs text-slate-500">
                 {selectedLocation.name} · {selectedLocation.address}
               </p>
+            )}
+            {selectedTerminal && (
+              <p className="text-xs text-slate-500">
+                Mode: {selectedTerminal.mode === "external" ? "external" : "bridge"} · {selectedTerminal.status}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2 rounded border border-slate-200 p-3">
+            <p className="text-xs text-slate-600">Payment method</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className={`rounded px-3 py-2 text-sm font-semibold ${
+                  !isExternalPaymentMode ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"
+                }`}
+                disabled={selectedTerminal?.mode === "external" || checkoutLocked}
+                onClick={() => setPaymentMethod("terminal_bridge")}
+              >
+                Terminal (connected)
+              </button>
+              <button
+                type="button"
+                className={`rounded px-3 py-2 text-sm font-semibold ${
+                  isExternalPaymentMode ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"
+                }`}
+                disabled={checkoutLocked}
+                onClick={() => setPaymentMethod("terminal_external")}
+              >
+                External terminal
+              </button>
+            </div>
+            {bridgeFallbackAvailable && !isExternalPaymentMode && (
+              <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                <p>No bridge agent online.</p>
+                <button
+                  type="button"
+                  className="mt-2 rounded bg-amber-600 px-2 py-1 text-xs font-semibold text-white"
+                  onClick={() => {
+                    setPaymentMethod("terminal_external");
+                    setCheckoutError(null);
+                  }}
+                >
+                  Switch to external terminal
+                </button>
+              </div>
+            )}
+            {isExternalPaymentMode && (
+              <div className="space-y-2 rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700">
+                <p>Zahlung am Terminal starten und danach Mark as Paid klicken.</p>
+                {pendingExternalTxId ? (
+                  <p className="text-slate-600">Pending tx: {pendingExternalTxId}</p>
+                ) : (
+                  <p className="text-slate-600">Start checkout first to create an external pending transaction.</p>
+                )}
+                <div className="grid gap-2">
+                  <input
+                    className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
+                    placeholder="Slip no. (optional)"
+                    value={externalRefForm.terminalSlipNo}
+                    onChange={(event) => setExternalRefForm((prev) => ({ ...prev, terminalSlipNo: event.target.value }))}
+                    disabled={!pendingExternalTxId || markingPaid}
+                  />
+                  <input
+                    className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
+                    placeholder="RRN (optional)"
+                    value={externalRefForm.rrn}
+                    onChange={(event) => setExternalRefForm((prev) => ({ ...prev, rrn: event.target.value }))}
+                    disabled={!pendingExternalTxId || markingPaid}
+                  />
+                  <input
+                    className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
+                    placeholder="Note (optional)"
+                    value={externalRefForm.note}
+                    onChange={(event) => setExternalRefForm((prev) => ({ ...prev, note: event.target.value }))}
+                    disabled={!pendingExternalTxId || markingPaid}
+                  />
+                  <button
+                    type="button"
+                    className="btnPrimary"
+                    onClick={handleMarkPaid}
+                    disabled={!pendingExternalTxId || markingPaid}
+                  >
+                    {markingPaid ? "Marking..." : "Mark as Paid"}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 
@@ -910,6 +1107,7 @@ export default function PosMainClient() {
                       type="button"
                       className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700"
                       onClick={() => adjustQty(line.itemId, -1)}
+                      disabled={checkoutLocked || checkingOut || markingPaid}
                     >
                       -
                     </button>
@@ -918,6 +1116,7 @@ export default function PosMainClient() {
                       type="button"
                       className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700"
                       onClick={() => adjustQty(line.itemId, +1)}
+                      disabled={checkoutLocked || checkingOut || markingPaid}
                     >
                       +
                     </button>
@@ -949,8 +1148,8 @@ export default function PosMainClient() {
             <button
               type="button"
               className="btnGhost"
-              onClick={clearCart}
-              disabled={cart.length === 0 || checkingOut}
+              onClick={() => clearCart()}
+              disabled={cart.length === 0 || checkingOut || checkoutLocked || markingPaid}
             >
               Clear cart
             </button>
@@ -958,7 +1157,7 @@ export default function PosMainClient() {
               type="button"
               className="btnPrimary"
               onClick={handleCheckout}
-              disabled={cart.length === 0 || checkingOut || terminals.length === 0}
+              disabled={cart.length === 0 || checkingOut || checkoutLocked || markingPaid || terminals.length === 0}
             >
               {checkingOut ? "Processing..." : "Checkout"}
             </button>

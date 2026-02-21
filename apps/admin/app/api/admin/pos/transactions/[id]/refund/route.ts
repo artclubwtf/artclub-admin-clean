@@ -86,6 +86,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   } catch (error) {
     console.error("Failed to refund POS transaction", error);
     const message = error instanceof Error ? error.message : "refund_failed";
+    if (typeof message === "string" && message.includes("Refund only supported")) {
+      return NextResponse.json({ ok: false, error: message }, { status: 400 });
+    }
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }

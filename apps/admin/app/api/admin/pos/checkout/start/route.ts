@@ -6,11 +6,11 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
 import { appendPosAuditLog } from "@/lib/pos/audit";
-import { createArtworkContractDraft, ensurePaidArtworkContractDocument, type ArtworkContractInput } from "@/lib/pos/contracts";
-import { ensurePaidTransactionDocuments } from "@/lib/pos/documents";
-import { tseCancel, tseFinish, tseStart } from "@/lib/pos/tse";
-import { getTerminalPaymentProvider, mapProviderStatusToTransactionStatus } from "@/lib/pos/terminalPayments";
+import { createArtworkContractDraft, type ArtworkContractInput } from "@/lib/pos/contracts";
+import { tseCancel, tseStart } from "@/lib/pos/tse";
+import { getTerminalPaymentProvider, mapProviderStatusToTransactionStatus, resolvePaymentProviderName } from "@/lib/pos/terminalPayments";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { PosAgentModel } from "@/models/PosAgent";
 import { PosItemModel } from "@/models/PosItem";
 import { PosLocationModel } from "@/models/PosLocation";
 import { PosTerminalModel } from "@/models/PosTerminal";
@@ -35,6 +35,7 @@ const buyerSchema = z.object({
 const startCheckoutSchema = z.object({
   locationId: z.string().trim().min(1, "locationId is required"),
   terminalId: z.string().trim().min(1, "terminalId is required"),
+  paymentMethod: z.enum(["terminal_bridge", "terminal_external"]).optional(),
   cart: z.array(cartLineSchema).min(1, "cart must contain at least one line"),
   buyer: buyerSchema,
   contract: z
@@ -68,6 +69,8 @@ type PosItemForCheckout = {
   artistName?: string;
   isActive: boolean;
 };
+
+const BRIDGE_AGENT_MAX_AGE_MS = 30_000;
 
 function ensureObjectId(value: string, field: string) {
   if (!Types.ObjectId.isValid(value)) {
@@ -153,6 +156,9 @@ export async function POST(req: Request) {
     if (terminal.locationId.toString() !== location._id.toString()) {
       return NextResponse.json({ ok: false, error: "terminal_location_mismatch" }, { status: 400 });
     }
+    if (terminal.isActive === false) {
+      return NextResponse.json({ ok: false, error: "terminal_inactive" }, { status: 400 });
+    }
 
     const mergedCartByItemId = new Map<string, number>();
     for (const line of parsed.data.cart) {
@@ -219,6 +225,62 @@ export async function POST(req: Request) {
 
     const totals = buildTotals(txItems);
     const actorAdminId = new Types.ObjectId(session.user.id);
+    const requestedPaymentMethod = parsed.data.paymentMethod || "terminal_bridge";
+    const useExternal = requestedPaymentMethod === "terminal_external" || terminal.mode === "external";
+
+    const defaultConnectedProvider = resolvePaymentProviderName("bridge");
+    const paymentProviderName = useExternal
+      ? "external"
+      : defaultConnectedProvider === "external"
+        ? "bridge"
+        : defaultConnectedProvider;
+    const paymentMethod = useExternal ? "terminal_external" : "terminal_bridge";
+
+    let bridgeAgentId: string | null = null;
+    if (paymentProviderName === "bridge") {
+      const terminalHost = terminal.host?.trim();
+      const terminalPort = typeof terminal.port === "number" ? terminal.port : 22000;
+      if (!terminalHost) {
+        return NextResponse.json({ ok: false, error: "terminal_host_missing" }, { status: 400 });
+      }
+      if (!terminalPort || terminalPort <= 0) {
+        return NextResponse.json({ ok: false, error: "terminal_port_invalid" }, { status: 400 });
+      }
+
+      const onlineSince = new Date(Date.now() - BRIDGE_AGENT_MAX_AGE_MS);
+      const preferredAgentId =
+        terminal.agentId && Types.ObjectId.isValid(terminal.agentId.toString()) ? new Types.ObjectId(terminal.agentId) : null;
+
+      const preferredAgent = preferredAgentId
+        ? await PosAgentModel.findOne({
+            _id: preferredAgentId,
+            isActive: true,
+            lastSeenAt: { $gte: onlineSince },
+          }).lean()
+        : null;
+
+      const fallbackAgent = preferredAgent
+        ? null
+        : await PosAgentModel.findOne({
+            isActive: true,
+            lastSeenAt: { $gte: onlineSince },
+          })
+            .sort({ lastSeenAt: -1 })
+            .lean();
+
+      const selectedAgent = preferredAgent || fallbackAgent;
+      if (!selectedAgent) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "no_bridge_agent_online",
+            fallback: "terminal_external",
+          },
+          { status: 409 },
+        );
+      }
+      bridgeAgentId = selectedAgent._id.toString();
+    }
 
     const tx = await POSTransactionModel.create({
       locationId: location._id,
@@ -237,8 +299,8 @@ export async function POST(req: Request) {
         shippingAddress: toOptionalTrimmed(parsed.data.buyer.shippingAddress),
       },
       payment: {
-        provider: terminal.provider || "mock",
-        method: "card",
+        provider: paymentProviderName,
+        method: paymentMethod,
       },
       createdByAdminId: actorAdminId,
     });
@@ -276,7 +338,7 @@ export async function POST(req: Request) {
 
     await tseStart(tx, actorAdminId);
 
-    const provider = getTerminalPaymentProvider(terminal.provider);
+    const provider = getTerminalPaymentProvider(paymentProviderName);
     const payment = await provider.createPayment({
       amountCents: totals.grossCents,
       currency: "EUR",
@@ -286,26 +348,29 @@ export async function POST(req: Request) {
         txId: tx._id.toString(),
         locationId: location._id.toString(),
         terminalId: terminal._id.toString(),
+        agentId: bridgeAgentId,
+        terminalHost: terminal.host ?? null,
+        terminalPort: terminal.port ?? 22000,
+        zvtPassword: terminal.zvtPassword ?? null,
+        paymentMethod,
       },
     });
 
-    const status = mapProviderStatusToTransactionStatus(payment.status);
+    const mappedStatus = mapProviderStatusToTransactionStatus(payment.status);
+    const status =
+      mappedStatus === "failed" || mappedStatus === "cancelled" ? mappedStatus : ("payment_pending" as const);
     const setPayload: Record<string, unknown> = {
       status,
       "payment.providerTxId": payment.providerTxId,
+      "payment.rawStatusPayload": {
+        createPayment: payment.raw ?? null,
+      },
     };
-    if (status === "paid") {
-      setPayload["payment.approvedAt"] = new Date();
-    }
 
     await POSTransactionModel.updateOne({ _id: tx._id }, { $set: setPayload });
 
-    if (status === "paid") {
-      await tseFinish(tx, actorAdminId);
-      await ensurePaidTransactionDocuments(tx._id, actorAdminId);
-      await ensurePaidArtworkContractDocument(tx._id, actorAdminId);
-    } else if (status === "failed" || status === "cancelled") {
-      await tseCancel(tx, actorAdminId, `payment_${status}`);
+    if (mappedStatus === "failed" || mappedStatus === "cancelled") {
+      await tseCancel(tx, actorAdminId, `payment_${mappedStatus}`);
     }
 
     return NextResponse.json(
@@ -313,6 +378,7 @@ export async function POST(req: Request) {
         ok: true,
         txId: tx._id.toString(),
         providerTxId: payment.providerTxId,
+        provider: paymentProviderName,
         status,
       },
       { status: 200 },

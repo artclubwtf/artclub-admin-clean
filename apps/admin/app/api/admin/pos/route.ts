@@ -14,6 +14,7 @@ export async function GET(req: Request) {
         { key: "transactions", path: "/api/admin/pos/transactions" },
         { key: "catalog", path: "/api/admin/pos/catalog" },
         { key: "checkoutStart", path: "/api/admin/pos/checkout/start" },
+        { key: "checkoutMarkPaid", path: "/api/admin/pos/checkout/mark-paid" },
         { key: "checkoutStatus", path: "/api/admin/pos/checkout/status" },
         { key: "transactionDetail", path: "/api/admin/pos/transactions/:id" },
         { key: "transactionRefund", path: "/api/admin/pos/transactions/:id/refund" },
