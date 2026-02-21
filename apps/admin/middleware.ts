@@ -21,6 +21,8 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith("/api/auth") ||
       pathname === "/api/setup" ||
       pathname.startsWith("/api/setup/") ||
+      pathname === "/api/admin/pos" ||
+      pathname.startsWith("/api/admin/pos/") ||
       pathname === "/api/account/change-password" ||
       pathname.startsWith("/api/account/change-password/") ||
       pathname.startsWith("/api/applications") ||

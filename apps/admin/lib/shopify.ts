@@ -1,7 +1,16 @@
 type ShopifyProduct = { id: string; title: string };
+type ShopifyProductVariant = {
+  id: string;
+  title: string;
+  price: string | null;
+  availableForSale: boolean;
+  sku: string | null;
+};
 type ShopifyProductWithImage = ShopifyProduct & {
   handle: string;
   featuredImage: string | null;
+  tags: string[];
+  variants: ShopifyProductVariant[];
   artistMetaobject?: ShopifyKuenstler | null;
   legacyArtistUrl?: string | null;
   kurzbeschreibung?: string | null;
@@ -563,8 +572,18 @@ export async function fetchProductsByCollectionId(
               id
               title
               handle
+              tags
               featuredImage {
                 url
+              }
+              variants(first: 25) {
+                nodes {
+                  id
+                  title
+                  price
+                  availableForSale
+                  sku
+                }
               }
               metafieldKunstler: metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.artistMetaobject}") {
                 reference {
@@ -628,6 +647,16 @@ export async function fetchProductsByCollectionId(
       id: node.id,
       title: node.title,
       handle: node.handle,
+      tags: Array.isArray(node.tags) ? node.tags.filter((tag: unknown): tag is string => typeof tag === "string") : [],
+      variants: Array.isArray(node.variants?.nodes)
+        ? node.variants.nodes.map((variant: { id?: string; title?: string; price?: string; availableForSale?: boolean; sku?: string }) => ({
+            id: variant.id || "",
+            title: variant.title || "",
+            price: typeof variant.price === "string" ? variant.price : null,
+            availableForSale: Boolean(variant.availableForSale),
+            sku: typeof variant.sku === "string" ? variant.sku : null,
+          }))
+        : [],
       featuredImage: node.featuredImage?.url ?? null,
       artistMetaobject,
       legacyArtistUrl: node.metafieldLegacyKuenstler?.value ?? null,
