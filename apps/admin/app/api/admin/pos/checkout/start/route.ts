@@ -5,10 +5,12 @@ import { z } from "zod";
 
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
-import { tseFinish, tseStart } from "@/lib/pos/tse";
+import { appendPosAuditLog } from "@/lib/pos/audit";
+import { createArtworkContractDraft, ensurePaidArtworkContractDocument, type ArtworkContractInput } from "@/lib/pos/contracts";
+import { ensurePaidTransactionDocuments } from "@/lib/pos/documents";
+import { tseCancel, tseFinish, tseStart } from "@/lib/pos/tse";
 import { getTerminalPaymentProvider, mapProviderStatusToTransactionStatus } from "@/lib/pos/terminalPayments";
 import { requireAdmin } from "@/lib/requireAdmin";
-import { POSAuditLogModel } from "@/models/PosAuditLog";
 import { PosItemModel } from "@/models/PosItem";
 import { PosLocationModel } from "@/models/PosLocation";
 import { PosTerminalModel } from "@/models/PosTerminal";
@@ -35,14 +37,35 @@ const startCheckoutSchema = z.object({
   terminalId: z.string().trim().min(1, "terminalId is required"),
   cart: z.array(cartLineSchema).min(1, "cart must contain at least one line"),
   buyer: buyerSchema,
+  contract: z
+    .object({
+      artworks: z
+        .array(
+          z.object({
+            itemId: z.string().trim().min(1, "contract.artworks.itemId is required"),
+            artistName: z.string().trim().optional(),
+            title: z.string().trim().optional(),
+            year: z.string().trim().optional(),
+            techniqueSize: z.string().trim().optional(),
+            editionType: z.enum(["unique", "edition"]).optional(),
+          }),
+        )
+        .min(1, "contract.artworks must contain at least one line"),
+      deliveryMethod: z.enum(["pickup", "shipping", "forwarding"]),
+      estimatedDeliveryDate: z.string().trim().optional(),
+      buyerSignatureDataUrl: z.string().trim().min(1, "contract buyer signature is required"),
+    })
+    .optional(),
 });
 
 type PosItemForCheckout = {
   _id: Types.ObjectId;
+  type: "artwork" | "event";
   title: string;
   priceGrossCents: number;
   vatRate: 0 | 7 | 19;
   currency: "EUR";
+  artistName?: string;
   isActive: boolean;
 };
 
@@ -156,6 +179,13 @@ export async function POST(req: Request) {
       vatRate: 0 | 7 | 19;
       titleSnapshot: string;
     }> = [];
+    const artworkLinesForContract: Array<{
+      itemId: string;
+      artistName?: string;
+      title: string;
+      qty: number;
+      unitGrossCents: number;
+    }> = [];
 
     for (const [itemId, qty] of mergedCartByItemId) {
       const item = itemById.get(itemId);
@@ -172,6 +202,19 @@ export async function POST(req: Request) {
         vatRate: item.vatRate,
         titleSnapshot: item.title,
       });
+      if (item.type === "artwork") {
+        artworkLinesForContract.push({
+          itemId,
+          artistName: item.artistName,
+          title: item.title,
+          qty,
+          unitGrossCents: item.priceGrossCents,
+        });
+      }
+    }
+
+    if (artworkLinesForContract.length > 0 && !parsed.data.contract) {
+      return NextResponse.json({ ok: false, error: "contract_required_for_artwork" }, { status: 400 });
     }
 
     const totals = buildTotals(txItems);
@@ -201,7 +244,25 @@ export async function POST(req: Request) {
     });
     createdTxId = tx._id as Types.ObjectId;
 
-    await POSAuditLogModel.create({
+    if (artworkLinesForContract.length > 0) {
+      await createArtworkContractDraft({
+        txId: tx._id,
+        buyer: {
+          name: parsed.data.buyer.name.trim(),
+          company: toOptionalTrimmed(parsed.data.buyer.company),
+          billingAddress: toOptionalTrimmed(parsed.data.buyer.billingAddress),
+          shippingAddress: toOptionalTrimmed(parsed.data.buyer.shippingAddress),
+          email: toOptionalTrimmed(parsed.data.buyer.email),
+          phone: toOptionalTrimmed(parsed.data.buyer.phone),
+        },
+        artworkLines: artworkLinesForContract,
+        contractInput: parsed.data.contract as ArtworkContractInput,
+        grossCents: totals.grossCents,
+        isPaid: false,
+      });
+    }
+
+    await appendPosAuditLog({
       actorAdminId,
       action: "CREATE_TX",
       txId: tx._id,
@@ -241,6 +302,10 @@ export async function POST(req: Request) {
 
     if (status === "paid") {
       await tseFinish(tx, actorAdminId);
+      await ensurePaidTransactionDocuments(tx._id, actorAdminId);
+      await ensurePaidArtworkContractDocument(tx._id, actorAdminId);
+    } else if (status === "failed" || status === "cancelled") {
+      await tseCancel(tx, actorAdminId, `payment_${status}`);
     }
 
     return NextResponse.json(
@@ -256,6 +321,7 @@ export async function POST(req: Request) {
     if (createdTxId) {
       try {
         await POSTransactionModel.updateOne({ _id: createdTxId }, { $set: { status: "failed" } });
+        await tseCancel({ _id: createdTxId }, session.user.id, "checkout_start_failed");
       } catch {
         // best-effort failure marking
       }

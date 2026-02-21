@@ -90,14 +90,16 @@ const posTransactionSchema = new Schema(
       pdfUrl: { type: String, trim: true },
     },
     contract: {
-      contractId: { type: Types.ObjectId, ref: "Contract" },
+      contractId: { type: Types.ObjectId, ref: "POSContract" },
       pdfUrl: { type: String, trim: true },
     },
     tse: {
       provider: { type: String, trim: true },
       txId: { type: String, trim: true },
       signature: { type: String, trim: true },
+      signatureCounter: { type: Number, min: 0, validate: isInteger },
       serial: { type: String, trim: true },
+      logTime: { type: Date },
       startedAt: { type: Date },
       finishedAt: { type: Date },
     },

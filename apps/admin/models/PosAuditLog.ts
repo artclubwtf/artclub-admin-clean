@@ -18,6 +18,8 @@ const posAuditLogSchema = new Schema(
     actorAdminId: { type: Types.ObjectId, ref: "User", required: true },
     action: { type: String, enum: posAuditActions, required: true },
     txId: { type: Types.ObjectId, ref: "POSTransaction" },
+    prevHash: { type: String, required: true, trim: true, default: "" },
+    hash: { type: String, required: true, trim: true },
     payload: { type: Schema.Types.Mixed, required: true, default: {} },
   },
   { timestamps: { createdAt: true, updatedAt: false }, collection: "pos_audit_logs" },
@@ -38,6 +40,7 @@ posAuditLogSchema.index({ createdAt: -1 });
 posAuditLogSchema.index({ txId: 1, createdAt: -1 });
 posAuditLogSchema.index({ actorAdminId: 1, createdAt: -1 });
 posAuditLogSchema.index({ action: 1, createdAt: -1 });
+posAuditLogSchema.index({ hash: 1 }, { unique: true, sparse: true });
 
 type PosAuditLog = InferSchemaType<typeof posAuditLogSchema>;
 

@@ -4,7 +4,9 @@ import { Types } from "mongoose";
 
 import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
-import { tseFinish } from "@/lib/pos/tse";
+import { ensurePaidArtworkContractDocument } from "@/lib/pos/contracts";
+import { ensurePaidTransactionDocuments } from "@/lib/pos/documents";
+import { tseCancel, tseFinish } from "@/lib/pos/tse";
 import { getTerminalPaymentProvider, mapProviderStatusToTransactionStatus } from "@/lib/pos/terminalPayments";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { POSTransactionModel } from "@/models/PosTransaction";
@@ -61,6 +63,10 @@ export async function GET(req: Request) {
 
     if (nextStatus === "paid") {
       await tseFinish(tx, session.user.id);
+      await ensurePaidTransactionDocuments(tx._id, session.user.id);
+      await ensurePaidArtworkContractDocument(tx._id, session.user.id);
+    } else if (nextStatus === "failed" || nextStatus === "cancelled") {
+      await tseCancel(tx, session.user.id, `payment_${nextStatus}`);
     }
 
     return NextResponse.json(
