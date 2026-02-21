@@ -887,3 +887,7 @@ body.ac-theme .rounded {
     padding: 18px 16px 28px;
   }
 }
+
+.admin-pos-css-fix{
+  flex-wrap: wrap; max-height: 200px; overflow: scroll;
+}

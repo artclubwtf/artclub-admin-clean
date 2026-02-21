@@ -310,7 +310,7 @@ export default function PosMainClient() {
             </button>
           </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-1" style="flex-wrap: wrap; max-height: 200px; overflow: scroll;">
+          <div className="flex gap-2 overflow-x-auto pb-1 admin-pos-css-fix">
             <button
               type="button"
               className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-semibold ${
