@@ -346,6 +346,17 @@ function buildReceiptDataString(ctx: FiskalyTSETransactionContext, mode: "ACTIVE
   });
 }
 
+function buildAmountsPerVatRate(ctx: FiskalyTSETransactionContext) {
+  const gross = Math.max(0, ctx.amountCents);
+  const major = Number((gross / 100).toFixed(2));
+  return [
+    {
+      vat_rate: "NORMAL",
+      amount: major,
+    },
+  ];
+}
+
 function buildStartPayload(ctx: FiskalyTSETransactionContext, config: FiskalyConfig, fiskalyTxId: string) {
   return {
     tx_id: fiskalyTxId,
@@ -353,6 +364,7 @@ function buildStartPayload(ctx: FiskalyTSETransactionContext, config: FiskalyCon
     client_id: config.clientId,
     // DSFinV-K v2.1: type and data must be empty at start.
     schema: buildStandardV1SchemaPayload("", ""),
+    amounts_per_vat_rate: buildAmountsPerVatRate(ctx),
   };
 }
 
@@ -362,6 +374,7 @@ function buildFinishPayload(ctx: FiskalyTSETransactionContext, config: FiskalyCo
     state: "FINISHED",
     client_id: config.clientId,
     schema: buildStandardV1SchemaPayload("Kassenbeleg-V1", buildReceiptDataString(ctx, "FINISHED")),
+    amounts_per_vat_rate: buildAmountsPerVatRate(ctx),
   };
 }
 
@@ -371,6 +384,7 @@ function buildCancelPayload(ctx: FiskalyTSETransactionContext, config: FiskalyCo
     state: "CANCELLED",
     client_id: config.clientId,
     schema: buildStandardV1SchemaPayload("Kassenbeleg-V1", buildReceiptDataString(ctx, "CANCELLED")),
+    amounts_per_vat_rate: [],
   };
 }
 
