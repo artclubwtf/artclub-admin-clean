@@ -14,8 +14,8 @@ import { PosCommandModel } from "@/models/PosCommand";
 const reportSchema = z.object({
   commandId: z.string().trim().min(1, "commandId is required"),
   ok: z.boolean(),
-  result: z.record(z.string(), z.unknown()).optional(),
-  error: z.string().trim().optional(),
+  result: z.record(z.string(), z.unknown()).nullable().optional(),
+  error: z.string().trim().nullable().optional(),
 });
 
 function mapBridgeStatus(statusValue: unknown, ok: boolean) {
