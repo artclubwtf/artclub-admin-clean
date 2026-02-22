@@ -1,6 +1,7 @@
 import { Types } from "mongoose";
 
 import { appendPosAuditLog } from "@/lib/pos/audit";
+import { getOrCreatePosSettings } from "@/lib/pos/settings";
 import { getPublicS3Url, uploadToS3 } from "@/lib/s3";
 import { CounterModel } from "@/models/Counter";
 import { PosLocationModel } from "@/models/PosLocation";
@@ -10,29 +11,62 @@ import { POSTransactionModel } from "@/models/PosTransaction";
 type VatRate = 0 | 7 | 19;
 
 type SellerData = {
-  name: string;
+  brandName: string;
+  companyName: string;
   addressLine1: string;
   addressLine2: string;
+  email?: string;
+  phone?: string;
+  steuernummer?: string;
+  finanzamt?: string;
   vatId?: string;
   taxId?: string;
+  footerLines: string[];
+  locale: string;
+  currency: string;
 };
 
-function getSellerData(): SellerData {
+async function getSellerData(): Promise<SellerData> {
+  const settings = await getOrCreatePosSettings();
   return {
-    name: process.env.POS_SELLER_NAME?.trim() || "Artclub",
-    addressLine1: process.env.POS_SELLER_ADDRESS_LINE1?.trim() || "Seller address line 1",
-    addressLine2: process.env.POS_SELLER_ADDRESS_LINE2?.trim() || "Seller address line 2",
-    vatId: process.env.POS_SELLER_VAT_ID?.trim() || undefined,
-    taxId: process.env.POS_SELLER_TAX_ID?.trim() || undefined,
+    brandName: settings.brandName,
+    companyName: settings.seller.companyName,
+    addressLine1: settings.seller.addressLine1,
+    addressLine2: settings.seller.addressLine2,
+    email: settings.seller.email || undefined,
+    phone: settings.seller.phone || undefined,
+    steuernummer: settings.tax.steuernummer || undefined,
+    finanzamt: settings.tax.finanzamt || undefined,
+    vatId: settings.tax.ustId || undefined,
+    taxId: settings.tax.steuernummer || undefined,
+    footerLines: settings.receiptFooterLines,
+    locale: settings.locale || "de-DE",
+    currency: settings.currency || "EUR",
   };
 }
 
-function formatCents(cents: number) {
-  return `EUR ${(cents / 100).toFixed(2)}`;
+function formatCents(cents: number, seller: Pick<SellerData, "currency" | "locale">) {
+  try {
+    return new Intl.NumberFormat(seller.locale, {
+      style: "currency",
+      currency: seller.currency || "EUR",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(cents / 100);
+  } catch {
+    return `${seller.currency || "EUR"} ${(cents / 100).toFixed(2)}`;
+  }
 }
 
 function formatDateTime(value: Date) {
-  return value.toISOString().replace("T", " ").slice(0, 19);
+  try {
+    return new Intl.DateTimeFormat("de-DE", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(value);
+  } catch {
+    return value.toISOString().replace("T", " ").slice(0, 19);
+  }
 }
 
 function sanitizeAscii(value: string) {
@@ -187,6 +221,32 @@ function hasRequiredInvoiceBuyerData(input: {
   return true;
 }
 
+function pushSection(lines: string[], title: string, rows: string[]) {
+  lines.push(`==== ${title.toUpperCase()} ====`);
+  for (const row of rows) lines.push(row);
+  lines.push("");
+}
+
+function compactBuyerLines(input: {
+  type?: string;
+  name?: string;
+  company?: string;
+  email?: string;
+  phone?: string;
+  billingAddress?: string;
+  shippingAddress?: string;
+}) {
+  const rows: string[] = [];
+  if (input.type) rows.push(`Type: ${input.type.toUpperCase()}`);
+  if (input.name) rows.push(`Name: ${input.name}`);
+  if (input.company) rows.push(`Company: ${input.company}`);
+  if (input.email) rows.push(`Email: ${input.email}`);
+  if (input.phone) rows.push(`Phone: ${input.phone}`);
+  if (input.billingAddress) rows.push(`Billing: ${input.billingAddress}`);
+  if (input.shippingAddress && input.shippingAddress !== input.billingAddress) rows.push(`Shipping: ${input.shippingAddress}`);
+  return rows;
+}
+
 function buildReceiptLines(input: {
   seller: SellerData;
   txId: string;
@@ -197,40 +257,84 @@ function buildReceiptLines(input: {
   paymentMethod: string;
   locationName?: string;
   terminalLabel?: string;
+  buyer?: {
+    type?: string;
+    name?: string;
+    company?: string;
+    email?: string;
+    phone?: string;
+    billingAddress?: string;
+    shippingAddress?: string;
+  };
+  tse?: {
+    provider?: string;
+    txId?: string;
+    serial?: string;
+    signatureCounter?: number;
+    logTime?: Date | null;
+    signature?: string;
+  };
 }) {
   const vatLines = computeVatBreakdown(input.items);
   const lines: string[] = [];
-  lines.push("Receipt (Beleg)");
-  lines.push("");
-  lines.push(`Seller: ${input.seller.name}`);
-  lines.push(`Address: ${input.seller.addressLine1}`);
-  lines.push(`${input.seller.addressLine2}`);
-  if (input.seller.vatId) lines.push(`VAT ID: ${input.seller.vatId}`);
-  if (input.seller.taxId) lines.push(`Tax ID: ${input.seller.taxId}`);
-  lines.push("");
-  lines.push(`Receipt number: ${input.receiptNo}`);
-  lines.push(`Transaction ID: ${input.txId}`);
+  lines.push(`${input.seller.brandName}`);
+  lines.push("Receipt / Beleg");
+  lines.push(`Receipt No: ${input.receiptNo}`);
   lines.push(`Date/Time: ${formatDateTime(input.createdAt)}`);
+  lines.push(`Transaction: ${input.txId}`);
   if (input.locationName) lines.push(`Location: ${input.locationName}`);
   if (input.terminalLabel) lines.push(`Terminal: ${input.terminalLabel}`);
-  lines.push(`Payment method: ${input.paymentMethod}`);
   lines.push("");
-  lines.push("Items:");
+
+  const summaryRows: string[] = [];
   for (const item of input.items) {
     const lineGross = item.qty * item.unitGrossCents;
-    lines.push(
-      `- ${item.titleSnapshot} | qty ${item.qty} | unit ${formatCents(item.unitGrossCents)} | VAT ${item.vatRate}% | line ${formatCents(lineGross)}`,
-    );
+    summaryRows.push(`${item.qty} x ${item.titleSnapshot}`);
+    summaryRows.push(`  Unit ${formatCents(item.unitGrossCents, input.seller)} | VAT ${item.vatRate}% | Line ${formatCents(lineGross, input.seller)}`);
   }
-  lines.push("");
-  lines.push("VAT breakdown:");
+  summaryRows.push("---");
+  summaryRows.push(`Subtotal (net): ${formatCents(input.totals.netCents, input.seller)}`);
   for (const vat of vatLines) {
-    lines.push(`- VAT ${vat.rate}%: net ${formatCents(vat.netCents)} | VAT ${formatCents(vat.vatCents)} | gross ${formatCents(vat.grossCents)}`);
+    summaryRows.push(`VAT ${vat.rate}%: ${formatCents(vat.vatCents, input.seller)} (gross ${formatCents(vat.grossCents, input.seller)})`);
   }
-  lines.push("");
-  lines.push(`Net total: ${formatCents(input.totals.netCents)}`);
-  lines.push(`VAT total: ${formatCents(input.totals.vatCents)}`);
-  lines.push(`Gross total: ${formatCents(input.totals.grossCents)}`);
+  summaryRows.push(`VAT total: ${formatCents(input.totals.vatCents, input.seller)}`);
+  summaryRows.push(`TOTAL: ${formatCents(input.totals.grossCents, input.seller)}`);
+  summaryRows.push(`Payment method: ${input.paymentMethod}`);
+  pushSection(lines, "Order Summary", summaryRows);
+
+  const buyerRows = compactBuyerLines(input.buyer || {});
+  if (buyerRows.length > 0) {
+    pushSection(lines, "Customer", buyerRows);
+  }
+
+  const sellerRows = [
+    input.seller.companyName,
+    input.seller.addressLine1,
+    input.seller.addressLine2,
+    ...(input.seller.email ? [`Email: ${input.seller.email}`] : []),
+    ...(input.seller.phone ? [`Phone: ${input.seller.phone}`] : []),
+    ...(input.seller.steuernummer ? [`Steuernummer: ${input.seller.steuernummer}`] : []),
+    ...(input.seller.vatId ? [`USt-IdNr.: ${input.seller.vatId}`] : []),
+    ...(input.seller.finanzamt ? [`Finanzamt: ${input.seller.finanzamt}`] : []),
+  ];
+  pushSection(lines, "Seller & Tax", sellerRows);
+
+  if (input.tse?.provider) {
+    const signature = input.tse.signature || "-";
+    const compactSignature = signature.length > 180 ? `${signature.slice(0, 180)}...` : signature;
+    pushSection(lines, "TSE", [
+      `Provider: ${input.tse.provider}`,
+      `Serial: ${input.tse.serial || "-"}`,
+      `TSE Tx: ${input.tse.txId || "-"}`,
+      `Signature Counter: ${typeof input.tse.signatureCounter === "number" ? input.tse.signatureCounter : "-"}`,
+      `Log Time: ${input.tse.logTime ? formatDateTime(new Date(input.tse.logTime)) : "-"}`,
+      `Signature: ${compactSignature}`,
+    ]);
+  }
+
+  if (input.seller.footerLines.length > 0) {
+    pushSection(lines, "Footer", input.seller.footerLines);
+  }
   return lines;
 }
 
@@ -245,45 +349,74 @@ function buildInvoiceLines(input: {
     type?: string;
     name?: string;
     company?: string;
+    email?: string;
+    phone?: string;
     billingAddress?: string;
+    shippingAddress?: string;
+  };
+  tse?: {
+    provider?: string;
+    txId?: string;
+    serial?: string;
+    signatureCounter?: number;
+    logTime?: Date | null;
+    signature?: string;
   };
 }) {
   const vatLines = computeVatBreakdown(input.items);
   const lines: string[] = [];
+  lines.push(`${input.seller.brandName}`);
   lines.push("Invoice");
-  lines.push("");
-  lines.push(`Seller: ${input.seller.name}`);
-  lines.push(`Seller address: ${input.seller.addressLine1}`);
-  lines.push(`${input.seller.addressLine2}`);
-  if (input.seller.vatId) lines.push(`Seller VAT ID: ${input.seller.vatId}`);
-  if (input.seller.taxId) lines.push(`Seller Tax ID: ${input.seller.taxId}`);
-  lines.push("");
-  lines.push(`Invoice number: ${input.invoiceNo}`);
-  lines.push(`Invoice date: ${formatDateTime(input.createdAt)}`);
+  lines.push(`Invoice No: ${input.invoiceNo}`);
+  lines.push(`Date/Time: ${formatDateTime(input.createdAt)}`);
   lines.push(`Related transaction: ${input.txId}`);
   lines.push("");
-  lines.push("Buyer:");
-  lines.push(`Name: ${input.buyer.name || "-"}`);
-  lines.push(`Company: ${input.buyer.company || "-"}`);
-  lines.push(`Address: ${input.buyer.billingAddress || "-"}`);
-  lines.push(`Buyer type: ${input.buyer.type || "-"}`);
-  lines.push("");
-  lines.push("Line items:");
+
+  const summaryRows: string[] = [];
   for (const item of input.items) {
     const lineGross = item.qty * item.unitGrossCents;
-    lines.push(
-      `- ${item.titleSnapshot} | qty ${item.qty} | unit ${formatCents(item.unitGrossCents)} | VAT ${item.vatRate}% | gross ${formatCents(lineGross)}`,
-    );
+    summaryRows.push(`${item.qty} x ${item.titleSnapshot}`);
+    summaryRows.push(`  Unit ${formatCents(item.unitGrossCents, input.seller)} | VAT ${item.vatRate}% | Line ${formatCents(lineGross, input.seller)}`);
   }
-  lines.push("");
-  lines.push("VAT summary:");
+  summaryRows.push("---");
+  summaryRows.push(`Subtotal (net): ${formatCents(input.totals.netCents, input.seller)}`);
   for (const vat of vatLines) {
-    lines.push(`- VAT ${vat.rate}%: net ${formatCents(vat.netCents)} | VAT ${formatCents(vat.vatCents)} | gross ${formatCents(vat.grossCents)}`);
+    summaryRows.push(`VAT ${vat.rate}%: ${formatCents(vat.vatCents, input.seller)} (gross ${formatCents(vat.grossCents, input.seller)})`);
   }
-  lines.push("");
-  lines.push(`Net total: ${formatCents(input.totals.netCents)}`);
-  lines.push(`VAT total: ${formatCents(input.totals.vatCents)}`);
-  lines.push(`Gross total: ${formatCents(input.totals.grossCents)}`);
+  summaryRows.push(`VAT total: ${formatCents(input.totals.vatCents, input.seller)}`);
+  summaryRows.push(`TOTAL: ${formatCents(input.totals.grossCents, input.seller)}`);
+  pushSection(lines, "Order Summary", summaryRows);
+
+  pushSection(lines, "Customer", compactBuyerLines(input.buyer));
+
+  const sellerRows = [
+    input.seller.companyName,
+    input.seller.addressLine1,
+    input.seller.addressLine2,
+    ...(input.seller.email ? [`Email: ${input.seller.email}`] : []),
+    ...(input.seller.phone ? [`Phone: ${input.seller.phone}`] : []),
+    ...(input.seller.steuernummer ? [`Steuernummer: ${input.seller.steuernummer}`] : []),
+    ...(input.seller.vatId ? [`USt-IdNr.: ${input.seller.vatId}`] : []),
+    ...(input.seller.finanzamt ? [`Finanzamt: ${input.seller.finanzamt}`] : []),
+  ];
+  pushSection(lines, "Seller & Tax", sellerRows);
+
+  if (input.tse?.provider) {
+    const signature = input.tse.signature || "-";
+    const compactSignature = signature.length > 180 ? `${signature.slice(0, 180)}...` : signature;
+    pushSection(lines, "TSE", [
+      `Provider: ${input.tse.provider}`,
+      `Serial: ${input.tse.serial || "-"}`,
+      `TSE Tx: ${input.tse.txId || "-"}`,
+      `Signature Counter: ${typeof input.tse.signatureCounter === "number" ? input.tse.signatureCounter : "-"}`,
+      `Log Time: ${input.tse.logTime ? formatDateTime(new Date(input.tse.logTime)) : "-"}`,
+      `Signature: ${compactSignature}`,
+    ]);
+  }
+
+  if (input.seller.footerLines.length > 0) {
+    pushSection(lines, "Footer", input.seller.footerLines);
+  }
   return lines;
 }
 
@@ -308,7 +441,7 @@ export async function ensurePaidTransactionDocuments(txId: string | Types.Object
   ]);
 
   const paidAt = tx.payment?.approvedAt || tx.updatedAt || tx.createdAt || new Date();
-  const seller = getSellerData();
+  const seller = await getSellerData();
 
   const updates: Record<string, unknown> = {};
 
@@ -329,6 +462,27 @@ export async function ensurePaidTransactionDocuments(txId: string | Types.Object
       paymentMethod: tx.payment?.method || "card",
       locationName: location?.name,
       terminalLabel: terminal?.label,
+      buyer: tx.buyer
+        ? {
+            type: tx.buyer.type,
+            name: tx.buyer.name,
+            company: tx.buyer.company ?? undefined,
+            email: tx.buyer.email ?? undefined,
+            phone: tx.buyer.phone ?? undefined,
+            billingAddress: tx.buyer.billingAddress ?? undefined,
+            shippingAddress: tx.buyer.shippingAddress ?? undefined,
+          }
+        : undefined,
+      tse: tx.tse
+        ? {
+            provider: tx.tse.provider ?? undefined,
+            txId: tx.tse.txId ?? undefined,
+            serial: tx.tse.serial ?? undefined,
+            signatureCounter: tx.tse.signatureCounter ?? undefined,
+            logTime: tx.tse.logTime ?? null,
+            signature: tx.tse.signature ?? undefined,
+          }
+        : undefined,
     });
     const receiptPdf = buildSimplePdf(receiptLines);
     const receiptYear = paidAt.getUTCFullYear();
@@ -356,7 +510,10 @@ export async function ensurePaidTransactionDocuments(txId: string | Types.Object
     type: tx.buyer?.type,
     name: tx.buyer?.name,
     company: tx.buyer?.company ?? undefined,
+    email: tx.buyer?.email ?? undefined,
+    phone: tx.buyer?.phone ?? undefined,
     billingAddress: tx.buyer?.billingAddress ?? tx.buyer?.shippingAddress ?? undefined,
+    shippingAddress: tx.buyer?.shippingAddress ?? undefined,
   };
 
   if (invoiceRequired && !tx.invoice?.pdfUrl) {
@@ -389,6 +546,16 @@ export async function ensurePaidTransactionDocuments(txId: string | Types.Object
         items: tx.items || [],
         totals: tx.totals,
         buyer: invoiceBuyerData,
+        tse: tx.tse
+          ? {
+              provider: tx.tse.provider ?? undefined,
+              txId: tx.tse.txId ?? undefined,
+              serial: tx.tse.serial ?? undefined,
+              signatureCounter: tx.tse.signatureCounter ?? undefined,
+              logTime: tx.tse.logTime ?? null,
+              signature: tx.tse.signature ?? undefined,
+            }
+          : undefined,
       });
 
       const invoicePdf = buildSimplePdf(invoiceLines);

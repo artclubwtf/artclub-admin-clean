@@ -81,6 +81,8 @@ type CheckoutDocuments = {
   receiptPdfUrl: string | null;
   invoicePdfUrl: string | null;
   contractPdfUrl: string | null;
+  receiptRequestEmail: string | null;
+  receiptEmailQueuedAt: string | null;
 };
 
 type Props = {
@@ -130,6 +132,10 @@ type Props = {
   onSignaturePointerMove: (event: ReactPointerEvent<HTMLCanvasElement>) => void;
   onSignaturePointerUp: (event: ReactPointerEvent<HTMLCanvasElement>) => void;
   doneDocuments: CheckoutDocuments | null;
+  sendingReceiptEmail: boolean;
+  receiptEmailStatus: string | null;
+  receiptEmailError: string | null;
+  onSendReceiptEmail: () => void;
 };
 
 function euro(cents: number) {
@@ -192,6 +198,10 @@ export default function CheckoutFlowModal(props: Props) {
     onSignaturePointerMove,
     onSignaturePointerUp,
     doneDocuments,
+    sendingReceiptEmail,
+    receiptEmailStatus,
+    receiptEmailError,
+    onSendReceiptEmail,
   } = props;
 
   if (!open) return null;
@@ -852,6 +862,27 @@ export default function CheckoutFlowModal(props: Props) {
                     )}
                   </div>
                 </div>
+
+                {(doneDocuments?.receiptRequestEmail || receiptEmailStatus || receiptEmailError) && (
+                  <div className="rounded border border-slate-200 p-4 space-y-2">
+                    <p className="text-sm font-semibold text-slate-900">Receipt Email</p>
+                    {doneDocuments?.receiptRequestEmail && (
+                      <p className="text-sm text-slate-600">
+                        Recipient: <span className="font-medium text-slate-900">{doneDocuments.receiptRequestEmail}</span>
+                      </p>
+                    )}
+                    {doneDocuments?.receiptEmailQueuedAt && (
+                      <p className="text-xs text-slate-500">Queued at {doneDocuments.receiptEmailQueuedAt}</p>
+                    )}
+                    {receiptEmailStatus && <p className="text-sm text-emerald-700">{receiptEmailStatus}</p>}
+                    {receiptEmailError && <p className="text-sm text-rose-700">{receiptEmailError}</p>}
+                    {doneDocuments?.receiptRequestEmail && (
+                      <button type="button" className="btnPrimary" onClick={onSendReceiptEmail} disabled={sendingReceiptEmail}>
+                        {sendingReceiptEmail ? "Queueing..." : "Send receipt"}
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex justify-end">
                   <button type="button" className="btnPrimary" onClick={onClose}>

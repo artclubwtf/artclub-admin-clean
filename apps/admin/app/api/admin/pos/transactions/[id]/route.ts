@@ -76,6 +76,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             ? {
                 receiptNo: tx.receipt.receiptNo ?? null,
                 pdfUrl: tx.receipt.pdfUrl ?? null,
+                requestEmail: tx.receipt.requestEmail ?? null,
+                emailQueuedAt: tx.receipt.emailQueuedAt ?? null,
               }
             : null,
           invoice: tx.invoice

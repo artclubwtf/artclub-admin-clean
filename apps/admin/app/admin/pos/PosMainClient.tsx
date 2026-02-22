@@ -93,6 +93,8 @@ type CheckoutDocuments = {
   receiptPdfUrl: string | null;
   invoicePdfUrl: string | null;
   contractPdfUrl: string | null;
+  receiptRequestEmail: string | null;
+  receiptEmailQueuedAt: string | null;
 };
 
 const CART_STORAGE_KEY = "ac_pos_cart_session_v1";
@@ -193,6 +195,9 @@ export default function PosMainClient() {
   const [receiptEmailEnabled, setReceiptEmailEnabled] = useState(false);
   const [invoiceDetailsEnabled, setInvoiceDetailsEnabled] = useState(false);
   const [doneDocuments, setDoneDocuments] = useState<CheckoutDocuments | null>(null);
+  const [sendingReceiptEmail, setSendingReceiptEmail] = useState(false);
+  const [receiptEmailStatus, setReceiptEmailStatus] = useState<string | null>(null);
+  const [receiptEmailError, setReceiptEmailError] = useState<string | null>(null);
 
   const [checkoutMessage, setCheckoutMessage] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
@@ -393,7 +398,7 @@ export default function PosMainClient() {
       | {
           ok?: boolean;
           transaction?: {
-            receipt?: { pdfUrl?: string | null } | null;
+            receipt?: { pdfUrl?: string | null; requestEmail?: string | null; emailQueuedAt?: string | null } | null;
             invoice?: { pdfUrl?: string | null } | null;
             contract?: { pdfUrl?: string | null } | null;
           };
@@ -402,7 +407,14 @@ export default function PosMainClient() {
       | null;
 
     if (!res.ok || !payload?.ok) {
-      return { txId, receiptPdfUrl: null, invoicePdfUrl: null, contractPdfUrl: null };
+      return {
+        txId,
+        receiptPdfUrl: null,
+        invoicePdfUrl: null,
+        contractPdfUrl: null,
+        receiptRequestEmail: null,
+        receiptEmailQueuedAt: null,
+      };
     }
 
     return {
@@ -410,6 +422,8 @@ export default function PosMainClient() {
       receiptPdfUrl: payload.transaction?.receipt?.pdfUrl ?? null,
       invoicePdfUrl: payload.transaction?.invoice?.pdfUrl ?? null,
       contractPdfUrl: payload.transaction?.contract?.pdfUrl ?? null,
+      receiptRequestEmail: payload.transaction?.receipt?.requestEmail ?? null,
+      receiptEmailQueuedAt: payload.transaction?.receipt?.emailQueuedAt ?? null,
     };
   };
 
@@ -419,8 +433,41 @@ export default function PosMainClient() {
     setCheckoutStep("done");
     setCheckoutMessage(message);
     setCheckoutError(null);
+    setReceiptEmailStatus(null);
+    setReceiptEmailError(null);
     const docs = await loadCheckoutDocuments(txId);
     setDoneDocuments(docs);
+  };
+
+  const handleSendReceiptEmail = async () => {
+    const txId = doneDocuments?.txId;
+    if (!txId) return;
+
+    setSendingReceiptEmail(true);
+    setReceiptEmailError(null);
+    setReceiptEmailStatus(null);
+    try {
+      const email = doneDocuments?.receiptRequestEmail || toOptionalString(buyerForm.email);
+      const res = await fetch(`/api/admin/pos/transactions/${encodeURIComponent(txId)}/send-receipt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email || undefined }),
+      });
+      const payload = (await res.json().catch(() => null)) as
+        | { ok?: boolean; email?: string; queuedAt?: string; error?: string }
+        | null;
+      if (!res.ok || !payload?.ok) {
+        throw new Error(payload?.error || "Failed to queue receipt email");
+      }
+      setReceiptEmailStatus(`Receipt send request queued for ${payload.email || email}.`);
+      const refreshed = await loadCheckoutDocuments(txId);
+      setDoneDocuments(refreshed);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to queue receipt email";
+      setReceiptEmailError(message);
+    } finally {
+      setSendingReceiptEmail(false);
+    }
   };
 
   const onAddToCart = (item: CatalogItem) => {
@@ -820,6 +867,8 @@ export default function PosMainClient() {
     setCheckoutError(null);
     setCheckoutMessage(null);
     setDoneDocuments(null);
+    setReceiptEmailStatus(null);
+    setReceiptEmailError(null);
     setPendingExternalTxId(null);
     setExternalRefForm(initialExternalRefForm());
   };
@@ -1178,6 +1227,10 @@ export default function PosMainClient() {
         onSignaturePointerMove={onSignaturePointerMove}
         onSignaturePointerUp={onSignaturePointerUp}
         doneDocuments={doneDocuments}
+        sendingReceiptEmail={sendingReceiptEmail}
+        receiptEmailStatus={receiptEmailStatus}
+        receiptEmailError={receiptEmailError}
+        onSendReceiptEmail={handleSendReceiptEmail}
       />
 
       <style jsx>{`

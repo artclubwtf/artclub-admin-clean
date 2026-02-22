@@ -58,6 +58,27 @@ type PosTerminalSetting = {
 type PosSettingsState = {
   locations: PosLocationSetting[];
   terminals: PosTerminalSetting[];
+  brandingLegal: PosBrandingLegalState;
+};
+
+type PosBrandingLegalState = {
+  brandName: string;
+  logoUrl: string;
+  seller: {
+    companyName: string;
+    addressLine1: string;
+    addressLine2: string;
+    email: string;
+    phone: string;
+  };
+  tax: {
+    steuernummer: string;
+    ustId: string;
+    finanzamt: string;
+  };
+  receiptFooterLines: string;
+  locale: string;
+  currency: string;
 };
 
 type LocationFormState = {
@@ -106,6 +127,26 @@ const initialTerminalForm: TerminalFormState = {
   isActive: true,
 };
 
+const initialBrandingLegalForm: PosBrandingLegalState = {
+  brandName: "ARTCLUB",
+  logoUrl: "",
+  seller: {
+    companyName: "Artclub Mixed Media GmbH",
+    addressLine1: "Friedrichsruher Straße 37",
+    addressLine2: "14193 Berlin",
+    email: "support@artclub.wtf",
+    phone: "+49 176 41534464",
+  },
+  tax: {
+    steuernummer: "",
+    ustId: "",
+    finanzamt: "",
+  },
+  receiptFooterLines: "Vielen Dank fuer Ihren Einkauf.\nThank you for your purchase.",
+  locale: "de-DE",
+  currency: "EUR",
+};
+
 function eurosFromCents(value: number) {
   return (value / 100).toFixed(2);
 }
@@ -122,7 +163,13 @@ function parseTagsInput(input: string) {
 }
 
 export default function PosSettingsClient() {
-  const [settings, setSettings] = useState<PosSettingsState>({ locations: [], terminals: [] });
+  const [settings, setSettings] = useState<PosSettingsState>({
+    locations: [],
+    terminals: [],
+    brandingLegal: initialBrandingLegalForm,
+  });
+  const [brandingForm, setBrandingForm] = useState<PosBrandingLegalState>(initialBrandingLegalForm);
+  const [savingBranding, setSavingBranding] = useState(false);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
@@ -157,6 +204,25 @@ export default function PosSettingsClient() {
             settings?: {
               locations?: PosLocationSetting[];
               terminals?: PosTerminalSetting[];
+              brandingLegal?: {
+                brandName?: string;
+                logoUrl?: string | null;
+                seller?: {
+                  companyName?: string;
+                  addressLine1?: string;
+                  addressLine2?: string;
+                  email?: string;
+                  phone?: string;
+                };
+                tax?: {
+                  steuernummer?: string | null;
+                  ustId?: string | null;
+                  finanzamt?: string | null;
+                };
+                receiptFooterLines?: string[];
+                locale?: string;
+                currency?: string;
+              };
             };
             error?: string;
           }
@@ -169,8 +235,30 @@ export default function PosSettingsClient() {
       const nextSettings: PosSettingsState = {
         locations: Array.isArray(payload.settings?.locations) ? payload.settings.locations : [],
         terminals: Array.isArray(payload.settings?.terminals) ? payload.settings.terminals : [],
+        brandingLegal: {
+          brandName: payload.settings?.brandingLegal?.brandName || initialBrandingLegalForm.brandName,
+          logoUrl: payload.settings?.brandingLegal?.logoUrl || "",
+          seller: {
+            companyName: payload.settings?.brandingLegal?.seller?.companyName || initialBrandingLegalForm.seller.companyName,
+            addressLine1: payload.settings?.brandingLegal?.seller?.addressLine1 || initialBrandingLegalForm.seller.addressLine1,
+            addressLine2: payload.settings?.brandingLegal?.seller?.addressLine2 || initialBrandingLegalForm.seller.addressLine2,
+            email: payload.settings?.brandingLegal?.seller?.email || initialBrandingLegalForm.seller.email,
+            phone: payload.settings?.brandingLegal?.seller?.phone || initialBrandingLegalForm.seller.phone,
+          },
+          tax: {
+            steuernummer: payload.settings?.brandingLegal?.tax?.steuernummer || "",
+            ustId: payload.settings?.brandingLegal?.tax?.ustId || "",
+            finanzamt: payload.settings?.brandingLegal?.tax?.finanzamt || "",
+          },
+          receiptFooterLines: Array.isArray(payload.settings?.brandingLegal?.receiptFooterLines)
+            ? payload.settings?.brandingLegal?.receiptFooterLines.filter(Boolean).join("\n")
+            : initialBrandingLegalForm.receiptFooterLines,
+          locale: payload.settings?.brandingLegal?.locale || initialBrandingLegalForm.locale,
+          currency: payload.settings?.brandingLegal?.currency || initialBrandingLegalForm.currency,
+        },
       };
       setSettings(nextSettings);
+      setBrandingForm(nextSettings.brandingLegal);
       setTerminalForm((prev) => {
         if (prev.locationId || nextSettings.locations.length === 0) return prev;
         return { ...prev, locationId: nextSettings.locations[0]?.id || "" };
@@ -214,6 +302,55 @@ export default function PosSettingsClient() {
     if (filterType === "all") return items;
     return items.filter((item) => item.type === filterType);
   }, [filterType, items]);
+
+  const handleSaveBrandingLegal = async () => {
+    setSettingsError(null);
+    setSettingsMessage(null);
+    setSavingBranding(true);
+    try {
+      const res = await fetch("/api/admin/pos/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "save_branding_legal",
+          brandName: brandingForm.brandName,
+          logoUrl: brandingForm.logoUrl,
+          seller: brandingForm.seller,
+          tax: brandingForm.tax,
+          receiptFooterLines: brandingForm.receiptFooterLines
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean),
+          locale: brandingForm.locale,
+          currency: brandingForm.currency,
+        }),
+      });
+
+      const payload = (await res.json().catch(() => null)) as
+        | {
+            ok?: boolean;
+            error?: string;
+            settings?: PosSettingsState;
+          }
+        | null;
+      if (!res.ok || !payload?.ok) {
+        throw new Error(payload?.error || "Failed to save POS branding/legal settings");
+      }
+
+      if (payload.settings) {
+        setSettings(payload.settings);
+        setBrandingForm(payload.settings.brandingLegal);
+      } else {
+        await loadSettings();
+      }
+      setSettingsMessage("POS branding & legal settings saved.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to save POS branding/legal settings";
+      setSettingsError(message);
+    } finally {
+      setSavingBranding(false);
+    }
+  };
 
   const handleCreateLocation = async () => {
     setSettingsError(null);
@@ -468,6 +605,168 @@ export default function PosSettingsClient() {
         <h1 className="text-2xl font-semibold">Settings</h1>
         <p className="text-sm text-slate-600">Configure terminals, locations, tax defaults, invoice thresholds, and catalog.</p>
       </header>
+
+      <section className="card space-y-4">
+        <div className="cardHeader">
+          <div>
+            <strong>POS Branding & Legal</strong>
+            <p className="mt-1 text-sm text-slate-600">
+              Editable seller identity, tax fields, footer text, and locale/currency used for POS receipts and invoices.
+            </p>
+          </div>
+          <button type="button" className="btnPrimary" onClick={handleSaveBrandingLegal} disabled={savingBranding || settingsLoading}>
+            {savingBranding ? "Saving..." : "Save branding & legal"}
+          </button>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <div className="rounded border border-slate-200 p-4 space-y-3">
+            <strong>Brand</strong>
+            <label className="block space-y-1">
+              <span className="text-sm text-slate-600">Brand name</span>
+              <input
+                className="w-full rounded border border-slate-200 px-3 py-2"
+                value={brandingForm.brandName}
+                onChange={(event) => setBrandingForm((prev) => ({ ...prev, brandName: event.target.value }))}
+                placeholder="ARTCLUB"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-sm text-slate-600">Logo URL (optional)</span>
+              <input
+                className="w-full rounded border border-slate-200 px-3 py-2"
+                value={brandingForm.logoUrl}
+                onChange={(event) => setBrandingForm((prev) => ({ ...prev, logoUrl: event.target.value }))}
+                placeholder="https://..."
+              />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block space-y-1">
+                <span className="text-sm text-slate-600">Locale</span>
+                <input
+                  className="w-full rounded border border-slate-200 px-3 py-2"
+                  value={brandingForm.locale}
+                  onChange={(event) => setBrandingForm((prev) => ({ ...prev, locale: event.target.value }))}
+                  placeholder="de-DE"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-sm text-slate-600">Currency</span>
+                <input
+                  className="w-full rounded border border-slate-200 px-3 py-2 uppercase"
+                  value={brandingForm.currency}
+                  onChange={(event) => setBrandingForm((prev) => ({ ...prev, currency: event.target.value.toUpperCase() }))}
+                  placeholder="EUR"
+                  maxLength={3}
+                />
+              </label>
+            </div>
+            <label className="block space-y-1">
+              <span className="text-sm text-slate-600">Receipt footer lines (one per line)</span>
+              <textarea
+                rows={4}
+                className="w-full rounded border border-slate-200 px-3 py-2"
+                value={brandingForm.receiptFooterLines}
+                onChange={(event) => setBrandingForm((prev) => ({ ...prev, receiptFooterLines: event.target.value }))}
+              />
+            </label>
+          </div>
+
+          <div className="rounded border border-slate-200 p-4 space-y-4">
+            <div className="space-y-3">
+              <strong>Seller</strong>
+              <label className="block space-y-1">
+                <span className="text-sm text-slate-600">Company name</span>
+                <input
+                  className="w-full rounded border border-slate-200 px-3 py-2"
+                  value={brandingForm.seller.companyName}
+                  onChange={(event) =>
+                    setBrandingForm((prev) => ({ ...prev, seller: { ...prev.seller, companyName: event.target.value } }))
+                  }
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-sm text-slate-600">Address line 1</span>
+                <input
+                  className="w-full rounded border border-slate-200 px-3 py-2"
+                  value={brandingForm.seller.addressLine1}
+                  onChange={(event) =>
+                    setBrandingForm((prev) => ({ ...prev, seller: { ...prev.seller, addressLine1: event.target.value } }))
+                  }
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-sm text-slate-600">Address line 2</span>
+                <input
+                  className="w-full rounded border border-slate-200 px-3 py-2"
+                  value={brandingForm.seller.addressLine2}
+                  onChange={(event) =>
+                    setBrandingForm((prev) => ({ ...prev, seller: { ...prev.seller, addressLine2: event.target.value } }))
+                  }
+                />
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block space-y-1">
+                  <span className="text-sm text-slate-600">Email</span>
+                  <input
+                    className="w-full rounded border border-slate-200 px-3 py-2"
+                    value={brandingForm.seller.email}
+                    onChange={(event) =>
+                      setBrandingForm((prev) => ({ ...prev, seller: { ...prev.seller, email: event.target.value } }))
+                    }
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-sm text-slate-600">Phone</span>
+                  <input
+                    className="w-full rounded border border-slate-200 px-3 py-2"
+                    value={brandingForm.seller.phone}
+                    onChange={(event) =>
+                      setBrandingForm((prev) => ({ ...prev, seller: { ...prev.seller, phone: event.target.value } }))
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <strong>Tax</strong>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block space-y-1">
+                  <span className="text-sm text-slate-600">Steuernummer</span>
+                  <input
+                    className="w-full rounded border border-slate-200 px-3 py-2"
+                    value={brandingForm.tax.steuernummer}
+                    onChange={(event) =>
+                      setBrandingForm((prev) => ({ ...prev, tax: { ...prev.tax, steuernummer: event.target.value } }))
+                    }
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-sm text-slate-600">USt-IdNr.</span>
+                  <input
+                    className="w-full rounded border border-slate-200 px-3 py-2"
+                    value={brandingForm.tax.ustId}
+                    onChange={(event) =>
+                      setBrandingForm((prev) => ({ ...prev, tax: { ...prev.tax, ustId: event.target.value } }))
+                    }
+                  />
+                </label>
+              </div>
+              <label className="block space-y-1">
+                <span className="text-sm text-slate-600">Finanzamt (optional)</span>
+                <input
+                  className="w-full rounded border border-slate-200 px-3 py-2"
+                  value={brandingForm.tax.finanzamt}
+                  onChange={(event) =>
+                    setBrandingForm((prev) => ({ ...prev, tax: { ...prev.tax, finanzamt: event.target.value } }))
+                  }
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section className="card space-y-4">
         <div className="cardHeader">

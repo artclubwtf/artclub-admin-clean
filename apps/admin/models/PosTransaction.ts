@@ -97,6 +97,7 @@ const posTransactionSchema = new Schema(
       receiptNo: { type: String, trim: true },
       pdfUrl: { type: String, trim: true },
       requestEmail: { type: String, trim: true },
+      emailQueuedAt: { type: Date },
     },
     invoice: {
       invoiceNo: { type: String, trim: true },

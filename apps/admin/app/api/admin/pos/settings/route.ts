@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { connectMongo } from "@/lib/mongodb";
+import { getOrCreatePosSettings, mapPosSettingsDocToSnapshot } from "@/lib/pos/settings";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { PosLocationModel } from "@/models/PosLocation";
+import { POS_SETTINGS_SCOPE, PosSettingsModel, currentSettingsEnvironment } from "@/models/PosSettings";
 import { PosTerminalModel } from "@/models/PosTerminal";
 
 const createLocationSchema = z.object({
@@ -33,15 +35,39 @@ const createTerminalSchema = z
     }
   });
 
+const saveBrandingLegalSchema = z.object({
+  action: z.literal("save_branding_legal"),
+  brandName: z.string().trim().min(1, "brand_name_required"),
+  logoUrl: z.string().trim().optional(),
+  seller: z.object({
+    companyName: z.string().trim().min(1, "seller_company_name_required"),
+    addressLine1: z.string().trim().min(1, "seller_address_line1_required"),
+    addressLine2: z.string().trim().min(1, "seller_address_line2_required"),
+    email: z.string().trim().email("seller_email_invalid"),
+    phone: z.string().trim().min(1, "seller_phone_required"),
+  }),
+  tax: z
+    .object({
+      steuernummer: z.string().trim().optional(),
+      ustId: z.string().trim().optional(),
+      finanzamt: z.string().trim().optional(),
+    })
+    .optional(),
+  receiptFooterLines: z.array(z.string()).max(20, "too_many_footer_lines").optional(),
+  locale: z.string().trim().min(2, "locale_required").optional(),
+  currency: z.string().trim().min(3, "currency_required").max(3, "currency_required").optional(),
+});
+
 function normalizeString(value?: string) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }
 
 async function readSettingsPayload() {
-  const [locations, terminals] = await Promise.all([
+  const [locations, terminals, posSettings] = await Promise.all([
     PosLocationModel.find({}).sort({ name: 1 }).lean(),
     PosTerminalModel.find({}).sort({ label: 1 }).lean(),
+    getOrCreatePosSettings(),
   ]);
 
   return {
@@ -72,6 +98,7 @@ async function readSettingsPayload() {
       receiptOnlyMax: null,
       invoiceRequiredFrom: null,
     },
+    brandingLegal: posSettings,
   };
 }
 
@@ -156,6 +183,59 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: false, error: "terminal_provider_ref_exists" }, { status: 409 });
       }
       const message = error instanceof Error ? error.message : "failed_to_create_terminal";
+      return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    }
+  }
+
+  if (action === "save_branding_legal") {
+    const parsed = saveBrandingLegalSchema.safeParse(body);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return NextResponse.json({ ok: false, error: issue?.message || "invalid_payload" }, { status: 400 });
+    }
+
+    const data = parsed.data;
+    const trimOptional = (value?: string) => {
+      const trimmed = value?.trim();
+      return trimmed ? trimmed : undefined;
+    };
+
+    try {
+      const environment = currentSettingsEnvironment();
+      const updated = await PosSettingsModel.findOneAndUpdate(
+        { scope: POS_SETTINGS_SCOPE, environment },
+        {
+          $set: {
+            brandName: data.brandName.trim(),
+            logoUrl: trimOptional(data.logoUrl),
+            seller: {
+              companyName: data.seller.companyName.trim(),
+              addressLine1: data.seller.addressLine1.trim(),
+              addressLine2: data.seller.addressLine2.trim(),
+              email: data.seller.email.trim(),
+              phone: data.seller.phone.trim(),
+            },
+            tax: {
+              steuernummer: trimOptional(data.tax?.steuernummer),
+              ustId: trimOptional(data.tax?.ustId),
+              finanzamt: trimOptional(data.tax?.finanzamt),
+            },
+            receiptFooterLines: (data.receiptFooterLines || []).map((line) => line.trim()).filter(Boolean),
+            locale: trimOptional(data.locale) || "de-DE",
+            currency: (trimOptional(data.currency) || "EUR").toUpperCase(),
+          },
+          $setOnInsert: { scope: POS_SETTINGS_SCOPE, environment },
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true },
+      ).lean();
+
+      const settings = await readSettingsPayload();
+      return NextResponse.json(
+        { ok: true, settings, brandingLegal: mapPosSettingsDocToSnapshot(updated), message: "branding_legal_saved" },
+        { status: 200 },
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "failed_to_save_branding_legal";
       return NextResponse.json({ ok: false, error: message }, { status: 500 });
     }
   }
