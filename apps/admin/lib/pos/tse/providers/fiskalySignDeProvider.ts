@@ -311,14 +311,19 @@ async function fiskalyRequest(config: FiskalyConfig, path: string, init: Request
   return json;
 }
 
-function buildTxPath(config: FiskalyConfig, fiskalyTxId: string) {
+function buildTxUpsertPath(config: FiskalyConfig) {
+  return `/tss/${encodeURIComponent(config.tssId)}/tx/${encodeURIComponent(config.clientId)}`;
+}
+
+function buildTxRetrievePath(config: FiskalyConfig, fiskalyTxId: string) {
   return `/tss/${encodeURIComponent(config.tssId)}/tx/${encodeURIComponent(config.clientId)}/${encodeURIComponent(fiskalyTxId)}`;
 }
 
-function buildStartPayload(ctx: FiskalyTSETransactionContext, config: FiskalyConfig) {
+function buildStartPayload(ctx: FiskalyTSETransactionContext, config: FiskalyConfig, fiskalyTxId: string) {
   const gross = Math.max(0, ctx.amountCents);
   const major = gross / 100;
   return {
+    tx_id: fiskalyTxId,
     state: "ACTIVE",
     client_id: config.clientId,
     schema: "standard_v1",
@@ -334,10 +339,11 @@ function buildStartPayload(ctx: FiskalyTSETransactionContext, config: FiskalyCon
   };
 }
 
-function buildFinishPayload(ctx: FiskalyTSETransactionContext, config: FiskalyConfig) {
+function buildFinishPayload(ctx: FiskalyTSETransactionContext, config: FiskalyConfig, fiskalyTxId: string) {
   const gross = Math.max(0, ctx.amountCents);
   const major = gross / 100;
   return {
+    tx_id: fiskalyTxId,
     state: "FINISHED",
     client_id: config.clientId,
     schema: "standard_v1",
@@ -352,8 +358,9 @@ function buildFinishPayload(ctx: FiskalyTSETransactionContext, config: FiskalyCo
   };
 }
 
-function buildCancelPayload(ctx: FiskalyTSETransactionContext, config: FiskalyConfig) {
+function buildCancelPayload(ctx: FiskalyTSETransactionContext, config: FiskalyConfig, fiskalyTxId: string) {
   return {
+    tx_id: fiskalyTxId,
     state: "CANCELLED",
     client_id: config.clientId,
     schema: "standard_v1",
@@ -422,10 +429,10 @@ export class FiskalySignDeProvider {
     const txId = ctx.tseTxId || deterministicUuid(ctx.txId);
     const json = await fiskalyRequest(
       config,
-      `${buildTxPath(config, txId)}?tx_revision=1`,
+      `${buildTxUpsertPath(config)}?tx_revision=1`,
       {
         method: "PUT",
-        body: JSON.stringify(buildStartPayload(ctx, config)),
+        body: JSON.stringify(buildStartPayload(ctx, config, txId)),
         idempotencyKey: ctx.txId,
       },
     );
@@ -448,7 +455,7 @@ export class FiskalySignDeProvider {
 
     // Try to fetch current transaction state if revision is unknown or stale.
     try {
-      const current = await fiskalyRequest(config, buildTxPath(config, txId), {
+      const current = await fiskalyRequest(config, buildTxRetrievePath(config, txId), {
         method: "GET",
       });
       const currentRecord = asRecord(current);
@@ -462,10 +469,10 @@ export class FiskalySignDeProvider {
 
     const json = await fiskalyRequest(
       config,
-      `${buildTxPath(config, txId)}?tx_revision=${encodeURIComponent(String(revision))}`,
+      `${buildTxUpsertPath(config)}?tx_revision=${encodeURIComponent(String(revision))}`,
       {
         method: "PUT",
-        body: JSON.stringify(buildFinishPayload(ctx, config)),
+        body: JSON.stringify(buildFinishPayload(ctx, config, txId)),
         idempotencyKey: `${ctx.txId}:finish`,
       },
     );
@@ -481,7 +488,7 @@ export class FiskalySignDeProvider {
     const txId = ctx.tseTxId || ctx.existingTse?.txId || deterministicUuid(ctx.txId);
     let revision = nextRevisionFromRaw(ctx.existingTse?.rawPayload, 2);
     try {
-      const current = await fiskalyRequest(config, buildTxPath(config, txId), {
+      const current = await fiskalyRequest(config, buildTxRetrievePath(config, txId), {
         method: "GET",
       });
       const currentRecord = asRecord(current);
@@ -499,10 +506,10 @@ export class FiskalySignDeProvider {
 
     await fiskalyRequest(
       config,
-      `${buildTxPath(config, txId)}?tx_revision=${encodeURIComponent(String(revision))}`,
+      `${buildTxUpsertPath(config)}?tx_revision=${encodeURIComponent(String(revision))}`,
       {
         method: "PUT",
-        body: JSON.stringify(buildCancelPayload(ctx, config)),
+        body: JSON.stringify(buildCancelPayload(ctx, config, txId)),
         idempotencyKey: `${ctx.txId}:cancel`,
       },
     );
