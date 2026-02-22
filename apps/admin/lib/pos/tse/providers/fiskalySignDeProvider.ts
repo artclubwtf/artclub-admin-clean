@@ -177,6 +177,28 @@ async function readJsonSafe(res: Response) {
   }
 }
 
+function summarizeRequestBodyForError(body: BodyInit | null | undefined) {
+  if (!body || typeof body !== "string") return null;
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    const root = asRecord(parsed);
+    const schema = asRecord(root.schema);
+    const standardV1 = asRecord(schema.standard_v1);
+    const receipt = asRecord(standardV1.receipt);
+    return {
+      rootKeys: Object.keys(root).sort(),
+      hasAmountsPerVatRate: Array.isArray(root.amounts_per_vat_rate),
+      amountsPerVatRateLen: Array.isArray(root.amounts_per_vat_rate) ? root.amounts_per_vat_rate.length : null,
+      schemaKeys: Object.keys(schema).sort(),
+      standardV1Keys: Object.keys(standardV1).sort(),
+      receiptKeys: Object.keys(receipt).sort(),
+      state: typeof root.state === "string" ? root.state : null,
+    };
+  } catch {
+    return { bodyType: "non-json-string" };
+  }
+}
+
 function summarizeErrorPayload(payload: unknown) {
   const record = asRecord(payload);
   const errorRecord = asRecord(record.error);
@@ -306,7 +328,9 @@ async function fiskalyRequest(config: FiskalyConfig, path: string, init: Request
   }
   const json = await readJsonSafe(res);
   if (!res.ok) {
-    throw new Error(`fiskaly_api_error:${res.status}:${path}:${summarizeErrorPayload(json)}`);
+    const debugBody = summarizeRequestBodyForError(init.body);
+    const debugSuffix = debugBody ? `:req=${JSON.stringify(debugBody)}` : "";
+    throw new Error(`fiskaly_api_error:${res.status}:${path}:${summarizeErrorPayload(json)}${debugSuffix}`);
   }
   return json;
 }
@@ -438,6 +462,7 @@ export class FiskalySignDeProvider {
       env: config.env,
       baseUrl: config.baseUrl,
       debug: {
+        providerBuild: "fiskaly-sign-de-v2-payload-debug-1",
         authFallbackEnabled: true,
         backendAuthBaseUrl: getFiskalyBackendApiBaseUrl(config.env),
       },
