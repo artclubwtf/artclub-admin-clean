@@ -31,7 +31,7 @@ export type TSEProvider = {
   startTransaction(tx: TSETransactionContext): Promise<TSEStartResult>;
   finishTransaction(tx: TSETransactionContext): Promise<TSEFinishResult>;
   cancelTransaction(tx: TSETransactionContext): Promise<void>;
-  ping?: () => Promise<{ ok: boolean; provider: string; env?: string }>;
+  ping?: () => Promise<{ ok: boolean; provider: string; env?: string; baseUrl?: string; debug?: Record<string, unknown> }>;
 };
 
 class NoopTSEProvider implements TSEProvider {
@@ -60,7 +60,12 @@ class NoopTSEProvider implements TSEProvider {
   }
 
   async ping() {
-    return { ok: true, provider: "noop", env: process.env.NODE_ENV || "development" };
+    return {
+      ok: true,
+      provider: "noop",
+      env: process.env.NODE_ENV || "development",
+      debug: { fallback: false },
+    };
   }
 }
 
@@ -115,7 +120,13 @@ export async function getTSEHealth() {
     return { ok: true, provider: providerName };
   }
   const result = await provider.ping();
-  return { ok: Boolean(result.ok), provider: result.provider || providerName, env: result.env };
+  return {
+    ok: Boolean(result.ok),
+    provider: result.provider || providerName,
+    env: result.env,
+    baseUrl: result.baseUrl,
+    debug: result.debug,
+  };
 }
 
 type TxRef = {

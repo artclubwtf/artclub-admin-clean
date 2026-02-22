@@ -65,6 +65,15 @@ function getFiskalyBaseUrl(env: "sandbox" | "production", override?: string | nu
   return "https://kassensichv-middleware-sandbox.fiskaly.com/api/v2";
 }
 
+function getFiskalyBackendApiBaseUrl(env: "sandbox" | "production") {
+  if (env === "production") return "https://kassensichv.fiskaly.com/api/v2";
+  return "https://kassensichv-sandbox.fiskaly.com/api/v2";
+}
+
+function toServiceRootUrl(apiBaseUrl: string) {
+  return apiBaseUrl.replace(/\/api\/v2\/?$/i, "");
+}
+
 function requireConfig(): FiskalyConfig {
   const env = (trimOptional(process.env.FISKALY_ENV)?.toLowerCase() === "production" ? "production" : "sandbox") as
     | "sandbox"
@@ -202,28 +211,47 @@ async function getAuthToken(config: FiskalyConfig) {
     return authTokenCache.token;
   }
 
-  let res: Response;
-  try {
-    res = await fetch(`${config.baseUrl}/auth`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        api_key: config.apiKey,
-        api_secret: config.apiSecret,
-      }),
-      cache: "no-store",
-    });
-  } catch (error) {
-    throw new Error(`fiskaly_network_error:auth:${config.baseUrl}/auth:${describeFetchError(error)}`);
+  const authPayload = {
+    api_key: config.apiKey,
+    api_secret: config.apiSecret,
+    base_url: toServiceRootUrl(config.baseUrl),
+  };
+
+  const tryAuth = async (apiBaseUrl: string, tag: "middleware" | "backend") => {
+    let response: Response;
+    try {
+      response = await fetch(`${apiBaseUrl}/auth`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(authPayload),
+        cache: "no-store",
+      });
+    } catch (error) {
+      throw new Error(`fiskaly_network_error:auth:${apiBaseUrl}/auth:${describeFetchError(error)}`);
+    }
+
+    const payload = await readJsonSafe(response);
+    return { response, payload, tag, apiBaseUrl };
+  };
+
+  let authAttempt = await tryAuth(config.baseUrl, "middleware");
+
+  // SIGN DE V2 docs note that auth is still available via backend; some middleware hosts return 404 for /auth.
+  if (authAttempt.response.status === 404) {
+    authAttempt = await tryAuth(getFiskalyBackendApiBaseUrl(config.env), "backend");
   }
-  const json = await readJsonSafe(res);
-  if (!res.ok) {
+
+  if (!authAttempt.response.ok) {
     const hint =
-      res.status === 404 && typeof config.baseUrl === "string" && config.baseUrl.includes("/api/v2")
-        ? ":hint=check_fiskaly_base_url_or_host(use_sign_de_v2_middleware)"
+      authAttempt.response.status === 404
+        ? ":hint=check_fiskaly_base_url_or_host(use_sign_de_v2_middleware_and_backend_auth_fallback)"
         : "";
-    throw new Error(`fiskaly_auth_failed:${res.status}:${summarizeErrorPayload(json)}${hint}`);
+    throw new Error(
+      `fiskaly_auth_failed:${authAttempt.response.status}:${summarizeErrorPayload(authAttempt.payload)}:auth_via=${authAttempt.tag}:${authAttempt.apiBaseUrl}${hint}`,
+    );
   }
+
+  const json = authAttempt.payload;
   const record = asRecord(json);
   const accessToken = pickString(record, ["access_token", "token"]);
   if (!accessToken) {
@@ -348,7 +376,16 @@ export class FiskalySignDeProvider {
   async ping() {
     const config = this.config;
     await getAuthToken(config);
-    return { ok: true as const, provider: "fiskaly" as const, env: config.env };
+    return {
+      ok: true as const,
+      provider: "fiskaly" as const,
+      env: config.env,
+      baseUrl: config.baseUrl,
+      debug: {
+        authFallbackEnabled: true,
+        backendAuthBaseUrl: getFiskalyBackendApiBaseUrl(config.env),
+      },
+    };
   }
 
   async startTransaction(ctx: FiskalyTSETransactionContext): Promise<FiskalyTSEStartResult> {

@@ -11,7 +11,16 @@ export async function GET(req: Request) {
   try {
     await connectMongo();
     const health = await getTSEHealth();
-    return NextResponse.json({ ok: Boolean(health.ok), provider: health.provider, env: health.env ?? null }, { status: 200 });
+    return NextResponse.json(
+      {
+        ok: Boolean(health.ok),
+        provider: health.provider,
+        env: health.env ?? null,
+        baseUrl: "baseUrl" in health ? (health.baseUrl ?? null) : null,
+        debug: "debug" in health ? (health.debug ?? null) : null,
+      },
+      { status: 200 },
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "tse_health_failed";
     return NextResponse.json(
@@ -19,6 +28,7 @@ export async function GET(req: Request) {
         ok: false,
         provider: process.env.POS_TSE_PROVIDER?.trim().toLowerCase() || "noop",
         env: process.env.FISKALY_ENV?.trim().toLowerCase() || null,
+        baseUrl: process.env.FISKALY_API_BASE_URL?.trim() || null,
         error: message,
       },
       { status: 500 },
