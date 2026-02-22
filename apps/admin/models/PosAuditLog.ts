@@ -10,6 +10,7 @@ export const posAuditActions = [
   "STORNO",
   "ISSUE_RECEIPT",
   "ISSUE_INVOICE",
+  "INVOICE_SKIPPED_MISSING_BUYER",
   "SIGN_CONTRACT",
   "TSE_START",
   "TSE_FINISH",

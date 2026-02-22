@@ -172,6 +172,21 @@ function shouldIssueInvoice(buyerType: string | undefined, grossCents: number) {
   return false;
 }
 
+function hasRequiredInvoiceBuyerData(input: {
+  buyerType?: string;
+  name?: string;
+  company?: string;
+  billingAddress?: string;
+}) {
+  const name = input.name?.trim();
+  const billingAddress = input.billingAddress?.trim();
+  const company = input.company?.trim();
+
+  if (!name || !billingAddress) return false;
+  if (input.buyerType === "b2b" && !company) return false;
+  return true;
+}
+
 function buildReceiptLines(input: {
   seller: SellerData;
   txId: string;
@@ -337,45 +352,65 @@ export async function ensurePaidTransactionDocuments(txId: string | Types.Object
 
   const invoiceRequired = shouldIssueInvoice(tx.buyer?.type, tx.totals?.grossCents || 0);
   let invoiceNo = tx.invoice?.invoiceNo;
+  const invoiceBuyerData = {
+    type: tx.buyer?.type,
+    name: tx.buyer?.name,
+    company: tx.buyer?.company ?? undefined,
+    billingAddress: tx.buyer?.billingAddress ?? tx.buyer?.shippingAddress ?? undefined,
+  };
+
   if (invoiceRequired && !tx.invoice?.pdfUrl) {
-    if (!invoiceNo) {
-      invoiceNo = await nextNumber("invoice", paidAt);
-      updates["invoice.invoiceNo"] = invoiceNo;
-    }
+    if (!hasRequiredInvoiceBuyerData(invoiceBuyerData)) {
+      updates["invoice.skippedReason"] = "missing_buyer";
 
-    const invoiceLines = buildInvoiceLines({
-      seller,
-      txId: tx._id.toString(),
-      invoiceNo,
-      createdAt: paidAt,
-      items: tx.items || [],
-      totals: tx.totals,
-      buyer: {
-        type: tx.buyer?.type,
-        name: tx.buyer?.name,
-        company: tx.buyer?.company ?? undefined,
-        billingAddress: tx.buyer?.billingAddress ?? tx.buyer?.shippingAddress ?? undefined,
-      },
-    });
+      if (tx.invoice?.skippedReason !== "missing_buyer") {
+        await appendPosAuditLog({
+          actorAdminId: adminId,
+          action: "INVOICE_SKIPPED_MISSING_BUYER",
+          txId: tx._id,
+          payload: {
+            reason: "missing_buyer",
+            buyerType: tx.buyer?.type ?? null,
+            grossCents: tx.totals?.grossCents ?? null,
+          },
+        });
+      }
+    } else {
+      if (!invoiceNo) {
+        invoiceNo = await nextNumber("invoice", paidAt);
+        updates["invoice.invoiceNo"] = invoiceNo;
+      }
 
-    const invoicePdf = buildSimplePdf(invoiceLines);
-    const invoiceYear = paidAt.getUTCFullYear();
-    const invoiceKey = `pos/invoices/${invoiceYear}/${safeS3Segment(invoiceNo)}.pdf`;
-    const uploadedInvoice = await uploadToS3(invoiceKey, invoicePdf, "application/pdf", `${safeS3Segment(invoiceNo)}.pdf`);
-    const invoiceUrl = resolvePdfUrl(invoiceKey, uploadedInvoice.url);
-
-    updates["invoice.pdfUrl"] = invoiceUrl;
-    updates["invoice.invoiceNo"] = invoiceNo;
-
-    await appendPosAuditLog({
-      actorAdminId: adminId,
-      action: "ISSUE_INVOICE",
-      txId: tx._id,
-      payload: {
+      const invoiceLines = buildInvoiceLines({
+        seller,
+        txId: tx._id.toString(),
         invoiceNo,
-        pdfUrl: invoiceUrl,
-      },
-    });
+        createdAt: paidAt,
+        items: tx.items || [],
+        totals: tx.totals,
+        buyer: invoiceBuyerData,
+      });
+
+      const invoicePdf = buildSimplePdf(invoiceLines);
+      const invoiceYear = paidAt.getUTCFullYear();
+      const invoiceKey = `pos/invoices/${invoiceYear}/${safeS3Segment(invoiceNo)}.pdf`;
+      const uploadedInvoice = await uploadToS3(invoiceKey, invoicePdf, "application/pdf", `${safeS3Segment(invoiceNo)}.pdf`);
+      const invoiceUrl = resolvePdfUrl(invoiceKey, uploadedInvoice.url);
+
+      updates["invoice.pdfUrl"] = invoiceUrl;
+      updates["invoice.invoiceNo"] = invoiceNo;
+      updates["invoice.skippedReason"] = null;
+
+      await appendPosAuditLog({
+        actorAdminId: adminId,
+        action: "ISSUE_INVOICE",
+        txId: tx._id,
+        payload: {
+          invoiceNo,
+          pdfUrl: invoiceUrl,
+        },
+      });
+    }
   }
 
   if (Object.keys(updates).length > 0) {

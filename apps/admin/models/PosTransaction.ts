@@ -43,7 +43,7 @@ const posTransactionTotalsSchema = new Schema(
 const posTransactionBuyerSchema = new Schema(
   {
     type: { type: String, enum: posBuyerTypes, required: true },
-    name: { type: String, required: true, trim: true },
+    name: { type: String, required: true, trim: true, default: "Walk-in customer" },
     company: { type: String, trim: true },
     email: { type: String, trim: true },
     phone: { type: String, trim: true },
@@ -64,6 +64,12 @@ const posTransactionPaymentSchema = new Schema(
       terminalSlipNo: { type: String, trim: true },
       rrn: { type: String, trim: true },
       note: { type: String, trim: true },
+    },
+    externalMeta: {
+      slipNo: { type: String, trim: true },
+      rrn: { type: String, trim: true },
+      note: { type: String, trim: true },
+      method: { type: String, trim: true },
     },
     tipCents: { type: Number, min: 0, validate: isInteger },
     approvedAt: { type: Date },
@@ -90,10 +96,12 @@ const posTransactionSchema = new Schema(
     receipt: {
       receiptNo: { type: String, trim: true },
       pdfUrl: { type: String, trim: true },
+      requestEmail: { type: String, trim: true },
     },
     invoice: {
       invoiceNo: { type: String, trim: true },
       pdfUrl: { type: String, trim: true },
+      skippedReason: { type: String, trim: true },
     },
     contract: {
       contractId: { type: Types.ObjectId, ref: "POSContract" },

@@ -1,13 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import CheckoutFlowModal from "./CheckoutFlowModal";
 
 type CatalogItemType = "artwork" | "event";
 type DeliveryMethod = "pickup" | "shipping" | "forwarding";
 type EditionType = "unique" | "edition";
 type CustomerType = "b2c" | "b2b";
-type CheckoutPaymentMethod = "terminal_bridge" | "terminal_external";
+type CheckoutPaymentMethod = "terminal_bridge" | "terminal_external" | "cash";
+type CheckoutStep = "receipt" | "contract" | "payment" | "processing" | "done";
 
 type CatalogItem = {
   id: string;
@@ -87,10 +88,15 @@ type ContractForm = {
   artworks: ContractArtworkFormLine[];
 };
 
+type CheckoutDocuments = {
+  txId: string | null;
+  receiptPdfUrl: string | null;
+  invoicePdfUrl: string | null;
+  contractPdfUrl: string | null;
+};
+
 const CART_STORAGE_KEY = "ac_pos_cart_session_v1";
 const CUSTOMER_TYPE_STORAGE_KEY = "ac_pos_customer_type_v1";
-const CONTRACT_TERMS_LINK = "https://artclub.wtf/policies/terms-of-service";
-const CONTRACT_SELLER_NAME = "Artclub Mixed Media GmbH";
 
 function formatEuroFromCents(cents: number) {
   return (cents / 100).toFixed(2);
@@ -180,9 +186,13 @@ export default function PosMainClient() {
     phone: "",
   });
 
-  const [contractModalOpen, setContractModalOpen] = useState(false);
+  const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
+  const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>("receipt");
   const [contractForm, setContractForm] = useState<ContractForm>(initialContractForm);
   const [hasSignature, setHasSignature] = useState(false);
+  const [receiptEmailEnabled, setReceiptEmailEnabled] = useState(false);
+  const [invoiceDetailsEnabled, setInvoiceDetailsEnabled] = useState(false);
+  const [doneDocuments, setDoneDocuments] = useState<CheckoutDocuments | null>(null);
 
   const [checkoutMessage, setCheckoutMessage] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
@@ -269,7 +279,7 @@ export default function PosMainClient() {
   }, []);
 
   useEffect(() => {
-    if (!contractModalOpen || !signatureCanvasRef.current) return;
+    if (!checkoutModalOpen || !signatureCanvasRef.current) return;
     const canvas = signatureCanvasRef.current;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -277,7 +287,7 @@ export default function PosMainClient() {
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     setHasSignature(false);
-  }, [contractModalOpen]);
+  }, [checkoutModalOpen]);
 
   const activeItems = useMemo(
     () => items.filter((item) => item.isActive && item.type === tab),
@@ -293,7 +303,6 @@ export default function PosMainClient() {
     () => locations.find((location) => location.id === selectedTerminal?.locationId) || null,
     [locations, selectedTerminal?.locationId],
   );
-  const isExternalPaymentMode = paymentMethod === "terminal_external" || selectedTerminal?.mode === "external";
   const checkoutLocked = Boolean(pendingExternalTxId);
 
   useEffect(() => {
@@ -359,6 +368,61 @@ export default function PosMainClient() {
     return { grossCents, netCents, vatCents };
   }, [cart]);
 
+  const invoiceRequired = useMemo(() => {
+    if (customerType === "b2b") return totals.grossCents >= 20000;
+    return totals.grossCents >= 100000;
+  }, [customerType, totals.grossCents]);
+
+  const invoiceRequirementLabel = useMemo(() => {
+    if (!invoiceRequired) return null;
+    if (customerType === "b2b") return "B2B checkout >= 200€ requires invoice details.";
+    return "B2C checkout >= 1000€ requires invoice details.";
+  }, [customerType, invoiceRequired]);
+
+  const invoiceFieldsVisible = invoiceRequired || invoiceDetailsEnabled;
+
+  const closeCheckoutModal = () => {
+    if (checkingOut || markingPaid) return;
+    setCheckoutModalOpen(false);
+    setCheckoutStep("receipt");
+  };
+
+  const loadCheckoutDocuments = async (txId: string): Promise<CheckoutDocuments> => {
+    const res = await fetch(`/api/admin/pos/transactions/${encodeURIComponent(txId)}`, { cache: "no-store" });
+    const payload = (await res.json().catch(() => null)) as
+      | {
+          ok?: boolean;
+          transaction?: {
+            receipt?: { pdfUrl?: string | null } | null;
+            invoice?: { pdfUrl?: string | null } | null;
+            contract?: { pdfUrl?: string | null } | null;
+          };
+          error?: string;
+        }
+      | null;
+
+    if (!res.ok || !payload?.ok) {
+      return { txId, receiptPdfUrl: null, invoicePdfUrl: null, contractPdfUrl: null };
+    }
+
+    return {
+      txId,
+      receiptPdfUrl: payload.transaction?.receipt?.pdfUrl ?? null,
+      invoicePdfUrl: payload.transaction?.invoice?.pdfUrl ?? null,
+      contractPdfUrl: payload.transaction?.contract?.pdfUrl ?? null,
+    };
+  };
+
+  const finalizeSuccessfulCheckout = async (txId: string, message: string) => {
+    clearCart(true);
+    setCheckoutModalOpen(true);
+    setCheckoutStep("done");
+    setCheckoutMessage(message);
+    setCheckoutError(null);
+    const docs = await loadCheckoutDocuments(txId);
+    setDoneDocuments(docs);
+  };
+
   const onAddToCart = (item: CatalogItem) => {
     if (checkoutLocked) return;
     setCart((prev) => {
@@ -415,7 +479,7 @@ export default function PosMainClient() {
     setBuyerForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const startContractStep = () => {
+  const prepareContractFormFromCart = () => {
     const artworkLines = cart
       .filter((line) => line.type === "artwork")
       .map((line) => ({
@@ -431,8 +495,6 @@ export default function PosMainClient() {
       estimatedDeliveryDate: "",
       artworks: artworkLines,
     });
-    setContractModalOpen(true);
-    setCheckoutError(null);
   };
 
   const getCanvasPoint = (event: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -518,9 +580,7 @@ export default function PosMainClient() {
 
       const status = payload.status || "payment_pending";
       if (status === "paid") {
-        clearCart(true);
-        setContractModalOpen(false);
-        setCheckoutMessage(`Payment approved. Transaction ${txId} is paid.`);
+        await finalizeSuccessfulCheckout(txId, `Payment approved. Transaction ${txId} is paid.`);
         return;
       }
       if (status === "failed" || status === "cancelled" || status === "refunded" || status === "storno") {
@@ -529,6 +589,30 @@ export default function PosMainClient() {
       }
     }
     setCheckoutError("Payment still pending. Keep polling from transactions view.");
+  };
+
+  const buildContractPayload = () => {
+    if (!hasArtworkInCart) return undefined;
+    if (!buyerForm.name.trim()) {
+      throw new Error("Buyer name is required for artwork contracts.");
+    }
+    if (!buyerForm.billingAddress.trim()) {
+      throw new Error("Billing address is required for artwork contracts.");
+    }
+    if (!buyerForm.shippingSameAsBilling && !buyerForm.shippingAddress.trim()) {
+      throw new Error("Shipping address is required when shipping differs from billing.");
+    }
+    if (!hasSignature || !signatureCanvasRef.current) {
+      throw new Error("Buyer signature is required.");
+    }
+
+    const signatureDataUrl = signatureCanvasRef.current.toDataURL("image/png");
+    return {
+      artworks: contractForm.artworks,
+      deliveryMethod: contractForm.deliveryMethod,
+      estimatedDeliveryDate: contractForm.estimatedDeliveryDate,
+      buyerSignatureDataUrl: signatureDataUrl,
+    };
   };
 
   const runCheckout = async (contractPayload?: {
@@ -542,8 +626,18 @@ export default function PosMainClient() {
       setCheckoutError("External terminal payment is pending. Finish it first.");
       return;
     }
-    if (!selectedTerminal || !selectedLocation) {
+    const checkoutLocation = selectedLocation || locations[0] || null;
+    const requiresTerminalForMode = paymentMethod === "terminal_bridge";
+    if (!checkoutLocation) {
+      setCheckoutError("No location configured. Add a POS location in settings.");
+      return;
+    }
+    if (requiresTerminalForMode && !selectedTerminal) {
       setCheckoutError("No terminal configured. Add a POS terminal in settings.");
+      return;
+    }
+    if (paymentMethod === "terminal_bridge" && selectedTerminal && selectedTerminal.mode === "external") {
+      setCheckoutError("Selected terminal is external-only. Choose a bridge terminal or switch payment method.");
       return;
     }
 
@@ -560,22 +654,53 @@ export default function PosMainClient() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          locationId: selectedLocation.id,
-          terminalId: selectedTerminal.id,
-          paymentMethod: isExternalPaymentMode ? "terminal_external" : "terminal_bridge",
+          locationId: checkoutLocation.id,
+          terminalId: selectedTerminal?.id,
+          buyerType: customerType,
+          receiptEmail: receiptEmailEnabled ? toOptionalString(buyerForm.email) : undefined,
+          paymentMode:
+            paymentMethod === "terminal_bridge" ? "terminal" : paymentMethod === "cash" ? "cash" : "external",
           cart: cart.map((line) => ({
             itemId: line.itemId,
             qty: line.qty,
           })),
           buyer: {
             type: customerType,
-            name: buyerName,
+            name: invoiceFieldsVisible || hasArtworkInCart ? buyerName : undefined,
             company: toOptionalString(buyerForm.company),
-            billingAddress: toOptionalString(billingAddress),
+            billingAddress: invoiceFieldsVisible || hasArtworkInCart ? toOptionalString(billingAddress) : undefined,
             shippingAddress: toOptionalString(shippingAddress),
-            email: toOptionalString(buyerForm.email),
-            phone: toOptionalString(buyerForm.phone),
+            email:
+              receiptEmailEnabled || invoiceFieldsVisible || hasArtworkInCart ? toOptionalString(buyerForm.email) : undefined,
+            phone: invoiceFieldsVisible || hasArtworkInCart ? toOptionalString(buyerForm.phone) : undefined,
           },
+          invoiceBuyer: invoiceFieldsVisible
+            ? {
+                type: customerType,
+                name: buyerName,
+                company: toOptionalString(buyerForm.company),
+                billingAddress: toOptionalString(billingAddress),
+                email: toOptionalString(buyerForm.email),
+                phone: toOptionalString(buyerForm.phone),
+              }
+            : undefined,
+          contractPayload: contractPayload
+            ? {
+                artworks: contractPayload.artworks.map((line) => ({
+                  itemId: line.itemId,
+                  artistName: toOptionalString(line.artistName),
+                  title: toOptionalString(line.title),
+                  year: toOptionalString(line.year),
+                  techniqueSize: toOptionalString(line.techniqueSize),
+                  editionType: line.editionType,
+                })),
+                deliveryMethod: contractPayload.deliveryMethod,
+                estimatedDeliveryDate: toOptionalString(contractPayload.estimatedDeliveryDate || ""),
+                buyerSignatureDataUrl: contractPayload.buyerSignatureDataUrl,
+              }
+            : undefined,
+          // backward-compatible payload keys (server accepts both)
+          paymentMethod: paymentMethod === "terminal_bridge" ? "terminal_bridge" : "terminal_external",
           contract: contractPayload
             ? {
                 artworks: contractPayload.artworks.map((line) => ({
@@ -613,20 +738,23 @@ export default function PosMainClient() {
         throw new Error(payload?.error || "Failed to start checkout");
       }
 
-      if (isExternalPaymentMode || payload.provider === "external") {
+      if (paymentMethod !== "terminal_bridge" || payload.provider === "external") {
         setPendingExternalTxId(payload.txId);
-        setContractModalOpen(false);
-        setCheckoutMessage("External terminal payment started. Confirm payment on device and click Mark as Paid.");
+        setCheckoutStep("processing");
+        setCheckoutMessage(
+          paymentMethod === "cash"
+            ? "Cash payment recorded as pending. Confirm with Mark as Paid."
+            : "External terminal payment started. Confirm payment on device and click Mark as Paid.",
+        );
         return;
       }
 
       if (payload.status === "paid") {
-        clearCart(true);
-        setContractModalOpen(false);
-        setCheckoutMessage(`Payment approved. Transaction ${payload.txId} is paid.`);
+        await finalizeSuccessfulCheckout(payload.txId, `Payment approved. Transaction ${payload.txId} is paid.`);
         return;
       }
 
+      setCheckoutStep("processing");
       setCheckoutMessage(`Payment started (${payload.providerTxId || "provider pending"}). Waiting for approval...`);
       await pollCheckoutStatus(payload.txId);
     } catch (checkoutErr: unknown) {
@@ -651,11 +779,10 @@ export default function PosMainClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           txId: pendingExternalTxId,
-          externalRef: {
-            terminalSlipNo: toOptionalString(externalRefForm.terminalSlipNo),
-            rrn: toOptionalString(externalRefForm.rrn),
-            note: toOptionalString(externalRefForm.note),
-          },
+          method: paymentMethod === "cash" ? "cash" : "external",
+          slipNo: toOptionalString(externalRefForm.terminalSlipNo),
+          rrn: toOptionalString(externalRefForm.rrn),
+          note: toOptionalString(externalRefForm.note) ?? (paymentMethod === "cash" ? "cash" : undefined),
         }),
       });
       const payload = (await res.json().catch(() => null)) as { ok?: boolean; txId?: string; status?: string; error?: string } | null;
@@ -663,9 +790,10 @@ export default function PosMainClient() {
         throw new Error(payload?.error || "Failed to mark transaction as paid");
       }
 
-      clearCart(true);
-      setContractModalOpen(false);
-      setCheckoutMessage(`External payment approved. Transaction ${payload.txId} is paid.`);
+      await finalizeSuccessfulCheckout(
+        payload.txId,
+        `${paymentMethod === "cash" ? "Cash payment" : "External payment"} approved. Transaction ${payload.txId} is paid.`,
+      );
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to mark transaction as paid";
       setCheckoutError(message);
@@ -675,66 +803,77 @@ export default function PosMainClient() {
   };
 
   const handleCheckout = async () => {
-    if (cart.length === 0) return;
     if (checkoutLocked) {
-      setCheckoutError("External terminal payment is pending. Use Mark as Paid first.");
+      setCheckoutModalOpen(true);
+      setCheckoutStep("processing");
       return;
     }
+    if (cart.length === 0) return;
     if (hasArtworkInCart) {
-      startContractStep();
-      return;
+      prepareContractFormFromCart();
+    } else {
+      setContractForm(initialContractForm());
     }
-    await runCheckout();
+    setCheckoutModalOpen(true);
+    setCheckoutStep("receipt");
+    setBridgeFallbackAvailable(false);
+    setCheckoutError(null);
+    setCheckoutMessage(null);
+    setDoneDocuments(null);
+    setPendingExternalTxId(null);
+    setExternalRefForm(initialExternalRefForm());
   };
 
-  const handleContractCheckout = async () => {
-    if (!hasArtworkInCart) {
-      await runCheckout();
-      return;
+  const handleStartCheckoutProcessing = async () => {
+    setCheckoutError(null);
+
+    if (invoiceFieldsVisible) {
+      if (!buyerForm.name.trim()) {
+        setCheckoutError("Buyer name is required for invoice details.");
+        setCheckoutStep("receipt");
+        return;
+      }
+      if (!buyerForm.billingAddress.trim()) {
+        setCheckoutError("Billing address is required for invoice details.");
+        setCheckoutStep("receipt");
+        return;
+      }
+      if (customerType === "b2b" && !buyerForm.company.trim()) {
+        setCheckoutError("Company is required for B2B invoice details.");
+        setCheckoutStep("receipt");
+        return;
+      }
     }
-    if (!buyerForm.name.trim()) {
-      setCheckoutError("Buyer name is required for artwork contracts.");
-      return;
-    }
-    if (!buyerForm.billingAddress.trim()) {
-      setCheckoutError("Billing address is required for artwork contracts.");
-      return;
-    }
-    if (!buyerForm.shippingSameAsBilling && !buyerForm.shippingAddress.trim()) {
-      setCheckoutError("Shipping address is required when shipping differs from billing.");
-      return;
-    }
-    if (!hasSignature || !signatureCanvasRef.current) {
-      setCheckoutError("Buyer signature is required.");
+
+    let contractPayload:
+      | {
+          artworks: ContractArtworkFormLine[];
+          deliveryMethod: DeliveryMethod;
+          estimatedDeliveryDate?: string;
+          buyerSignatureDataUrl: string;
+        }
+      | undefined;
+
+    try {
+      contractPayload = buildContractPayload();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Contract validation failed";
+      setCheckoutError(message);
+      if (hasArtworkInCart) setCheckoutStep("contract");
       return;
     }
 
-    const signatureDataUrl = signatureCanvasRef.current.toDataURL("image/png");
-    await runCheckout({
-      artworks: contractForm.artworks,
-      deliveryMethod: contractForm.deliveryMethod,
-      estimatedDeliveryDate: contractForm.estimatedDeliveryDate,
-      buyerSignatureDataUrl: signatureDataUrl,
-    });
+    setCheckoutStep("processing");
+    await runCheckout(contractPayload);
   };
 
   return (
     <main className="admin-dashboard">
       <header className="space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="space-y-1">
-            <p className="text-sm text-slate-500">POS</p>
-            <h1 className="text-2xl font-semibold">Sales</h1>
-            <p className="text-sm text-slate-600">Fast item pickup for cashier checkout.</p>
-          </div>
-          <div className="flex gap-2">
-            <Link href="/admin/pos/settings" className="btnGhost">
-              Settings
-            </Link>
-            <Link href="/admin/pos/transactions" className="btnGhost">
-              Transactions
-            </Link>
-          </div>
+        <div className="space-y-1">
+          <p className="text-sm text-slate-500">POS</p>
+          <h1 className="text-2xl font-semibold">Sales</h1>
+          <p className="text-sm text-slate-600">Fast item pickup for cashier checkout.</p>
         </div>
       </header>
 
@@ -900,187 +1039,6 @@ export default function PosMainClient() {
             </button>
           </div>
 
-          <div className="space-y-2 rounded border border-slate-200 p-3">
-            <label className="space-y-1">
-              <span className="text-xs text-slate-600">Terminal</span>
-              <select
-                className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                value={selectedTerminalId}
-                onChange={(event) => setSelectedTerminalId(event.target.value)}
-              >
-                {terminals.length === 0 ? <option value="">No terminals configured</option> : null}
-                {terminals.map((terminal) => {
-                  const location = locations.find((entry) => entry.id === terminal.locationId);
-                  return (
-                    <option key={terminal.id} value={terminal.id}>
-                      {terminal.label} {location ? `(${location.name})` : ""}
-                    </option>
-                  );
-                })}
-              </select>
-            </label>
-            {selectedLocation && (
-              <p className="text-xs text-slate-500">
-                {selectedLocation.name} · {selectedLocation.address}
-              </p>
-            )}
-            {selectedTerminal && (
-              <p className="text-xs text-slate-500">
-                Mode: {selectedTerminal.mode === "external" ? "external" : "bridge"} · {selectedTerminal.status}
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-2 rounded border border-slate-200 p-3">
-            <p className="text-xs text-slate-600">Payment method</p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                className={`rounded px-3 py-2 text-sm font-semibold ${
-                  !isExternalPaymentMode ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"
-                }`}
-                disabled={selectedTerminal?.mode === "external" || checkoutLocked}
-                onClick={() => setPaymentMethod("terminal_bridge")}
-              >
-                Terminal (connected)
-              </button>
-              <button
-                type="button"
-                className={`rounded px-3 py-2 text-sm font-semibold ${
-                  isExternalPaymentMode ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"
-                }`}
-                disabled={checkoutLocked}
-                onClick={() => setPaymentMethod("terminal_external")}
-              >
-                External terminal
-              </button>
-            </div>
-            {bridgeFallbackAvailable && !isExternalPaymentMode && (
-              <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-                <p>No bridge agent online.</p>
-                <button
-                  type="button"
-                  className="mt-2 rounded bg-amber-600 px-2 py-1 text-xs font-semibold text-white"
-                  onClick={() => {
-                    setPaymentMethod("terminal_external");
-                    setCheckoutError(null);
-                  }}
-                >
-                  Switch to external terminal
-                </button>
-              </div>
-            )}
-            {isExternalPaymentMode && (
-              <div className="space-y-2 rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700">
-                <p>Zahlung am Terminal starten und danach Mark as Paid klicken.</p>
-                {pendingExternalTxId ? (
-                  <p className="text-slate-600">Pending tx: {pendingExternalTxId}</p>
-                ) : (
-                  <p className="text-slate-600">Start checkout first to create an external pending transaction.</p>
-                )}
-                <div className="grid gap-2">
-                  <input
-                    className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
-                    placeholder="Slip no. (optional)"
-                    value={externalRefForm.terminalSlipNo}
-                    onChange={(event) => setExternalRefForm((prev) => ({ ...prev, terminalSlipNo: event.target.value }))}
-                    disabled={!pendingExternalTxId || markingPaid}
-                  />
-                  <input
-                    className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
-                    placeholder="RRN (optional)"
-                    value={externalRefForm.rrn}
-                    onChange={(event) => setExternalRefForm((prev) => ({ ...prev, rrn: event.target.value }))}
-                    disabled={!pendingExternalTxId || markingPaid}
-                  />
-                  <input
-                    className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
-                    placeholder="Note (optional)"
-                    value={externalRefForm.note}
-                    onChange={(event) => setExternalRefForm((prev) => ({ ...prev, note: event.target.value }))}
-                    disabled={!pendingExternalTxId || markingPaid}
-                  />
-                  <button
-                    type="button"
-                    className="btnPrimary"
-                    onClick={handleMarkPaid}
-                    disabled={!pendingExternalTxId || markingPaid}
-                  >
-                    {markingPaid ? "Marking..." : "Mark as Paid"}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="grid gap-2 rounded border border-slate-200 p-3">
-            <label className="space-y-1">
-              <span className="text-xs text-slate-600">Buyer name</span>
-              <input
-                className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                value={buyerForm.name}
-                onChange={(event) => updateBuyer("name", event.target.value)}
-                placeholder="Walk-in customer"
-              />
-            </label>
-            {customerType === "b2b" && (
-              <label className="space-y-1">
-                <span className="text-xs text-slate-600">Company</span>
-                <input
-                  className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                  value={buyerForm.company}
-                  onChange={(event) => updateBuyer("company", event.target.value)}
-                />
-              </label>
-            )}
-            <label className="space-y-1">
-              <span className="text-xs text-slate-600">Billing address</span>
-              <textarea
-                className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                rows={2}
-                value={buyerForm.billingAddress}
-                onChange={(event) => updateBuyer("billingAddress", event.target.value)}
-              />
-            </label>
-            <label className="inline-flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={buyerForm.shippingSameAsBilling}
-                onChange={(event) => updateBuyer("shippingSameAsBilling", event.target.checked)}
-              />
-              <span className="text-xs text-slate-600">Shipping same as billing</span>
-            </label>
-            {!buyerForm.shippingSameAsBilling && (
-              <label className="space-y-1">
-                <span className="text-xs text-slate-600">Shipping address</span>
-                <textarea
-                  className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                  rows={2}
-                  value={buyerForm.shippingAddress}
-                  onChange={(event) => updateBuyer("shippingAddress", event.target.value)}
-                />
-              </label>
-            )}
-            <div className="grid gap-2 sm:grid-cols-2">
-              <label className="space-y-1">
-                <span className="text-xs text-slate-600">Email</span>
-                <input
-                  className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                  value={buyerForm.email}
-                  onChange={(event) => updateBuyer("email", event.target.value)}
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs text-slate-600">Phone</span>
-                <input
-                  className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                  value={buyerForm.phone}
-                  onChange={(event) => updateBuyer("phone", event.target.value)}
-                />
-              </label>
-            </div>
-          </div>
-
           <div className="max-h-[360px] space-y-2 overflow-auto pr-1">
             {cart.length === 0 ? (
               <div className="rounded border border-dashed border-slate-200 px-3 py-8 text-center text-sm text-slate-500">
@@ -1157,258 +1115,70 @@ export default function PosMainClient() {
               type="button"
               className="btnPrimary"
               onClick={handleCheckout}
-              disabled={cart.length === 0 || checkingOut || checkoutLocked || markingPaid || terminals.length === 0}
+              disabled={cart.length === 0 || checkingOut || markingPaid}
             >
-              {checkingOut ? "Processing..." : "Checkout"}
+              {checkoutLocked ? "Resume checkout" : checkingOut ? "Processing..." : "Checkout"}
             </button>
           </div>
         </aside>
       </div>
 
-      {contractModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="card w-full max-w-4xl space-y-4">
-            <div className="cardHeader">
-              <strong>Artwork Purchase Contract</strong>
-              <button
-                type="button"
-                className="btnGhost"
-                onClick={() => {
-                  if (!checkingOut) setContractModalOpen(false);
-                }}
-                disabled={checkingOut}
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              <section className="space-y-3 rounded border border-slate-200 p-3">
-                <h3 className="text-sm font-semibold">Buyer details</h3>
-                <label className="space-y-1">
-                  <span className="text-xs text-slate-600">Name *</span>
-                  <input
-                    className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                    value={buyerForm.name}
-                    onChange={(event) => updateBuyer("name", event.target.value)}
-                  />
-                </label>
-                <label className="space-y-1">
-                  <span className="text-xs text-slate-600">Company</span>
-                  <input
-                    className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                    value={buyerForm.company}
-                    onChange={(event) => updateBuyer("company", event.target.value)}
-                  />
-                </label>
-                <label className="space-y-1">
-                  <span className="text-xs text-slate-600">Billing address *</span>
-                  <textarea
-                    className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                    rows={2}
-                    value={buyerForm.billingAddress}
-                    onChange={(event) => updateBuyer("billingAddress", event.target.value)}
-                  />
-                </label>
-                <label className="inline-flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={buyerForm.shippingSameAsBilling}
-                    onChange={(event) => updateBuyer("shippingSameAsBilling", event.target.checked)}
-                  />
-                  <span className="text-xs text-slate-600">Shipping same as billing</span>
-                </label>
-                {!buyerForm.shippingSameAsBilling && (
-                  <label className="space-y-1">
-                    <span className="text-xs text-slate-600">Shipping address *</span>
-                    <textarea
-                      className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                      rows={2}
-                      value={buyerForm.shippingAddress}
-                      onChange={(event) => updateBuyer("shippingAddress", event.target.value)}
-                    />
-                  </label>
-                )}
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <label className="space-y-1">
-                    <span className="text-xs text-slate-600">Email</span>
-                    <input
-                      className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                      value={buyerForm.email}
-                      onChange={(event) => updateBuyer("email", event.target.value)}
-                    />
-                  </label>
-                  <label className="space-y-1">
-                    <span className="text-xs text-slate-600">Phone</span>
-                    <input
-                      className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                      value={buyerForm.phone}
-                      onChange={(event) => updateBuyer("phone", event.target.value)}
-                    />
-                  </label>
-                </div>
-              </section>
-
-              <section className="space-y-3 rounded border border-slate-200 p-3">
-                <h3 className="text-sm font-semibold">Delivery and legal</h3>
-                <label className="space-y-1">
-                  <span className="text-xs text-slate-600">Delivery method *</span>
-                  <select
-                    className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                    value={contractForm.deliveryMethod}
-                    onChange={(event) => setContractForm((prev) => ({ ...prev, deliveryMethod: event.target.value as DeliveryMethod }))}
-                  >
-                    <option value="pickup">Pickup</option>
-                    <option value="shipping">Shipping</option>
-                    <option value="forwarding">Forwarding</option>
-                  </select>
-                </label>
-                <label className="space-y-1">
-                  <span className="text-xs text-slate-600">Estimated delivery date</span>
-                  <input
-                    type="date"
-                    className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                    value={contractForm.estimatedDeliveryDate}
-                    onChange={(event) => setContractForm((prev) => ({ ...prev, estimatedDeliveryDate: event.target.value }))}
-                  />
-                </label>
-                <div className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-                  <p>Seller signature: {CONTRACT_SELLER_NAME}</p>
-                  <p>Timestamp: {new Date().toLocaleString()}</p>
-                  <p>
-                    Terms:{" "}
-                    <a className="underline" href={CONTRACT_TERMS_LINK} target="_blank" rel="noreferrer">
-                      {CONTRACT_TERMS_LINK}
-                    </a>
-                  </p>
-                </div>
-              </section>
-            </div>
-
-            <section className="space-y-2 rounded border border-slate-200 p-3">
-              <h3 className="text-sm font-semibold">Artwork details</h3>
-              <div className="space-y-3">
-                {contractForm.artworks.map((artwork, index) => (
-                  <div key={artwork.itemId} className="grid gap-2 rounded border border-slate-200 p-3 sm:grid-cols-2 lg:grid-cols-3">
-                    <label className="space-y-1">
-                      <span className="text-xs text-slate-600">Artist name *</span>
-                      <input
-                        className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                        value={artwork.artistName}
-                        onChange={(event) =>
-                          setContractForm((prev) => ({
-                            ...prev,
-                            artworks: prev.artworks.map((line, lineIndex) =>
-                              lineIndex === index ? { ...line, artistName: event.target.value } : line,
-                            ),
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="space-y-1">
-                      <span className="text-xs text-slate-600">Artwork title *</span>
-                      <input
-                        className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                        value={artwork.title}
-                        onChange={(event) =>
-                          setContractForm((prev) => ({
-                            ...prev,
-                            artworks: prev.artworks.map((line, lineIndex) =>
-                              lineIndex === index ? { ...line, title: event.target.value } : line,
-                            ),
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="space-y-1">
-                      <span className="text-xs text-slate-600">Year</span>
-                      <input
-                        className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                        value={artwork.year}
-                        onChange={(event) =>
-                          setContractForm((prev) => ({
-                            ...prev,
-                            artworks: prev.artworks.map((line, lineIndex) =>
-                              lineIndex === index ? { ...line, year: event.target.value } : line,
-                            ),
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="space-y-1 sm:col-span-2">
-                      <span className="text-xs text-slate-600">Technique / size</span>
-                      <input
-                        className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                        value={artwork.techniqueSize}
-                        onChange={(event) =>
-                          setContractForm((prev) => ({
-                            ...prev,
-                            artworks: prev.artworks.map((line, lineIndex) =>
-                              lineIndex === index ? { ...line, techniqueSize: event.target.value } : line,
-                            ),
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="space-y-1">
-                      <span className="text-xs text-slate-600">Unique / edition</span>
-                      <select
-                        className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                        value={artwork.editionType}
-                        onChange={(event) =>
-                          setContractForm((prev) => ({
-                            ...prev,
-                            artworks: prev.artworks.map((line, lineIndex) =>
-                              lineIndex === index ? { ...line, editionType: event.target.value as EditionType } : line,
-                            ),
-                          }))
-                        }
-                      >
-                        <option value="unique">Unique</option>
-                        <option value="edition">Edition</option>
-                      </select>
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="space-y-2 rounded border border-slate-200 p-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Buyer signature *</h3>
-                <button type="button" className="btnGhost" onClick={clearSignature}>
-                  Clear
-                </button>
-              </div>
-              <canvas
-                ref={signatureCanvasRef}
-                width={900}
-                height={220}
-                className="h-[160px] w-full rounded border border-slate-200 bg-white"
-                onPointerDown={onSignaturePointerDown}
-                onPointerMove={onSignaturePointerMove}
-                onPointerUp={onSignaturePointerUp}
-                onPointerLeave={onSignaturePointerUp}
-              />
-              {!hasSignature && <p className="text-xs text-amber-700">Draw buyer signature before continuing.</p>}
-            </section>
-
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                className="btnGhost"
-                onClick={() => setContractModalOpen(false)}
-                disabled={checkingOut}
-              >
-                Cancel
-              </button>
-              <button type="button" className="btnPrimary" onClick={handleContractCheckout} disabled={checkingOut}>
-                {checkingOut ? "Processing..." : "Sign & pay"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CheckoutFlowModal
+        open={checkoutModalOpen}
+        onClose={closeCheckoutModal}
+        step={checkoutStep}
+        onStepChange={setCheckoutStep}
+        customerType={customerType}
+        onCustomerTypeChange={setCustomerType}
+        cart={cart}
+        totals={totals}
+        hasArtworkInCart={hasArtworkInCart}
+        checkoutLocked={checkoutLocked}
+        checkingOut={checkingOut}
+        markingPaid={markingPaid}
+        checkoutMessage={checkoutMessage}
+        checkoutError={checkoutError}
+        locations={locations}
+        terminals={terminals}
+        selectedTerminalId={selectedTerminalId}
+        onSelectedTerminalIdChange={setSelectedTerminalId}
+        selectedTerminal={selectedTerminal}
+        selectedLocation={selectedLocation}
+        paymentMethod={paymentMethod}
+        onPaymentMethodChange={setPaymentMethod}
+        bridgeFallbackAvailable={bridgeFallbackAvailable}
+        onSwitchToExternal={() => {
+          setPaymentMethod("terminal_external");
+          setCheckoutError(null);
+        }}
+        pendingExternalTxId={pendingExternalTxId}
+        externalRefForm={externalRefForm}
+        onExternalRefChange={setExternalRefForm}
+        onMarkPaid={handleMarkPaid}
+        onStartCheckoutProcessing={handleStartCheckoutProcessing}
+        buyerForm={buyerForm}
+        onBuyerChange={updateBuyer}
+        receiptEmailEnabled={receiptEmailEnabled}
+        onReceiptEmailEnabledChange={(enabled) => {
+          setReceiptEmailEnabled(enabled);
+          if (!enabled && !invoiceFieldsVisible) {
+            setBuyerForm((prev) => ({ ...prev, email: "" }));
+          }
+        }}
+        invoiceDetailsEnabled={invoiceDetailsEnabled}
+        onInvoiceDetailsEnabledChange={setInvoiceDetailsEnabled}
+        invoiceRequired={invoiceRequired}
+        invoiceRequirementLabel={invoiceRequirementLabel}
+        contractForm={contractForm}
+        onContractFormChange={setContractForm}
+        signatureCanvasRef={signatureCanvasRef}
+        hasSignature={hasSignature}
+        onClearSignature={clearSignature}
+        onSignaturePointerDown={onSignaturePointerDown}
+        onSignaturePointerMove={onSignaturePointerMove}
+        onSignaturePointerUp={onSignaturePointerUp}
+        doneDocuments={doneDocuments}
+      />
 
       <style jsx>{`
         .pos-card-added {

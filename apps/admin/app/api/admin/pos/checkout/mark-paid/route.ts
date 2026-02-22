@@ -14,6 +14,10 @@ import { POSTransactionModel } from "@/models/PosTransaction";
 
 const markPaidSchema = z.object({
   txId: z.string().trim().min(1, "txId is required"),
+  method: z.enum(["external", "cash"]).optional(),
+  slipNo: z.string().trim().optional(),
+  rrn: z.string().trim().optional(),
+  note: z.string().trim().optional(),
   externalRef: z
     .object({
       terminalSlipNo: z.string().trim().optional(),
@@ -26,6 +30,28 @@ const markPaidSchema = z.object({
 function toOptionalTrimmed(value?: string) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+async function buildTxResponse(txId: Types.ObjectId) {
+  const tx = await POSTransactionModel.findById(txId).lean();
+  if (!tx) return null;
+  return {
+    txId: tx._id.toString(),
+    status: tx.status,
+    receipt: {
+      receiptNo: tx.receipt?.receiptNo ?? null,
+      pdfUrl: tx.receipt?.pdfUrl ?? null,
+      requestEmail: tx.receipt?.requestEmail ?? null,
+    },
+    invoice: {
+      invoiceNo: tx.invoice?.invoiceNo ?? null,
+      pdfUrl: tx.invoice?.pdfUrl ?? null,
+    },
+    contract: {
+      contractId: tx.contract?.contractId ? tx.contract.contractId.toString() : null,
+      pdfUrl: tx.contract?.pdfUrl ?? null,
+    },
+  };
 }
 
 export async function POST(req: Request) {
@@ -49,6 +75,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "invalid_txId" }, { status: 400 });
   }
 
+  const markMethod = parsed.data.method || "external";
+  const slipNo = toOptionalTrimmed(parsed.data.slipNo) ?? toOptionalTrimmed(externalRef?.terminalSlipNo);
+  const rrn = toOptionalTrimmed(parsed.data.rrn) ?? toOptionalTrimmed(externalRef?.rrn);
+  const note = toOptionalTrimmed(parsed.data.note) ?? toOptionalTrimmed(externalRef?.note);
+
   try {
     await connectMongo();
 
@@ -57,8 +88,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "tx_not_found" }, { status: 404 });
     }
 
-    if (tx.status === "paid") {
-      return NextResponse.json({ ok: true, txId: tx._id.toString(), status: tx.status, idempotent: true }, { status: 200 });
+    if (["paid", "refunded", "storno"].includes(tx.status)) {
+      const txPayload = await buildTxResponse(tx._id);
+      return NextResponse.json(
+        {
+          ok: true,
+          ...(txPayload || { txId: tx._id.toString(), status: tx.status }),
+          idempotent: true,
+        },
+        { status: 200 },
+      );
     }
     if (!["created", "payment_pending"].includes(tx.status)) {
       return NextResponse.json({ ok: false, error: `status_not_markable:${tx.status}` }, { status: 409 });
@@ -68,13 +107,19 @@ export async function POST(req: Request) {
     const now = new Date();
     tx.status = "paid";
     tx.payment.provider = "external";
-    tx.payment.providerTxId = `external:${tx._id.toString()}`;
-    tx.payment.method = "terminal_external";
+    tx.payment.providerTxId = `${markMethod}:${tx._id.toString()}`;
+    tx.payment.method = markMethod === "cash" ? "cash" : "terminal_external";
     tx.payment.approvedAt = now;
     tx.payment.externalRef = {
-      terminalSlipNo: toOptionalTrimmed(externalRef?.terminalSlipNo),
-      rrn: toOptionalTrimmed(externalRef?.rrn),
-      note: toOptionalTrimmed(externalRef?.note),
+      terminalSlipNo: slipNo,
+      rrn,
+      note,
+    };
+    tx.payment.externalMeta = {
+      slipNo,
+      rrn,
+      note,
+      method: markMethod,
     };
     await tx.save();
 
@@ -83,10 +128,13 @@ export async function POST(req: Request) {
       action: "PAYMENT_MARK_PAID",
       txId: tx._id,
       payload: {
-        source: "manual_external",
+        source: markMethod === "cash" ? "manual_cash" : "manual_external",
+        method: markMethod,
         beforeStatus,
         afterStatus: "paid",
-        externalRef: tx.payment.externalRef ?? null,
+        slipNo: slipNo ?? null,
+        rrn: rrn ?? null,
+        note: note ?? null,
       },
     });
 
@@ -94,7 +142,14 @@ export async function POST(req: Request) {
     await ensurePaidTransactionDocuments(tx._id, session.user.id);
     await ensurePaidArtworkContractDocument(tx._id, session.user.id);
 
-    return NextResponse.json({ ok: true, txId: tx._id.toString(), status: tx.status }, { status: 200 });
+    const txPayload = await buildTxResponse(tx._id);
+    return NextResponse.json(
+      {
+        ok: true,
+        ...(txPayload || { txId: tx._id.toString(), status: tx.status }),
+      },
+      { status: 200 },
+    );
   } catch (error) {
     console.error("Failed to mark POS transaction paid", error);
     const message = error instanceof Error ? error.message : "mark_paid_failed";
