@@ -67,6 +67,22 @@ class NoopTSEProvider implements TSEProvider {
 const noopProvider = new NoopTSEProvider();
 const fiskalyProvider = new FiskalySignDeProvider();
 
+function shouldStrictTSE() {
+  const value = process.env.POS_TSE_STRICT?.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
+
+function isSoftFiskalyError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("fiskaly_not_configured") ||
+    normalized.includes("fetch failed") ||
+    normalized.includes("fiskaly_auth_failed") ||
+    normalized.includes("fiskaly_api_error")
+  );
+}
+
 function getTSEProvider(providerName?: string | null): { provider: TSEProvider; providerName: string } {
   const envProvider = process.env.POS_TSE_PROVIDER?.trim().toLowerCase();
   const normalized = providerName?.trim().toLowerCase() || envProvider || "noop";
@@ -128,8 +144,7 @@ export async function tseStart(tx: TxRef, actorAdminId: string | Types.ObjectId)
   if (!row) return;
   if (row.tse?.startedAt && row.tse?.txId) return;
 
-  const { provider, providerName } = getTSEProvider(row.tse?.provider);
-  const result = await provider.startTransaction({
+  const context: TSETransactionContext = {
     txId: txId.toString(),
     amountCents: row.totals?.grossCents || 0,
     currency: "EUR",
@@ -142,12 +157,31 @@ export async function tseStart(tx: TxRef, actorAdminId: string | Types.ObjectId)
           rawPayload: row.tse.rawPayload,
         }
       : null,
-  });
+  };
+
+  let { provider, providerName } = getTSEProvider(row.tse?.provider);
+  let fallbackFrom: string | null = null;
+  let fallbackReason: string | null = null;
+  let result: TSEStartResult;
+  try {
+    result = await provider.startTransaction(context);
+  } catch (error) {
+    if (providerName === "fiskaly" && !shouldStrictTSE() && isSoftFiskalyError(error)) {
+      fallbackFrom = "fiskaly";
+      fallbackReason = error instanceof Error ? error.message : String(error ?? "tse_start_failed");
+      provider = noopProvider;
+      providerName = "noop";
+      result = await provider.startTransaction(context);
+    } else {
+      throw error;
+    }
+  }
 
   const startedAt = result.startedAt || new Date();
   const rawPayload = {
     ...(row.tse?.rawPayload && typeof row.tse.rawPayload === "object" ? (row.tse.rawPayload as Record<string, unknown>) : {}),
     start: result.raw ?? null,
+    ...(fallbackFrom ? { fallback: { from: fallbackFrom, reason: fallbackReason, at: startedAt.toISOString() } } : {}),
   };
   await POSTransactionModel.updateOne(
     { _id: txId },
@@ -171,6 +205,7 @@ export async function tseStart(tx: TxRef, actorAdminId: string | Types.ObjectId)
       tseTxId: result.tseTxId,
       serial: result.serial,
       startedAt,
+      ...(fallbackFrom ? { fallbackFrom, fallbackReason } : {}),
     },
   });
 }
@@ -181,8 +216,7 @@ export async function tseFinish(tx: TxRef, actorAdminId: string | Types.ObjectId
   if (!row.tse?.startedAt) return;
   if (row.tse?.signature) return;
 
-  const { provider, providerName } = getTSEProvider(row.tse?.provider);
-  const result = await provider.finishTransaction({
+  const context: TSETransactionContext = {
     txId: txId.toString(),
     amountCents: row.totals?.grossCents || 0,
     currency: "EUR",
@@ -195,12 +229,31 @@ export async function tseFinish(tx: TxRef, actorAdminId: string | Types.ObjectId
           rawPayload: row.tse.rawPayload,
         }
       : null,
-  });
+  };
+
+  let { provider, providerName } = getTSEProvider(row.tse?.provider);
+  let fallbackFrom: string | null = null;
+  let fallbackReason: string | null = null;
+  let result: TSEFinishResult;
+  try {
+    result = await provider.finishTransaction(context);
+  } catch (error) {
+    if (providerName === "fiskaly" && !shouldStrictTSE() && isSoftFiskalyError(error)) {
+      fallbackFrom = "fiskaly";
+      fallbackReason = error instanceof Error ? error.message : String(error ?? "tse_finish_failed");
+      provider = noopProvider;
+      providerName = "noop";
+      result = await provider.finishTransaction(context);
+    } else {
+      throw error;
+    }
+  }
 
   const finishedAt = result.finishedAt || new Date();
   const rawPayload = {
     ...(row.tse?.rawPayload && typeof row.tse.rawPayload === "object" ? (row.tse.rawPayload as Record<string, unknown>) : {}),
     finish: result.raw ?? null,
+    ...(fallbackFrom ? { fallback: { from: fallbackFrom, reason: fallbackReason, at: finishedAt.toISOString() } } : {}),
   };
   await POSTransactionModel.updateOne(
     { _id: txId },
@@ -226,6 +279,7 @@ export async function tseFinish(tx: TxRef, actorAdminId: string | Types.ObjectId
       signatureCounter: result.signatureCounter,
       logTime: result.logTime,
       finishedAt,
+      ...(fallbackFrom ? { fallbackFrom, fallbackReason } : {}),
     },
   });
 }
@@ -236,8 +290,7 @@ export async function tseCancel(tx: TxRef, actorAdminId: string | Types.ObjectId
   if (!row.tse?.startedAt) return;
   if (row.tse?.finishedAt && row.tse?.signature) return;
 
-  const { provider, providerName } = getTSEProvider(row.tse?.provider);
-  await provider.cancelTransaction({
+  const context: TSETransactionContext = {
     txId: txId.toString(),
     amountCents: row.totals?.grossCents || 0,
     currency: "EUR",
@@ -250,12 +303,30 @@ export async function tseCancel(tx: TxRef, actorAdminId: string | Types.ObjectId
           rawPayload: row.tse.rawPayload,
         }
       : null,
-  });
+  };
+
+  const { provider, providerName: resolvedProviderName } = getTSEProvider(row.tse?.provider);
+  let providerName = resolvedProviderName;
+  let fallbackFrom: string | null = null;
+  let fallbackReason: string | null = null;
+  try {
+    await provider.cancelTransaction(context);
+  } catch (error) {
+    if (providerName === "fiskaly" && !shouldStrictTSE() && isSoftFiskalyError(error)) {
+      fallbackFrom = "fiskaly";
+      fallbackReason = error instanceof Error ? error.message : String(error ?? "tse_cancel_failed");
+      providerName = "noop";
+      await noopProvider.cancelTransaction(context);
+    } else {
+      throw error;
+    }
+  }
 
   const finishedAt = new Date();
   const rawPayload = {
     ...(row.tse?.rawPayload && typeof row.tse.rawPayload === "object" ? (row.tse.rawPayload as Record<string, unknown>) : {}),
     cancel: { cancelledAt: finishedAt.toISOString(), reason: reason || "tse_cancel" },
+    ...(fallbackFrom ? { fallback: { from: fallbackFrom, reason: fallbackReason, at: finishedAt.toISOString() } } : {}),
   };
   await POSTransactionModel.updateOne(
     { _id: txId, "tse.finishedAt": { $exists: false } },
@@ -276,6 +347,7 @@ export async function tseCancel(tx: TxRef, actorAdminId: string | Types.ObjectId
       reason: reason || "tse_cancel",
       provider: providerName,
       finishedAt,
+      ...(fallbackFrom ? { fallbackFrom, fallbackReason } : {}),
     },
   });
 }
