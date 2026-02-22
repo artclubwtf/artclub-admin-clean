@@ -72,14 +72,14 @@ public sealed class ZvtTerminalService
                 return AbortExecutionResult.Failure("terminal_unreachable");
             }
 
-            var abortMethod = FindMethod(context.Client.GetType(), "AbortAsync", 0)
-                ?? FindMethod(context.Client.GetType(), "ReversalAsync", 0);
+            var abortMethod = FindMethod(context.Client.GetType(), "AbortAsync")
+                ?? FindMethod(context.Client.GetType(), "ReversalAsync");
             if (abortMethod is null)
             {
                 return AbortExecutionResult.Failure("abort_not_supported_by_library");
             }
 
-            var task = abortMethod.Invoke(context.Client, []);
+            var task = InvokeMethodWithDefaults(context.Client, abortMethod, cancellationToken);
             await AwaitTask(task, cancellationToken);
             return AbortExecutionResult.Success();
         }
@@ -103,13 +103,13 @@ public sealed class ZvtTerminalService
         }
 
         var communication = CreateTcpCommunication(communicationType, host, port);
-        var connectMethod = FindMethod(communicationType, "ConnectAsync", 0);
+        var connectMethod = FindMethod(communicationType, "ConnectAsync");
         if (connectMethod is null)
         {
             throw new InvalidOperationException("ConnectAsync method not found in Portalum.Zvt communication type.");
         }
 
-        var connected = await AwaitTaskBool(connectMethod.Invoke(communication, []), cancellationToken);
+        var connected = await AwaitTaskBool(InvokeMethodWithDefaults(communication, connectMethod, cancellationToken), cancellationToken);
         if (!connected)
         {
             return new ZvtContext(communication, null, false);
@@ -130,12 +130,12 @@ public sealed class ZvtTerminalService
                 parameters[0].ParameterType == typeof(string) &&
                 parameters[1].ParameterType == typeof(int))
             {
-                return ctor.Invoke([host, port]);
+                return ctor.Invoke(BuildConstructorArgs(parameters, host, port));
             }
 
             if (parameters.Length == 1 && parameters[0].ParameterType == typeof(string))
             {
-                return ctor.Invoke([host]);
+                return ctor.Invoke(BuildConstructorArgs(parameters, host));
             }
         }
 
@@ -240,7 +240,7 @@ public sealed class ZvtTerminalService
                     ? amountCents / 100f
                     : amountCents;
 
-        var task = method.Invoke(zvtClient, [amountArgument]);
+        var task = InvokeMethodWithDefaults(zvtClient, method, cancellationToken, amountArgument);
         var result = await AwaitTaskResult(task, cancellationToken);
         var refs = ExtractTerminalRefs(result);
         var statusHint = ExtractStatusHint(result);
@@ -252,13 +252,89 @@ public sealed class ZvtTerminalService
     {
         return clientType
             .GetMethods(BindingFlags.Instance | BindingFlags.Public)
-            .FirstOrDefault(m => m.Name == "PaymentAsync" && m.GetParameters().Length == 1);
+            .Where(m => m.Name == "PaymentAsync")
+            .OrderBy(m => m.GetParameters().Length)
+            .FirstOrDefault(m =>
+            {
+                var parameters = m.GetParameters();
+                if (parameters.Length == 0)
+                {
+                    return false;
+                }
+
+                var first = parameters[0].ParameterType;
+                return first == typeof(int) || first == typeof(long) ||
+                       first == typeof(decimal) || first == typeof(double) || first == typeof(float);
+            });
     }
 
-    private static MethodInfo? FindMethod(Type type, string name, int parameterCount)
+    private static MethodInfo? FindMethod(Type type, string name)
     {
         return type.GetMethods(BindingFlags.Instance | BindingFlags.Public)
-            .FirstOrDefault(m => m.Name == name && m.GetParameters().Length == parameterCount);
+            .Where(m => m.Name == name)
+            .OrderBy(m => m.GetParameters().Length)
+            .FirstOrDefault();
+    }
+
+    private static object?[] BuildConstructorArgs(ParameterInfo[] parameters, params object?[] prefixValues)
+    {
+        var args = new object?[parameters.Length];
+
+        for (var i = 0; i < parameters.Length; i++)
+        {
+            if (i < prefixValues.Length)
+            {
+                args[i] = prefixValues[i];
+                continue;
+            }
+
+            args[i] = GetDefaultParameterValue(parameters[i]);
+        }
+
+        return args;
+    }
+
+    private static object? InvokeMethodWithDefaults(object target, MethodInfo method, CancellationToken cancellationToken, params object?[] prefixValues)
+    {
+        var parameters = method.GetParameters();
+        var args = new object?[parameters.Length];
+        var prefixIndex = 0;
+
+        for (var i = 0; i < parameters.Length; i++)
+        {
+            var parameter = parameters[i];
+            if (parameter.ParameterType == typeof(CancellationToken))
+            {
+                args[i] = cancellationToken;
+                continue;
+            }
+
+            if (prefixIndex < prefixValues.Length)
+            {
+                args[i] = prefixValues[prefixIndex++];
+                continue;
+            }
+
+            args[i] = GetDefaultParameterValue(parameter);
+        }
+
+        return method.Invoke(target, args);
+    }
+
+    private static object? GetDefaultParameterValue(ParameterInfo parameter)
+    {
+        if (parameter.HasDefaultValue)
+        {
+            return parameter.DefaultValue;
+        }
+
+        var type = parameter.ParameterType;
+        if (type == typeof(CancellationToken))
+        {
+            return CancellationToken.None;
+        }
+
+        return type.IsValueType ? Activator.CreateInstance(type) : null;
     }
 
     private static async Task AwaitTask(object? maybeTask, CancellationToken cancellationToken)
