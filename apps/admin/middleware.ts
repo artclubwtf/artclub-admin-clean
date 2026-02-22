@@ -27,6 +27,8 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith("/api/account/change-password/") ||
       pathname.startsWith("/api/applications") ||
       pathname.startsWith("/api/mobile") ||
+      pathname.startsWith("/api/pos-agent") ||
+      pathname.startsWith("/api/webhooks/verifone") ||
       pathname === "/api/shopify/files/upload" ||
       pathname === "/api/shopify/files/resolve" ||
       pathname === "/api/shopify/resolve-media" ||
