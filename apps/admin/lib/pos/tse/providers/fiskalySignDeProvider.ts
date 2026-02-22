@@ -59,15 +59,15 @@ function getFiskalyBaseUrl(env: "sandbox" | "production", override?: string | nu
     return normalized.endsWith("/api/v2") ? normalized : `${normalized}/api/v2`;
   }
 
-  // SIGN DE V2 integrations should talk to fiskaly Middleware by default.
-  // The backend remains available for a subset of endpoints, but middleware is the recommended client entrypoint.
-  if (env === "production") return "https://kassensichv-middleware.fiskaly.com/api/v2";
-  return "https://kassensichv-middleware-sandbox.fiskaly.com/api/v2";
+  // SIGN DE V2 docs document the middleware host without an explicit sandbox suffix.
+  // TEST/LIVE is selected by the API key/secret environment, not by a different hostname.
+  void env;
+  return "https://kassensichv-middleware.fiskaly.com/api/v2";
 }
 
 function getFiskalyBackendApiBaseUrl(env: "sandbox" | "production") {
-  if (env === "production") return "https://kassensichv.fiskaly.com/api/v2";
-  return "https://kassensichv-sandbox.fiskaly.com/api/v2";
+  void env;
+  return "https://kassensichv.fiskaly.com/api/v2";
 }
 
 function toServiceRootUrl(apiBaseUrl: string) {
