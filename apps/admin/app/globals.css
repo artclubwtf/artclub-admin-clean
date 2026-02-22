@@ -888,6 +888,13 @@ body.ac-theme .rounded {
   }
 }
 
-.admin-pos-css-fix{
-  flex-wrap: wrap; max-height: 200px; overflow: scroll;
+.flex.gap-2.overflow-x-auto.pb-1 {
+    flex-wrap: wrap;
+    max-height: 80px;
+    overflow: scroll;
+}
+
+
+a.whitespace-nowrap.rounded-xl.border.px-3.py-2.text-sm.font-semibold.transition.border-slate-900.bg-slate-900.text-white {
+    color: white;
 }
