@@ -59,8 +59,10 @@ function getFiskalyBaseUrl(env: "sandbox" | "production", override?: string | nu
     return normalized.endsWith("/api/v2") ? normalized : `${normalized}/api/v2`;
   }
 
-  if (env === "production") return "https://kassensichv.fiskaly.com/api/v2";
-  return "https://kassensichv-sandbox.fiskaly.com/api/v2";
+  // SIGN DE V2 integrations should talk to fiskaly Middleware by default.
+  // The backend remains available for a subset of endpoints, but middleware is the recommended client entrypoint.
+  if (env === "production") return "https://kassensichv-middleware.fiskaly.com/api/v2";
+  return "https://kassensichv-middleware-sandbox.fiskaly.com/api/v2";
 }
 
 function requireConfig(): FiskalyConfig {
@@ -216,7 +218,11 @@ async function getAuthToken(config: FiskalyConfig) {
   }
   const json = await readJsonSafe(res);
   if (!res.ok) {
-    throw new Error(`fiskaly_auth_failed:${res.status}:${summarizeErrorPayload(json)}`);
+    const hint =
+      res.status === 404 && typeof config.baseUrl === "string" && config.baseUrl.includes("/api/v2")
+        ? ":hint=check_fiskaly_base_url_or_host(use_sign_de_v2_middleware)"
+        : "";
+    throw new Error(`fiskaly_auth_failed:${res.status}:${summarizeErrorPayload(json)}${hint}`);
   }
   const record = asRecord(json);
   const accessToken = pickString(record, ["access_token", "token"]);
