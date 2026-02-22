@@ -326,9 +326,11 @@ function buildStandardV1SchemaPayload(
 ) {
   return {
     standard_v1: {
-      receipt_type: receiptType,
-      type,
-      data,
+      receipt: {
+        receipt_type: receiptType,
+        type,
+        data,
+      },
     },
   };
 }
