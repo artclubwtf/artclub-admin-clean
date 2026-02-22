@@ -112,6 +112,7 @@ const posTransactionSchema = new Schema(
     tse: {
       provider: { type: String, trim: true },
       txId: { type: String, trim: true },
+      rawPayload: { type: Schema.Types.Mixed },
       signature: { type: String, trim: true },
       signatureCounter: { type: Number, min: 0, validate: isInteger },
       serial: { type: String, trim: true },

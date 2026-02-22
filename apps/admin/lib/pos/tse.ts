@@ -1,17 +1,22 @@
 import { Types } from "mongoose";
 
 import { appendPosAuditLog } from "@/lib/pos/audit";
+import { FiskalySignDeProvider, type ExistingTseState } from "@/lib/pos/tse/providers/fiskalySignDeProvider";
 import { POSTransactionModel } from "@/models/PosTransaction";
 
 export type TSEStartResult = {
   tseTxId: string;
   serial: string;
+  startedAt?: Date;
+  raw?: unknown;
 };
 
 export type TSEFinishResult = {
   signature: string;
   signatureCounter: number;
   logTime: Date;
+  finishedAt?: Date;
+  raw?: unknown;
 };
 
 type TSETransactionContext = {
@@ -19,12 +24,14 @@ type TSETransactionContext = {
   amountCents: number;
   currency: string;
   tseTxId?: string;
+  existingTse?: ExistingTseState | null;
 };
 
 export type TSEProvider = {
   startTransaction(tx: TSETransactionContext): Promise<TSEStartResult>;
   finishTransaction(tx: TSETransactionContext): Promise<TSEFinishResult>;
   cancelTransaction(tx: TSETransactionContext): Promise<void>;
+  ping?: () => Promise<{ ok: boolean; provider: string; env?: string }>;
 };
 
 class NoopTSEProvider implements TSEProvider {
@@ -32,6 +39,8 @@ class NoopTSEProvider implements TSEProvider {
     return {
       tseTxId: `noop-tse-${tx.txId}`,
       serial: "NOOP-SERIAL-001",
+      startedAt: new Date(),
+      raw: { provider: "noop", state: "ACTIVE" },
     };
   }
 
@@ -41,27 +50,45 @@ class NoopTSEProvider implements TSEProvider {
       signature: `noop-signature-${tx.tseTxId || tx.txId}-${logTime.getTime()}`,
       signatureCounter: Math.max(1, Math.floor(logTime.getTime() / 1000)),
       logTime,
+      finishedAt: logTime,
+      raw: { provider: "noop", state: "FINISHED", logTime: logTime.toISOString() },
     };
   }
 
   async cancelTransaction(_tx: TSETransactionContext) {
     void _tx;
   }
+
+  async ping() {
+    return { ok: true, provider: "noop", env: process.env.NODE_ENV || "development" };
+  }
 }
 
 const noopProvider = new NoopTSEProvider();
+const fiskalyProvider = new FiskalySignDeProvider();
 
 function getTSEProvider(providerName?: string | null): { provider: TSEProvider; providerName: string } {
-  const normalized = providerName?.trim().toLowerCase();
+  const envProvider = process.env.POS_TSE_PROVIDER?.trim().toLowerCase();
+  const normalized = providerName?.trim().toLowerCase() || envProvider || "noop";
+
+  if (normalized === "fiskaly") {
+    return { provider: fiskalyProvider, providerName: "fiskaly" };
+  }
+
   if (!normalized || normalized === "noop") {
     return { provider: noopProvider, providerName: "noop" };
   }
-  if (process.env.NODE_ENV !== "production") {
-    return { provider: noopProvider, providerName: "noop" };
-  }
 
-  // Placeholder until real TSE adapters are connected.
   return { provider: noopProvider, providerName: "noop" };
+}
+
+export async function getTSEHealth() {
+  const { provider, providerName } = getTSEProvider();
+  if (!provider.ping) {
+    return { ok: true, provider: providerName };
+  }
+  const result = await provider.ping();
+  return { ok: Boolean(result.ok), provider: result.provider || providerName, env: result.env };
 }
 
 type TxRef = {
@@ -71,6 +98,7 @@ type TxRef = {
   tse?: {
     txId?: string | null;
     provider?: string | null;
+    rawPayload?: unknown;
     signature?: string | null;
     signatureCounter?: number | null;
     serial?: string | null;
@@ -98,24 +126,38 @@ async function loadTransaction(tx: TxRef) {
 export async function tseStart(tx: TxRef, actorAdminId: string | Types.ObjectId) {
   const { txId, row } = await loadTransaction(tx);
   if (!row) return;
-  if (row.tse?.startedAt) return;
+  if (row.tse?.startedAt && row.tse?.txId) return;
 
   const { provider, providerName } = getTSEProvider(row.tse?.provider);
   const result = await provider.startTransaction({
     txId: txId.toString(),
     amountCents: row.totals?.grossCents || 0,
     currency: "EUR",
+    tseTxId: row.tse?.txId ?? undefined,
+    existingTse: row.tse
+      ? {
+          txId: row.tse.txId ?? undefined,
+          signature: row.tse.signature ?? undefined,
+          serial: row.tse.serial ?? undefined,
+          rawPayload: row.tse.rawPayload,
+        }
+      : null,
   });
 
-  const startedAt = new Date();
+  const startedAt = result.startedAt || new Date();
+  const rawPayload = {
+    ...(row.tse?.rawPayload && typeof row.tse.rawPayload === "object" ? (row.tse.rawPayload as Record<string, unknown>) : {}),
+    start: result.raw ?? null,
+  };
   await POSTransactionModel.updateOne(
-    { _id: txId, "tse.startedAt": { $exists: false } },
+    { _id: txId },
     {
       $set: {
         "tse.provider": providerName,
         "tse.txId": result.tseTxId,
         "tse.serial": result.serial,
         "tse.startedAt": startedAt,
+        "tse.rawPayload": rawPayload,
       },
     },
   );
@@ -137,7 +179,7 @@ export async function tseFinish(tx: TxRef, actorAdminId: string | Types.ObjectId
   const { txId, row } = await loadTransaction(tx);
   if (!row) return;
   if (!row.tse?.startedAt) return;
-  if (row.tse?.finishedAt && row.tse?.signature) return;
+  if (row.tse?.signature) return;
 
   const { provider, providerName } = getTSEProvider(row.tse?.provider);
   const result = await provider.finishTransaction({
@@ -145,9 +187,21 @@ export async function tseFinish(tx: TxRef, actorAdminId: string | Types.ObjectId
     amountCents: row.totals?.grossCents || 0,
     currency: "EUR",
     tseTxId: row.tse?.txId ?? undefined,
+    existingTse: row.tse
+      ? {
+          txId: row.tse.txId ?? undefined,
+          signature: row.tse.signature ?? undefined,
+          serial: row.tse.serial ?? undefined,
+          rawPayload: row.tse.rawPayload,
+        }
+      : null,
   });
 
-  const finishedAt = new Date();
+  const finishedAt = result.finishedAt || new Date();
+  const rawPayload = {
+    ...(row.tse?.rawPayload && typeof row.tse.rawPayload === "object" ? (row.tse.rawPayload as Record<string, unknown>) : {}),
+    finish: result.raw ?? null,
+  };
   await POSTransactionModel.updateOne(
     { _id: txId },
     {
@@ -157,6 +211,7 @@ export async function tseFinish(tx: TxRef, actorAdminId: string | Types.ObjectId
         "tse.signatureCounter": result.signatureCounter,
         "tse.logTime": result.logTime,
         "tse.finishedAt": finishedAt,
+        "tse.rawPayload": rawPayload,
       },
     },
   );
@@ -187,15 +242,28 @@ export async function tseCancel(tx: TxRef, actorAdminId: string | Types.ObjectId
     amountCents: row.totals?.grossCents || 0,
     currency: "EUR",
     tseTxId: row.tse?.txId ?? undefined,
+    existingTse: row.tse
+      ? {
+          txId: row.tse.txId ?? undefined,
+          signature: row.tse.signature ?? undefined,
+          serial: row.tse.serial ?? undefined,
+          rawPayload: row.tse.rawPayload,
+        }
+      : null,
   });
 
   const finishedAt = new Date();
+  const rawPayload = {
+    ...(row.tse?.rawPayload && typeof row.tse.rawPayload === "object" ? (row.tse.rawPayload as Record<string, unknown>) : {}),
+    cancel: { cancelledAt: finishedAt.toISOString(), reason: reason || "tse_cancel" },
+  };
   await POSTransactionModel.updateOne(
     { _id: txId, "tse.finishedAt": { $exists: false } },
     {
       $set: {
         "tse.provider": providerName,
         "tse.finishedAt": finishedAt,
+        "tse.rawPayload": rawPayload,
       },
     },
   );
