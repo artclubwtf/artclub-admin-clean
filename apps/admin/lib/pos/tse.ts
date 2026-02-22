@@ -72,6 +72,11 @@ function shouldStrictTSE() {
   return value === "1" || value === "true" || value === "yes";
 }
 
+function shouldAllowNoopFallback() {
+  const value = process.env.POS_TSE_ALLOW_NOOP_FALLBACK?.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
+
 function isSoftFiskalyError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error ?? "");
   const normalized = message.toLowerCase();
@@ -81,6 +86,12 @@ function isSoftFiskalyError(error: unknown) {
     normalized.includes("fiskaly_auth_failed") ||
     normalized.includes("fiskaly_api_error")
   );
+}
+
+function formatTSEError(error: unknown, maxLength = 700) {
+  const raw = error instanceof Error ? error.message : String(error ?? "unknown_tse_error");
+  const compact = raw.replace(/\s+/g, " ").trim();
+  return compact.length > maxLength ? `${compact.slice(0, maxLength)}...` : compact;
 }
 
 function getTSEProvider(providerName?: string | null): { provider: TSEProvider; providerName: string } {
@@ -166,14 +177,14 @@ export async function tseStart(tx: TxRef, actorAdminId: string | Types.ObjectId)
   try {
     result = await provider.startTransaction(context);
   } catch (error) {
-    if (providerName === "fiskaly" && !shouldStrictTSE() && isSoftFiskalyError(error)) {
+    if (providerName === "fiskaly" && shouldAllowNoopFallback() && !shouldStrictTSE() && isSoftFiskalyError(error)) {
       fallbackFrom = "fiskaly";
       fallbackReason = error instanceof Error ? error.message : String(error ?? "tse_start_failed");
       provider = noopProvider;
       providerName = "noop";
       result = await provider.startTransaction(context);
     } else {
-      throw error;
+      throw new Error(`tse_start_failed:${providerName}:${formatTSEError(error)}`);
     }
   }
 
@@ -238,14 +249,14 @@ export async function tseFinish(tx: TxRef, actorAdminId: string | Types.ObjectId
   try {
     result = await provider.finishTransaction(context);
   } catch (error) {
-    if (providerName === "fiskaly" && !shouldStrictTSE() && isSoftFiskalyError(error)) {
+    if (providerName === "fiskaly" && shouldAllowNoopFallback() && !shouldStrictTSE() && isSoftFiskalyError(error)) {
       fallbackFrom = "fiskaly";
       fallbackReason = error instanceof Error ? error.message : String(error ?? "tse_finish_failed");
       provider = noopProvider;
       providerName = "noop";
       result = await provider.finishTransaction(context);
     } else {
-      throw error;
+      throw new Error(`tse_finish_failed:${providerName}:${formatTSEError(error)}`);
     }
   }
 
@@ -312,13 +323,13 @@ export async function tseCancel(tx: TxRef, actorAdminId: string | Types.ObjectId
   try {
     await provider.cancelTransaction(context);
   } catch (error) {
-    if (providerName === "fiskaly" && !shouldStrictTSE() && isSoftFiskalyError(error)) {
+    if (providerName === "fiskaly" && shouldAllowNoopFallback() && !shouldStrictTSE() && isSoftFiskalyError(error)) {
       fallbackFrom = "fiskaly";
       fallbackReason = error instanceof Error ? error.message : String(error ?? "tse_cancel_failed");
       providerName = "noop";
       await noopProvider.cancelTransaction(context);
     } else {
-      throw error;
+      throw new Error(`tse_cancel_failed:${providerName}:${formatTSEError(error)}`);
     }
   }
 

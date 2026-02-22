@@ -149,6 +149,29 @@ async function readJsonSafe(res: Response) {
   }
 }
 
+function summarizeErrorPayload(payload: unknown) {
+  const record = asRecord(payload);
+  const errorRecord = asRecord(record.error);
+  const detailsRecord = asRecord(record.details);
+
+  const parts = [
+    pickString(record, ["message", "error"]),
+    pickString(errorRecord, ["message", "type", "code"]),
+    pickString(detailsRecord, ["message", "code"]),
+    pickString(record, ["code", "type"]),
+  ].filter(Boolean);
+
+  if (parts.length > 0) return parts.join(" | ");
+
+  const text = JSON.stringify(payload);
+  return text.length > 600 ? `${text.slice(0, 600)}...` : text;
+}
+
+function describeFetchError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "unknown_fetch_error");
+  return message.replace(/\s+/g, " ").trim();
+}
+
 async function getAuthToken(config: FiskalyConfig) {
   const cacheKey = createHash("sha256").update(`${config.baseUrl}|${config.apiKey}|${config.apiSecret}`).digest("hex");
   const now = Date.now();
@@ -156,18 +179,23 @@ async function getAuthToken(config: FiskalyConfig) {
     return authTokenCache.token;
   }
 
-  const res = await fetch(`${config.baseUrl}/auth`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      api_key: config.apiKey,
-      api_secret: config.apiSecret,
-    }),
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${config.baseUrl}/auth`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: config.apiKey,
+        api_secret: config.apiSecret,
+      }),
+      cache: "no-store",
+    });
+  } catch (error) {
+    throw new Error(`fiskaly_network_error:auth:${config.baseUrl}/auth:${describeFetchError(error)}`);
+  }
   const json = await readJsonSafe(res);
   if (!res.ok) {
-    throw new Error(`fiskaly_auth_failed:${res.status}:${JSON.stringify(json)}`);
+    throw new Error(`fiskaly_auth_failed:${res.status}:${summarizeErrorPayload(json)}`);
   }
   const record = asRecord(json);
   const accessToken = pickString(record, ["access_token", "token"]);
@@ -194,14 +222,19 @@ async function fiskalyRequest(config: FiskalyConfig, path: string, init: Request
     headers.set("Idempotency-Key", init.idempotencyKey);
   }
 
-  const res = await fetch(`${config.baseUrl}${path}`, {
-    ...init,
-    headers,
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${config.baseUrl}${path}`, {
+      ...init,
+      headers,
+      cache: "no-store",
+    });
+  } catch (error) {
+    throw new Error(`fiskaly_network_error:api:${path}:${describeFetchError(error)}`);
+  }
   const json = await readJsonSafe(res);
   if (!res.ok) {
-    throw new Error(`fiskaly_api_error:${res.status}:${JSON.stringify(json)}`);
+    throw new Error(`fiskaly_api_error:${res.status}:${path}:${summarizeErrorPayload(json)}`);
   }
   return json;
 }
