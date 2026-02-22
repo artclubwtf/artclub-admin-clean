@@ -319,42 +319,47 @@ function buildTxRetrievePath(config: FiskalyConfig, fiskalyTxId: string) {
   return `/tss/${encodeURIComponent(config.tssId)}/tx/${encodeURIComponent(config.clientId)}/${encodeURIComponent(fiskalyTxId)}`;
 }
 
-function buildStartPayload(ctx: FiskalyTSETransactionContext, config: FiskalyConfig, fiskalyTxId: string) {
+function buildStandardV1SchemaPayload(
+  type: string,
+  data: string,
+  receiptType: "RECEIPT" | "ORDER" = "RECEIPT",
+) {
+  return {
+    standard_v1: {
+      receipt_type: receiptType,
+      type,
+      data,
+    },
+  };
+}
+
+function buildReceiptDataString(ctx: FiskalyTSETransactionContext, mode: "ACTIVE" | "FINISHED" | "CANCELLED") {
   const gross = Math.max(0, ctx.amountCents);
   const major = gross / 100;
+  return JSON.stringify({
+    txId: ctx.txId,
+    amount: Number(major.toFixed(2)),
+    currency: ctx.currency || "EUR",
+    status: mode,
+  });
+}
+
+function buildStartPayload(ctx: FiskalyTSETransactionContext, config: FiskalyConfig, fiskalyTxId: string) {
   return {
     tx_id: fiskalyTxId,
     state: "ACTIVE",
     client_id: config.clientId,
-    schema: "standard_v1",
-    // Minimal generic process data for TSE signing. Can be extended later with exact DSFinV-K process strings.
-    process_type: "Kassenbeleg-V1",
-    process_data: `TX ${ctx.txId} ${major.toFixed(2)} ${ctx.currency || "EUR"}`,
-    amounts_per_vat_rate: [
-      {
-        vat_rate: "NORMAL",
-        amount: Number(major.toFixed(2)),
-      },
-    ],
+    // DSFinV-K v2.1: type and data must be empty at start.
+    schema: buildStandardV1SchemaPayload("", ""),
   };
 }
 
 function buildFinishPayload(ctx: FiskalyTSETransactionContext, config: FiskalyConfig, fiskalyTxId: string) {
-  const gross = Math.max(0, ctx.amountCents);
-  const major = gross / 100;
   return {
     tx_id: fiskalyTxId,
     state: "FINISHED",
     client_id: config.clientId,
-    schema: "standard_v1",
-    process_type: "Kassenbeleg-V1",
-    process_data: `TX ${ctx.txId} ${major.toFixed(2)} ${ctx.currency || "EUR"} PAID`,
-    amounts_per_vat_rate: [
-      {
-        vat_rate: "NORMAL",
-        amount: Number(major.toFixed(2)),
-      },
-    ],
+    schema: buildStandardV1SchemaPayload("Kassenbeleg-V1", buildReceiptDataString(ctx, "FINISHED")),
   };
 }
 
@@ -363,10 +368,7 @@ function buildCancelPayload(ctx: FiskalyTSETransactionContext, config: FiskalyCo
     tx_id: fiskalyTxId,
     state: "CANCELLED",
     client_id: config.clientId,
-    schema: "standard_v1",
-    process_type: "Kassenbeleg-V1",
-    process_data: `TX ${ctx.txId} CANCELLED`,
-    amounts_per_vat_rate: [],
+    schema: buildStandardV1SchemaPayload("Kassenbeleg-V1", buildReceiptDataString(ctx, "CANCELLED")),
   };
 }
 
@@ -383,14 +385,24 @@ function mapStartResult(ctx: FiskalyTSETransactionContext, json: unknown): Fiska
 
 function mapFinishResult(ctx: FiskalyTSETransactionContext, json: unknown): FiskalyTSEFinishResult {
   const record = asRecord(json);
-  const signature = pickString(record, ["signature", "signature_base64", "tse_signature"]);
+  const signatureRecord = asRecord(record.signature);
+  const logRecord = asRecord(record.log);
+  const signature =
+    pickString(signatureRecord, ["value", "signature"]) ?? pickString(record, ["signature", "signature_base64", "tse_signature"]);
   if (!signature) {
     throw new Error("fiskaly_finish_failed:missing_signature");
   }
   const signatureCounter =
-    pickNumber(record, ["signature_counter", "signatureCounter", "log_message_serial_number"]) ?? 0;
+    pickNumber(record, ["signature_counter", "signatureCounter", "log_message_serial_number"]) ??
+    pickNumber(logRecord, ["signature_counter", "message_serial_number", "log_message_serial_number"]) ??
+    0;
   const logTime =
-    parseDate(record.time_end) || parseDate(record.time_finish) || parseDate(record.log_time) || new Date();
+    parseDate(record.time_end) ||
+    parseDate(record.time_finish) ||
+    parseDate(record.log_time) ||
+    parseDate(logRecord.timestamp) ||
+    parseDate(logRecord.time) ||
+    new Date();
   const finishedAt = parseDate(record.time_end) || parseDate(record.time_finish) || new Date();
   void ctx;
   return { signature, signatureCounter, logTime, finishedAt, raw: json };
