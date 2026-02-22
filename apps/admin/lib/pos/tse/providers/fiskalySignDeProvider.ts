@@ -169,7 +169,28 @@ function summarizeErrorPayload(payload: unknown) {
 
 function describeFetchError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error ?? "unknown_fetch_error");
-  return message.replace(/\s+/g, " ").trim();
+  const normalizedMessage = message.replace(/\s+/g, " ").trim();
+
+  const cause =
+    error && typeof error === "object" && "cause" in error ? (error as { cause?: unknown }).cause : undefined;
+
+  if (!cause || typeof cause !== "object") {
+    return normalizedMessage;
+  }
+
+  const causeRecord = cause as Record<string, unknown>;
+  const details = [
+    typeof causeRecord.name === "string" ? `cause=${causeRecord.name}` : null,
+    typeof causeRecord.code === "string" ? `code=${causeRecord.code}` : null,
+    typeof causeRecord.errno === "number" || typeof causeRecord.errno === "string" ? `errno=${String(causeRecord.errno)}` : null,
+    typeof causeRecord.syscall === "string" ? `syscall=${causeRecord.syscall}` : null,
+    typeof causeRecord.hostname === "string" ? `hostname=${causeRecord.hostname}` : null,
+    typeof causeRecord.address === "string" ? `address=${causeRecord.address}` : null,
+    typeof causeRecord.port === "number" || typeof causeRecord.port === "string" ? `port=${String(causeRecord.port)}` : null,
+    typeof causeRecord.message === "string" ? `causeMessage=${causeRecord.message.replace(/\s+/g, " ").trim()}` : null,
+  ].filter(Boolean);
+
+  return details.length > 0 ? `${normalizedMessage} [${details.join(", ")}]` : normalizedMessage;
 }
 
 async function getAuthToken(config: FiskalyConfig) {
