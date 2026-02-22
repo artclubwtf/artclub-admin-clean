@@ -52,6 +52,20 @@ function trimOptional(value?: string | null) {
   return trimmed ? trimmed : undefined;
 }
 
+function isUuidLike(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function deterministicUuid(input: string, namespace = "artclub-fiskaly-tx") {
+  const hash = createHash("sha256").update(`${namespace}:${input}`).digest();
+  const bytes = Uint8Array.from(hash.subarray(0, 16));
+  // RFC 4122 variant + version 4 style bits (deterministic payload, not random)
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
 function getFiskalyBaseUrl(env: "sandbox" | "production", override?: string | null) {
   const raw = trimOptional(override);
   if (raw) {
@@ -91,6 +105,9 @@ function requireConfig(): FiskalyConfig {
   }
   if (!clientId) {
     throw new Error("fiskaly_not_configured:missing_client_id");
+  }
+  if (!isUuidLike(clientId)) {
+    throw new Error("fiskaly_not_configured:invalid_client_id_uuid");
   }
 
   return {
@@ -294,6 +311,10 @@ async function fiskalyRequest(config: FiskalyConfig, path: string, init: Request
   return json;
 }
 
+function buildTxPath(config: FiskalyConfig, fiskalyTxId: string) {
+  return `/tss/${encodeURIComponent(config.tssId)}/tx/${encodeURIComponent(config.clientId)}/${encodeURIComponent(fiskalyTxId)}`;
+}
+
 function buildStartPayload(ctx: FiskalyTSETransactionContext, config: FiskalyConfig) {
   const gross = Math.max(0, ctx.amountCents);
   const major = gross / 100;
@@ -398,10 +419,10 @@ export class FiskalySignDeProvider {
     }
 
     const config = this.config;
-    const txId = ctx.tseTxId || ctx.txId;
+    const txId = ctx.tseTxId || deterministicUuid(ctx.txId);
     const json = await fiskalyRequest(
       config,
-      `/tss/${encodeURIComponent(config.tssId)}/tx/${encodeURIComponent(txId)}?tx_revision=1`,
+      `${buildTxPath(config, txId)}?tx_revision=1`,
       {
         method: "PUT",
         body: JSON.stringify(buildStartPayload(ctx, config)),
@@ -422,12 +443,12 @@ export class FiskalySignDeProvider {
     }
 
     const config = this.config;
-    const txId = ctx.tseTxId || ctx.existingTse?.txId || ctx.txId;
+    const txId = ctx.tseTxId || ctx.existingTse?.txId || deterministicUuid(ctx.txId);
     let revision = nextRevisionFromRaw(ctx.existingTse?.rawPayload, 2);
 
     // Try to fetch current transaction state if revision is unknown or stale.
     try {
-      const current = await fiskalyRequest(config, `/tss/${encodeURIComponent(config.tssId)}/tx/${encodeURIComponent(txId)}`, {
+      const current = await fiskalyRequest(config, buildTxPath(config, txId), {
         method: "GET",
       });
       const currentRecord = asRecord(current);
@@ -441,7 +462,7 @@ export class FiskalySignDeProvider {
 
     const json = await fiskalyRequest(
       config,
-      `/tss/${encodeURIComponent(config.tssId)}/tx/${encodeURIComponent(txId)}?tx_revision=${encodeURIComponent(String(revision))}`,
+      `${buildTxPath(config, txId)}?tx_revision=${encodeURIComponent(String(revision))}`,
       {
         method: "PUT",
         body: JSON.stringify(buildFinishPayload(ctx, config)),
@@ -457,10 +478,10 @@ export class FiskalySignDeProvider {
     }
 
     const config = this.config;
-    const txId = ctx.tseTxId || ctx.existingTse?.txId || ctx.txId;
+    const txId = ctx.tseTxId || ctx.existingTse?.txId || deterministicUuid(ctx.txId);
     let revision = nextRevisionFromRaw(ctx.existingTse?.rawPayload, 2);
     try {
-      const current = await fiskalyRequest(config, `/tss/${encodeURIComponent(config.tssId)}/tx/${encodeURIComponent(txId)}`, {
+      const current = await fiskalyRequest(config, buildTxPath(config, txId), {
         method: "GET",
       });
       const currentRecord = asRecord(current);
@@ -478,7 +499,7 @@ export class FiskalySignDeProvider {
 
     await fiskalyRequest(
       config,
-      `/tss/${encodeURIComponent(config.tssId)}/tx/${encodeURIComponent(txId)}?tx_revision=${encodeURIComponent(String(revision))}`,
+      `${buildTxPath(config, txId)}?tx_revision=${encodeURIComponent(String(revision))}`,
       {
         method: "PUT",
         body: JSON.stringify(buildCancelPayload(ctx, config)),
