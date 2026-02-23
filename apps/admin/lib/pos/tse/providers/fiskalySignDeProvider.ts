@@ -347,6 +347,7 @@ function buildStandardV1SchemaPayload(
   type: string,
   data: string,
   receiptType: "RECEIPT" | "ORDER" = "RECEIPT",
+  extras?: Record<string, unknown>,
 ) {
   return {
     standard_v1: {
@@ -354,6 +355,7 @@ function buildStandardV1SchemaPayload(
         receipt_type: receiptType,
         type,
         data,
+        ...(extras || {}),
       },
     },
   };
@@ -372,10 +374,21 @@ function buildReceiptDataString(ctx: FiskalyTSETransactionContext, mode: "ACTIVE
 
 function buildAmountsPerVatRate(ctx: FiskalyTSETransactionContext) {
   const gross = Math.max(0, ctx.amountCents);
-  const major = Number((gross / 100).toFixed(2));
+  const major = (gross / 100).toFixed(5);
   return [
     {
       vat_rate: "NORMAL",
+      amount: major,
+    },
+  ];
+}
+
+function buildAmountsPerPaymentType(ctx: FiskalyTSETransactionContext) {
+  const gross = Math.max(0, ctx.amountCents);
+  const major = (gross / 100).toFixed(5);
+  return [
+    {
+      payment_type: "NON_CASH",
       amount: major,
     },
   ];
@@ -387,8 +400,9 @@ function buildStartPayload(ctx: FiskalyTSETransactionContext, config: FiskalyCon
     state: "ACTIVE",
     client_id: config.clientId,
     // DSFinV-K v2.1: type and data must be empty at start.
-    schema: buildStandardV1SchemaPayload("", ""),
-    amounts_per_vat_rate: buildAmountsPerVatRate(ctx),
+    schema: buildStandardV1SchemaPayload("", "", "RECEIPT", {
+      amounts_per_vat_rate: buildAmountsPerVatRate(ctx),
+    }),
   };
 }
 
@@ -397,8 +411,10 @@ function buildFinishPayload(ctx: FiskalyTSETransactionContext, config: FiskalyCo
     tx_id: fiskalyTxId,
     state: "FINISHED",
     client_id: config.clientId,
-    schema: buildStandardV1SchemaPayload("Kassenbeleg-V1", buildReceiptDataString(ctx, "FINISHED")),
-    amounts_per_vat_rate: buildAmountsPerVatRate(ctx),
+    schema: buildStandardV1SchemaPayload("Kassenbeleg-V1", buildReceiptDataString(ctx, "FINISHED"), "RECEIPT", {
+      amounts_per_vat_rate: buildAmountsPerVatRate(ctx),
+      amounts_per_payment_type: buildAmountsPerPaymentType(ctx),
+    }),
   };
 }
 
@@ -407,8 +423,10 @@ function buildCancelPayload(ctx: FiskalyTSETransactionContext, config: FiskalyCo
     tx_id: fiskalyTxId,
     state: "CANCELLED",
     client_id: config.clientId,
-    schema: buildStandardV1SchemaPayload("Kassenbeleg-V1", buildReceiptDataString(ctx, "CANCELLED")),
-    amounts_per_vat_rate: [],
+    schema: buildStandardV1SchemaPayload("Kassenbeleg-V1", buildReceiptDataString(ctx, "CANCELLED"), "RECEIPT", {
+      amounts_per_vat_rate: [],
+      amounts_per_payment_type: [],
+    }),
   };
 }
 
