@@ -14,6 +14,7 @@
   "dependencies": {
     "@artclub/models": "workspace:*",
     "@artclub/api-client": "workspace:*",
+    "@tailwindcss/postcss": "^4",
     "@aws-sdk/client-s3": "^3.954.0",
     "@aws-sdk/s3-request-presigner": "^3.954.0",
     "@google-analytics/data": "^5.2.1",
@@ -25,16 +26,15 @@
     "next-auth": "^4.24.13",
     "react": "19.2.1",
     "react-dom": "19.2.1",
+    "tailwindcss": "^4",
     "zod": "^4.2.1"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.0.10",
-    "tailwindcss": "^4",
     "typescript": "^5"
   }
 }
