@@ -6,7 +6,7 @@ export const fetchCache = "force-no-store";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSession, signIn } from "next-auth/react";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 
 function mapRegisterError(code?: string) {
   const normalized = (code || "").toLowerCase();
@@ -33,7 +33,7 @@ function mapRegisterError(code?: string) {
   }
 }
 
-export default function ArtistV2RegisterPage() {
+function ArtistV2RegisterInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -247,5 +247,21 @@ export default function ArtistV2RegisterPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ArtistV2RegisterPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="ac-shell">
+          <div className="ac-card" style={{ maxWidth: 520, margin: "40px auto" }}>
+            Loading...
+          </div>
+        </div>
+      }
+    >
+      <ArtistV2RegisterInner />
+    </Suspense>
   );
 }

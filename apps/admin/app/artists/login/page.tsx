@@ -6,7 +6,7 @@ export const fetchCache = "force-no-store";
 import type { Session } from "next-auth";
 import Link from "next/link";
 import { getSession, signIn } from "next-auth/react";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 function resolveDestination(session: Session | null) {
@@ -18,7 +18,7 @@ function resolveDestination(session: Session | null) {
   return onboardingComplete ? "/artists" : "/artists/onboarding";
 }
 
-export default function ArtistV2LoginPage() {
+function ArtistV2LoginInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -141,5 +141,21 @@ export default function ArtistV2LoginPage() {
         <div className="mt-2 text-sm text-slate-500">Forgot password: coming soon.</div>
       </div>
     </div>
+  );
+}
+
+export default function ArtistV2LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="ac-shell">
+          <div className="ac-card" style={{ maxWidth: 520, margin: "40px auto" }}>
+            Loading...
+          </div>
+        </div>
+      }
+    >
+      <ArtistV2LoginInner />
+    </Suspense>
   );
 }
