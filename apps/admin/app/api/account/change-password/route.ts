@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth";
 import { changePasswordSchema } from "@/lib/authSchemas";
+import { sendEmail } from "@/lib/email";
 import { connectMongo } from "@/lib/mongodb";
 import { resolveShopDomain } from "@/lib/shopDomain";
 import { UserModel } from "@/models/User";
@@ -36,6 +37,13 @@ export async function POST(req: Request) {
     user.passwordHash = await hash(password, 12);
     user.mustChangePassword = false;
     await user.save();
+
+    await sendEmail({
+      to: user.email,
+      subject: "Your password was changed",
+      text: "Your Artclub password has been updated successfully.",
+      html: "<p>Your Artclub password has been updated successfully.</p>",
+    }).catch(() => null);
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {

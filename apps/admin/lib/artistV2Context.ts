@@ -23,6 +23,10 @@ type ArtistV2CanonicalArtist = {
   handle?: string;
   displayName?: string;
   instagram?: string;
+  websiteUrl?: string;
+  locationCity?: string;
+  locationCountry?: string;
+  bio?: string;
   email?: string;
   profileImages?: {
     avatarUrl?: string;

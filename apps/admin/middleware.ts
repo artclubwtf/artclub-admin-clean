@@ -9,8 +9,28 @@ function redirectToLogin(req: NextRequest) {
   return NextResponse.redirect(loginUrl);
 }
 
+function redirectToArtistsLogin(req: NextRequest) {
+  const callbackUrl = req.nextUrl.pathname + req.nextUrl.search;
+  const loginUrl = new URL("/artists/login", req.url);
+  loginUrl.searchParams.set("callbackUrl", callbackUrl);
+  return NextResponse.redirect(loginUrl);
+}
+
+function isEnabled(rawValue: string | undefined, fallback = false) {
+  const raw = (rawValue || "").trim().toLowerCase();
+  if (!raw) return fallback;
+  return raw === "true" || raw === "1" || raw === "yes";
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const artistsV3Enabled = isEnabled(process.env.ARTISTS_V3_ENABLED, true);
+  const isPublicArtistsEntry =
+    pathname === "/artists/register" ||
+    pathname === "/artists/register/" ||
+    pathname === "/artists/login" ||
+    pathname === "/artists/login/";
+  const isArtistsOnboardingPath = pathname === "/artists/onboarding" || pathname.startsWith("/artists/onboarding/");
 
   const isApiPath = pathname.startsWith("/api");
   const isAdminPath = pathname.startsWith("/admin");
@@ -31,6 +51,7 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith("/api/pos-agent") ||
       pathname.startsWith("/api/webhooks/verifone") ||
       pathname === "/api/artists/v2/register" ||
+      pathname === "/api/artists/v3/register" ||
       pathname === "/api/shopify/files/upload" ||
       pathname === "/api/shopify/files/resolve" ||
       pathname === "/api/shopify/resolve-media" ||
@@ -67,6 +88,14 @@ export async function middleware(req: NextRequest) {
         return NextResponse.next();
       }
 
+      const isArtistsV3Api = pathname.startsWith("/api/artists/v3/");
+      if (isArtistsV3Api) {
+        if (token.role !== "artist") {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+        return NextResponse.next();
+      }
+
       if (token.role !== "team") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
@@ -80,26 +109,17 @@ export async function middleware(req: NextRequest) {
   if (!isAdminPath && !isArtistPath && !isArtistsPath) return NextResponse.next();
 
   try {
-    const isPublicArtistsEntry =
-      pathname === "/artists" ||
-      pathname === "/artists/" ||
-      pathname === "/artists/register" ||
-      pathname === "/artists/register/" ||
-      pathname === "/artists/login" ||
-      pathname === "/artists/login/";
-
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    if (isArtistsPath && isPublicArtistsEntry && !token) {
-      return NextResponse.next();
+    if (!token) {
+      if (isArtistsPath && isPublicArtistsEntry) return NextResponse.next();
+      if (pathname === "/artist" || pathname === "/artist/") return NextResponse.redirect(new URL("/artists/register", req.url));
+      if (isArtistsPath || isArtistPath) return redirectToArtistsLogin(req);
+      return redirectToLogin(req);
     }
-    if (!token && (pathname === "/artist" || pathname === "/artist/")) {
-      return NextResponse.redirect(new URL("/artists", req.url));
-    }
-    if (!token) return redirectToLogin(req);
 
     if (isAdminPath) {
       if (token.role !== "team") {
-        const fallback = token.role === "artist" ? "/artist" : "/login";
+        const fallback = token.role === "artist" ? "/artists" : "/login";
         return NextResponse.redirect(new URL(fallback, req.url));
       }
       return NextResponse.next();
@@ -107,54 +127,46 @@ export async function middleware(req: NextRequest) {
 
     if (isArtistPath) {
       if (token.role !== "artist") {
-        const fallback = token.role === "team" ? "/admin" : "/login";
+        const fallback = token.role === "team" ? "/admin" : "/artists/login";
         return NextResponse.redirect(new URL(fallback, req.url));
       }
 
-      const artistKey = (token as { artistKey?: string }).artistKey;
       const onboardingComplete = (token as { onboardingComplete?: boolean }).onboardingComplete === true;
-      if (!token.artistId && artistKey) {
-        if (token.mustChangePassword) {
-          if (!pathname.startsWith("/artist/change-password")) {
-            const changeUrl = new URL("/artist/change-password", req.url);
-            changeUrl.searchParams.set("callbackUrl", pathname + req.nextUrl.search);
-            return NextResponse.redirect(changeUrl);
-          }
-          return NextResponse.next();
+      if (token.mustChangePassword) {
+        if (!pathname.startsWith("/artist/change-password")) {
+          const changeUrl = new URL("/artist/change-password", req.url);
+          changeUrl.searchParams.set("callbackUrl", "/artists");
+          return NextResponse.redirect(changeUrl);
         }
-
-        const target = onboardingComplete ? "/artists" : "/artists/onboarding";
-        return NextResponse.redirect(new URL(target, req.url));
+        return NextResponse.next();
       }
 
-      const pendingRegistrationId = (token as { pendingRegistrationId?: string }).pendingRegistrationId;
-      if (!token.artistId && pendingRegistrationId) {
-        return NextResponse.redirect(new URL(`/apply/${pendingRegistrationId}/dashboard`, req.url));
-      }
-
-      if (token.mustChangePassword && !pathname.startsWith("/artist/change-password")) {
-        const changeUrl = new URL("/artist/change-password", req.url);
-        changeUrl.searchParams.set("callbackUrl", pathname + req.nextUrl.search);
-        return NextResponse.redirect(changeUrl);
-      }
-
-      return NextResponse.next();
+      if (pathname.startsWith("/artist/change-password")) return NextResponse.next();
+      return NextResponse.redirect(new URL(onboardingComplete ? "/artists" : "/artists/onboarding", req.url));
     }
 
     if (isArtistsPath) {
+      if (!artistsV3Enabled && !isPublicArtistsEntry) return NextResponse.next();
+
       if (isPublicArtistsEntry) {
+        if (token.role === "team") return NextResponse.redirect(new URL("/admin", req.url));
+        if (token.role === "customer") return NextResponse.redirect(new URL("/account", req.url));
+        if (token.role === "artist") {
+          const onboardingComplete = (token as { onboardingComplete?: boolean }).onboardingComplete === true;
+          return NextResponse.redirect(new URL(onboardingComplete ? "/artists" : "/artists/onboarding", req.url));
+        }
         return NextResponse.next();
       }
 
       if (token.role !== "artist") {
-        const fallback = token.role === "team" ? "/admin" : "/login";
+        const fallback = token.role === "team" ? "/admin" : "/artists/login";
         return NextResponse.redirect(new URL(fallback, req.url));
       }
 
       const artistKey = (token as { artistKey?: string }).artistKey;
       const onboardingComplete = (token as { onboardingComplete?: boolean }).onboardingComplete === true;
       if (!artistKey) {
-        return NextResponse.redirect(new URL("/artist", req.url));
+        return NextResponse.redirect(new URL("/artists/register", req.url));
       }
 
       if (token.mustChangePassword && !pathname.startsWith("/artist/change-password")) {
@@ -163,14 +175,18 @@ export async function middleware(req: NextRequest) {
         return NextResponse.redirect(changeUrl);
       }
 
-      if (!onboardingComplete && !pathname.startsWith("/artists/onboarding")) {
+      if (!onboardingComplete && !isArtistsOnboardingPath) {
         return NextResponse.redirect(new URL("/artists/onboarding", req.url));
+      }
+      if (onboardingComplete && isArtistsOnboardingPath) {
+        return NextResponse.redirect(new URL("/artists", req.url));
       }
 
       return NextResponse.next();
     }
   } catch (err) {
     console.error("Middleware auth error", err);
+    if (isArtistsPath || isArtistPath) return redirectToArtistsLogin(req);
     return redirectToLogin(req);
   }
 

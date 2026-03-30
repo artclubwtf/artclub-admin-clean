@@ -113,7 +113,7 @@ function ArtistV2RegisterInner() {
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/artists/v2/register", {
+      const res = await fetch("/api/artists/v3/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

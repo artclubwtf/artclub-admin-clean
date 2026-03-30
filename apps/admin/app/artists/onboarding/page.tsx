@@ -31,7 +31,7 @@ type OnboardingResponse = {
   ok: boolean;
   onboardingComplete: boolean;
   artistKey: string;
-  personal: { fullName: string; email: string };
+  personal: { fullName: string; email: string; city?: string; country?: string; bio?: string };
   shopify: { handle: string; displayName: string; instagram: string };
   profileImages: { avatarUrl: string; heroUrl: string; galleryUrls: string[] };
   consents: {
@@ -44,7 +44,7 @@ type OnboardingResponse = {
   terms: { activeModules: TermsModule[]; accepted: TermsAcceptedRecord[] };
 };
 
-const steps = ["Personal", "Shopify profile", "Profile images", "Consents", "Terms"];
+const steps = ["Personal", "Profile details", "Profile visuals", "Consents", "Legal & finish"];
 
 function formatDate(value?: string | null) {
   if (!value) return "—";
@@ -66,6 +66,9 @@ export default function ArtistsOnboardingPage() {
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [city, setCity] = useState("");
+  const [country, setCountry] = useState("");
+  const [bio, setBio] = useState("");
   const [handle, setHandle] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [instagram, setInstagram] = useState("");
@@ -105,7 +108,7 @@ export default function ArtistsOnboardingPage() {
       const res = await fetch("/api/artists/v2/onboarding", { cache: "no-store" });
       const payload = (await res.json().catch(() => null)) as OnboardingResponse | { error?: string } | null;
       if (res.status === 401) {
-        router.replace(`/login?callbackUrl=${encodeURIComponent("/artists/onboarding")}`);
+        router.replace(`/artists/login?callbackUrl=${encodeURIComponent("/artists/onboarding")}`);
         return;
       }
       if (!res.ok) {
@@ -117,6 +120,9 @@ export default function ArtistsOnboardingPage() {
       setArtistKey(data.artistKey || "");
       setFullName(data.personal.fullName || "");
       setEmail(data.personal.email || "");
+      setCity(data.personal.city || "");
+      setCountry(data.personal.country || "");
+      setBio(data.personal.bio || "");
       setHandle(data.shopify.handle || "");
       setDisplayName(data.shopify.displayName || "");
       setInstagram(data.shopify.instagram || "");
@@ -242,7 +248,7 @@ export default function ArtistsOnboardingPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          personal: { fullName },
+          personal: { fullName, city, country, bio },
           shopify: { handle, displayName, instagram },
           profileImages: { avatarUrl, heroUrl, galleryUrls },
           consents: { sellOriginals, sellPrints, rental, exhibitions, presentationOnly },
@@ -317,6 +323,18 @@ export default function ArtistsOnboardingPage() {
               <label className="field">
                 Email (locked)
                 <input value={email} readOnly />
+              </label>
+              <label className="field">
+                City
+                <input value={city} onChange={(event) => setCity(event.target.value)} placeholder="Berlin" />
+              </label>
+              <label className="field">
+                Country
+                <input value={country} onChange={(event) => setCountry(event.target.value)} placeholder="Germany" />
+              </label>
+              <label className="field">
+                Short bio
+                <textarea rows={4} value={bio} onChange={(event) => setBio(event.target.value)} placeholder="A short intro to your work." />
               </label>
             </div>
           ) : null}

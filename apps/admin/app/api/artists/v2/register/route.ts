@@ -4,6 +4,7 @@ import { Types } from "mongoose";
 import { z } from "zod";
 
 import { normalizeArtistRegistrationCode } from "@/lib/artistRegistrationKeys";
+import { sendEmail } from "@/lib/email";
 import { connectMongo } from "@/lib/mongodb";
 import { resolveShopDomain } from "@/lib/shopDomain";
 import { ArtistRegistrationKeyModel } from "@/models/ArtistRegistrationKey";
@@ -117,6 +118,13 @@ export async function POST(req: Request) {
         displayName,
         email,
       });
+
+      await sendEmail({
+        to: email,
+        subject: "Welcome to Artclub",
+        text: "Welcome! Your artist account is ready. Continue onboarding at /artists/onboarding.",
+        html: "<p>Welcome! Your artist account is ready.</p><p>Continue onboarding at <strong>/artists/onboarding</strong>.</p>",
+      }).catch(() => null);
     } catch (err) {
       await CanonicalArtistModel.deleteOne({ shopDomain, artistKey }).catch(() => null);
       await UserModel.deleteOne({ _id: userId }).catch(() => null);

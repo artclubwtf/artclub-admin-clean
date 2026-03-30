@@ -15,6 +15,7 @@ import {
 } from "@/models/CanonicalProduct";
 import { CanonicalVariantModel } from "@/models/CanonicalVariant";
 import { ArtistMediaV2Model } from "@/models/ArtistMediaV2";
+import { ArtistSeriesModel } from "@/models/ArtistSeries";
 
 const createArtworkSchema = z
   .object({
@@ -32,6 +33,10 @@ const createArtworkSchema = z
     originalPriceEur: z.number().positive().max(100000).optional(),
     printSizeCodes: z.array(z.string().trim().min(1)).default([]),
     mediaIds: z.array(z.string().trim().min(1)).min(1),
+    seriesId: z.string().trim().optional().or(z.literal("")),
+    forSale: z.boolean().optional(),
+    allowPrints: z.boolean().optional(),
+    originalAvailable: z.boolean().optional(),
   })
   .strict();
 
@@ -162,6 +167,22 @@ export async function POST(req: Request) {
   }
 
   const productKey = makeProductKey();
+  let seriesId: string | undefined;
+  let seriesName: string | undefined;
+  if (data.seriesId) {
+    const series = await ArtistSeriesModel.findOne({
+      _id: data.seriesId,
+      shopDomain: context.user.shopDomain,
+      artistKey: context.user.artistKey,
+    })
+      .select({ _id: 1, name: 1 })
+      .lean();
+    if (!series) {
+      return NextResponse.json({ ok: false, error: "series_not_found" }, { status: 404 });
+    }
+    seriesId = series._id.toString();
+    seriesName = series.name;
+  }
   const primaryImage = media[0];
   const galleryUrls = dedupeTrimmed(media.map((item) => item.previewUrl || item.url || "").filter(Boolean));
   const originalPriceCents = Number.isFinite(data.originalPriceEur)
@@ -237,7 +258,12 @@ export async function POST(req: Request) {
     title: data.title,
     artistKey: context.user.artistKey,
     artistRef: context.canonicalArtist.shopify?.metaobjectGid || undefined,
+    seriesId,
+    seriesName,
     offerings: data.offerings,
+    forSale: data.forSale ?? true,
+    allowPrints: data.allowPrints ?? includePrints,
+    originalAvailable: data.originalAvailable ?? includeOriginal,
     status: "db_only",
     year: data.year,
     shortText: data.shortText || undefined,

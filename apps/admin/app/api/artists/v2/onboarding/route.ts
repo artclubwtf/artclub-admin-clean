@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { authOptions } from "@/lib/auth";
 import { getArtistShopifySyncMode } from "@/lib/artistShopifySyncMode";
+import { sendEmail } from "@/lib/email";
 import { ensureTermsDocument, loadActiveTermsModules } from "@/lib/terms";
 import { connectMongo } from "@/lib/mongodb";
 import { CanonicalArtistModel } from "@/models/CanonicalArtist";
@@ -17,6 +18,9 @@ const onboardingSubmitSchema = z
     personal: z
       .object({
         fullName: z.string().trim().min(2),
+        city: z.string().trim().max(120).optional().default(""),
+        country: z.string().trim().max(120).optional().default(""),
+        bio: z.string().trim().max(4000).optional().default(""),
       })
       .strict(),
     shopify: z
@@ -116,6 +120,9 @@ export async function GET() {
       personal: {
         fullName: user.name || canonicalArtist.displayName || "",
         email: user.email,
+        city: canonicalArtist.locationCity || "",
+        country: canonicalArtist.locationCountry || "",
+        bio: canonicalArtist.bio || "",
       },
       shopify: {
         handle: canonicalArtist.handle || "",
@@ -223,6 +230,9 @@ export async function POST(req: Request) {
   const galleryUrls = normalizeGalleryUrls(parsed.data.profileImages.galleryUrls || []);
   const avatarUrl = parsed.data.profileImages.avatarUrl.trim();
   const heroUrl = parsed.data.profileImages.heroUrl.trim();
+  const city = parsed.data.personal.city.trim();
+  const country = parsed.data.personal.country.trim();
+  const bio = parsed.data.personal.bio.trim();
   const handle = parsed.data.shopify.handle.trim();
   const displayName = parsed.data.shopify.displayName.trim();
   const instagram = parsed.data.shopify.instagram.trim();
@@ -266,6 +276,9 @@ export async function POST(req: Request) {
       heroUrl: heroUrl || undefined,
       galleryUrls,
     },
+    locationCity: city || undefined,
+    locationCountry: country || undefined,
+    bio: bio || undefined,
     consents: {
       allowOriginalSales: parsed.data.consents.sellOriginals,
       allowPrintSales: parsed.data.consents.sellPrints,
@@ -298,6 +311,15 @@ export async function POST(req: Request) {
   );
 
   const accepted = await TermsAcceptanceModel.find({ userId: user._id }).sort({ acceptedAt: -1 }).lean();
+
+  if (user.onboardingComplete !== true) {
+    await sendEmail({
+      to: user.email,
+      subject: "Artclub onboarding completed",
+      text: "Your artist onboarding is complete. You can now manage your workspace at /artists.",
+      html: "<p>Your artist onboarding is complete.</p><p>You can now manage your workspace at <strong>/artists</strong>.</p>",
+    }).catch(() => null);
+  }
 
   return NextResponse.json(
     {
