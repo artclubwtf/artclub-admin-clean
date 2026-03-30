@@ -158,6 +158,12 @@ export default function ArtistsOnboardingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!loading && onboardingComplete) {
+      router.replace("/artists");
+    }
+  }, [loading, onboardingComplete, router]);
+
   const validateStep = (index: number): string | null => {
     if (index === 0) {
       if (!fullName.trim() || fullName.trim().length < 2) return "Please enter your full name.";

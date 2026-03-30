@@ -30,7 +30,6 @@ export async function middleware(req: NextRequest) {
     pathname === "/artists/register/" ||
     pathname === "/artists/login" ||
     pathname === "/artists/login/";
-  const isArtistsOnboardingPath = pathname === "/artists/onboarding" || pathname.startsWith("/artists/onboarding/");
 
   const isApiPath = pathname.startsWith("/api");
   const isAdminPath = pathname.startsWith("/admin");
@@ -131,7 +130,6 @@ export async function middleware(req: NextRequest) {
         return NextResponse.redirect(new URL(fallback, req.url));
       }
 
-      const onboardingComplete = (token as { onboardingComplete?: boolean }).onboardingComplete === true;
       if (token.mustChangePassword) {
         if (!pathname.startsWith("/artist/change-password")) {
           const changeUrl = new URL("/artist/change-password", req.url);
@@ -142,7 +140,7 @@ export async function middleware(req: NextRequest) {
       }
 
       if (pathname.startsWith("/artist/change-password")) return NextResponse.next();
-      return NextResponse.redirect(new URL(onboardingComplete ? "/artists" : "/artists/onboarding", req.url));
+      return NextResponse.redirect(new URL("/artists", req.url));
     }
 
     if (isArtistsPath) {
@@ -152,8 +150,7 @@ export async function middleware(req: NextRequest) {
         if (token.role === "team") return NextResponse.redirect(new URL("/admin", req.url));
         if (token.role === "customer") return NextResponse.redirect(new URL("/account", req.url));
         if (token.role === "artist") {
-          const onboardingComplete = (token as { onboardingComplete?: boolean }).onboardingComplete === true;
-          return NextResponse.redirect(new URL(onboardingComplete ? "/artists" : "/artists/onboarding", req.url));
+          return NextResponse.redirect(new URL("/artists", req.url));
         }
         return NextResponse.next();
       }
@@ -173,13 +170,6 @@ export async function middleware(req: NextRequest) {
         const changeUrl = new URL("/artist/change-password", req.url);
         changeUrl.searchParams.set("callbackUrl", pathname + req.nextUrl.search);
         return NextResponse.redirect(changeUrl);
-      }
-
-      if (!onboardingComplete && !isArtistsOnboardingPath) {
-        return NextResponse.redirect(new URL("/artists/onboarding", req.url));
-      }
-      if (onboardingComplete && isArtistsOnboardingPath) {
-        return NextResponse.redirect(new URL("/artists", req.url));
       }
 
       return NextResponse.next();
