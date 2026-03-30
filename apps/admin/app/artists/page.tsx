@@ -110,10 +110,6 @@ function toIsoDate(value?: string) {
   return date.toLocaleString();
 }
 
-function wait(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export default function ArtistsDashboardPage() {
   const router = useRouter();
   const [authState, setAuthState] = useState<"checking" | "guest" | "artist">("checking");
@@ -257,23 +253,6 @@ export default function ArtistsDashboardPage() {
     }));
   }, [createOriginalPriceEur, selectedPrintSizes]);
 
-  const resolveUploadedFileUrl = async (fileIdGid: string) => {
-    const encoded = encodeURIComponent(fileIdGid);
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      const res = await fetch(`/api/shopify/files/resolve?ids=${encoded}`, { cache: "no-store" });
-      const payload = (await res.json().catch(() => null)) as
-        | { files?: Array<{ id?: string; url?: string | null; previewImage?: string | null }> }
-        | null;
-      if (res.ok) {
-        const file = payload?.files?.[0];
-        const url = file?.url || file?.previewImage || "";
-        if (url) return url;
-      }
-      if (attempt < 5) await wait(600);
-    }
-    return "";
-  };
-
   const handleSaveSettings = async () => {
     setSavingSettings(true);
     setError(null);
@@ -309,12 +288,16 @@ export default function ArtistsDashboardPage() {
         const formData = new FormData();
         formData.append("file", file);
 
-        const uploadRes = await fetch("/api/shopify/files/upload", {
+        const uploadRes = await fetch("/api/artists/v2/media/upload", {
           method: "POST",
           body: formData,
         });
         const uploadPayload = (await uploadRes.json().catch(() => null)) as
-          | { error?: string; fileIdGid?: string; url?: string | null; filename?: string }
+          | {
+              ok?: boolean;
+              error?: string;
+              file?: { filename?: string; mimeType?: string; sizeBytes?: number; url?: string | null; previewUrl?: string | null };
+            }
           | null;
         if (!uploadRes.ok) {
           throw new Error(uploadPayload?.error || "File upload failed");
@@ -323,12 +306,10 @@ export default function ArtistsDashboardPage() {
           throw new Error("File upload failed");
         }
 
-        let resolvedUrl = uploadPayload?.url || "";
-        if (!resolvedUrl && uploadPayload?.fileIdGid) {
-          resolvedUrl = await resolveUploadedFileUrl(uploadPayload.fileIdGid);
-        }
-        if (!resolvedUrl) {
-          throw new Error("Upload finished, but preview is not ready yet. Please try again in a few seconds.");
+        const resolvedUrl = uploadPayload.file?.url || "";
+        const resolvedPreviewUrl = uploadPayload.file?.previewUrl || resolvedUrl;
+        if (!resolvedUrl || !resolvedPreviewUrl) {
+          throw new Error("File upload failed");
         }
 
         const saveRes = await fetch("/api/artists/v2/media", {
@@ -336,12 +317,11 @@ export default function ArtistsDashboardPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             kind: uploadKind,
-            fileIdGid: uploadPayload.fileIdGid,
             url: resolvedUrl,
-            previewUrl: resolvedUrl,
-            filename: uploadPayload.filename || file.name,
-            mimeType: file.type || undefined,
-            sizeBytes: file.size || undefined,
+            previewUrl: resolvedPreviewUrl,
+            filename: uploadPayload.file?.filename || file.name,
+            mimeType: uploadPayload.file?.mimeType || file.type || undefined,
+            sizeBytes: uploadPayload.file?.sizeBytes ?? file.size ?? undefined,
           }),
         });
         const savePayload = (await saveRes.json().catch(() => null)) as { error?: string } | null;

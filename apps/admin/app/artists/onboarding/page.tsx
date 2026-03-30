@@ -52,10 +52,6 @@ function formatDate(value?: string | null) {
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
 }
 
-function wait(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export default function ArtistsOnboardingPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -100,23 +96,6 @@ export default function ArtistsOnboardingPage() {
       }, {}),
     [termsModules],
   );
-
-  const resolveUploadedFileUrl = async (fileIdGid: string) => {
-    const encoded = encodeURIComponent(fileIdGid);
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      const res = await fetch(`/api/shopify/files/resolve?ids=${encoded}`, { cache: "no-store" });
-      const payload = (await res.json().catch(() => null)) as
-        | { files?: Array<{ id?: string; url?: string | null; previewImage?: string | null }> }
-        | null;
-      if (res.ok) {
-        const file = payload?.files?.[0];
-        const url = file?.url || file?.previewImage || "";
-        if (url) return url;
-      }
-      if (attempt < 5) await wait(600);
-    }
-    return "";
-  };
 
   const load = async () => {
     setLoading(true);
@@ -211,23 +190,24 @@ export default function ArtistsOnboardingPage() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await fetch("/api/shopify/files/upload", {
+      const res = await fetch("/api/artists/v2/media/upload", {
         method: "POST",
         body: formData,
       });
       const payload = (await res.json().catch(() => null)) as
-        | { error?: string; url?: string | null; fileIdGid?: string }
+        | {
+            ok?: boolean;
+            error?: string;
+            file?: { url?: string | null; previewUrl?: string | null };
+          }
         | null;
       if (!res.ok) {
         throw new Error(payload?.error || "Upload failed");
       }
 
-      let resolvedUrl = payload?.url || "";
-      if (!resolvedUrl && payload?.fileIdGid) {
-        resolvedUrl = await resolveUploadedFileUrl(payload.fileIdGid);
-      }
+      const resolvedUrl = payload?.file?.previewUrl || payload?.file?.url || "";
       if (!resolvedUrl) {
-        throw new Error("Upload finished, but preview is not ready yet. Please try again in a few seconds.");
+        throw new Error("Upload failed");
       }
 
       if (kind === "avatar") {
