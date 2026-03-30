@@ -5,6 +5,7 @@ export const fetchCache = "force-no-store";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 import { renderMarkdownToHtml } from "@/lib/markdown";
 
@@ -54,6 +55,7 @@ function formatDate(value?: string | null) {
 
 export default function ArtistsOnboardingPage() {
   const router = useRouter();
+  const { update } = useSession();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<"avatar" | "hero" | "gallery" | null>(null);
@@ -225,6 +227,7 @@ export default function ArtistsOnboardingPage() {
   };
 
   const onSubmit = async () => {
+    const wasComplete = onboardingComplete;
     const stepError = validateStep(4);
     if (stepError) {
       setError(stepError);
@@ -258,6 +261,11 @@ export default function ArtistsOnboardingPage() {
       }
 
       setOnboardingComplete(true);
+      if (!wasComplete) {
+        await update({ onboardingComplete: true });
+        router.replace("/artists");
+        return;
+      }
       setMessage("Onboarding saved.");
       await load();
     } catch (err: any) {
