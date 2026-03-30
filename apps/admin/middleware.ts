@@ -14,7 +14,7 @@ export async function middleware(req: NextRequest) {
 
   const isApiPath = pathname.startsWith("/api");
   const isAdminPath = pathname.startsWith("/admin");
-  const isArtistPath = pathname.startsWith("/artist");
+  const isArtistPath = pathname === "/artist" || pathname.startsWith("/artist/");
   const isArtistsPath = pathname.startsWith("/artists");
 
   if (isApiPath) {
@@ -86,6 +86,9 @@ export async function middleware(req: NextRequest) {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (isArtistsPath && isPublicArtistsEntry && !token) {
       return NextResponse.next();
+    }
+    if (!token && (pathname === "/artist" || pathname === "/artist/")) {
+      return NextResponse.redirect(new URL("/artists", req.url));
     }
     if (!token) return redirectToLogin(req);
 
