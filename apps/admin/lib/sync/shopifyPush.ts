@@ -1,4 +1,5 @@
 import { buildProductMetafieldsForArtwork, upsertArtistMetaobject } from "@/lib/shopify";
+import { getArtistShopifySyncMode } from "@/lib/artistShopifySyncMode";
 import { connectMongo } from "@/lib/mongodb";
 import { CanonicalArtistModel } from "@/models/CanonicalArtist";
 import { CanonicalProductModel, type CanonicalProduct } from "@/models/CanonicalProduct";
@@ -260,6 +261,7 @@ async function bulkUpdateShopifyVariants(
 
 export async function pushArtists(input: PushInput): Promise<PushResult> {
   await connectMongo();
+  const syncMode = getArtistShopifySyncMode();
 
   const limit = Math.min(Math.max(input.limit ?? 20, 1), 250);
   const artists = await CanonicalArtistModel.find({
@@ -270,21 +272,29 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
     .limit(limit)
     .lean();
 
+  console.info(`[shopifyPush][artists] mode=${syncMode} count=${artists.length}`);
+
   let pushedCount = 0;
   let failedCount = 0;
   const errors: string[] = [];
 
   for (const artist of artists) {
     try {
-      const fields = {
-        name: artist.displayName,
-        instagram: artist.instagram || undefined,
-        bilder: artist.profileImages?.heroUrl || undefined,
-        bild_1: artist.profileImages?.avatarUrl || undefined,
-      };
+      const fields =
+        syncMode === "legacy"
+          ? {
+              name: artist.displayName,
+              instagram: artist.instagram || undefined,
+              bilder: artist.profileImages?.heroUrl || undefined,
+              bild_1: artist.profileImages?.avatarUrl || undefined,
+            }
+          : {
+              // Minimal mode intentionally syncs only identifiers.
+              name: artist.displayName,
+            };
 
       const result = await upsertArtistMetaobject({
-        metaobjectId: artist.shopify?.metaobjectGid || undefined,
+        metaobjectId: syncMode === "legacy" ? artist.shopify?.metaobjectGid || undefined : undefined,
         handle: artist.handle,
         fields,
       });
@@ -305,7 +315,7 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
       pushedCount += 1;
     } catch (error) {
       failedCount += 1;
-      errors.push(`${artist.artistKey}: ${error instanceof Error ? error.message : "push_failed"}`);
+      errors.push(`${artist.artistKey} [mode=${syncMode}]: ${error instanceof Error ? error.message : "push_failed"}`);
     }
   }
 

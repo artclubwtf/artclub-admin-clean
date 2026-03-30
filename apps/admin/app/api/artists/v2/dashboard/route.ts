@@ -125,17 +125,6 @@ export async function PATCH(req: Request) {
   }
 
   const { user, canonicalArtist } = context;
-  const now = new Date();
-  const dirtyFields = Array.from(
-    new Set([
-      ...(Array.isArray(canonicalArtist.sync?.dirtyFields) ? canonicalArtist.sync.dirtyFields : []),
-      "consents.allowOriginalSales",
-      "consents.allowPrintSales",
-      "consents.allowRental",
-      "consents.allowExhibitions",
-      "consents.presentationOnly",
-    ]),
-  );
 
   await CanonicalArtistModel.updateOne(
     { _id: canonicalArtist._id, shopDomain: user.shopDomain, artistKey: user.artistKey },
@@ -148,9 +137,6 @@ export async function PATCH(req: Request) {
           allowExhibitions: parsed.data.allowExhibitions,
           presentationOnly: parsed.data.presentationOnly,
         },
-        "sync.needsPush": true,
-        "sync.dirtyAt": now,
-        "sync.dirtyFields": dirtyFields,
       },
     },
   );

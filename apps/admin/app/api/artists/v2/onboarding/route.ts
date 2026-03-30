@@ -5,6 +5,7 @@ import { Types } from "mongoose";
 import { z } from "zod";
 
 import { authOptions } from "@/lib/auth";
+import { getArtistShopifySyncMode } from "@/lib/artistShopifySyncMode";
 import { ensureTermsDocument, loadActiveTermsModules } from "@/lib/terms";
 import { connectMongo } from "@/lib/mongodb";
 import { CanonicalArtistModel } from "@/models/CanonicalArtist";
@@ -225,48 +226,64 @@ export async function POST(req: Request) {
   const handle = parsed.data.shopify.handle.trim();
   const displayName = parsed.data.shopify.displayName.trim();
   const instagram = parsed.data.shopify.instagram.trim();
+  const syncMode = getArtistShopifySyncMode();
+  const minimalChangedFields: string[] = [];
+  if ((canonicalArtist.handle || "") !== handle) minimalChangedFields.push("handle");
+  if ((canonicalArtist.displayName || "") !== displayName) minimalChangedFields.push("displayName");
 
-  const dirtyFields = Array.from(
-    new Set([
-      ...(Array.isArray(canonicalArtist.sync?.dirtyFields) ? canonicalArtist.sync?.dirtyFields : []),
-      "handle",
-      "displayName",
-      "instagram",
-      "profileImages.avatarUrl",
-      "profileImages.heroUrl",
-      "profileImages.galleryUrls",
-      "consents.allowOriginalSales",
-      "consents.allowPrintSales",
-      "consents.allowRental",
-      "consents.allowExhibitions",
-      "consents.presentationOnly",
-    ]),
-  );
+  const legacyChangedFields: string[] = [
+    "handle",
+    "displayName",
+    "instagram",
+    "profileImages.avatarUrl",
+    "profileImages.heroUrl",
+    "profileImages.galleryUrls",
+    "consents.allowOriginalSales",
+    "consents.allowPrintSales",
+    "consents.allowRental",
+    "consents.allowExhibitions",
+    "consents.presentationOnly",
+  ];
+
+  const changedFieldsForSync = syncMode === "legacy" ? legacyChangedFields : minimalChangedFields;
+  const dirtyFields =
+    changedFieldsForSync.length > 0
+      ? Array.from(
+          new Set([
+            ...(Array.isArray(canonicalArtist.sync?.dirtyFields) ? canonicalArtist.sync?.dirtyFields : []),
+            ...changedFieldsForSync,
+          ]),
+        )
+      : [];
+
+  const setPayload: Record<string, unknown> = {
+    handle,
+    displayName,
+    email: user.email,
+    instagram: instagram || undefined,
+    profileImages: {
+      avatarUrl: avatarUrl || undefined,
+      heroUrl: heroUrl || undefined,
+      galleryUrls,
+    },
+    consents: {
+      allowOriginalSales: parsed.data.consents.sellOriginals,
+      allowPrintSales: parsed.data.consents.sellPrints,
+      allowRental: parsed.data.consents.rental,
+      allowExhibitions: parsed.data.consents.exhibitions,
+      presentationOnly: parsed.data.consents.presentationOnly,
+    },
+  };
+  if (dirtyFields.length > 0) {
+    setPayload["sync.needsPush"] = true;
+    setPayload["sync.dirtyAt"] = now;
+    setPayload["sync.dirtyFields"] = dirtyFields;
+  }
 
   await CanonicalArtistModel.updateOne(
     { _id: canonicalArtist._id },
     {
-      $set: {
-        handle,
-        displayName,
-        email: user.email,
-        instagram: instagram || undefined,
-        profileImages: {
-          avatarUrl: avatarUrl || undefined,
-          heroUrl: heroUrl || undefined,
-          galleryUrls,
-        },
-        consents: {
-          allowOriginalSales: parsed.data.consents.sellOriginals,
-          allowPrintSales: parsed.data.consents.sellPrints,
-          allowRental: parsed.data.consents.rental,
-          allowExhibitions: parsed.data.consents.exhibitions,
-          presentationOnly: parsed.data.consents.presentationOnly,
-        },
-        "sync.needsPush": true,
-        "sync.dirtyAt": now,
-        "sync.dirtyFields": dirtyFields,
-      },
+      $set: setPayload,
     },
   );
 

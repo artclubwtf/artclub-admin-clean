@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { connectMongo } from "@/lib/mongodb";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { getArtistShopifySyncMode } from "@/lib/artistShopifySyncMode";
 import { resolveShopDomain } from "@/lib/shopDomain";
 import { pushArtists, pushProducts } from "@/lib/sync/shopifyPush";
 import { SyncStateModel } from "@/models/SyncState";
@@ -44,6 +45,7 @@ export async function POST(req: Request) {
 
   try {
     const result = scope === "artists" ? await pushArtists({ shopDomain, limit }) : await pushProducts({ shopDomain, limit });
+    const artistSyncMode = scope === "artists" ? getArtistShopifySyncMode() : undefined;
 
     await SyncStateModel.findOneAndUpdate(
       { shopDomain, scope: "shopify_push" },
@@ -51,7 +53,10 @@ export async function POST(req: Request) {
         $set: {
           lastRunAt: new Date(),
           lastSuccessAt: new Date(),
-          lastError: result.failedCount > 0 ? result.errors.slice(0, 5).join(" | ") : null,
+          lastError:
+            result.failedCount > 0
+              ? `${scope === "artists" ? `[artist_mode=${artistSyncMode}] ` : ""}${result.errors.slice(0, 5).join(" | ")}`
+              : null,
           cursor: null,
         },
       },
@@ -66,6 +71,7 @@ export async function POST(req: Request) {
         failedCount: result.failedCount,
         durationMs: Date.now() - startedAt,
         errors: result.errors,
+        ...(artistSyncMode ? { artistSyncMode } : {}),
       },
       { status: 200 },
     );
