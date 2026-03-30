@@ -1091,6 +1091,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../app/api/artists/v2/media/upload/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/artists/v2/media/upload">> = Specific
+  const handler = {} as typeof import("../../app/api/artists/v2/media/upload/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../app/api/artists/v2/onboarding/route.ts
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/artists/v2/onboarding">> = Specific
