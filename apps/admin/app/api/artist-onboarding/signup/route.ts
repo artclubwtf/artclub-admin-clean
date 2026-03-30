@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { connectMongo } from "@/lib/mongodb";
 import { createApplicationToken } from "@/lib/applicationAuth";
+import { isArtistLegacyEnabled } from "@/lib/artistLegacy";
 import { resolveShopDomain } from "@/lib/shopDomain";
 import { ArtistApplicationModel } from "@/models/ArtistApplication";
 import { UserModel } from "@/models/User";
@@ -30,6 +31,10 @@ function escapeRegex(value: string) {
 
 export async function POST(req: Request) {
   try {
+    if (!isArtistLegacyEnabled()) {
+      return NextResponse.json({ ok: false, error: "legacy_disabled" }, { status: 410 });
+    }
+
     const body = await req.json().catch(() => null);
     const parsed = signupSchema.safeParse(body);
     if (!parsed.success) {

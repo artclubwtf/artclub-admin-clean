@@ -12,16 +12,28 @@ function resolveDestination(session: Session | null, callbackUrl?: string | null
   if (!session?.user) return "/login";
 
   const safeCallback = callbackUrl && callbackUrl.startsWith("/") ? callbackUrl : null;
-  const defaultArtistTarget = session.user.mustChangePassword ? "/artist/change-password" : "/artist";
+  const isV2Artist = Boolean((session.user as { artistKey?: string }).artistKey) && !session.user.artistId;
+  const onboardingComplete = (session.user as { onboardingComplete?: boolean }).onboardingComplete === true;
+  const defaultArtistTarget = isV2Artist
+    ? onboardingComplete
+      ? "/artists"
+      : "/artists/onboarding"
+    : session.user.mustChangePassword
+      ? "/artist/change-password"
+      : "/artist";
 
   if (session.user.role === "team") {
     if (safeCallback?.startsWith("/admin")) return safeCallback;
     return "/admin";
   }
 
-  if (safeCallback?.startsWith("/artist")) {
+  if (safeCallback?.startsWith("/artist") || safeCallback?.startsWith("/artists")) {
     if (session.user.mustChangePassword && !safeCallback.startsWith("/artist/change-password")) {
       return `/artist/change-password?callbackUrl=${encodeURIComponent(safeCallback)}`;
+    }
+
+    if (isV2Artist && safeCallback.startsWith("/artist")) {
+      return defaultArtistTarget;
     }
     return safeCallback;
   }

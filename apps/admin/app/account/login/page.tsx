@@ -26,7 +26,9 @@ export default function CustomerLoginPage() {
           return;
         }
         if (session?.user?.role === "artist") {
-          router.replace("/artist");
+          const isV2Artist = Boolean((session.user as { artistKey?: string }).artistKey) && !session.user.artistId;
+          const onboardingComplete = (session.user as { onboardingComplete?: boolean }).onboardingComplete === true;
+          router.replace(isV2Artist ? (onboardingComplete ? "/artists" : "/artists/onboarding") : "/artist");
           return;
         }
 

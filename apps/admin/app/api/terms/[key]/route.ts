@@ -19,13 +19,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
   return NextResponse.json(
     {
       document: {
+        slug: document.slug || document.key,
         key: document.key,
         title: document.title,
       },
       version: {
         id: version._id.toString(),
+        documentSlug: version.documentSlug || document.slug || document.key,
         version: version.version,
         effectiveAt: version.effectiveAt,
+        bodyMarkdown: version.bodyMarkdown || version.content?.fullMarkdown || "",
         summaryMarkdown: version.content?.summaryMarkdown || "",
         fullMarkdown: version.content?.fullMarkdown || "",
         blocks: Array.isArray(version.content?.blocks) ? version.content?.blocks : [],

@@ -29,6 +29,7 @@ const productPatchSchema = z
     title: z.string().trim().min(1).optional(),
     description: nullableTrimmedString.optional(),
     tags: stringArray.optional(),
+    artistKey: nullableTrimmedString.optional(),
     artistRef: nullableTrimmedString.optional(),
     images: z
       .object({
@@ -41,6 +42,7 @@ const productPatchSchema = z
       .optional(),
     offerings: z.enum(canonicalProductOfferings).optional(),
     status: z.enum(canonicalProductStatuses).optional(),
+    year: z.union([z.number().int(), z.null()]).optional(),
     dimensions: z
       .object({
         widthCm: z.union([z.number(), z.null()]).optional(),
@@ -57,6 +59,7 @@ const editablePaths = [
   "title",
   "description",
   "tags",
+  "artistKey",
   "artistRef",
   "images.thumbUrl",
   "images.mediumUrl",
@@ -64,6 +67,7 @@ const editablePaths = [
   "images.galleryUrls",
   "offerings",
   "status",
+  "year",
   "dimensions.widthCm",
   "dimensions.heightCm",
   "shortText",

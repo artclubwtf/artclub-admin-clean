@@ -1,6 +1,25 @@
 import { TermsDocumentModel } from "@/models/TermsDocument";
 import { TermsVersionModel } from "@/models/TermsVersion";
 
+export type ActiveTermsModule = {
+  document: {
+    id: string;
+    slug: string;
+    key: string;
+    title: string;
+    isActive: boolean;
+  };
+  version: {
+    id: string;
+    documentSlug: string;
+    version: number;
+    bodyMarkdown: string;
+    effectiveAt: Date | null | undefined;
+    createdAt: Date | null | undefined;
+    status: "draft" | "published" | "archived";
+  };
+};
+
 const defaultTermsTitles: Record<string, string> = {
   artist_registration_terms: "Artist registration terms",
 };
@@ -58,23 +77,35 @@ export function defaultTermsTitleForKey(key: string) {
   return defaultTermsTitles[key] || key.replace(/_/g, " ").trim();
 }
 
-export async function ensureTermsDocument(key: string) {
-  const title = defaultTermsTitleForKey(key);
-  let document = await TermsDocumentModel.findOne({ key });
+export function normalizeTermsSlug(value: string) {
+  return value.trim().toLowerCase();
+}
+
+export async function ensureTermsDocument(keyOrSlug: string) {
+  const slug = normalizeTermsSlug(keyOrSlug);
+  const title = defaultTermsTitleForKey(slug);
+  let document = await TermsDocumentModel.findOne({ $or: [{ slug }, { key: slug }] });
   if (!document) {
-    document = await TermsDocumentModel.create({ key, title });
+    document = await TermsDocumentModel.create({ slug, key: slug, title, isActive: true });
+  } else if (!document.slug || document.slug !== slug || document.key !== slug) {
+    document.slug = slug;
+    document.key = slug;
+    if (!document.title) document.title = title;
+    await document.save();
   }
 
-  const defaultContent = defaultTermsContent[key];
+  const defaultContent = defaultTermsContent[slug];
   if (defaultContent) {
     const existingVersion = await TermsVersionModel.findOne({ documentId: document._id }).lean();
     if (!existingVersion) {
       const now = new Date();
       const created = await TermsVersionModel.create({
         documentId: document._id,
+        documentSlug: slug,
         version: 1,
         status: "published",
         effectiveAt: now,
+        bodyMarkdown: defaultContent.fullMarkdown,
         content: {
           summaryMarkdown: defaultContent.summaryMarkdown,
           fullMarkdown: defaultContent.fullMarkdown,
@@ -100,8 +131,8 @@ export async function ensureTermsDocument(key: string) {
   return document;
 }
 
-export async function loadActiveTermsVersion(key: string) {
-  const document = await ensureTermsDocument(key);
+export async function loadActiveTermsVersion(keyOrSlug: string) {
+  const document = await ensureTermsDocument(keyOrSlug);
   let version: any = null;
 
   if (document.activeVersionId) {
@@ -111,5 +142,55 @@ export async function loadActiveTermsVersion(key: string) {
     version = await TermsVersionModel.findOne({ documentId: document._id, status: "published" }).sort({ version: -1 }).lean();
   }
 
+  if (version && (!version.documentSlug || version.documentSlug !== document.slug)) {
+    await TermsVersionModel.updateOne(
+      { _id: version._id },
+      {
+        $set: {
+          documentSlug: document.slug,
+          bodyMarkdown: version.bodyMarkdown || version.content?.fullMarkdown || "",
+          createdByAdminId: version.createdByAdminId || version.createdByUserId || null,
+        },
+      },
+    );
+    version = await TermsVersionModel.findById(version._id).lean();
+  }
+
   return { document, version };
+}
+
+export async function loadActiveTermsModules(): Promise<ActiveTermsModule[]> {
+  const documents = await TermsDocumentModel.find({ isActive: true }).sort({ slug: 1 }).lean();
+  if (!documents.length) return [];
+
+  const activeVersionIds = documents.map((doc) => doc.activeVersionId).filter(Boolean);
+  const versions = activeVersionIds.length ? await TermsVersionModel.find({ _id: { $in: activeVersionIds } }).lean() : [];
+  const versionMap = new Map(versions.map((version) => [version._id.toString(), version]));
+
+  const mapped = documents
+    .map((document) => {
+      const activeVersion = document.activeVersionId ? versionMap.get(document.activeVersionId.toString()) : null;
+      if (!activeVersion) return null;
+      return {
+        document: {
+          id: document._id.toString(),
+          slug: document.slug || document.key,
+          key: document.key,
+          title: document.title,
+          isActive: document.isActive !== false,
+        },
+        version: {
+          id: activeVersion._id.toString(),
+          documentSlug: activeVersion.documentSlug || document.slug || document.key,
+          version: activeVersion.version,
+          bodyMarkdown: activeVersion.bodyMarkdown || activeVersion.content?.fullMarkdown || "",
+          effectiveAt: activeVersion.effectiveAt,
+          createdAt: activeVersion.createdAt,
+          status: activeVersion.status,
+        },
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+
+  return mapped as ActiveTermsModule[];
 }

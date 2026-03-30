@@ -7,8 +7,10 @@ import { renderMarkdownToHtml } from "@/lib/markdown";
 
 type TermsDocument = {
   id: string;
+  slug: string;
   key: string;
   title: string;
+  isActive?: boolean;
   activeVersionId?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -16,13 +18,16 @@ type TermsDocument = {
 
 type TermsVersion = {
   id: string;
+  documentSlug?: string;
   version: number;
   status: "draft" | "published" | "archived";
   effectiveAt?: string | null;
   changelog?: string;
   createdAt?: string | null;
   updatedAt?: string | null;
+  createdByAdminId?: string | null;
   createdByUserId?: string | null;
+  bodyMarkdown?: string;
   content?: {
     summaryMarkdown?: string;
     fullMarkdown?: string;
@@ -51,6 +56,7 @@ export default function AdminTermsEditorPage() {
   const [changelog, setChangelog] = useState("");
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [activatingVersionId, setActivatingVersionId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
@@ -73,7 +79,7 @@ export default function AdminTermsEditorPage() {
       const active = doc?.activeVersionId ? list.find((item) => item.id === doc.activeVersionId) || null : null;
       const base = draft || active;
       setSummaryMarkdown(base?.content?.summaryMarkdown || "");
-      setFullMarkdown(base?.content?.fullMarkdown || "");
+      setFullMarkdown(base?.bodyMarkdown || base?.content?.fullMarkdown || "");
       setActionMessage(null);
       setActionError(null);
     } catch (err: any) {
@@ -113,7 +119,7 @@ export default function AdminTermsEditorPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           summaryMarkdown,
-          fullMarkdown,
+          bodyMarkdown: fullMarkdown,
         }),
       });
       const payload = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -155,12 +161,37 @@ export default function AdminTermsEditorPage() {
     }
   };
 
+  const handleSetActive = async (versionId: string) => {
+    if (!key) return;
+    setActivatingVersionId(versionId);
+    setActionError(null);
+    setActionMessage(null);
+    try {
+      const res = await fetch(`/api/admin/terms/${encodeURIComponent(key)}/active`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ versionId }),
+      });
+      const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) throw new Error(payload?.error || "Failed to set active version");
+      setActionMessage("Active version updated.");
+      await load();
+    } catch (err: any) {
+      setActionError(err?.message ?? "Failed to set active version");
+    } finally {
+      setActivatingVersionId(null);
+    }
+  };
+
   return (
     <main className="admin-dashboard">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">{document?.title || "Terms"}</h1>
-          <p className="text-sm text-slate-600">{document?.key || key}</p>
+          <p className="text-sm text-slate-600">
+            {document?.slug || document?.key || key}
+            {document?.isActive === false ? " · inactive" : " · active"}
+          </p>
         </div>
         <div className="text-xs text-slate-500">
           Active: {activeVersion ? `v${activeVersion.version} · ${formatDate(activeVersion.effectiveAt)}` : "—"}
@@ -299,7 +330,19 @@ export default function AdminTermsEditorPage() {
                         <span className="text-xs uppercase tracking-[0.2em] text-slate-500">{version.status}</span>
                         {isActive ? <span className="text-xs font-semibold text-emerald-700">Active</span> : null}
                       </div>
-                      <div className="text-xs text-slate-500">Created {formatDate(version.createdAt)}</div>
+                      <div className="flex items-center gap-2">
+                        {!isActive ? (
+                          <button
+                            type="button"
+                            className="btnGhost"
+                            onClick={() => handleSetActive(version.id)}
+                            disabled={Boolean(activatingVersionId)}
+                          >
+                            {activatingVersionId === version.id ? "Setting..." : "Set active"}
+                          </button>
+                        ) : null}
+                        <div className="text-xs text-slate-500">Created {formatDate(version.createdAt)}</div>
+                      </div>
                     </div>
                     <div className="mt-2 text-xs text-slate-500">
                       Effective {formatDate(version.effectiveAt)} · Updated {formatDate(version.updatedAt)}

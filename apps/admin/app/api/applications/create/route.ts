@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { connectMongo } from "@/lib/mongodb";
 import { createApplicationToken } from "@/lib/applicationAuth";
+import { isArtistLegacyEnabled } from "@/lib/artistLegacy";
 import { ArtistApplicationModel } from "@/models/ArtistApplication";
 
 const APPLICATION_TOKEN_TTL_MS = 90 * 24 * 60 * 60 * 1000;
@@ -24,6 +25,10 @@ function addMonths(date: Date, months: number) {
 
 export async function POST(req: Request) {
   try {
+    if (!isArtistLegacyEnabled()) {
+      return NextResponse.json({ ok: false, error: "legacy_disabled" }, { status: 410 });
+    }
+
     const body = (await req.json().catch(() => null)) as { email?: string } | null;
     const email = normalizeEmail(body?.email);
 

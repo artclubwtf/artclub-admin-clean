@@ -9,6 +9,7 @@ import { TermsVersionModel } from "@/models/TermsVersion";
 type DraftPayload = {
   summaryMarkdown?: string;
   fullMarkdown?: string;
+  bodyMarkdown?: string;
   blocks?: unknown;
 };
 
@@ -29,7 +30,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ key: s
   }
 
   const hasSummary = typeof body.summaryMarkdown === "string";
-  const hasFull = typeof body.fullMarkdown === "string";
+  const hasBodyMarkdown = typeof body.bodyMarkdown === "string";
+  const hasFull = typeof body.fullMarkdown === "string" || hasBodyMarkdown;
+  const fullMarkdownValue = hasBodyMarkdown ? body.bodyMarkdown : body.fullMarkdown;
   const blocks = Array.isArray(body.blocks) ? body.blocks : undefined;
   const hasBlocks = blocks !== undefined;
 
@@ -48,17 +51,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ key: s
     const latest = await TermsVersionModel.findOne({ documentId: document._id }).sort({ version: -1 }).lean();
     const nextVersion = latest?.version ? latest.version + 1 : 1;
 
-    const created = await TermsVersionModel.create({
-      documentId: document._id,
-      version: nextVersion,
-      status: "draft",
-      content: {
-        summaryMarkdown: hasSummary ? body.summaryMarkdown : "",
-        fullMarkdown: hasFull ? body.fullMarkdown : "",
-        blocks: blocks ?? [],
-      },
-      createdByUserId: session.user.id,
-    });
+      const created = await TermsVersionModel.create({
+        documentId: document._id,
+        documentSlug: document.slug || document.key,
+        version: nextVersion,
+        status: "draft",
+        bodyMarkdown: hasFull ? fullMarkdownValue : "",
+        content: {
+          summaryMarkdown: hasSummary ? body.summaryMarkdown : "",
+          fullMarkdown: hasFull ? fullMarkdownValue : "",
+          blocks: blocks ?? [],
+        },
+        createdByAdminId: session.user.id,
+        createdByUserId: session.user.id,
+      });
 
     return NextResponse.json(
       {
@@ -75,8 +81,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ key: s
   }
 
   if (hasSummary) existingDraft.set("content.summaryMarkdown", body.summaryMarkdown);
-  if (hasFull) existingDraft.set("content.fullMarkdown", body.fullMarkdown);
+  if (hasFull) {
+    existingDraft.set("content.fullMarkdown", fullMarkdownValue);
+    existingDraft.set("bodyMarkdown", fullMarkdownValue);
+  }
   if (blocks !== undefined) existingDraft.set("content.blocks", blocks);
+  if (!existingDraft.documentSlug) existingDraft.set("documentSlug", document.slug || document.key);
+  if (!existingDraft.createdByAdminId && session.user.id) existingDraft.set("createdByAdminId", session.user.id);
 
   await existingDraft.save();
 

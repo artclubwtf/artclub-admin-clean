@@ -15,6 +15,7 @@ export async function middleware(req: NextRequest) {
   const isApiPath = pathname.startsWith("/api");
   const isAdminPath = pathname.startsWith("/admin");
   const isArtistPath = pathname.startsWith("/artist");
+  const isArtistsPath = pathname.startsWith("/artists");
 
   if (isApiPath) {
     const allowedApi =
@@ -29,6 +30,7 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith("/api/mobile") ||
       pathname.startsWith("/api/pos-agent") ||
       pathname.startsWith("/api/webhooks/verifone") ||
+      pathname === "/api/artists/v2/register" ||
       pathname === "/api/shopify/files/upload" ||
       pathname === "/api/shopify/files/resolve" ||
       pathname === "/api/shopify/resolve-media" ||
@@ -57,6 +59,14 @@ export async function middleware(req: NextRequest) {
         return NextResponse.next();
       }
 
+      const isArtistsV2Api = pathname.startsWith("/api/artists/v2/");
+      if (isArtistsV2Api) {
+        if (token.role !== "artist") {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+        return NextResponse.next();
+      }
+
       if (token.role !== "team") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
@@ -67,7 +77,7 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  if (!isAdminPath && !isArtistPath) return NextResponse.next();
+  if (!isAdminPath && !isArtistPath && !isArtistsPath) return NextResponse.next();
 
   try {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
@@ -87,6 +97,13 @@ export async function middleware(req: NextRequest) {
         return NextResponse.redirect(new URL(fallback, req.url));
       }
 
+      const artistKey = (token as { artistKey?: string }).artistKey;
+      const onboardingComplete = (token as { onboardingComplete?: boolean }).onboardingComplete === true;
+      if (!token.artistId && artistKey) {
+        const target = onboardingComplete ? "/artists" : "/artists/onboarding";
+        return NextResponse.redirect(new URL(target, req.url));
+      }
+
       const pendingRegistrationId = (token as { pendingRegistrationId?: string }).pendingRegistrationId;
       if (!token.artistId && pendingRegistrationId) {
         return NextResponse.redirect(new URL(`/apply/${pendingRegistrationId}/dashboard`, req.url));
@@ -100,6 +117,31 @@ export async function middleware(req: NextRequest) {
 
       return NextResponse.next();
     }
+
+    if (isArtistsPath) {
+      if (token.role !== "artist") {
+        const fallback = token.role === "team" ? "/admin" : "/login";
+        return NextResponse.redirect(new URL(fallback, req.url));
+      }
+
+      const artistKey = (token as { artistKey?: string }).artistKey;
+      const onboardingComplete = (token as { onboardingComplete?: boolean }).onboardingComplete === true;
+      if (!artistKey) {
+        return NextResponse.redirect(new URL("/artist", req.url));
+      }
+
+      if (token.mustChangePassword && !pathname.startsWith("/artist/change-password")) {
+        const changeUrl = new URL("/artist/change-password", req.url);
+        changeUrl.searchParams.set("callbackUrl", pathname + req.nextUrl.search);
+        return NextResponse.redirect(changeUrl);
+      }
+
+      if (!onboardingComplete && pathname !== "/artists/onboarding") {
+        return NextResponse.redirect(new URL("/artists/onboarding", req.url));
+      }
+
+      return NextResponse.next();
+    }
   } catch (err) {
     console.error("Middleware auth error", err);
     return redirectToLogin(req);
@@ -109,5 +151,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/artist/:path*", "/api/:path*"],
+  matcher: ["/admin/:path*", "/artist/:path*", "/artists/:path*", "/api/:path*"],
 };

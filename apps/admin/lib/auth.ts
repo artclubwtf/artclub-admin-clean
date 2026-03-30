@@ -41,9 +41,11 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           role: user.role,
           artistId: user.artistId?.toString(),
+          artistKey: user.artistKey ?? undefined,
+          onboardingComplete: user.onboardingComplete === true,
           mustChangePassword: user.mustChangePassword,
           pendingRegistrationId: user.pendingRegistrationId?.toString(),
-          onboardingStatus: user.onboardingStatus,
+          onboardingStatus: user.onboardingStatus ?? undefined,
         };
       },
     }),
@@ -56,6 +58,8 @@ export const authOptions: NextAuthOptions = {
         const role = (user as { role?: UserRole }).role;
         if (role) token.role = role;
         token.artistId = (user as { artistId?: string }).artistId;
+        token.artistKey = (user as { artistKey?: string }).artistKey;
+        token.onboardingComplete = (user as { onboardingComplete?: boolean }).onboardingComplete;
         token.mustChangePassword = (user as { mustChangePassword?: boolean }).mustChangePassword;
         token.pendingRegistrationId = (user as { pendingRegistrationId?: string }).pendingRegistrationId;
         token.onboardingStatus = (user as { onboardingStatus?: string }).onboardingStatus;
@@ -67,6 +71,12 @@ export const authOptions: NextAuthOptions = {
         }
         if ("artistId" in session && session.artistId) {
           token.artistId = session.artistId as string;
+        }
+        if ("artistKey" in session && session.artistKey) {
+          token.artistKey = session.artistKey as string;
+        }
+        if ("onboardingComplete" in session && session.onboardingComplete !== undefined) {
+          token.onboardingComplete = session.onboardingComplete as boolean;
         }
         if ("role" in session && session.role) {
           token.role = session.role as UserRole;
@@ -87,6 +97,9 @@ export const authOptions: NextAuthOptions = {
         session.user.role = (token.role as UserRole) ?? "artist";
         session.user.email = (token.email as string) ?? session.user.email;
         if (token.artistId) session.user.artistId = token.artistId as string;
+        if (token.artistKey) (session.user as { artistKey?: string }).artistKey = token.artistKey as string;
+        (session.user as { onboardingComplete?: boolean }).onboardingComplete =
+          token.onboardingComplete === true;
         session.user.mustChangePassword = token.mustChangePassword as boolean | undefined;
         if (token.pendingRegistrationId) {
           (session.user as { pendingRegistrationId?: string }).pendingRegistrationId = token.pendingRegistrationId as string;

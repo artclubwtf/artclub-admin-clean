@@ -5,8 +5,10 @@ import { useEffect, useState } from "react";
 
 type TermsDocumentItem = {
   id: string;
+  slug: string;
   key: string;
   title: string;
+  isActive: boolean;
   updatedAt?: string | null;
   activeVersion?: {
     id: string;
@@ -27,6 +29,9 @@ export default function AdminTermsPage() {
   const [documents, setDocuments] = useState<TermsDocumentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [newSlug, setNewSlug] = useState("");
+  const [newTitle, setNewTitle] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -48,6 +53,34 @@ export default function AdminTermsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleCreate = async () => {
+    const slug = newSlug.trim().toLowerCase();
+    const title = newTitle.trim();
+    if (!slug || !title) {
+      setError("Slug and title are required.");
+      return;
+    }
+
+    setCreating(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/terms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug, title }),
+      });
+      const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) throw new Error(payload?.error || "Failed to create document");
+      setNewSlug("");
+      setNewTitle("");
+      await load();
+    } catch (err: any) {
+      setError(err?.message ?? "Failed to create document");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <main className="admin-dashboard">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -65,6 +98,26 @@ export default function AdminTermsPage() {
           {loading ? <span className="text-xs text-slate-500">Loading...</span> : null}
         </div>
 
+        <div className="grid gap-2 sm:grid-cols-3">
+          <input
+            className="rounded border border-slate-200 px-3 py-2 text-sm"
+            placeholder="slug (e.g. artist_terms_v2)"
+            value={newSlug}
+            onChange={(event) => setNewSlug(event.target.value)}
+            disabled={creating || loading}
+          />
+          <input
+            className="rounded border border-slate-200 px-3 py-2 text-sm sm:col-span-2"
+            placeholder="Title"
+            value={newTitle}
+            onChange={(event) => setNewTitle(event.target.value)}
+            disabled={creating || loading}
+          />
+          <button type="button" className="btnGhost w-fit" onClick={handleCreate} disabled={creating || loading}>
+            {creating ? "Creating..." : "Create document"}
+          </button>
+        </div>
+
         {!loading && documents.length === 0 ? <p className="text-sm text-slate-600">No terms documents found.</p> : null}
 
         <ul className="grid gap-3">
@@ -73,9 +126,12 @@ export default function AdminTermsPage() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="font-semibold text-slate-900">{doc.title}</div>
-                  <div className="text-xs text-slate-500">{doc.key}</div>
+                  <div className="text-xs text-slate-500">
+                    {doc.slug}
+                    {doc.isActive ? " · active" : " · inactive"}
+                  </div>
                 </div>
-                <Link href={`/admin/terms/${doc.key}`} className="btnGhost">
+                <Link href={`/admin/terms/${doc.slug || doc.key}`} className="btnGhost">
                   Edit
                 </Link>
               </div>

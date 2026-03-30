@@ -48,6 +48,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ key: st
   draft.status = "published";
   draft.effectiveAt = now;
   draft.changelog = changelog;
+  if (!draft.documentSlug) {
+    draft.documentSlug = document.slug || document.key;
+  }
+  if (!draft.bodyMarkdown) {
+    draft.bodyMarkdown = draft.content?.fullMarkdown || "";
+  }
+  if (!draft.createdByAdminId) {
+    const userId = session.user.id;
+    if (userId && Types.ObjectId.isValid(userId)) {
+      draft.createdByAdminId = new Types.ObjectId(userId);
+    }
+  }
   if (!draft.createdByUserId) {
     const userId = session.user.id;
     if (userId && Types.ObjectId.isValid(userId)) {
@@ -57,6 +69,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ key: st
   await draft.save();
 
   document.activeVersionId = draft._id;
+  document.isActive = true;
   await document.save();
 
   return NextResponse.json(

@@ -10,6 +10,8 @@ const userSchema = new Schema(
     shopDomain: { type: String, required: true, lowercase: true, trim: true },
     shopifyCustomerGid: { type: String, trim: true },
     artistId: { type: Schema.Types.ObjectId, ref: "Artist" },
+    artistKey: { type: String, trim: true },
+    onboardingComplete: { type: Boolean, default: false },
     pendingRegistrationId: { type: Schema.Types.ObjectId, ref: "ArtistApplication" },
     onboardingStatus: { type: String, enum: ["pending", "accepted", "rejected"] },
     passwordHash: { type: String, required: true },
@@ -20,6 +22,7 @@ const userSchema = new Schema(
 );
 
 userSchema.index({ email: 1, shopDomain: 1 }, { unique: true });
+userSchema.index({ shopDomain: 1, artistKey: 1 }, { unique: true, sparse: true });
 
 type User = InferSchemaType<typeof userSchema>;
 export type UserRole = (typeof userRoles)[number];

@@ -7,7 +7,11 @@ declare module "next-auth" {
       id: string;
       role: "team" | "artist" | "customer";
       artistId?: string;
+      artistKey?: string;
+      onboardingComplete?: boolean;
       mustChangePassword?: boolean;
+      pendingRegistrationId?: string;
+      onboardingStatus?: string;
     };
   }
 
@@ -15,7 +19,11 @@ declare module "next-auth" {
     id: string;
     role: "team" | "artist" | "customer";
     artistId?: string;
+    artistKey?: string;
+    onboardingComplete?: boolean;
     mustChangePassword?: boolean;
+    pendingRegistrationId?: string;
+    onboardingStatus?: string;
   }
 }
 
@@ -24,7 +32,11 @@ declare module "next-auth/jwt" {
     id?: string;
     role?: "team" | "artist" | "customer";
     artistId?: string;
+    artistKey?: string;
+    onboardingComplete?: boolean;
     mustChangePassword?: boolean;
+    pendingRegistrationId?: string;
+    onboardingStatus?: string;
   }
 }
 

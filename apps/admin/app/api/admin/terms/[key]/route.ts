@@ -26,13 +26,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ key: str
 
   const payload = versions.map((version) => ({
     id: version._id.toString(),
+    documentSlug: version.documentSlug,
     version: version.version,
     status: version.status,
     effectiveAt: version.effectiveAt,
     changelog: version.changelog || "",
     createdAt: version.createdAt,
     updatedAt: version.updatedAt,
+    createdByAdminId: version.createdByAdminId?.toString(),
     createdByUserId: version.createdByUserId?.toString(),
+    bodyMarkdown: version.bodyMarkdown || version.content?.fullMarkdown || "",
     content: {
       summaryMarkdown: version.content?.summaryMarkdown || "",
       fullMarkdown: version.content?.fullMarkdown || "",
@@ -44,8 +47,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ key: str
     {
       document: {
         id: document._id.toString(),
+        slug: document.slug || document.key,
         key: document.key,
         title: document.title,
+        isActive: document.isActive !== false,
         activeVersionId: document.activeVersionId?.toString(),
         createdAt: document.createdAt,
         updatedAt: document.updatedAt,

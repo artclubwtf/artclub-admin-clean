@@ -48,10 +48,12 @@ const canonicalProductSchema = new Schema(
     title: { type: String, required: true, trim: true },
     description: { type: String },
     tags: { type: [String], default: [] },
+    artistKey: { type: String, trim: true },
     artistRef: { type: String, trim: true },
     images: { type: canonicalProductImagesSchema, default: () => ({ galleryUrls: [] }) },
     offerings: { type: String, enum: canonicalProductOfferings, required: true },
     status: { type: String, enum: canonicalProductStatuses, default: "draft" },
+    year: { type: Number },
     dimensions: { type: canonicalProductDimensionsSchema, default: () => ({}) },
     shortText: { type: String },
     shopify: { type: canonicalProductShopifySchema, default: () => ({}) },
@@ -61,6 +63,7 @@ const canonicalProductSchema = new Schema(
 );
 
 canonicalProductSchema.index({ shopDomain: 1, productKey: 1 }, { unique: true });
+canonicalProductSchema.index({ shopDomain: 1, artistKey: 1, createdAt: -1 });
 canonicalProductSchema.index({ shopDomain: 1, "shopify.productGid": 1 }, { unique: true, sparse: true });
 canonicalProductSchema.index({ shopDomain: 1, "sync.needsPush": 1, "sync.dirtyAt": 1 });
 
