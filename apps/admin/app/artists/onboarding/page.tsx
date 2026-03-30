@@ -52,6 +52,10 @@ function formatDate(value?: string | null) {
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export default function ArtistsOnboardingPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -96,6 +100,23 @@ export default function ArtistsOnboardingPage() {
       }, {}),
     [termsModules],
   );
+
+  const resolveUploadedFileUrl = async (fileIdGid: string) => {
+    const encoded = encodeURIComponent(fileIdGid);
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const res = await fetch(`/api/shopify/files/resolve?ids=${encoded}`, { cache: "no-store" });
+      const payload = (await res.json().catch(() => null)) as
+        | { files?: Array<{ id?: string; url?: string | null; previewImage?: string | null }> }
+        | null;
+      if (res.ok) {
+        const file = payload?.files?.[0];
+        const url = file?.url || file?.previewImage || "";
+        if (url) return url;
+      }
+      if (attempt < 5) await wait(600);
+    }
+    return "";
+  };
 
   const load = async () => {
     setLoading(true);
@@ -194,17 +215,27 @@ export default function ArtistsOnboardingPage() {
         method: "POST",
         body: formData,
       });
-      const payload = (await res.json().catch(() => null)) as { error?: string; url?: string } | null;
-      if (!res.ok || !payload?.url) {
+      const payload = (await res.json().catch(() => null)) as
+        | { error?: string; url?: string | null; fileIdGid?: string }
+        | null;
+      if (!res.ok) {
         throw new Error(payload?.error || "Upload failed");
       }
 
+      let resolvedUrl = payload?.url || "";
+      if (!resolvedUrl && payload?.fileIdGid) {
+        resolvedUrl = await resolveUploadedFileUrl(payload.fileIdGid);
+      }
+      if (!resolvedUrl) {
+        throw new Error("Upload finished, but preview is not ready yet. Please try again in a few seconds.");
+      }
+
       if (kind === "avatar") {
-        setAvatarUrl(payload.url);
+        setAvatarUrl(resolvedUrl);
       } else if (kind === "hero") {
-        setHeroUrl(payload.url);
+        setHeroUrl(resolvedUrl);
       } else {
-        setGalleryUrls((prev) => Array.from(new Set([...prev, payload.url!])).slice(0, 10));
+        setGalleryUrls((prev) => Array.from(new Set([...prev, resolvedUrl])).slice(0, 10));
       }
     } catch (err: any) {
       setError(err?.message || "Upload failed");
@@ -536,4 +567,3 @@ export default function ArtistsOnboardingPage() {
     </div>
   );
 }
-

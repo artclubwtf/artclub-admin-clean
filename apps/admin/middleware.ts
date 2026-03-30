@@ -14,7 +14,7 @@ export async function middleware(req: NextRequest) {
 
   const isApiPath = pathname.startsWith("/api");
   const isAdminPath = pathname.startsWith("/admin");
-  const isArtistPath = pathname === "/artist" || pathname.startsWith("/artist/");
+  const isArtistPath = pathname.startsWith("/artist");
   const isArtistsPath = pathname.startsWith("/artists");
 
   if (isApiPath) {

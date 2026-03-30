@@ -110,6 +110,10 @@ function toIsoDate(value?: string) {
   return date.toLocaleString();
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export default function ArtistsDashboardPage() {
   const router = useRouter();
   const [authState, setAuthState] = useState<"checking" | "guest" | "artist">("checking");
@@ -253,6 +257,23 @@ export default function ArtistsDashboardPage() {
     }));
   }, [createOriginalPriceEur, selectedPrintSizes]);
 
+  const resolveUploadedFileUrl = async (fileIdGid: string) => {
+    const encoded = encodeURIComponent(fileIdGid);
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const res = await fetch(`/api/shopify/files/resolve?ids=${encoded}`, { cache: "no-store" });
+      const payload = (await res.json().catch(() => null)) as
+        | { files?: Array<{ id?: string; url?: string | null; previewImage?: string | null }> }
+        | null;
+      if (res.ok) {
+        const file = payload?.files?.[0];
+        const url = file?.url || file?.previewImage || "";
+        if (url) return url;
+      }
+      if (attempt < 5) await wait(600);
+    }
+    return "";
+  };
+
   const handleSaveSettings = async () => {
     setSavingSettings(true);
     setError(null);
@@ -293,10 +314,21 @@ export default function ArtistsDashboardPage() {
           body: formData,
         });
         const uploadPayload = (await uploadRes.json().catch(() => null)) as
-          | { error?: string; fileIdGid?: string; url?: string; filename?: string }
+          | { error?: string; fileIdGid?: string; url?: string | null; filename?: string }
           | null;
-        if (!uploadRes.ok || !uploadPayload?.url) {
+        if (!uploadRes.ok) {
           throw new Error(uploadPayload?.error || "File upload failed");
+        }
+        if (!uploadPayload) {
+          throw new Error("File upload failed");
+        }
+
+        let resolvedUrl = uploadPayload?.url || "";
+        if (!resolvedUrl && uploadPayload?.fileIdGid) {
+          resolvedUrl = await resolveUploadedFileUrl(uploadPayload.fileIdGid);
+        }
+        if (!resolvedUrl) {
+          throw new Error("Upload finished, but preview is not ready yet. Please try again in a few seconds.");
         }
 
         const saveRes = await fetch("/api/artists/v2/media", {
@@ -305,8 +337,8 @@ export default function ArtistsDashboardPage() {
           body: JSON.stringify({
             kind: uploadKind,
             fileIdGid: uploadPayload.fileIdGid,
-            url: uploadPayload.url,
-            previewUrl: uploadPayload.url,
+            url: resolvedUrl,
+            previewUrl: resolvedUrl,
             filename: uploadPayload.filename || file.name,
             mimeType: file.type || undefined,
             sizeBytes: file.size || undefined,
