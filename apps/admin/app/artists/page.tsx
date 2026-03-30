@@ -4,7 +4,9 @@ export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { getSession } from "next-auth/react";
 
 import { calculatePrintPriceCents } from "@/lib/artistPrintPricing";
 
@@ -110,6 +112,7 @@ function toIsoDate(value?: string) {
 
 export default function ArtistsDashboardPage() {
   const router = useRouter();
+  const [authState, setAuthState] = useState<"checking" | "guest" | "artist">("checking");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -147,7 +150,7 @@ export default function ArtistsDashboardPage() {
     const payload = (await res.json().catch(() => null)) as DashboardResponse | { error?: string } | null;
 
     if (res.status === 401) {
-      router.replace(`/login?callbackUrl=${encodeURIComponent("/artists")}`);
+      setAuthState("guest");
       return null;
     }
     if (!res.ok) {
@@ -165,7 +168,7 @@ export default function ArtistsDashboardPage() {
     const res = await fetch("/api/artists/v2/media", { cache: "no-store" });
     const payload = (await res.json().catch(() => null)) as { ok?: boolean; media?: MediaItem[]; error?: string } | null;
     if (res.status === 401) {
-      router.replace(`/login?callbackUrl=${encodeURIComponent("/artists")}`);
+      setAuthState("guest");
       return;
     }
     if (!res.ok) {
@@ -189,9 +192,46 @@ export default function ArtistsDashboardPage() {
   };
 
   useEffect(() => {
+    let active = true;
+    const checkAuth = async () => {
+      try {
+        const session = await getSession();
+        if (!active) return;
+
+        if (!session?.user) {
+          setAuthState("guest");
+          setLoading(false);
+          return;
+        }
+
+        if (session.user.role === "team") {
+          router.replace("/admin");
+          return;
+        }
+
+        if (session.user.role === "customer") {
+          router.replace("/account");
+          return;
+        }
+
+        setAuthState("artist");
+      } catch {
+        if (!active) return;
+        setAuthState("guest");
+        setLoading(false);
+      }
+    };
+    void checkAuth();
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
+  useEffect(() => {
+    if (authState !== "artist") return;
     void loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authState]);
 
   const selectableMedia = useMemo(() => media, [media]);
   const selectedPrintSizes = useMemo(
@@ -372,11 +412,32 @@ export default function ArtistsDashboardPage() {
     }
   };
 
-  if (loading) {
+  if (authState === "checking" || (authState === "artist" && loading)) {
     return (
       <div className="ac-shell">
         <div className="ac-card" style={{ maxWidth: 1100, margin: "40px auto" }}>
           Loading dashboard...
+        </div>
+      </div>
+    );
+  }
+
+  if (authState === "guest") {
+    return (
+      <div className="ac-shell">
+        <div className="ac-card" style={{ maxWidth: 720, margin: "40px auto" }}>
+          <h1 className="text-2xl font-semibold text-slate-900">Artist v2</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            Register with your one-time key or log in if you already have an artist account.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link href="/artists/register" className="btnPrimary">
+              Register
+            </Link>
+            <Link href="/artists/login" className="btnGhost">
+              Login
+            </Link>
+          </div>
         </div>
       </div>
     );

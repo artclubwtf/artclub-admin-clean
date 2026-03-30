@@ -80,7 +80,13 @@ export async function middleware(req: NextRequest) {
   if (!isAdminPath && !isArtistPath && !isArtistsPath) return NextResponse.next();
 
   try {
+    const isPublicArtistsEntry =
+      pathname === "/artists" || pathname === "/artists/register" || pathname === "/artists/login";
+
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    if (isArtistsPath && isPublicArtistsEntry && !token) {
+      return NextResponse.next();
+    }
     if (!token) return redirectToLogin(req);
 
     if (isAdminPath) {
@@ -119,6 +125,14 @@ export async function middleware(req: NextRequest) {
     }
 
     if (isArtistsPath) {
+      if (isPublicArtistsEntry) {
+        const onboardingComplete = (token as { onboardingComplete?: boolean }).onboardingComplete === true;
+        if (token.role === "artist" && pathname === "/artists" && !onboardingComplete) {
+          return NextResponse.redirect(new URL("/artists/onboarding", req.url));
+        }
+        return NextResponse.next();
+      }
+
       if (token.role !== "artist") {
         const fallback = token.role === "team" ? "/admin" : "/login";
         return NextResponse.redirect(new URL(fallback, req.url));
