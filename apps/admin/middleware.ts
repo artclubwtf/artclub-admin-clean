@@ -143,10 +143,6 @@ export async function middleware(req: NextRequest) {
 
     if (isArtistsPath) {
       if (isPublicArtistsEntry) {
-        const onboardingComplete = (token as { onboardingComplete?: boolean }).onboardingComplete === true;
-        if (token.role === "artist" && pathname === "/artists" && !onboardingComplete) {
-          return NextResponse.redirect(new URL("/artists/onboarding", req.url));
-        }
         return NextResponse.next();
       }
 

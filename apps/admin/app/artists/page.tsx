@@ -183,6 +183,10 @@ export default function ArtistsDashboardPage() {
     try {
       const dashboardData = await loadDashboard();
       if (!dashboardData) return;
+      if (dashboardData.artist?.onboardingComplete !== true) {
+        router.replace("/artists/onboarding");
+        return;
+      }
       await loadMedia();
     } catch (err: any) {
       setError(err?.message || "Failed to load artist dashboard");
