@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSession, signIn } from "next-auth/react";
 import { FormEvent, Suspense, useEffect, useState } from "react";
+import styles from "@/app/artists/auth.module.css";
 
 function mapRegisterError(code?: string) {
   const normalized = (code || "").toLowerCase();
@@ -151,9 +152,11 @@ function ArtistV2RegisterInner() {
 
   if (checkingSession) {
     return (
-      <div className="ac-shell">
-        <div className="ac-card" style={{ maxWidth: 520, margin: "40px auto" }}>
-          Checking session...
+      <div className={styles.authShell}>
+        <div className={styles.authWrap}>
+          <div className={styles.card}>
+            <div className={styles.loading}>Checking session...</div>
+          </div>
         </div>
       </div>
     );
@@ -161,22 +164,24 @@ function ArtistV2RegisterInner() {
 
   if (notAllowedMessage) {
     return (
-      <div className="ac-shell">
-        <div className="ac-card" style={{ maxWidth: 520, margin: "40px auto" }}>
-          <h1 className="text-2xl font-semibold text-slate-900">Not allowed</h1>
-          <p className="mt-2 text-sm text-slate-600">{notAllowedMessage}</p>
+      <div className={styles.authShell}>
+        <div className={styles.authWrap}>
+          <div className={styles.card}>
+            <h1 className="text-2xl font-semibold text-slate-900">Not allowed</h1>
+            <p className="mt-2 text-sm text-slate-600">{notAllowedMessage}</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="ac-shell">
-      <div className="ac-card" style={{ maxWidth: 520, margin: "40px auto" }}>
-        <h1 className="text-2xl font-semibold text-slate-900">Artist registration</h1>
-        <p className="mt-2 text-sm text-slate-600">Enter your one-time registration key to create your artist account.</p>
-
-        <form className="mt-6 grid gap-3" onSubmit={handleSubmit}>
+    <div className={styles.authShell}>
+      <div className={styles.authWrap}>
+        <div className={styles.brand}>ARTCLUB</div>
+        <p className={styles.subtitle}>Create your artist account</p>
+        <div className={styles.card}>
+          <form className={styles.form} onSubmit={handleSubmit}>
           <label className="field">
             Registration key
             <input
@@ -227,24 +232,26 @@ function ArtistV2RegisterInner() {
             />
           </label>
 
-          <label className="flex items-center gap-2 text-sm text-slate-700">
+          <label className={styles.row}>
+            <span className="text-sm text-slate-700">Show passwords</span>
             <input type="checkbox" checked={showPassword} onChange={(event) => setShowPassword(event.target.checked)} />
-            Show passwords
           </label>
 
-          {error ? <div className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+          {error ? <div className={styles.error}>{error}</div> : null}
 
           <button type="submit" className="btnPrimary" disabled={submitting}>
-            {submitting ? "Creating account..." : "Register"}
+            {submitting ? "Creating account..." : "Create account"}
           </button>
-        </form>
+          </form>
 
-        <div className="mt-5 text-sm text-slate-600">
-          Already registered?{" "}
-          <Link href="/artists/login" className="font-semibold text-slate-900">
-            Log in
-          </Link>
+          <div className={styles.footer}>
+            Already have an account?{" "}
+            <Link href="/artists/login" className="font-semibold text-slate-900">
+              Sign in
+            </Link>
+          </div>
         </div>
+        <div className={styles.legal}>© {new Date().getFullYear()} ARTCLUB</div>
       </div>
     </div>
   );
@@ -254,9 +261,11 @@ export default function ArtistV2RegisterPage() {
   return (
     <Suspense
       fallback={
-        <div className="ac-shell">
-          <div className="ac-card" style={{ maxWidth: 520, margin: "40px auto" }}>
-            Loading...
+        <div className={styles.authShell}>
+          <div className={styles.authWrap}>
+            <div className={styles.card}>
+              <div className={styles.loading}>Loading...</div>
+            </div>
           </div>
         </div>
       }

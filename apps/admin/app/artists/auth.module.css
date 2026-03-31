@@ -1,0 +1,77 @@
+.authShell {
+  min-height: 100vh;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.authWrap {
+  width: 100%;
+  max-width: 420px;
+}
+
+.brand {
+  text-align: center;
+  font-size: 42px;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  color: #111111;
+}
+
+.subtitle {
+  margin-top: 6px;
+  text-align: center;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.card {
+  margin-top: 22px;
+  background: #ffffff;
+  box-shadow: 0 16px 34px rgba(17, 17, 17, 0.08);
+  border-radius: 18px;
+  padding: 20px;
+}
+
+.form {
+  margin-top: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.footer {
+  margin-top: 14px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.legal {
+  margin-top: 14px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.error {
+  border-radius: 12px;
+  background: rgba(220, 38, 38, 0.1);
+  color: #b91c1c;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.loading {
+  text-align: center;
+  color: #6b7280;
+  font-size: 14px;
+}

@@ -28,14 +28,21 @@ const NAV_ITEMS = [
 
 export default function ArtistsWorkspaceShell({ artist, children }: WorkspaceShellProps) {
   const pathname = usePathname();
+  const currentLabel = NAV_ITEMS.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))?.label || "Workspace";
+  const initials = (artist.displayName || "AR")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("");
 
   return (
     <div className={styles.shell}>
       <div className={styles.frame}>
         <aside className={styles.sidebar}>
-          <div className={styles.brand}>Artclub Artist Workspace</div>
-          <div className={styles.title}>{artist.displayName || "Artist"}</div>
-          <div className={styles.meta}>{artist.artistKey}</div>
+          <div className={styles.brand}>ARTCLUB</div>
+          <div className={styles.title}>Artist Workspace</div>
+          <div className={styles.meta}>{artist.displayName || artist.artistKey}</div>
           <div className={styles.statusPill}>{artist.onboardingComplete ? "Active" : "Onboarding"}</div>
 
           <nav className={styles.nav}>
@@ -52,18 +59,18 @@ export default function ArtistsWorkspaceShell({ artist, children }: WorkspaceShe
               );
             })}
           </nav>
+          <div className={styles.footer}>© {new Date().getFullYear()} ARTCLUB</div>
         </aside>
 
         <section className={styles.content}>
           <div className={styles.topbar}>
             <div>
-              <div style={{ fontSize: 12, color: "#64748b" }}>Workspace</div>
-              <div style={{ fontWeight: 700, color: "#0f172a" }}>{artist.displayName || "Artist"}</div>
+              <div className={styles.topTitle}>{currentLabel}</div>
+              <div className={styles.topSub}>{artist.displayName || "Artist"}</div>
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <a className="btnGhost" href="/artists/profile">
-                Preview Profile
-              </a>
+            <div className={styles.topActions}>
+              <span className={styles.statusChip}>{artist.onboardingComplete ? "Active" : "Onboarding"}</span>
+              <span className={styles.avatarChip}>{initials || "AR"}</span>
               <button className="btnGhost" type="button" onClick={() => signOut({ callbackUrl: "/artists/login" })}>
                 Logout
               </button>

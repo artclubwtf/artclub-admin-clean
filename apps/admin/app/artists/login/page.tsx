@@ -8,6 +8,7 @@ import Link from "next/link";
 import { getSession, signIn } from "next-auth/react";
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import styles from "@/app/artists/auth.module.css";
 
 function resolveDestination(session: Session | null) {
   if (!session?.user) return "/artists/login";
@@ -78,21 +79,23 @@ function ArtistV2LoginInner() {
 
   if (checkingSession) {
     return (
-      <div className="ac-shell">
-        <div className="ac-card" style={{ maxWidth: 520, margin: "40px auto" }}>
-          Checking session...
+      <div className={styles.authShell}>
+        <div className={styles.authWrap}>
+          <div className={styles.card}>
+            <div className={styles.loading}>Checking session...</div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="ac-shell">
-      <div className="ac-card" style={{ maxWidth: 520, margin: "40px auto" }}>
-        <h1 className="text-2xl font-semibold text-slate-900">Artist login</h1>
-        <p className="mt-2 text-sm text-slate-600">Sign in to continue your onboarding or open your artist dashboard.</p>
-
-        <form className="mt-6 grid gap-3" onSubmit={handleSubmit}>
+    <div className={styles.authShell}>
+      <div className={styles.authWrap}>
+        <div className={styles.brand}>ARTCLUB</div>
+        <p className={styles.subtitle}>Sign in to your artist workspace</p>
+        <div className={styles.card}>
+          <form className={styles.form} onSubmit={handleSubmit}>
           <label className="field">
             Email
             <input
@@ -119,26 +122,28 @@ function ArtistV2LoginInner() {
             />
           </label>
 
-          <label className="flex items-center gap-2 text-sm text-slate-700">
+          <label className={styles.row}>
+            <span className="text-sm text-slate-700">Show password</span>
             <input type="checkbox" checked={showPassword} onChange={(event) => setShowPassword(event.target.checked)} />
-            Show password
           </label>
 
-          {error ? <div className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+          {error ? <div className={styles.error}>{error}</div> : null}
 
           <button type="submit" className="btnPrimary" disabled={submitting}>
-            {submitting ? "Signing in..." : "Log in"}
+            {submitting ? "Signing in..." : "Sign in"}
           </button>
-        </form>
+          </form>
 
-        <div className="mt-5 text-sm text-slate-600">
-          Need an account?{" "}
-          <Link href="/artists/register" className="font-semibold text-slate-900">
-            Register
-          </Link>
+          <div className={styles.footer}>
+            Need an account?{" "}
+            <Link href="/artists/register" className="font-semibold text-slate-900">
+              Register
+            </Link>
+          </div>
+
+          <div className={styles.footer}>Forgot password: coming soon.</div>
         </div>
-
-        <div className="mt-2 text-sm text-slate-500">Forgot password: coming soon.</div>
+        <div className={styles.legal}>© {new Date().getFullYear()} ARTCLUB</div>
       </div>
     </div>
   );
@@ -148,9 +153,11 @@ export default function ArtistV2LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="ac-shell">
-          <div className="ac-card" style={{ maxWidth: 520, margin: "40px auto" }}>
-            Loading...
+        <div className={styles.authShell}>
+          <div className={styles.authWrap}>
+            <div className={styles.card}>
+              <div className={styles.loading}>Loading...</div>
+            </div>
           </div>
         </div>
       }

@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { renderMarkdownToHtml } from "@/lib/markdown";
+import styles from "./onboarding.module.css";
 
 type TermsModule = {
   documentSlug: string;
@@ -44,7 +45,13 @@ type OnboardingResponse = {
   terms: { activeModules: TermsModule[]; accepted: TermsAcceptedRecord[] };
 };
 
-const steps = ["Personal", "Profile details", "Profile visuals", "Consents", "Legal & finish"];
+const steps = [
+  { label: "Personal", sub: "Basic info" },
+  { label: "Profile", sub: "Public details" },
+  { label: "Visuals", sub: "Profile images" },
+  { label: "Consents", sub: "Permissions" },
+  { label: "Legal", sub: "Terms" },
+];
 
 function formatDate(value?: string | null) {
   if (!value) return "—";
@@ -88,8 +95,6 @@ export default function ArtistsOnboardingPage() {
   const [termsChecked, setTermsChecked] = useState<Record<string, boolean>>({});
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [acceptedName, setAcceptedName] = useState("");
-
-  const progress = ((step + 1) / steps.length) * 100;
 
   const termsHtml = useMemo(
     () =>
@@ -286,8 +291,8 @@ export default function ArtistsOnboardingPage() {
 
   if (loading) {
     return (
-      <div className="ac-shell">
-        <div className="ac-card" style={{ maxWidth: 920, margin: "40px auto" }}>
+      <div className={styles.shell}>
+        <div className={styles.card}>
           Loading onboarding...
         </div>
       </div>
@@ -295,25 +300,42 @@ export default function ArtistsOnboardingPage() {
   }
 
   return (
-    <div className="ac-shell">
-      <div className="ac-card" style={{ maxWidth: 920, margin: "40px auto" }}>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Artist onboarding</h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Artist key: {artistKey || "—"}
-              {onboardingComplete ? " · completed" : " · pending"}
-            </p>
-          </div>
-        </div>
+    <div className={styles.shell}>
+      <div className={styles.heading}>
+        <h1 className={styles.title}>Welcome to ARTCLUB</h1>
+        <p className={styles.subtitle}>Let&apos;s set up your artist profile</p>
+      </div>
 
-        <div className="mt-4">
-          <div className="mb-2 text-xs text-slate-500">
-            Step {step + 1} / {steps.length}: {steps[step]}
-          </div>
-          <div style={{ height: 6, borderRadius: 999, background: "#e2e8f0", overflow: "hidden" }}>
-            <span style={{ display: "block", height: "100%", width: `${progress}%`, background: "#0f172a" }} />
-          </div>
+      <div className={styles.stepper}>
+        {steps.map((item, index) => {
+          const done = index < step;
+          const current = index === step;
+          return (
+            <div key={item.label} className={styles.stepItem}>
+              {index < steps.length - 1 ? (
+                <span className={`${styles.stepLine} ${done ? styles.stepLineDone : ""}`.trim()} aria-hidden="true" />
+              ) : null}
+              <span
+                className={`${styles.stepCircle} ${done ? styles.stepCircleDone : ""} ${current ? styles.stepCircleCurrent : ""}`.trim()}
+                aria-hidden="true"
+              >
+                {done ? "✓" : index + 1}
+              </span>
+              <div>
+                <div className={styles.stepLabel}>{item.label}</div>
+                <div className={styles.stepSub}>{item.sub}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className={styles.card}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <p className="text-sm text-slate-600">
+            Artist key: {artistKey || "—"}
+            {onboardingComplete ? " · completed" : " · pending"}
+          </p>
         </div>
 
         {error ? <div className="mt-4 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
@@ -550,7 +572,7 @@ export default function ArtistsOnboardingPage() {
                 setStep((prev) => Math.min(steps.length - 1, prev + 1));
               }}
             >
-              Next
+              Continue
             </button>
           ) : (
             <button type="button" className="btnPrimary" disabled={saving} onClick={onSubmit}>
@@ -559,7 +581,7 @@ export default function ArtistsOnboardingPage() {
           )}
         </div>
 
-        <div className="mt-8 rounded border border-slate-200 p-3">
+        <div className={styles.history}>
           <div className="text-sm font-semibold text-slate-900">Accepted terms history</div>
           {acceptedTerms.length === 0 ? <div className="mt-2 text-xs text-slate-500">No acceptance records yet.</div> : null}
           {acceptedTerms.length > 0 ? (

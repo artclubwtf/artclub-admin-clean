@@ -1,0 +1,133 @@
+.shell {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 26px 20px 40px;
+}
+
+.heading {
+  text-align: center;
+}
+
+.title {
+  font-size: 46px;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  color: #111111;
+}
+
+.subtitle {
+  margin-top: 6px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.stepper {
+  margin: 26px auto 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  max-width: 760px;
+}
+
+.stepItem {
+  position: relative;
+  text-align: center;
+}
+
+.stepLine {
+  position: absolute;
+  top: 16px;
+  right: -50%;
+  width: 100%;
+  height: 2px;
+  background: #e5e7eb;
+}
+
+.stepLineDone {
+  background: #16a34a;
+}
+
+.stepCircle {
+  width: 32px;
+  height: 32px;
+  margin: 0 auto;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: #6b7280;
+  background: #f3f4f6;
+}
+
+.stepCircleDone {
+  background: #16a34a;
+  color: #ffffff;
+}
+
+.stepCircleCurrent {
+  background: #111111;
+  color: #ffffff;
+}
+
+.stepLabel {
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #111111;
+}
+
+.stepSub {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.card {
+  margin-top: 20px;
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 16px 32px rgba(17, 17, 17, 0.08);
+  padding: 18px;
+}
+
+.history {
+  margin-top: 16px;
+  background: #f6f6f6;
+  border-radius: 14px;
+  padding: 12px;
+}
+
+@media (max-width: 980px) {
+  .shell {
+    padding: 16px 12px 30px;
+  }
+
+  .title {
+    font-size: 34px;
+  }
+
+  .stepper {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    max-width: none;
+  }
+
+  .stepLine {
+    display: none;
+  }
+
+  .stepItem {
+    text-align: left;
+    display: grid;
+    grid-template-columns: 32px 1fr;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .stepLabel,
+  .stepSub {
+    margin-top: 0;
+  }
+}
