@@ -4,20 +4,18 @@
 }
 
 .frame {
-  max-width: 1380px;
+  max-width: 1460px;
   margin: 0 auto;
-  display: grid;
-  grid-template-columns: 228px 1fr;
-  gap: 0;
   min-height: 100vh;
+  display: grid;
+  grid-template-columns: 250px 1fr;
 }
 
 .sidebar {
   position: sticky;
   top: 0;
-  align-self: start;
   height: 100vh;
-  padding: 18px 12px 14px;
+  padding: 18px 10px 12px;
   background: #fafafa;
   box-shadow: inset -1px 0 0 rgba(17, 17, 17, 0.06);
   display: flex;
@@ -25,52 +23,37 @@
 }
 
 .brand {
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: #111111;
+  font-size: 34px;
   line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #111111;
+  padding: 0 10px;
 }
 
 .title {
   margin-top: 4px;
+  padding: 0 10px;
   font-size: 12px;
-  font-weight: 600;
-  color: #7a7a7a;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.meta {
-  margin-top: 10px;
-  font-size: 12px;
-  color: #888888;
-}
-
-.statusPill {
-  margin-top: 12px;
-  display: inline-flex;
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 700;
-  background: rgba(22, 163, 74, 0.16);
-  color: #166534;
+  color: #6b7280;
 }
 
 .nav {
-  margin-top: 22px;
+  margin-top: 16px;
   display: grid;
-  gap: 4px;
+  gap: 3px;
   flex: 1;
 }
 
 .navLink {
+  padding: 10px 12px;
   border-radius: 14px;
-  padding: 11px 12px;
-  font-size: 14px;
-  color: #2f2f2f;
+  color: #3f3f46;
   text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -80,14 +63,22 @@
 }
 
 .navLinkActive {
-  background: #ebebeb;
+  background: #ececec;
   color: #111111;
 }
 
+.navIcon {
+  width: 16px;
+  height: 16px;
+  color: currentColor;
+  opacity: 0.9;
+  flex: 0 0 auto;
+}
+
 .footer {
+  padding: 8px 10px;
   font-size: 11px;
-  color: #909090;
-  padding: 10px 8px;
+  color: #9ca3af;
 }
 
 .content {
@@ -96,37 +87,31 @@
 }
 
 .topbar {
-  height: 64px;
-  padding: 10px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  box-shadow: inset 0 -1px 0 rgba(17, 17, 17, 0.06);
   position: sticky;
   top: 0;
-  background: #ffffff;
   z-index: 10;
+  height: 58px;
+  padding: 10px 14px;
+  background: #ffffff;
+  box-shadow: inset 0 -1px 0 rgba(17, 17, 17, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .topTitle {
-  font-size: 28px;
+  font-size: 22px;
+  line-height: 1;
+  letter-spacing: -0.02em;
   font-weight: 800;
   color: #111111;
-  letter-spacing: -0.02em;
-  line-height: 1;
-}
-
-.topSub {
-  font-size: 12px;
-  color: #8a8a8a;
-  margin-top: 2px;
 }
 
 .topActions {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .statusChip {
@@ -134,8 +119,25 @@
   padding: 4px 10px;
   font-size: 11px;
   font-weight: 700;
-  background: rgba(22, 163, 74, 0.12);
-  color: #166534;
+  background: #f3f4f6;
+  color: #111111;
+}
+
+.iconBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: #111111;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.iconBtn:hover {
+  background: #f3f4f6;
 }
 
 .avatarChip {
@@ -152,9 +154,7 @@
 }
 
 .main {
-  padding: 20px;
-  display: grid;
-  gap: 16px;
+  padding: 20px 16px 24px;
 }
 
 @media (max-width: 980px) {
@@ -168,15 +168,11 @@
     box-shadow: inset 0 -1px 0 rgba(17, 17, 17, 0.06);
   }
 
+  .nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .main {
-    padding: 14px;
-  }
-
-  .topbar {
-    padding: 10px 14px;
-  }
-
-  .topTitle {
-    font-size: 20px;
+    padding: 14px 12px 18px;
   }
 }

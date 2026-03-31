@@ -47,16 +47,25 @@ type OnboardingResponse = {
 
 const steps = [
   { label: "Personal", sub: "Basic info" },
-  { label: "Profile", sub: "Public details" },
   { label: "Visuals", sub: "Profile images" },
   { label: "Consents", sub: "Permissions" },
   { label: "Legal", sub: "Terms" },
+  { label: "Finish", sub: "Review" },
 ];
 
 function formatDate(value?: string | null) {
   if (!value) return "—";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
 }
 
 export default function ArtistsOnboardingPage() {
@@ -105,6 +114,21 @@ export default function ArtistsOnboardingPage() {
     [termsModules],
   );
 
+  const resolvedDisplayName = useMemo(() => {
+    const candidate = displayName.trim().length > 0 ? displayName.trim() : fullName.trim();
+    if (candidate.length > 0) return candidate;
+    const localPart = email.split("@")[0] || "artist";
+    return localPart;
+  }, [displayName, fullName, email]);
+
+  const resolvedHandle = useMemo(() => {
+    if (handle.trim().length > 0) return handle.trim();
+    const fromName = slugify(resolvedDisplayName);
+    if (fromName.length > 0) return fromName;
+    const localPart = slugify(email.split("@")[0] || "artist");
+    return localPart || "artist";
+  }, [handle, resolvedDisplayName, email]);
+
   const load = async () => {
     setLoading(true);
     setError(null);
@@ -116,9 +140,7 @@ export default function ArtistsOnboardingPage() {
         router.replace(`/artists/login?callbackUrl=${encodeURIComponent("/artists/onboarding")}`);
         return;
       }
-      if (!res.ok) {
-        throw new Error((payload as { error?: string } | null)?.error || "Failed to load onboarding");
-      }
+      if (!res.ok) throw new Error((payload as { error?: string } | null)?.error || "Failed to load onboarding");
 
       const data = payload as OnboardingResponse;
       setOnboardingComplete(data.onboardingComplete === true);
@@ -160,43 +182,40 @@ export default function ArtistsOnboardingPage() {
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (!loading && onboardingComplete) {
+    if (loading === false && onboardingComplete) {
       router.replace("/artists");
     }
   }, [loading, onboardingComplete, router]);
 
   const validateStep = (index: number): string | null => {
     if (index === 0) {
-      if (!fullName.trim() || fullName.trim().length < 2) return "Please enter your full name.";
+      if (fullName.trim().length < 2) return "Please enter your full name.";
       return null;
     }
+
     if (index === 1) {
-      if (!handle.trim() || handle.trim().length < 2) return "Handle is required.";
-      if (!displayName.trim() || displayName.trim().length < 2) return "Display name is required.";
-      return null;
-    }
-    if (index === 2) {
-      if (!avatarUrl.trim() && !heroUrl.trim() && galleryUrls.length === 0) {
+      if (avatarUrl.trim().length === 0 && heroUrl.trim().length === 0 && galleryUrls.length === 0) {
         return "Please upload at least one profile image.";
       }
       return null;
     }
-    if (index === 3) {
+
+    if (index === 2) {
       return null;
     }
-    if (index === 4) {
-      if (!acceptTerms) return "Please accept the terms.";
+
+    if (index === 3) {
+      if (acceptTerms === false) return "Please accept the terms.";
       for (const module of termsModules) {
-        if (!termsChecked[module.documentSlug]) {
-          return `Please accept ${module.title}.`;
-        }
+        if (!termsChecked[module.documentSlug]) return `Please accept ${module.title}.`;
       }
-      if (!acceptedName.trim() || acceptedName.trim().length < 2) return "Please type your name for acceptance.";
+      if (acceptedName.trim().length < 2) return "Please type your name for acceptance.";
+      return null;
     }
+
     return null;
   };
 
@@ -207,10 +226,7 @@ export default function ArtistsOnboardingPage() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await fetch("/api/artists/v2/media/upload", {
-        method: "POST",
-        body: formData,
-      });
+      const res = await fetch("/api/artists/v2/media/upload", { method: "POST", body: formData });
       const payload = (await res.json().catch(() => null)) as
         | {
             ok?: boolean;
@@ -218,21 +234,17 @@ export default function ArtistsOnboardingPage() {
             file?: { url?: string | null; previewUrl?: string | null };
           }
         | null;
-      if (!res.ok) {
-        throw new Error(payload?.error || "Upload failed");
-      }
+      if (!res.ok) throw new Error(payload?.error || "Upload failed");
 
       const resolvedUrl = payload?.file?.previewUrl || payload?.file?.url || "";
-      if (!resolvedUrl) {
-        throw new Error("Upload failed");
-      }
+      if (resolvedUrl.length === 0) throw new Error("Upload failed");
 
       if (kind === "avatar") {
         setAvatarUrl(resolvedUrl);
       } else if (kind === "hero") {
         setHeroUrl(resolvedUrl);
       } else {
-        setGalleryUrls((prev) => Array.from(new Set([...prev, resolvedUrl])).slice(0, 10));
+        setGalleryUrls((prev) => Array.from(new Set([...prev, resolvedUrl])).slice(0, 3));
       }
     } catch (err: any) {
       setError(err?.message || "Upload failed");
@@ -242,10 +254,9 @@ export default function ArtistsOnboardingPage() {
   };
 
   const onSubmit = async () => {
-    const wasComplete = onboardingComplete;
-    const stepError = validateStep(4);
-    if (stepError) {
-      setError(stepError);
+    const currentError = validateStep(3);
+    if (currentError) {
+      setError(currentError);
       return;
     }
 
@@ -260,7 +271,7 @@ export default function ArtistsOnboardingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           personal: { fullName, city, country, bio },
-          shopify: { handle, displayName, instagram },
+          shopify: { handle: resolvedHandle, displayName: resolvedDisplayName, instagram },
           profileImages: { avatarUrl, heroUrl, galleryUrls },
           consents: { sellOriginals, sellPrints, rental, exhibitions, presentationOnly },
           terms: {
@@ -271,17 +282,10 @@ export default function ArtistsOnboardingPage() {
         }),
       });
       const payload = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
-      if (!res.ok) {
-        throw new Error(payload?.error || "Failed to submit onboarding");
-      }
+      if (!res.ok) throw new Error(payload?.error || "Failed to submit onboarding");
 
       setOnboardingComplete(true);
-      if (!wasComplete) {
-        router.replace("/artists");
-        return;
-      }
-      setMessage("Onboarding saved.");
-      await load();
+      router.replace("/artists");
     } catch (err: any) {
       setError(err?.message || "Failed to submit onboarding");
     } finally {
@@ -292,9 +296,7 @@ export default function ArtistsOnboardingPage() {
   if (loading) {
     return (
       <div className={styles.shell}>
-        <div className={styles.card}>
-          Loading onboarding...
-        </div>
+        <div className={styles.card}>Loading onboarding...</div>
       </div>
     );
   }
@@ -315,10 +317,7 @@ export default function ArtistsOnboardingPage() {
               {index < steps.length - 1 ? (
                 <span className={`${styles.stepLine} ${done ? styles.stepLineDone : ""}`.trim()} aria-hidden="true" />
               ) : null}
-              <span
-                className={`${styles.stepCircle} ${done ? styles.stepCircleDone : ""} ${current ? styles.stepCircleCurrent : ""}`.trim()}
-                aria-hidden="true"
-              >
+              <span className={`${styles.stepCircle} ${done ? styles.stepCircleDone : ""} ${current ? styles.stepCircleCurrent : ""}`.trim()} aria-hidden="true">
                 {done ? "✓" : index + 1}
               </span>
               <div>
@@ -331,19 +330,14 @@ export default function ArtistsOnboardingPage() {
       </div>
 
       <div className={styles.card}>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <p className="text-sm text-slate-600">
-            Artist key: {artistKey || "—"}
-            {onboardingComplete ? " · completed" : " · pending"}
-          </p>
-        </div>
+        <p className={styles.meta}>Artist key: {artistKey || "—"} · {onboardingComplete ? "completed" : "pending"}</p>
 
-        {error ? <div className="mt-4 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
-        {message ? <div className="mt-4 rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</div> : null}
+        {error ? <div className={styles.error}>{error}</div> : null}
+        {message ? <div className={styles.success}>{message}</div> : null}
 
-        <div className="mt-6 space-y-4">
+        <div className={styles.section}>
           {step === 0 ? (
-            <div className="grid gap-3">
+            <div className={styles.grid}>
               <label className="field">
                 Full name
                 <input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Your full name" />
@@ -360,107 +354,91 @@ export default function ArtistsOnboardingPage() {
                 Country
                 <input value={country} onChange={(event) => setCountry(event.target.value)} placeholder="Germany" />
               </label>
-              <label className="field">
+              <label className="field" style={{ gridColumn: "1 / -1" }}>
                 Short bio
-                <textarea rows={4} value={bio} onChange={(event) => setBio(event.target.value)} placeholder="A short intro to your work." />
+                <textarea rows={4} value={bio} onChange={(event) => setBio(event.target.value)} placeholder="Share a bit about your artistic practice" />
               </label>
             </div>
           ) : null}
 
           {step === 1 ? (
-            <div className="grid gap-3">
-              <label className="field">
-                Handle
-                <input value={handle} onChange={(event) => setHandle(event.target.value)} placeholder="artist-handle" />
-              </label>
-              <label className="field">
-                Display name
-                <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Displayed publicly" />
-              </label>
-              <label className="field">
-                Instagram
-                <input value={instagram} onChange={(event) => setInstagram(event.target.value)} placeholder="@handle or URL" />
-              </label>
-            </div>
-          ) : null}
-
-          {step === 2 ? (
-            <div className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded border border-slate-200 p-3">
-                  <div className="mb-2 text-sm font-semibold">Avatar</div>
+            <div className={styles.visualsGrid}>
+              <div className={styles.visualCard}>
+                <div className={styles.visualTitle}>Avatar</div>
+                <div className={styles.visualPreviewSmall}>
                   {avatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={avatarUrl} alt="Avatar preview" className="h-28 w-28 rounded object-cover" />
+                    <img src={avatarUrl} alt="Avatar preview" className={styles.cover} />
                   ) : (
-                    <div className="text-xs text-slate-500">No avatar uploaded.</div>
+                    <span>Upload</span>
                   )}
-                  <label className="btnGhost mt-3 inline-flex cursor-pointer">
-                    {uploading === "avatar" ? "Uploading..." : "Upload avatar"}
-                    <input
-                      className="hidden"
-                      type="file"
-                      accept="image/*"
-                      disabled={uploading !== null}
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (file) void handleUpload(file, "avatar");
-                        event.currentTarget.value = "";
-                      }}
-                    />
-                  </label>
                 </div>
-
-                <div className="rounded border border-slate-200 p-3">
-                  <div className="mb-2 text-sm font-semibold">Hero</div>
-                  {heroUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={heroUrl} alt="Hero preview" className="h-28 w-full rounded object-cover" />
-                  ) : (
-                    <div className="text-xs text-slate-500">No hero image uploaded.</div>
-                  )}
-                  <label className="btnGhost mt-3 inline-flex cursor-pointer">
-                    {uploading === "hero" ? "Uploading..." : "Upload hero"}
-                    <input
-                      className="hidden"
-                      type="file"
-                      accept="image/*"
-                      disabled={uploading !== null}
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (file) void handleUpload(file, "hero");
-                        event.currentTarget.value = "";
-                      }}
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <div className="rounded border border-slate-200 p-3">
-                <div className="mb-2 text-sm font-semibold">Gallery</div>
-                {galleryUrls.length === 0 ? <div className="text-xs text-slate-500">No gallery images uploaded.</div> : null}
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {galleryUrls.map((url) => (
-                    <div key={url} className="relative rounded border border-slate-200 p-1">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt="Gallery preview" className="h-28 w-full rounded object-cover" />
-                      <button
-                        type="button"
-                        className="absolute right-2 top-2 rounded bg-white/90 px-2 py-1 text-xs"
-                        onClick={() => setGalleryUrls((prev) => prev.filter((item) => item !== url))}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <label className="btnGhost mt-3 inline-flex cursor-pointer">
-                  {uploading === "gallery" ? "Uploading..." : "Add gallery image"}
+                <label className="btnGhost" style={{ marginTop: 10 }}>
+                  {uploading === "avatar" ? "Uploading..." : "Choose image"}
                   <input
-                    className="hidden"
+                    style={{ display: "none" }}
                     type="file"
                     accept="image/*"
-                    disabled={uploading !== null}
+                    disabled={uploading != null}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) void handleUpload(file, "avatar");
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+
+              <div className={styles.visualCard}>
+                <div className={styles.visualTitle}>Header image</div>
+                <div className={styles.visualPreviewWide}>
+                  {heroUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={heroUrl} alt="Hero preview" className={styles.cover} />
+                  ) : (
+                    <span>Click to upload</span>
+                  )}
+                </div>
+                <label className="btnGhost" style={{ marginTop: 10 }}>
+                  {uploading === "hero" ? "Uploading..." : "Upload hero"}
+                  <input
+                    style={{ display: "none" }}
+                    type="file"
+                    accept="image/*"
+                    disabled={uploading != null}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) void handleUpload(file, "hero");
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+
+              <div className={styles.visualCard} style={{ gridColumn: "1 / -1" }}>
+                <div className={styles.visualTitle}>Gallery images (1-3)</div>
+                <div className={styles.galleryRow}>
+                  {[0, 1, 2].map((slot) => {
+                    const url = galleryUrls[slot];
+                    return (
+                      <div key={slot} className={styles.galleryTile}>
+                        {url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={url} alt="Gallery" className={styles.cover} />
+                        ) : (
+                          <span>Upload</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <label className="btnGhost" style={{ marginTop: 10 }}>
+                  {uploading === "gallery" ? "Uploading..." : "Add gallery image"}
+                  <input
+                    style={{ display: "none" }}
+                    type="file"
+                    accept="image/*"
+                    disabled={uploading != null}
                     onChange={(event) => {
                       const file = event.target.files?.[0];
                       if (file) void handleUpload(file, "gallery");
@@ -472,87 +450,111 @@ export default function ArtistsOnboardingPage() {
             </div>
           ) : null}
 
-          {step === 3 ? (
-            <div className="grid gap-2 text-sm text-slate-700">
-              <label className="flex items-start gap-2">
+          {step === 2 ? (
+            <div className={styles.consentList}>
+              <label className={styles.consentItem}>
                 <input type="checkbox" checked={sellOriginals} onChange={(event) => setSellOriginals(event.target.checked)} />
-                Sell originals
+                <span>
+                  <strong>ARTCLUB may sell my originals</strong>
+                  <small>30% platform fee on sales</small>
+                </span>
               </label>
-              <label className="flex items-start gap-2">
+
+              <label className={styles.consentItem}>
                 <input type="checkbox" checked={sellPrints} onChange={(event) => setSellPrints(event.target.checked)} />
-                Sell prints
+                <span>
+                  <strong>ARTCLUB may sell prints/editions</strong>
+                  <small>Artist gets 40% license fee</small>
+                </span>
               </label>
-              <label className="flex items-start gap-2">
+
+              <label className={styles.consentItem}>
                 <input type="checkbox" checked={rental} onChange={(event) => setRental(event.target.checked)} />
-                Rental
+                <span>
+                  <strong>ARTCLUB may rent my artworks</strong>
+                  <small>30% platform fee on rental fees</small>
+                </span>
               </label>
-              <label className="flex items-start gap-2">
+
+              <label className={styles.consentItem}>
                 <input type="checkbox" checked={exhibitions} onChange={(event) => setExhibitions(event.target.checked)} />
-                Exhibitions
+                <span>
+                  <strong>ARTCLUB may contact me for exhibitions</strong>
+                  <small>We&apos;ll reach out with opportunities</small>
+                </span>
               </label>
-              <label className="flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  checked={presentationOnly}
-                  onChange={(event) => setPresentationOnly(event.target.checked)}
-                />
-                Presentation-only
+
+              <label className={styles.consentItem}>
+                <input type="checkbox" checked={presentationOnly} onChange={(event) => setPresentationOnly(event.target.checked)} />
+                <span>
+                  <strong>Presentation-only profile</strong>
+                  <small>Showcase only, no sales</small>
+                </span>
+              </label>
+            </div>
+          ) : null}
+
+          {step === 3 ? (
+            <div className={styles.sectionStack}>
+              {termsModules.map((module) => (
+                <div key={`${module.documentSlug}:${module.version}`} className={styles.termsCard}>
+                  <div className={styles.termsTitle}>{module.title}</div>
+                  <div className={styles.termsSub}>
+                    {module.documentSlug} · v{module.version} · Effective {formatDate(module.effectiveAt)}
+                  </div>
+
+                  {termsHtml[module.documentSlug] ? (
+                    <div className="md-preview" style={{ marginTop: 10 }} dangerouslySetInnerHTML={{ __html: termsHtml[module.documentSlug] }} />
+                  ) : (
+                    <div className={styles.termsSub}>No terms body found.</div>
+                  )}
+
+                  <label className={styles.acceptItem}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(termsChecked[module.documentSlug])}
+                      onChange={(event) =>
+                        setTermsChecked((prev) => ({
+                          ...prev,
+                          [module.documentSlug]: event.target.checked,
+                        }))
+                      }
+                    />
+                    Accept this module
+                  </label>
+                </div>
+              ))}
+
+              <label className={styles.acceptItem}>
+                <input type="checkbox" checked={acceptTerms} onChange={(event) => setAcceptTerms(event.target.checked)} />
+                I accept the terms and conditions
+              </label>
+
+              <label className="field">
+                Typed name for acceptance
+                <input value={acceptedName} onChange={(event) => setAcceptedName(event.target.value)} placeholder="Type your full name" />
               </label>
             </div>
           ) : null}
 
           {step === 4 ? (
-            <div className="space-y-4">
-              {termsModules.map((module) => (
-                <div key={`${module.documentSlug}:${module.version}`} className="rounded border border-slate-200 p-3">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">{module.title}</div>
-                      <div className="text-xs text-slate-500">
-                        {module.documentSlug} · v{module.version} · Effective {formatDate(module.effectiveAt)}
-                      </div>
-                    </div>
-                    <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(termsChecked[module.documentSlug])}
-                        onChange={(event) =>
-                          setTermsChecked((prev) => ({
-                            ...prev,
-                            [module.documentSlug]: event.target.checked,
-                          }))
-                        }
-                      />
-                      Accept this module
-                    </label>
-                  </div>
+            <div className={styles.finishWrap}>
+              <div className={styles.finishIcon}>✓</div>
+              <div className={styles.finishTitle}>You&apos;re all set!</div>
+              <div className={styles.finishSub}>Your artist profile is ready to go</div>
 
-                  {termsHtml[module.documentSlug] ? (
-                    <div className="md-preview mt-3" dangerouslySetInnerHTML={{ __html: termsHtml[module.documentSlug] }} />
-                  ) : (
-                    <div className="mt-2 text-xs text-slate-500">No terms body found.</div>
-                  )}
-                </div>
-              ))}
-
-              <label className="flex items-start gap-2 text-sm font-medium text-slate-800">
-                <input type="checkbox" checked={acceptTerms} onChange={(event) => setAcceptTerms(event.target.checked)} />
-                I accept all modules above.
-              </label>
-
-              <label className="field">
-                Typed name for acceptance
-                <input
-                  value={acceptedName}
-                  onChange={(event) => setAcceptedName(event.target.value)}
-                  placeholder="Type your full name"
-                />
-              </label>
+              <div className={styles.previewTable}>
+                <div><span>Name</span><strong>{resolvedDisplayName}</strong></div>
+                <div><span>Location</span><strong>{[city, country].filter(Boolean).join(", ") || "Not set"}</strong></div>
+                <div><span>Bio</span><strong>{bio.trim().length > 0 ? "Set" : "Not set"}</strong></div>
+                <div><span>Profile images</span><strong>{(avatarUrl ? 1 : 0) + (heroUrl ? 1 : 0) + galleryUrls.length} uploaded</strong></div>
+                <div><span>Consents</span><strong>{[sellOriginals, sellPrints, rental, exhibitions, presentationOnly].filter(Boolean).length} enabled</strong></div>
+              </div>
             </div>
           ) : null}
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
+        <div className={styles.actions}>
           <button type="button" className="btnGhost" disabled={step === 0 || saving} onClick={() => setStep((prev) => Math.max(0, prev - 1))}>
             Back
           </button>
@@ -576,18 +578,18 @@ export default function ArtistsOnboardingPage() {
             </button>
           ) : (
             <button type="button" className="btnPrimary" disabled={saving} onClick={onSubmit}>
-              {saving ? "Submitting..." : onboardingComplete ? "Save changes" : "Submit onboarding"}
+              {saving ? "Submitting..." : "Go to dashboard"}
             </button>
           )}
         </div>
 
         <div className={styles.history}>
-          <div className="text-sm font-semibold text-slate-900">Accepted terms history</div>
-          {acceptedTerms.length === 0 ? <div className="mt-2 text-xs text-slate-500">No acceptance records yet.</div> : null}
+          <div className={styles.historyTitle}>Accepted terms history</div>
+          {acceptedTerms.length === 0 ? <div className={styles.historySub}>No acceptance records yet.</div> : null}
           {acceptedTerms.length > 0 ? (
-            <ul className="mt-2 space-y-2">
+            <ul className={styles.historyList}>
               {acceptedTerms.map((item) => (
-                <li key={item.id} className="rounded bg-slate-50 p-2 text-xs text-slate-700">
+                <li key={item.id}>
                   {item.documentSlug} · v{item.version} · {formatDate(item.acceptedAt)} · {item.acceptedName || "—"}
                 </li>
               ))}

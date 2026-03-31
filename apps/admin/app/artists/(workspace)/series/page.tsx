@@ -1,11 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import EmptyState from "@/app/artists/_components/EmptyState";
-import PageShell from "@/app/artists/_components/PageShell";
-import SectionCard from "@/app/artists/_components/SectionCard";
+import ui from "../workspace-ui.module.css";
 
 type SeriesItem = {
   id: string;
@@ -16,29 +14,34 @@ type SeriesItem = {
   updatedAt?: string;
 };
 
-function fmtDate(value?: string) {
-  if (!value) return "-";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? "-" : d.toLocaleString();
-}
+type Artwork = { productKey: string; seriesId?: string };
 
 export default function ArtistsSeriesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [coverImageUrl, setCoverImageUrl] = useState("");
   const [items, setItems] = useState<SeriesItem[]>([]);
+  const [artworks, setArtworks] = useState<Artwork[]>([]);
 
   const load = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/artists/v3/series", { cache: "no-store" });
-      const payload = (await res.json().catch(() => null)) as { series?: SeriesItem[]; error?: string } | null;
-      if (!res.ok) throw new Error(payload?.error || "Failed to load series");
-      setItems(Array.isArray(payload?.series) ? payload!.series : []);
+      const [seriesRes, artworksRes] = await Promise.all([
+        fetch("/api/artists/v3/series", { cache: "no-store" }),
+        fetch("/api/artists/v2/artworks", { cache: "no-store" }),
+      ]);
+      const seriesPayload = (await seriesRes.json().catch(() => null)) as { series?: SeriesItem[]; error?: string } | null;
+      if (!seriesRes.ok) throw new Error(seriesPayload?.error || "Failed to load series");
+
+      const artworksPayload = (await artworksRes.json().catch(() => null)) as { artworks?: Artwork[] } | null;
+      setItems(Array.isArray(seriesPayload?.series) ? seriesPayload?.series || [] : []);
+      setArtworks(Array.isArray(artworksPayload?.artworks) ? artworksPayload?.artworks || [] : []);
     } catch (err: any) {
       setError(err?.message || "Failed to load series");
     } finally {
@@ -50,9 +53,19 @@ export default function ArtistsSeriesPage() {
     void load();
   }, []);
 
+  const counts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const artwork of artworks) {
+      const key = artwork.seriesId || "";
+      if (key.length === 0) continue;
+      map.set(key, (map.get(key) || 0) + 1);
+    }
+    return map;
+  }, [artworks]);
+
   const onCreate = async (event: FormEvent) => {
     event.preventDefault();
-    if (!name.trim()) {
+    if (name.trim().length === 0) {
       setError("Series name is required.");
       return;
     }
@@ -71,6 +84,7 @@ export default function ArtistsSeriesPage() {
       setName("");
       setDescription("");
       setCoverImageUrl("");
+      setShowCreate(false);
       await load();
     } catch (err: any) {
       setError(err?.message || "Failed to create series");
@@ -79,54 +93,100 @@ export default function ArtistsSeriesPage() {
     }
   };
 
-  return (
-    <PageShell title="Series" subtitle="Create and manage artwork collections">
-      {error ? <div className="mb-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+  const onDelete = async (id: string) => {
+    if (window.confirm("Delete this series?") === false) return;
+    setDeletingId(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/artists/v3/series/${encodeURIComponent(id)}`, { method: "DELETE" });
+      const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) throw new Error(payload?.error || "Failed to delete series");
+      await load();
+    } catch (err: any) {
+      setError(err?.message || "Failed to delete series");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
-      <SectionCard title="New series" subtitle="Group related artworks together">
-        <form className="grid gap-3 md:grid-cols-2" onSubmit={onCreate}>
-          <label className="field">
-            Name
-            <input value={name} onChange={(e) => setName(e.target.value)} required />
-          </label>
-          <label className="field">
-            Cover image URL (optional)
-            <input value={coverImageUrl} onChange={(e) => setCoverImageUrl(e.target.value)} />
-          </label>
-          <label className="field md:col-span-2">
-            Description
-            <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
-          </label>
-          <div className="md:col-span-2 flex justify-end">
+  return (
+    <div>
+      {error ? <div className={ui.error}>{error}</div> : null}
+
+      <div className={ui.headerRow}>
+        <div>
+          <div className={ui.pageTitle}>Series</div>
+          <div className={ui.pageSub}>Organize your artworks into collections</div>
+        </div>
+        <button className="btnPrimary" type="button" onClick={() => setShowCreate((prev) => prev === false)}>
+          Create series
+        </button>
+      </div>
+
+      {showCreate ? (
+        <form className={ui.panel} onSubmit={onCreate}>
+          <div className={ui.cardTitle}>New series</div>
+          <div className={ui.twoCol} style={{ marginTop: 10 }}>
+            <label className={ui.inputField}>
+              Name
+              <input value={name} onChange={(e) => setName(e.target.value)} required />
+            </label>
+            <label className={ui.inputField}>
+              Cover image URL (optional)
+              <input value={coverImageUrl} onChange={(e) => setCoverImageUrl(e.target.value)} />
+            </label>
+            <label className={ui.inputField} style={{ gridColumn: "1 / -1" }}>
+              Description
+              <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
+            </label>
+          </div>
+          <div className={ui.rowActions} style={{ marginTop: 10 }}>
+            <button className="btnGhost" type="button" onClick={() => setShowCreate(false)}>
+              Cancel
+            </button>
             <button className="btnPrimary" type="submit" disabled={saving}>
-              {saving ? "Creating..." : "Create series"}
+              {saving ? "Creating..." : "Save series"}
             </button>
           </div>
         </form>
-      </SectionCard>
-
-      {loading ? <div className="text-sm text-slate-600">Loading series…</div> : null}
-
-      {!loading && items.length === 0 ? (
-        <EmptyState title="No series yet" description="Create your first series to organize artworks." />
       ) : null}
 
-      {!loading && items.length > 0 ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {loading ? <div className={ui.muted}>Loading series...</div> : null}
+      {loading === false && items.length === 0 ? <div className={ui.muted}>No series yet.</div> : null}
+
+      {loading === false && items.length > 0 ? (
+        <div className={ui.seriesGrid}>
           {items.map((item) => (
-            <Link key={item.id} href={`/artists/series/${encodeURIComponent(item.id)}`} className="rounded-xl border border-slate-200 bg-white p-3 hover:bg-slate-50">
+            <div key={item.id} className={ui.seriesCard}>
               {item.coverImageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.coverImageUrl} alt={item.name} className="h-32 w-full rounded object-cover" />
+                <img src={item.coverImageUrl} alt={item.name} className={ui.seriesImage} />
               ) : (
-                <div className="flex h-32 items-center justify-center rounded bg-slate-100 text-xs text-slate-500">No cover image</div>
+                <div className={ui.seriesImage} />
               )}
-              <div className="mt-2 text-sm font-semibold text-slate-900">{item.name}</div>
-              <div className="text-xs text-slate-500">Updated {fmtDate(item.updatedAt)}</div>
-            </Link>
+
+              <div className={ui.seriesBody}>
+                <div className={ui.seriesTitle}>{item.name}</div>
+                <div className={ui.seriesMeta}>{counts.get(item.id) || 0} artworks</div>
+                <div className={ui.seriesDesc}>{item.description || "No description"}</div>
+                <div className={ui.seriesActions}>
+                  <Link href={`/artists/series/${encodeURIComponent(item.id)}`} className="btnGhost">
+                    Edit
+                  </Link>
+                  <button
+                    className="btnGhost"
+                    type="button"
+                    onClick={() => void onDelete(item.id)}
+                    disabled={deletingId === item.id}
+                  >
+                    {deletingId === item.id ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       ) : null}
-    </PageShell>
+    </div>
   );
 }

@@ -177,71 +177,75 @@ function ArtistV2RegisterInner() {
 
   return (
     <div className={styles.authShell}>
+      <button className={styles.topIcon} type="button" aria-label="Theme toggle">
+        <MoonIcon />
+      </button>
       <div className={styles.authWrap}>
         <div className={styles.brand}>ARTCLUB</div>
         <p className={styles.subtitle}>Create your artist account</p>
         <div className={styles.card}>
           <form className={styles.form} onSubmit={handleSubmit}>
-          <label className="field">
-            Registration key
-            <input
-              required
-              value={registrationKey}
-              onChange={(event) => setRegistrationKey(event.target.value)}
-              placeholder="ARK-XXXXXXXXXXXX"
-              disabled={submitting}
-            />
-          </label>
+            <label className="field">
+              Registration key
+              <input
+                required
+                value={registrationKey}
+                onChange={(event) => setRegistrationKey(event.target.value)}
+                placeholder="ARK-XXXXXXXXXXXX"
+                disabled={submitting}
+              />
+              <span className={styles.fieldHint}>Received from ARTCLUB team</span>
+            </label>
 
-          <label className="field">
-            Email
-            <input
-              required
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
-              disabled={submitting}
-            />
-          </label>
+            <label className="field">
+              Email
+              <input
+                required
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="you@example.com"
+                disabled={submitting}
+              />
+            </label>
 
-          <label className="field">
-            Password
-            <input
-              required
-              type={showPassword ? "text" : "password"}
-              autoComplete="new-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="At least 8 characters"
-              disabled={submitting}
-            />
-          </label>
+            <label className="field">
+              Password
+              <input
+                required
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="At least 8 characters"
+                disabled={submitting}
+              />
+            </label>
 
-          <label className="field">
-            Confirm password
-            <input
-              required
-              type={showPassword ? "text" : "password"}
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              placeholder="Repeat password"
-              disabled={submitting}
-            />
-          </label>
+            <label className="field">
+              Confirm password
+              <input
+                required
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                placeholder="Repeat password"
+                disabled={submitting}
+              />
+            </label>
 
-          <label className={styles.row}>
-            <span className="text-sm text-slate-700">Show passwords</span>
-            <input type="checkbox" checked={showPassword} onChange={(event) => setShowPassword(event.target.checked)} />
-          </label>
+            <label className={styles.row}>
+              <span className="text-sm text-slate-700">Show passwords</span>
+              <input type="checkbox" checked={showPassword} onChange={(event) => setShowPassword(event.target.checked)} />
+            </label>
 
-          {error ? <div className={styles.error}>{error}</div> : null}
+            {error ? <div className={styles.error}>{error}</div> : null}
 
-          <button type="submit" className="btnPrimary" disabled={submitting}>
-            {submitting ? "Creating account..." : "Create account"}
-          </button>
+            <button type="submit" className="btnPrimary" disabled={submitting}>
+              {submitting ? "Creating account..." : "Create account"}
+            </button>
           </form>
 
           <div className={styles.footer}>
@@ -254,6 +258,14 @@ function ArtistV2RegisterInner() {
         <div className={styles.legal}>© {new Date().getFullYear()} ARTCLUB</div>
       </div>
     </div>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3c-.07.33-.11.67-.11 1.02a8 8 0 0 0 8 8c.65 0 1.27-.08 1.9-.23Z" />
+    </svg>
   );
 }
 

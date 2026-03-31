@@ -1,10 +1,8 @@
 "use client";
 
-import { ChangeEvent, useEffect, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 
-import EmptyState from "@/app/artists/_components/EmptyState";
-import PageShell from "@/app/artists/_components/PageShell";
-import SectionCard from "@/app/artists/_components/SectionCard";
+import ui from "../workspace-ui.module.css";
 
 type MediaItem = {
   id: string;
@@ -39,6 +37,7 @@ export default function ArtistsMediaPage() {
   const [uploadKind, setUploadKind] = useState<MediaItem["kind"]>("artwork");
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [profile, setProfile] = useState<ProfileState>({ avatarUrl: "", heroUrl: "", galleryUrls: [] });
+  const [tab, setTab] = useState<"profile" | "library">("profile");
 
   const load = async () => {
     setLoading(true);
@@ -57,12 +56,12 @@ export default function ArtistsMediaPage() {
         | null;
       if (!profileRes.ok) throw new Error(profilePayload?.error || "Failed to load profile images");
 
-      setMedia(Array.isArray(mediaPayload?.media) ? mediaPayload!.media : []);
+      setMedia(Array.isArray(mediaPayload?.media) ? mediaPayload?.media || [] : []);
       setProfile({
         avatarUrl: profilePayload?.profile?.profileImages?.avatarUrl || "",
         heroUrl: profilePayload?.profile?.profileImages?.heroUrl || "",
         galleryUrls: Array.isArray(profilePayload?.profile?.profileImages?.galleryUrls)
-          ? profilePayload!.profile!.profileImages!.galleryUrls
+          ? profilePayload?.profile?.profileImages?.galleryUrls || []
           : [],
       });
     } catch (err: any) {
@@ -79,7 +78,7 @@ export default function ArtistsMediaPage() {
   const onUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     event.currentTarget.value = "";
-    if (!files.length) return;
+    if (files.length === 0) return;
 
     setUploading(true);
     setError(null);
@@ -107,7 +106,7 @@ export default function ArtistsMediaPage() {
             previewUrl: uploadPayload?.file?.previewUrl || uploadPayload?.file?.url,
             filename: uploadPayload?.file?.filename || file.name,
             mimeType: uploadPayload?.file?.mimeType || file.type,
-            sizeBytes: uploadPayload?.file?.sizeBytes ?? file.size,
+            sizeBytes: uploadPayload?.file?.sizeBytes || file.size,
           }),
         });
         const savePayload = (await saveRes.json().catch(() => null)) as { error?: string } | null;
@@ -141,6 +140,7 @@ export default function ArtistsMediaPage() {
   const onSaveProfileImages = async () => {
     setSavingProfile(true);
     setError(null);
+    setMessage(null);
     try {
       const res = await fetch("/api/artists/v3/profile", {
         method: "PATCH",
@@ -157,122 +157,193 @@ export default function ArtistsMediaPage() {
     }
   };
 
+  const selectableMedia = useMemo(
+    () => media.filter((item) => item.previewUrl || item.url),
+    [media],
+  );
+
+  const selectAvatar = (url: string) => setProfile((prev) => ({ ...prev, avatarUrl: prev.avatarUrl === url ? "" : url }));
+  const selectHero = (url: string) => setProfile((prev) => ({ ...prev, heroUrl: prev.heroUrl === url ? "" : url }));
+  const toggleGallery = (url: string) =>
+    setProfile((prev) => ({
+      ...prev,
+      galleryUrls: prev.galleryUrls.includes(url)
+        ? prev.galleryUrls.filter((item) => item !== url)
+        : [...prev.galleryUrls, url].slice(0, 3),
+    }));
+
   return (
-    <PageShell title="Media" subtitle="Manage profile images and uploaded assets with live previews">
-      {error ? <div className="mb-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
-      {message ? <div className="mb-3 rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</div> : null}
+    <div>
+      {error ? <div className={ui.error}>{error}</div> : null}
+      {message ? <div className={ui.success}>{message}</div> : null}
 
-      <SectionCard title="Upload" subtitle="Upload images and classify by media type">
-        <div className="grid gap-3 md:grid-cols-[220px_1fr]">
-          <label className="field">
-            Kind
-            <select value={uploadKind} onChange={(e) => setUploadKind(e.target.value as MediaItem["kind"])}>
-              {kindOptions.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="btnGhost inline-flex cursor-pointer items-center justify-center self-end">
-            {uploading ? "Uploading..." : "Upload image(s)"}
-            <input className="hidden" type="file" accept="image/*" multiple disabled={uploading} onChange={onUpload} />
-          </label>
-        </div>
-      </SectionCard>
+      <div className={ui.pageIntro}>
+        <div className={ui.pageTitle}>Media library</div>
+        <div className={ui.pageSub}>Manage your profile images and uploads</div>
+      </div>
 
-      <SectionCard title="Profile images" subtitle="Avatar, hero and gallery selection">
-        <div className="grid gap-3 lg:grid-cols-3">
-          <MediaPicker
-            title="Avatar"
-            selectedUrl={profile.avatarUrl}
-            media={media}
-            onSelect={(url) => setProfile((prev) => ({ ...prev, avatarUrl: prev.avatarUrl === url ? "" : url }))}
-          />
-          <MediaPicker
-            title="Hero"
-            selectedUrl={profile.heroUrl}
-            media={media}
-            onSelect={(url) => setProfile((prev) => ({ ...prev, heroUrl: prev.heroUrl === url ? "" : url }))}
-          />
-          <MediaPicker
-            title="Gallery"
-            selectedUrls={profile.galleryUrls}
-            media={media}
-            multi
-            onSelect={(url) =>
-              setProfile((prev) => ({
-                ...prev,
-                galleryUrls: prev.galleryUrls.includes(url)
-                  ? prev.galleryUrls.filter((item) => item !== url)
-                  : [...prev.galleryUrls, url].slice(0, 10),
-              }))
-            }
-          />
-        </div>
+      <div className={ui.mediaTabs}>
+        <button className={`${ui.mediaTab} ${tab === "profile" ? ui.mediaTabActive : ""}`.trim()} type="button" onClick={() => setTab("profile")}>
+          Profile Images
+        </button>
+        <button className={`${ui.mediaTab} ${tab === "library" ? ui.mediaTabActive : ""}`.trim()} type="button" onClick={() => setTab("library")}>
+          Upload Library
+        </button>
+      </div>
 
-        <div className="mt-3 flex justify-end">
-          <button className="btnPrimary" type="button" onClick={onSaveProfileImages} disabled={savingProfile}>
-            {savingProfile ? "Saving..." : "Save profile images"}
-          </button>
-        </div>
-      </SectionCard>
+      {loading ? <div className={ui.muted} style={{ marginTop: 12 }}>Loading media...</div> : null}
 
-      {loading ? <div className="text-sm text-slate-600">Loading media…</div> : null}
-
-      {!loading && media.length === 0 ? (
-        <EmptyState title="No media uploaded" description="Upload images to use them in profile and artworks." />
-      ) : null}
-
-      {!loading && media.length > 0 ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {media.map((item) => (
-            <div key={item.id} className="rounded border border-slate-200 p-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={item.previewUrl || item.url} alt={item.filename} className="h-32 w-full rounded object-cover" />
-              <div className="mt-1 text-xs font-semibold text-slate-800">{item.filename || "media"}</div>
-              <div className="text-xs text-slate-500">{item.kind}</div>
-              <button className="btnGhost mt-2 w-full" type="button" onClick={() => void onDelete(item.id)} disabled={deletingId === item.id}>
-                {deletingId === item.id ? "Deleting..." : "Delete"}
+      {loading === false && tab === "profile" ? (
+        <>
+          <div className={ui.mediaSection}>
+            <div className={ui.mediaLabel}>Avatar</div>
+            <div className={ui.rowActions} style={{ marginTop: 10 }}>
+              {profile.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={profile.avatarUrl} alt="Avatar" className={ui.mediaAvatar} />
+              ) : (
+                <div className={ui.mediaAvatar} />
+              )}
+              <button className="btnGhost" type="button" onClick={() => setProfile((prev) => ({ ...prev, avatarUrl: "" }))}>
+                Remove
               </button>
             </div>
-          ))}
+            <div className={ui.mediaLibraryGrid}>
+              {selectableMedia.map((item) => {
+                const url = item.previewUrl || item.url;
+                const selected = profile.avatarUrl === url;
+                return (
+                  <button
+                    key={`avatar-${item.id}`}
+                    type="button"
+                    className={`${ui.mediaLibraryTile} ${selected ? ui.mediaTileSelected : ""}`.trim()}
+                    onClick={() => selectAvatar(url)}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt={item.filename} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className={ui.mediaSection}>
+            <div className={ui.mediaLabel}>Header image</div>
+            <div className={ui.mediaPreview}>
+              {profile.heroUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={profile.heroUrl} alt="Header" style={{ maxHeight: 240, width: "100%" }} />
+              ) : (
+                <div className={ui.bigDrop}>No header image selected.</div>
+              )}
+            </div>
+            <div className={ui.mediaLibraryGrid}>
+              {selectableMedia.map((item) => {
+                const url = item.previewUrl || item.url;
+                const selected = profile.heroUrl === url;
+                return (
+                  <button
+                    key={`hero-${item.id}`}
+                    type="button"
+                    className={`${ui.mediaLibraryTile} ${selected ? ui.mediaTileSelected : ""}`.trim()}
+                    onClick={() => selectHero(url)}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt={item.filename} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className={ui.mediaSection}>
+            <div className={ui.mediaLabel}>Gallery images (up to 3)</div>
+            <div className={ui.mediaGallery}>
+              {profile.galleryUrls.map((url) => (
+                <div key={url} className={ui.mediaGalleryItem}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt="Gallery" />
+                </div>
+              ))}
+            </div>
+            <div className={ui.mediaLibraryGrid}>
+              {selectableMedia.map((item) => {
+                const url = item.previewUrl || item.url;
+                const selected = profile.galleryUrls.includes(url);
+                return (
+                  <button
+                    key={`gallery-${item.id}`}
+                    type="button"
+                    className={`${ui.mediaLibraryTile} ${selected ? ui.mediaTileSelected : ""}`.trim()}
+                    onClick={() => toggleGallery(url)}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt={item.filename} />
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className={ui.rowActions} style={{ marginTop: 12 }}>
+              <button className="btnPrimary" type="button" onClick={onSaveProfileImages} disabled={savingProfile}>
+                {savingProfile ? "Saving..." : "Save profile images"}
+              </button>
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      {loading === false && tab === "library" ? (
+        <div className={ui.mediaSection}>
+          <div className={ui.headerRow}>
+            <div className={ui.mediaLabel}>Upload library</div>
+            <div className={ui.rowActions}>
+              <label className="btnGhost">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  style={{ display: "none" }}
+                  disabled={uploading}
+                  onChange={onUpload}
+                />
+                {uploading ? "Uploading..." : "Upload images"}
+              </label>
+              <label className={ui.inputField}>
+                Kind
+                <select value={uploadKind} onChange={(e) => setUploadKind(e.target.value as MediaItem["kind"])}>
+                  {kindOptions.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          {media.length === 0 ? <div className={ui.muted}>No media uploaded yet.</div> : null}
+          {media.length > 0 ? (
+            <div className={ui.mediaLibraryGrid}>
+              {media.map((item) => (
+                <div key={item.id} className={ui.mediaLibraryTile}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={item.previewUrl || item.url} alt={item.filename} />
+                  <button
+                    type="button"
+                    className="btnGhost"
+                    style={{ position: "absolute", right: 8, top: 8 }}
+                    onClick={() => void onDelete(item.id)}
+                    disabled={deletingId === item.id}
+                  >
+                    {deletingId === item.id ? "..." : "Delete"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
-    </PageShell>
-  );
-}
-
-type MediaPickerProps = {
-  title: string;
-  media: MediaItem[];
-  selectedUrl?: string;
-  selectedUrls?: string[];
-  multi?: boolean;
-  onSelect: (url: string) => void;
-};
-
-function MediaPicker({ title, media, selectedUrl, selectedUrls = [], multi = false, onSelect }: MediaPickerProps) {
-  return (
-    <div className="rounded border border-slate-200 p-2">
-      <div className="text-sm font-semibold text-slate-900">{title}</div>
-      <div className="mt-2 grid max-h-72 gap-2 overflow-auto">
-        {media.map((item) => {
-          const url = item.previewUrl || item.url;
-          const selected = multi ? selectedUrls.includes(url) : selectedUrl === url;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onSelect(url)}
-              className={`rounded border p-1 text-left ${selected ? "border-slate-900" : "border-slate-200"}`}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={item.filename} className="h-20 w-full rounded object-cover" />
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }

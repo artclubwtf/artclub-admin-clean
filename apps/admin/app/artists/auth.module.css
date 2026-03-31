@@ -5,6 +5,22 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
+  position: relative;
+}
+
+.topIcon {
+  position: absolute;
+  right: 18px;
+  top: 16px;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: #111111;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .authWrap {
@@ -14,8 +30,9 @@
 
 .brand {
   text-align: center;
-  font-size: 42px;
-  letter-spacing: -0.03em;
+  font-size: 56px;
+  line-height: 1;
+  letter-spacing: -0.05em;
   font-weight: 800;
   color: #111111;
 }
@@ -28,17 +45,23 @@
 }
 
 .card {
-  margin-top: 22px;
+  margin-top: 20px;
   background: #ffffff;
-  box-shadow: 0 16px 34px rgba(17, 17, 17, 0.08);
-  border-radius: 18px;
+  box-shadow: 0 12px 32px rgba(17, 17, 17, 0.08);
+  border-radius: 16px;
   padding: 20px;
 }
 
 .form {
-  margin-top: 16px;
+  margin-top: 12px;
   display: grid;
   gap: 12px;
+}
+
+.fieldHint {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #9ca3af;
 }
 
 .row {
@@ -56,14 +79,14 @@
 }
 
 .legal {
-  margin-top: 14px;
+  margin-top: 16px;
   text-align: center;
   color: #9ca3af;
   font-size: 12px;
 }
 
 .error {
-  border-radius: 12px;
+  border-radius: 10px;
   background: rgba(220, 38, 38, 0.1);
   color: #b91c1c;
   padding: 8px 10px;

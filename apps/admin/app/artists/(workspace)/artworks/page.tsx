@@ -3,9 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import EmptyState from "@/app/artists/_components/EmptyState";
-import PageShell from "@/app/artists/_components/PageShell";
-import SectionCard from "@/app/artists/_components/SectionCard";
+import ui from "../workspace-ui.module.css";
 
 type Artwork = {
   id: string;
@@ -31,7 +29,7 @@ export default function ArtistsArtworksPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [seriesFilter, setSeriesFilter] = useState("all");
   const [saleFilter, setSaleFilter] = useState("all");
-  const [mode, setMode] = useState<"grid" | "list">("grid");
+  const [syncFilter, setSyncFilter] = useState("all");
 
   useEffect(() => {
     let active = true;
@@ -48,8 +46,8 @@ export default function ArtistsArtworksPage() {
         const seriesPayload = (await seriesRes.json().catch(() => null)) as { series?: Series[] } | null;
 
         if (active) {
-          setItems(Array.isArray(artworksPayload?.artworks) ? artworksPayload!.artworks : []);
-          setSeries(Array.isArray(seriesPayload?.series) ? seriesPayload!.series : []);
+          setItems(Array.isArray(artworksPayload?.artworks) ? artworksPayload?.artworks || [] : []);
+          setSeries(Array.isArray(seriesPayload?.series) ? seriesPayload?.series || [] : []);
         }
       } catch (err: any) {
         if (active) setError(err?.message || "Failed to load artworks");
@@ -69,104 +67,141 @@ export default function ArtistsArtworksPage() {
       if (seriesFilter !== "all" && (item.seriesId || "") !== seriesFilter) return false;
       if (saleFilter === "for_sale" && item.forSale === false) return false;
       if (saleFilter === "not_for_sale" && item.forSale !== false) return false;
+      if (syncFilter === "db_only" && item.status !== "db_only") return false;
+      if (syncFilter === "synced" && item.status === "db_only") return false;
       return true;
     });
-  }, [items, saleFilter, seriesFilter, statusFilter]);
+  }, [items, saleFilter, seriesFilter, statusFilter, syncFilter]);
+
+  const updateArtwork = async (productKey: string, patch: { forSale?: boolean; allowPrints?: boolean }) => {
+    setError(null);
+    const previous = items;
+    setItems((prev) =>
+      prev.map((item) => (item.productKey === productKey ? { ...item, ...patch } : item)),
+    );
+
+    try {
+      const res = await fetch(`/api/artists/v3/artworks/${encodeURIComponent(productKey)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) throw new Error(payload?.error || "Failed to update artwork");
+    } catch (err: any) {
+      setItems(previous);
+      setError(err?.message || "Failed to update artwork");
+    }
+  };
 
   return (
-    <PageShell
-      title="Artworks"
-      subtitle="Manage your artwork catalog, selling options and print readiness"
-      actions={
+    <div>
+      {error ? <div className={ui.error}>{error}</div> : null}
+      <div className={ui.headerRow}>
+        <div>
+          <div className={ui.pageTitle}>Artworks</div>
+          <div className={ui.pageSub}>Manage your uploaded artworks and selling options</div>
+        </div>
         <Link href="/artists/artworks/new" className="btnPrimary">
           New artwork
         </Link>
-      }
-    >
-      {error ? <div className="mb-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+      </div>
 
-      <SectionCard title="Filters" subtitle="Status, series and sale state">
-        <div className="grid gap-3 md:grid-cols-5">
-          <label className="field">
-            Status
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="all">All</option>
-              <option value="db_only">db_only</option>
-              <option value="draft">draft</option>
-              <option value="active">active</option>
-              <option value="archived">archived</option>
-            </select>
-          </label>
-          <label className="field">
-            Series
-            <select value={seriesFilter} onChange={(e) => setSeriesFilter(e.target.value)}>
-              <option value="all">All</option>
-              {series.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            Sale
-            <select value={saleFilter} onChange={(e) => setSaleFilter(e.target.value)}>
-              <option value="all">All</option>
-              <option value="for_sale">For sale</option>
-              <option value="not_for_sale">Not for sale</option>
-            </select>
-          </label>
-          <label className="field">
-            View
-            <select value={mode} onChange={(e) => setMode(e.target.value as "grid" | "list")}>
-              <option value="grid">Grid</option>
-              <option value="list">List</option>
-            </select>
-          </label>
-        </div>
-      </SectionCard>
+      <div className={ui.filterBar}>
+        <label className={ui.filterField}>
+          Status
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="all">All</option>
+            <option value="db_only">db_only</option>
+            <option value="draft">draft</option>
+            <option value="active">active</option>
+            <option value="archived">archived</option>
+          </select>
+        </label>
 
-      {loading ? <div className="text-sm text-slate-600">Loading artworks…</div> : null}
+        <label className={ui.filterField}>
+          Series
+          <select value={seriesFilter} onChange={(e) => setSeriesFilter(e.target.value)}>
+            <option value="all">All</option>
+            {series.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
 
-      {!loading && filtered.length === 0 ? (
-        <EmptyState
-          title="No artworks found"
-          description="Create your first artwork draft or broaden filters."
-          action={
-            <Link href="/artists/artworks/new" className="btnPrimary">
-              Create artwork
-            </Link>
-          }
-        />
-      ) : null}
+        <label className={ui.filterField}>
+          For sale
+          <select value={saleFilter} onChange={(e) => setSaleFilter(e.target.value)}>
+            <option value="all">All</option>
+            <option value="for_sale">For sale</option>
+            <option value="not_for_sale">Not for sale</option>
+          </select>
+        </label>
 
-      {!loading && filtered.length > 0 ? (
-        <div className={mode === "grid" ? "grid gap-3 sm:grid-cols-2 xl:grid-cols-3" : "space-y-3"}>
+        <label className={ui.filterField}>
+          Sync
+          <select value={syncFilter} onChange={(e) => setSyncFilter(e.target.value)}>
+            <option value="all">All</option>
+            <option value="db_only">DB only</option>
+            <option value="synced">Synced</option>
+          </select>
+        </label>
+      </div>
+
+      {loading ? <div className={ui.muted}>Loading artworks...</div> : null}
+      {loading === false && filtered.length === 0 ? <div className={ui.muted}>No artworks found.</div> : null}
+
+      {loading === false && filtered.length > 0 ? (
+        <div className={ui.artGrid}>
           {filtered.map((item) => {
-            const preview = item.images?.thumbUrl || item.images?.mediumUrl || item.images?.originalUrl || "";
+            const image = item.images?.thumbUrl || item.images?.mediumUrl || item.images?.originalUrl || "";
+            const forSale = item.forSale !== false;
+            const allowPrints = item.allowPrints === true;
             return (
-              <Link
-                key={item.productKey}
-                href={`/artists/artworks/${encodeURIComponent(item.productKey)}`}
-                className="rounded-xl border border-slate-200 bg-white p-3 hover:bg-slate-50"
-              >
-                {preview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={preview} alt={item.title} className="h-40 w-full rounded object-cover" />
-                ) : (
-                  <div className="flex h-40 items-center justify-center rounded bg-slate-100 text-xs text-slate-500">No preview image</div>
-                )}
-                <div className="mt-2 text-sm font-semibold text-slate-900">{item.title}</div>
-                <div className="text-xs text-slate-500">
-                  {item.status} · {item.seriesName || "No series"}
+              <div key={item.productKey} className={ui.artCard}>
+                <Link href={`/artists/artworks/${encodeURIComponent(item.productKey)}`} className={ui.artImageWrap}>
+                  {image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={image} alt={item.title} className={ui.artImage} />
+                  ) : null}
+                  <span className={ui.artStatus}>{item.status === "db_only" ? "DB only" : "Synced"}</span>
+                </Link>
+
+                <div className={ui.artBody}>
+                  <Link href={`/artists/artworks/${encodeURIComponent(item.productKey)}`} className={ui.artTitle}>
+                    {item.title}
+                  </Link>
+                  <div className={ui.artMeta}>{item.seriesName || "No series"}</div>
+
+                  <div className={ui.toggleRow}>
+                    <span>For sale</span>
+                    <label className={`${ui.switch} ${forSale ? ui.switchOn : ""}`.trim()}>
+                      <input
+                        type="checkbox"
+                        checked={forSale}
+                        onChange={(e) => void updateArtwork(item.productKey, { forSale: e.target.checked })}
+                      />
+                    </label>
+                  </div>
+
+                  <div className={ui.toggleRow}>
+                    <span>Prints enabled</span>
+                    <label className={`${ui.switch} ${allowPrints ? ui.switchOn : ""}`.trim()}>
+                      <input
+                        type="checkbox"
+                        checked={allowPrints}
+                        onChange={(e) => void updateArtwork(item.productKey, { allowPrints: e.target.checked })}
+                      />
+                    </label>
+                  </div>
                 </div>
-                <div className="text-xs text-slate-500">forSale: {item.forSale === false ? "no" : "yes"}</div>
-                <div className="text-xs text-slate-500">prints: {item.allowPrints ? "enabled" : "disabled"}</div>
-              </Link>
+              </div>
             );
           })}
         </div>
       ) : null}
-    </PageShell>
+    </div>
   );
 }

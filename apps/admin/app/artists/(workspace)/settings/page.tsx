@@ -3,8 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
 
-import PageShell from "@/app/artists/_components/PageShell";
-import SectionCard from "@/app/artists/_components/SectionCard";
+import ui from "../workspace-ui.module.css";
 
 type Consents = {
   allowOriginalSales: boolean;
@@ -38,7 +37,9 @@ export default function ArtistsSettingsPage() {
   });
   const [email, setEmail] = useState("");
   const [artistKey, setArtistKey] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -111,6 +112,10 @@ export default function ArtistsSettingsPage() {
       setError("Password must be at least 8 characters.");
       return;
     }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
 
     setSavingPassword(true);
     setError(null);
@@ -123,7 +128,9 @@ export default function ArtistsSettingsPage() {
       });
       const payload = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) throw new Error(payload?.error || "Failed to change password");
+      setCurrentPassword("");
       setPassword("");
+      setConfirmPassword("");
       setMessage("Password updated.");
     } catch (err: any) {
       setError(err?.message || "Failed to change password");
@@ -133,89 +140,135 @@ export default function ArtistsSettingsPage() {
   };
 
   return (
-    <PageShell title="Settings" subtitle="Consents, account and workspace status">
-      {error ? <div className="mb-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
-      {message ? <div className="mb-3 rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</div> : null}
-      {loading ? <div className="text-sm text-slate-600">Loading settings…</div> : null}
+    <div>
+      {error ? <div className={ui.error}>{error}</div> : null}
+      {message ? <div className={ui.success}>{message}</div> : null}
+      {loading ? <div className={ui.muted}>Loading settings...</div> : null}
 
-      {!loading ? (
-        <div className="grid gap-4">
-          <SectionCard title="Consents" subtitle="Update permissions and collaboration preferences">
-            <div className="grid gap-2 text-sm text-slate-700">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={consents.allowOriginalSales}
-                  onChange={(e) => setConsents((prev) => ({ ...prev, allowOriginalSales: e.target.checked }))}
-                />
-                Sell originals (30% ARTCLUB)
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={consents.allowPrintSales}
-                  onChange={(e) => setConsents((prev) => ({ ...prev, allowPrintSales: e.target.checked }))}
-                />
-                Sell prints/editions (artist receives 40% license fee)
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={consents.allowRental}
-                  onChange={(e) => setConsents((prev) => ({ ...prev, allowRental: e.target.checked }))}
-                />
-                Rent artworks (30% ARTCLUB on artwork fee)
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={consents.allowExhibitions}
-                  onChange={(e) => setConsents((prev) => ({ ...prev, allowExhibitions: e.target.checked }))}
-                />
-                Exhibition inquiries allowed
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={consents.presentationOnly}
-                  onChange={(e) => setConsents((prev) => ({ ...prev, presentationOnly: e.target.checked }))}
-                />
-                Presentation-only profile
-              </label>
+      {loading === false ? (
+        <div className={ui.inputRow}>
+          <div className={ui.pageIntro}>
+            <div className={ui.pageTitle}>Settings</div>
+            <div className={ui.pageSub}>Manage your account and preferences</div>
+          </div>
+
+          <div className={ui.panel}>
+            <div className={ui.cardTitle}>Consents</div>
+            <div className={ui.pageSub}>Control how ARTCLUB can work with your artworks</div>
+
+            <div className={ui.settingsGroup} style={{ marginTop: 10 }}>
+              <div className={ui.settingsRow}>
+                <div>
+                  <div className={ui.settingsTitle}>ARTCLUB may sell my originals</div>
+                  <div className={ui.settingsSub}>30% platform fee on sales</div>
+                </div>
+                <label className={`${ui.switch} ${consents.allowOriginalSales ? ui.switchOn : ""}`.trim()}>
+                  <input
+                    type="checkbox"
+                    checked={consents.allowOriginalSales}
+                    onChange={(e) => setConsents((prev) => ({ ...prev, allowOriginalSales: e.target.checked }))}
+                  />
+                </label>
+              </div>
+
+              <div className={ui.settingsRow}>
+                <div>
+                  <div className={ui.settingsTitle}>ARTCLUB may sell prints/editions</div>
+                  <div className={ui.settingsSub}>Artist gets 40% license fee</div>
+                </div>
+                <label className={`${ui.switch} ${consents.allowPrintSales ? ui.switchOn : ""}`.trim()}>
+                  <input
+                    type="checkbox"
+                    checked={consents.allowPrintSales}
+                    onChange={(e) => setConsents((prev) => ({ ...prev, allowPrintSales: e.target.checked }))}
+                  />
+                </label>
+              </div>
+
+              <div className={ui.settingsRow}>
+                <div>
+                  <div className={ui.settingsTitle}>ARTCLUB may rent my artworks</div>
+                  <div className={ui.settingsSub}>30% platform fee on rental fees</div>
+                </div>
+                <label className={`${ui.switch} ${consents.allowRental ? ui.switchOn : ""}`.trim()}>
+                  <input
+                    type="checkbox"
+                    checked={consents.allowRental}
+                    onChange={(e) => setConsents((prev) => ({ ...prev, allowRental: e.target.checked }))}
+                  />
+                </label>
+              </div>
+
+              <div className={ui.settingsRow}>
+                <div>
+                  <div className={ui.settingsTitle}>ARTCLUB may contact me for exhibitions</div>
+                  <div className={ui.settingsSub}>We&apos;ll reach out with opportunities</div>
+                </div>
+                <label className={`${ui.switch} ${consents.allowExhibitions ? ui.switchOn : ""}`.trim()}>
+                  <input
+                    type="checkbox"
+                    checked={consents.allowExhibitions}
+                    onChange={(e) => setConsents((prev) => ({ ...prev, allowExhibitions: e.target.checked }))}
+                  />
+                </label>
+              </div>
+
+              <div className={ui.settingsRow}>
+                <div>
+                  <div className={ui.settingsTitle}>Presentation-only profile</div>
+                  <div className={ui.settingsSub}>Showcase only, no sales</div>
+                </div>
+                <label className={`${ui.switch} ${consents.presentationOnly ? ui.switchOn : ""}`.trim()}>
+                  <input
+                    type="checkbox"
+                    checked={consents.presentationOnly}
+                    onChange={(e) => setConsents((prev) => ({ ...prev, presentationOnly: e.target.checked }))}
+                  />
+                </label>
+              </div>
             </div>
-            <div className="mt-3 flex justify-end">
+
+            <div className={ui.rowActions} style={{ marginTop: 12 }}>
               <button className="btnPrimary" type="button" onClick={saveConsents} disabled={savingConsents}>
                 {savingConsents ? "Saving..." : "Save consents"}
               </button>
             </div>
-          </SectionCard>
+          </div>
 
-          <SectionCard title="Account" subtitle="Change your password and manage session">
-            <form className="grid gap-3 md:grid-cols-2" onSubmit={onChangePassword}>
-              <label className="field">
+          <div className={ui.panel}>
+            <div className={ui.cardTitle}>Account</div>
+            <div className={ui.pageSub}>Status: active · {artistKey || "—"}</div>
+
+            <form className={ui.inputRow} style={{ marginTop: 10 }} onSubmit={onChangePassword}>
+              <label className={ui.inputField}>
                 Email
                 <input value={email} readOnly />
               </label>
-              <label className="field">
-                Artist key
-                <input value={artistKey} readOnly />
+              <label className={ui.inputField}>
+                Current password
+                <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
               </label>
-              <label className="field md:col-span-2">
+              <label className={ui.inputField}>
                 New password
                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} />
               </label>
-              <div className="md:col-span-2 flex justify-between gap-2">
-                <button className="btnGhost" type="button" onClick={() => signOut({ callbackUrl: "/artists/login" })}>
-                  Logout
-                </button>
+              <label className={ui.inputField}>
+                Confirm new password
+                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} minLength={8} />
+              </label>
+
+              <div className={ui.rowActions}>
                 <button className="btnPrimary" type="submit" disabled={savingPassword}>
-                  {savingPassword ? "Updating..." : "Change password"}
+                  {savingPassword ? "Updating..." : "Update password"}
+                </button>
+                <button className={ui.btnDanger} type="button" onClick={() => signOut({ callbackUrl: "/artists/login" })}>
+                  Logout
                 </button>
               </div>
             </form>
-          </SectionCard>
+          </div>
         </div>
       ) : null}
-    </PageShell>
+    </div>
   );
 }
