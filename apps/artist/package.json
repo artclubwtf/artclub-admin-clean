@@ -1,0 +1,26 @@
+{
+  "name": "artist",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build --webpack",
+    "start": "sh -c 'next start -p \"${PORT:-3000}\"'"
+  },
+  "dependencies": {
+    "@artclub/api-client": "workspace:*",
+    "@artclub/models": "workspace:*",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "next": "16.0.10",
+    "react": "19.2.1",
+    "react-dom": "19.2.1",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  --font-artist-sans: "Avenir Next", "Helvetica Neue", "Segoe UI", sans-serif;
+  --font-artist-mono: "SF Mono", "IBM Plex Mono", "Menlo", monospace;
+}
+
+html {
+  background: #ffffff;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top, rgba(15, 23, 42, 0.04), transparent 28%),
+    #ffffff;
+  color: #0a0a0a;
+  font-family: var(--font-artist-sans), sans-serif;
+}
+
+::selection {
+  background: rgba(10, 10, 10, 0.08);
+}
+
+a,
+button,
+input {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+code {
+  font-family: var(--font-artist-mono), monospace;
+}

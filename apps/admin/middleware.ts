@@ -24,12 +24,6 @@ function isEnabled(rawValue: string | undefined, fallback = false) {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const artistsV3Enabled = isEnabled(process.env.ARTISTS_V3_ENABLED, true);
-  const isPublicArtistsEntry =
-    pathname === "/artists/register" ||
-    pathname === "/artists/register/" ||
-    pathname === "/artists/login" ||
-    pathname === "/artists/login/";
 
   const isApiPath = pathname.startsWith("/api");
   const isAdminPath = pathname.startsWith("/admin");
@@ -105,14 +99,15 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  if (!isAdminPath && !isArtistPath && !isArtistsPath) return NextResponse.next();
+  if (isArtistPath || isArtistsPath) {
+    return NextResponse.next();
+  }
+
+  if (!isAdminPath) return NextResponse.next();
 
   try {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) {
-      if (isArtistsPath && isPublicArtistsEntry) return NextResponse.next();
-      if (pathname === "/artist" || pathname === "/artist/") return NextResponse.redirect(new URL("/artists/register", req.url));
-      if (isArtistsPath || isArtistPath) return redirectToArtistsLogin(req);
       return redirectToLogin(req);
     }
 
@@ -123,60 +118,8 @@ export async function middleware(req: NextRequest) {
       }
       return NextResponse.next();
     }
-
-    if (isArtistPath) {
-      if (token.role !== "artist") {
-        const fallback = token.role === "team" ? "/admin" : "/artists/login";
-        return NextResponse.redirect(new URL(fallback, req.url));
-      }
-
-      if (token.mustChangePassword) {
-        if (!pathname.startsWith("/artist/change-password")) {
-          const changeUrl = new URL("/artist/change-password", req.url);
-          changeUrl.searchParams.set("callbackUrl", "/artists");
-          return NextResponse.redirect(changeUrl);
-        }
-        return NextResponse.next();
-      }
-
-      if (pathname.startsWith("/artist/change-password")) return NextResponse.next();
-      return NextResponse.redirect(new URL("/artists", req.url));
-    }
-
-    if (isArtistsPath) {
-      if (!artistsV3Enabled && !isPublicArtistsEntry) return NextResponse.next();
-
-      if (isPublicArtistsEntry) {
-        if (token.role === "team") return NextResponse.redirect(new URL("/admin", req.url));
-        if (token.role === "customer") return NextResponse.redirect(new URL("/account", req.url));
-        if (token.role === "artist") {
-          return NextResponse.redirect(new URL("/artists", req.url));
-        }
-        return NextResponse.next();
-      }
-
-      if (token.role !== "artist") {
-        const fallback = token.role === "team" ? "/admin" : "/artists/login";
-        return NextResponse.redirect(new URL(fallback, req.url));
-      }
-
-      const artistKey = (token as { artistKey?: string }).artistKey;
-      const onboardingComplete = (token as { onboardingComplete?: boolean }).onboardingComplete === true;
-      if (!artistKey) {
-        return NextResponse.redirect(new URL("/artists/register", req.url));
-      }
-
-      if (token.mustChangePassword && !pathname.startsWith("/artist/change-password")) {
-        const changeUrl = new URL("/artist/change-password", req.url);
-        changeUrl.searchParams.set("callbackUrl", pathname + req.nextUrl.search);
-        return NextResponse.redirect(changeUrl);
-      }
-
-      return NextResponse.next();
-    }
   } catch (err) {
     console.error("Middleware auth error", err);
-    if (isArtistsPath || isArtistPath) return redirectToArtistsLogin(req);
     return redirectToLogin(req);
   }
 

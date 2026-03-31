@@ -1,17 +1,12 @@
 import type { ReactNode } from "react";
 
-import ArtistShell from "@/components/artist/ArtistShell";
-import "./artist.css";
+import ArtistFrontendDeprecated from "@/components/artist/ArtistFrontendDeprecated";
 
 export const metadata = {
-  title: "Artist Portal | Artclub",
-  description: "Artist tools and updates",
+  title: "Artist Area Moved | Artclub",
+  description: "Legacy artist frontend is deprecated in admin.",
 };
 
-export default function ArtistLayout({ children }: { children: ReactNode }) {
-  return (
-    <div className="artist-app">
-      <ArtistShell>{children}</ArtistShell>
-    </div>
-  );
+export default function ArtistLayout({ children: _children }: { children: ReactNode }) {
+  return <ArtistFrontendDeprecated scope="artist" />;
 }

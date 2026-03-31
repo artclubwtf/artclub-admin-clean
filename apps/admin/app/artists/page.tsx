@@ -1,5 +1,5 @@
 import ArtistFrontendDeprecated from "@/components/artist/ArtistFrontendDeprecated";
 
-export default function ArtistsOnboardingDeprecatedPage() {
+export default function ArtistsDeprecatedPage() {
   return <ArtistFrontendDeprecated scope="artists" />;
 }
