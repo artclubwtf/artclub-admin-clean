@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { ImageUploader } from "@/components/forms/ImageUploader";
+import { MultiStepForm } from "@/components/forms/MultiStepForm";
 import { StatusMessage } from "@/components/forms/StatusMessage";
 import { Textarea } from "@/components/forms/Textarea";
 import { Button } from "@/components/primitives/Button";
@@ -185,37 +186,93 @@ function EducationForm({
   submitLabel: string;
 }) {
   const logoItems = asSingleMedia(item.imageUrl, "other", "Logo");
+  const [step, setStep] = useState(0);
+  const [stepError, setStepError] = useState<string | null>(null);
+
+  const steps = [
+    { key: "basic", title: "Basic info", description: "Set the school, degree and field of study." },
+    { key: "dates", title: "Dates", description: "Add the time period and optional grade." },
+    { key: "details", title: "Details", description: "Add description, activities, courses and an image." },
+    { key: "review", title: "Review", description: "Check the education entry before saving." },
+  ];
 
   function handleLogoChange(items: ArtistMediaItem[]) {
     onChange({ ...item, imageUrl: items[0]?.url || "" });
   }
 
+  function validateCurrentStep() {
+    if (step === 0 && !item.school.trim()) return "Enter a school.";
+    if (step === 1 && !item.startDate) return "Enter a start date.";
+    return null;
+  }
+
   return (
-    <div className="space-y-4 rounded-[2rem] bg-neutral-50 p-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Input label="School" value={item.school} onChange={(event) => onChange({ ...item, school: event.target.value })} />
-        <Input label="Degree" value={item.degree} onChange={(event) => onChange({ ...item, degree: event.target.value })} />
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Input label="Field of study" value={item.fieldOfStudy} onChange={(event) => onChange({ ...item, fieldOfStudy: event.target.value })} />
-        <Input label="Grade" value={item.grade} onChange={(event) => onChange({ ...item, grade: event.target.value })} />
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Input label="Start date" type="date" value={item.startDate} onChange={(event) => onChange({ ...item, startDate: event.target.value })} />
-        <Input label="End date" type="date" value={item.endDate} onChange={(event) => onChange({ ...item, endDate: event.target.value })} />
-      </div>
-      <Textarea label="Activities" value={item.activities} onChange={(event) => onChange({ ...item, activities: event.target.value })} />
-      <Textarea label="Courses" value={item.courses} onChange={(event) => onChange({ ...item, courses: event.target.value })} />
-      <Textarea label="Description" value={item.description} onChange={(event) => onChange({ ...item, description: event.target.value })} />
-      <ImageUploader label="Logo or image" kind="other" items={logoItems} onChange={handleLogoChange} />
-      <div className="flex flex-wrap gap-3">
-        <Button type="button" onClick={onSubmit}>
-          {submitLabel}
-        </Button>
-        <Button type="button" tone="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
+    <div className="rounded-[2rem] bg-neutral-50 p-4">
+      <MultiStepForm
+        steps={steps}
+        currentStep={step}
+        onBack={() => {
+          setStepError(null);
+          setStep((current) => Math.max(current - 1, 0));
+        }}
+        onNext={() => {
+          const error = validateCurrentStep();
+          if (error) {
+            setStepError(error);
+            return;
+          }
+          setStepError(null);
+          setStep((current) => Math.min(current + 1, steps.length - 1));
+        }}
+        onSubmit={() => void onSubmit()}
+        canGoBack={step > 0}
+        isLastStep={step === steps.length - 1}
+        submitLabel={submitLabel}
+        footerHint={stepError ? <StatusMessage tone="error">{stepError}</StatusMessage> : null}
+      >
+        {step === 0 ? (
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input label="School" value={item.school} onChange={(event) => onChange({ ...item, school: event.target.value })} />
+              <Input label="Degree" value={item.degree} onChange={(event) => onChange({ ...item, degree: event.target.value })} />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input label="Field of study" value={item.fieldOfStudy} onChange={(event) => onChange({ ...item, fieldOfStudy: event.target.value })} />
+              <Input label="Grade" value={item.grade} onChange={(event) => onChange({ ...item, grade: event.target.value })} />
+            </div>
+          </div>
+        ) : null}
+        {step === 1 ? (
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input label="Start date" type="date" value={item.startDate} onChange={(event) => onChange({ ...item, startDate: event.target.value })} />
+              <Input label="End date" type="date" value={item.endDate} onChange={(event) => onChange({ ...item, endDate: event.target.value })} />
+            </div>
+          </div>
+        ) : null}
+        {step === 2 ? (
+          <div className="space-y-4">
+            <Textarea label="Activities" value={item.activities} onChange={(event) => onChange({ ...item, activities: event.target.value })} />
+            <Textarea label="Courses" value={item.courses} onChange={(event) => onChange({ ...item, courses: event.target.value })} />
+            <Textarea label="Description" value={item.description} onChange={(event) => onChange({ ...item, description: event.target.value })} />
+            <ImageUploader label="Logo or image" kind="other" items={logoItems} onChange={handleLogoChange} />
+          </div>
+        ) : null}
+        {step === 3 ? (
+          <div className="rounded-[1.75rem] bg-white px-4 py-4 text-sm leading-7 text-neutral-600">
+            <div><span className="font-medium text-neutral-900">School:</span> {item.school || "Not set"}</div>
+            <div><span className="font-medium text-neutral-900">Degree:</span> {[item.degree, item.fieldOfStudy].filter(Boolean).join(" · ") || "Not set"}</div>
+            <div><span className="font-medium text-neutral-900">Dates:</span> {formatDateRange(item.startDate, item.endDate, false, "") || "Not set"}</div>
+            <div><span className="font-medium text-neutral-900">Activities:</span> {item.activities || "No activities"}</div>
+            <div><span className="font-medium text-neutral-900">Courses:</span> {item.courses || "No courses"}</div>
+          </div>
+        ) : null}
+        <div className="pt-1">
+          <Button type="button" tone="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </MultiStepForm>
     </div>
   );
 }

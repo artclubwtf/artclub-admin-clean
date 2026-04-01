@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { CheckboxField } from "@/components/forms/CheckboxField";
 import { ImageUploader } from "@/components/forms/ImageUploader";
+import { MultiStepForm } from "@/components/forms/MultiStepForm";
 import { StatusMessage } from "@/components/forms/StatusMessage";
 import { Textarea } from "@/components/forms/Textarea";
 import { Button } from "@/components/primitives/Button";
@@ -93,14 +94,58 @@ export function ArtworkForm({ mode, productKey, initialValue, series, printSizes
   const [mediaItems, setMediaItems] = useState<ArtistMediaItem[]>(value.mediaItems);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [step, setStep] = useState(0);
   const [isPending, startTransition] = useTransition();
+
+  const steps = [
+    { key: "images", title: "Images", description: "Upload and order the artwork images first." },
+    { key: "details", title: "Basic info", description: "Add the title, description, year and optional series." },
+    { key: "sales", title: "Sales options", description: "Define how the work can be sold on ARTCLUB." },
+    ...(printsEnabled ? [{ key: "prints", title: "Print sizes", description: "Choose the print formats to generate canonical variants." }] : []),
+    { key: "review", title: "Review", description: "Check the setup before saving the artwork." },
+  ] as const;
+
+  function currentPrintStepIndex() {
+    return printsEnabled ? 3 : -1;
+  }
+
+  function reviewStepIndex() {
+    return printsEnabled ? 4 : 3;
+  }
+
+  function validateStep(index: number) {
+    if (index === 0 && mediaItems.length === 0) return "Upload at least one artwork image.";
+    if (index === 1 && !title.trim()) return "Enter a title.";
+    if (printsEnabled && index === currentPrintStepIndex() && printSizeCodes.length === 0) {
+      return "Select at least one print size.";
+    }
+    return null;
+  }
+
+  function goNext() {
+    const nextError = validateStep(step);
+    if (nextError) {
+      setError(nextError);
+      return;
+    }
+    setError(null);
+    setStep((current) => Math.min(current + 1, steps.length - 1));
+  }
+
+  function goBack() {
+    setError(null);
+    setStep((current) => Math.max(current - 1, 0));
+  }
+
+  useEffect(() => {
+    setStep((current) => Math.min(current, steps.length - 1));
+  }, [steps.length]);
 
   function togglePrintSize(code: string) {
     setPrintSizeCodes((current) => (current.includes(code) ? current.filter((item) => item !== code) : [...current, code]));
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submitForm() {
     setError(null);
     setSuccess(null);
 
@@ -137,6 +182,11 @@ export function ArtworkForm({ mode, productKey, initialValue, series, printSizes
     });
   }
 
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void submitForm();
+  }
+
   return (
     <form className="space-y-8" onSubmit={handleSubmit}>
       <PageTitle
@@ -149,67 +199,103 @@ export function ArtworkForm({ mode, productKey, initialValue, series, printSizes
         }
       />
 
-      <Section title="Core details" subtitle="Stored in CanonicalProduct.">
-        <div className="space-y-4">
-          <Input label="Title" value={title} onChange={(event) => setTitle(event.target.value)} disabled={isPending} />
-          <Textarea label="Description" value={description} onChange={(event) => setDescription(event.target.value)} disabled={isPending} />
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Input label="Year" value={year} onChange={(event) => setYear(event.target.value)} inputMode="numeric" disabled={isPending} />
-            <Input label="Width (cm)" value={widthCm} onChange={(event) => setWidthCm(event.target.value)} inputMode="decimal" disabled={isPending} />
-            <Input label="Height (cm)" value={heightCm} onChange={(event) => setHeightCm(event.target.value)} inputMode="decimal" disabled={isPending} />
-          </div>
-          <label className="block space-y-2">
-            <span className="text-sm font-medium tracking-[-0.01em] text-neutral-700">Series</span>
-            <select
-              value={seriesId}
-              onChange={(event) => setSeriesId(event.target.value)}
-              className="w-full rounded-3xl bg-neutral-100 px-4 py-3.5 text-[15px] text-neutral-950 focus-visible:bg-neutral-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-950/10"
-              disabled={isPending}
-            >
-              <option value="">No series</option>
-              {series.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
+      <MultiStepForm
+        steps={steps.map((item) => ({ ...item }))}
+        currentStep={step}
+        onBack={goBack}
+        onNext={goNext}
+        onSubmit={() => void submitForm()}
+        canGoBack={step > 0}
+        canGoNext={!validateStep(step)}
+        isLastStep={step === reviewStepIndex()}
+        submitLabel={mode === "create" ? "Create artwork" : "Save artwork"}
+        isSubmitting={isPending}
+        footerHint={
+          error ? <StatusMessage tone="error">{error}</StatusMessage> : success ? <StatusMessage tone="success">{success}</StatusMessage> : null
+        }
+      >
+        {step === 0 ? (
+          <Section title="Images" subtitle="Uploads create ArtistMediaV2 entries and link them into the artwork.">
+            <ImageUploader label="Artwork images" kind="artwork" multiple items={mediaItems} onChange={setMediaItems} />
+          </Section>
+        ) : null}
+
+        {step === 1 ? (
+          <Section title="Core details" subtitle="Stored in CanonicalProduct.">
+            <div className="space-y-4">
+              <Input label="Title" value={title} onChange={(event) => setTitle(event.target.value)} disabled={isPending} />
+              <Textarea label="Description" value={description} onChange={(event) => setDescription(event.target.value)} disabled={isPending} />
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Input label="Year" value={year} onChange={(event) => setYear(event.target.value)} inputMode="numeric" disabled={isPending} />
+                <Input label="Width (cm)" value={widthCm} onChange={(event) => setWidthCm(event.target.value)} inputMode="decimal" disabled={isPending} />
+                <Input label="Height (cm)" value={heightCm} onChange={(event) => setHeightCm(event.target.value)} inputMode="decimal" disabled={isPending} />
+              </div>
+              <label className="block space-y-2">
+                <span className="text-sm font-medium tracking-[-0.01em] text-neutral-700">Series</span>
+                <select
+                  value={seriesId}
+                  onChange={(event) => setSeriesId(event.target.value)}
+                  className="w-full rounded-3xl bg-neutral-100 px-4 py-3.5 text-[15px] text-neutral-950 focus-visible:bg-neutral-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-950/10"
+                  disabled={isPending}
+                >
+                  <option value="">No series</option>
+                  {series.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </Section>
+        ) : null}
+
+        {step === 2 ? (
+          <Section title="Availability" subtitle="Real canonical flags, no fake publish toggles.">
+            <div className="grid gap-3">
+              <CheckboxField checked={forSale} onChange={setForSale} label="Available for sale" />
+              <CheckboxField checked={originalAvailable} onChange={setOriginalAvailable} label="Original available" />
+              <CheckboxField checked={printsEnabled} onChange={setPrintsEnabled} label="Enable prints" />
+            </div>
+          </Section>
+        ) : null}
+
+        {printsEnabled && step === currentPrintStepIndex() ? (
+          <Section title="Print sizes" subtitle="Canonical variants are generated from the selected print sizes.">
+            <div className="grid gap-3">
+              {printSizes.map((item) => (
+                <CheckboxField
+                  key={item.code}
+                  checked={printSizeCodes.includes(item.code)}
+                  onChange={() => togglePrintSize(item.code)}
+                  label={item.label}
+                />
               ))}
-            </select>
-          </label>
-        </div>
-      </Section>
+            </div>
+          </Section>
+        ) : null}
 
-      <Section title="Images" subtitle="Uploads create ArtistMediaV2 entries and link them into the artwork.">
-        <ImageUploader label="Artwork images" kind="artwork" multiple items={mediaItems} onChange={setMediaItems} />
-      </Section>
-
-      <Section title="Availability" subtitle="Real canonical flags, no fake publish toggles.">
-        <div className="grid gap-3">
-          <CheckboxField checked={forSale} onChange={setForSale} label="Available for sale" />
-          <CheckboxField checked={originalAvailable} onChange={setOriginalAvailable} label="Original available" />
-          <CheckboxField checked={printsEnabled} onChange={setPrintsEnabled} label="Enable prints" />
-        </div>
-      </Section>
-
-      {printsEnabled ? (
-        <Section title="Print sizes" subtitle="Canonical variants are generated from the selected print sizes.">
-          <div className="grid gap-3">
-            {printSizes.map((item) => (
-              <CheckboxField
-                key={item.code}
-                checked={printSizeCodes.includes(item.code)}
-                onChange={() => togglePrintSize(item.code)}
-                label={item.label}
-              />
-            ))}
-          </div>
-        </Section>
-      ) : null}
-
-      {error ? <StatusMessage tone="error">{error}</StatusMessage> : null}
-      {success ? <StatusMessage tone="success">{success}</StatusMessage> : null}
-
-      <Button type="submit" className="w-full" disabled={isPending}>
-        {isPending ? "Saving..." : mode === "create" ? "Create artwork" : "Save artwork"}
-      </Button>
+        {step === reviewStepIndex() ? (
+          <Section title="Review" subtitle="Check the canonical artwork setup before saving.">
+            <div className="space-y-4">
+              <div className="rounded-[1.75rem] bg-neutral-50 px-4 py-4 text-sm leading-7 text-neutral-600">
+                <div><span className="font-medium text-neutral-900">Title:</span> {title || "Not set"}</div>
+                <div><span className="font-medium text-neutral-900">Series:</span> {series.find((item) => item.id === seriesId)?.name || "No series"}</div>
+                <div><span className="font-medium text-neutral-900">Year:</span> {year || "Not set"}</div>
+                <div><span className="font-medium text-neutral-900">Dimensions:</span> {[widthCm && `${widthCm} cm`, heightCm && `${heightCm} cm`].filter(Boolean).join(" × ") || "Not set"}</div>
+                <div><span className="font-medium text-neutral-900">Images:</span> {mediaItems.length}</div>
+                <div><span className="font-medium text-neutral-900">Description:</span> {description || "No description"}</div>
+              </div>
+              <div className="rounded-[1.75rem] bg-neutral-50 px-4 py-4 text-sm leading-7 text-neutral-600">
+                <div><span className="font-medium text-neutral-900">For sale:</span> {forSale ? "Yes" : "No"}</div>
+                <div><span className="font-medium text-neutral-900">Original available:</span> {originalAvailable ? "Yes" : "No"}</div>
+                <div><span className="font-medium text-neutral-900">Prints enabled:</span> {printsEnabled ? "Yes" : "No"}</div>
+                {printsEnabled ? <div><span className="font-medium text-neutral-900">Print sizes:</span> {printSizes.filter((item) => printSizeCodes.includes(item.code)).map((item) => item.label).join(", ") || "None selected"}</div> : null}
+              </div>
+            </div>
+          </Section>
+        ) : null}
+      </MultiStepForm>
     </form>
   );
 }

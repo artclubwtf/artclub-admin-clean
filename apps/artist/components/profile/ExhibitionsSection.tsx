@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { CheckboxField } from "@/components/forms/CheckboxField";
 import { ImageUploader } from "@/components/forms/ImageUploader";
+import { MultiStepForm } from "@/components/forms/MultiStepForm";
 import { StatusMessage } from "@/components/forms/StatusMessage";
 import { Textarea } from "@/components/forms/Textarea";
 import { Button } from "@/components/primitives/Button";
@@ -225,47 +226,104 @@ function ExhibitionForm({
   submitLabel: string;
 }) {
   const coverItems = asSingleMedia(item.coverImageUrl, "other", "Cover image");
+  const [step, setStep] = useState(0);
+  const [stepError, setStepError] = useState<string | null>(null);
+
+  const steps = [
+    { key: "basic", title: "Basic info", description: "Set the title, venue and exhibition type." },
+    { key: "dates", title: "Dates & visibility", description: "Define timing, location and public visibility." },
+    { key: "details", title: "Details", description: "Add description, link and optional cover image." },
+    { key: "review", title: "Review", description: "Check the exhibition entry before saving." },
+  ];
 
   function handleCoverChange(items: ArtistMediaItem[]) {
     onChange({ ...item, coverImageUrl: items[0]?.url || "" });
   }
 
+  function validateCurrentStep() {
+    if (step === 0 && !item.title.trim()) return "Enter a title.";
+    if (step === 0 && !item.venue.trim()) return "Enter a venue or institution.";
+    if (step === 1 && !item.startDate) return "Enter a start date.";
+    return null;
+  }
+
   return (
-    <div className="space-y-4 rounded-[2rem] bg-neutral-50 p-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Input label="Title" value={item.title} onChange={(event) => onChange({ ...item, title: event.target.value })} />
-        <Input label="Venue / institution / gallery" value={item.venue} onChange={(event) => onChange({ ...item, venue: event.target.value })} />
-      </div>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Input label="Type" value={item.exhibitionType} onChange={(event) => onChange({ ...item, exhibitionType: event.target.value })} />
-        <Input label="City" value={item.city} onChange={(event) => onChange({ ...item, city: event.target.value })} />
-        <Input label="Country" value={item.country} onChange={(event) => onChange({ ...item, country: event.target.value })} />
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Input label="Start date" type="date" value={item.startDate} onChange={(event) => onChange({ ...item, startDate: event.target.value })} />
-        <Input
-          label="End date"
-          type="date"
-          value={item.endDate}
-          onChange={(event) => onChange({ ...item, endDate: event.target.value })}
-          disabled={item.isOngoing}
-        />
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <CheckboxField label="Ongoing / upcoming" checked={item.isOngoing} onChange={(checked) => onChange({ ...item, isOngoing: checked, endDate: checked ? "" : item.endDate })} />
-        <CheckboxField label="Visible on public profile" checked={item.visibility === "public"} onChange={(checked) => onChange({ ...item, visibility: checked ? "public" : "private" })} />
-      </div>
-      <Input label="Link" value={item.link} onChange={(event) => onChange({ ...item, link: event.target.value })} />
-      <Textarea label="Description" value={item.description} onChange={(event) => onChange({ ...item, description: event.target.value })} />
-      <ImageUploader label="Cover image" kind="other" items={coverItems} onChange={handleCoverChange} />
-      <div className="flex flex-wrap gap-3">
-        <Button type="button" onClick={onSubmit}>
-          {submitLabel}
-        </Button>
-        <Button type="button" tone="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
+    <div className="rounded-[2rem] bg-neutral-50 p-4">
+      <MultiStepForm
+        steps={steps}
+        currentStep={step}
+        onBack={() => {
+          setStepError(null);
+          setStep((current) => Math.max(current - 1, 0));
+        }}
+        onNext={() => {
+          const error = validateCurrentStep();
+          if (error) {
+            setStepError(error);
+            return;
+          }
+          setStepError(null);
+          setStep((current) => Math.min(current + 1, steps.length - 1));
+        }}
+        onSubmit={() => void onSubmit()}
+        canGoBack={step > 0}
+        isLastStep={step === steps.length - 1}
+        submitLabel={submitLabel}
+        footerHint={stepError ? <StatusMessage tone="error">{stepError}</StatusMessage> : null}
+      >
+        {step === 0 ? (
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input label="Title" value={item.title} onChange={(event) => onChange({ ...item, title: event.target.value })} />
+              <Input label="Venue / institution / gallery" value={item.venue} onChange={(event) => onChange({ ...item, venue: event.target.value })} />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Input label="Type" value={item.exhibitionType} onChange={(event) => onChange({ ...item, exhibitionType: event.target.value })} />
+              <Input label="City" value={item.city} onChange={(event) => onChange({ ...item, city: event.target.value })} />
+              <Input label="Country" value={item.country} onChange={(event) => onChange({ ...item, country: event.target.value })} />
+            </div>
+          </div>
+        ) : null}
+        {step === 1 ? (
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input label="Start date" type="date" value={item.startDate} onChange={(event) => onChange({ ...item, startDate: event.target.value })} />
+              <Input
+                label="End date"
+                type="date"
+                value={item.endDate}
+                onChange={(event) => onChange({ ...item, endDate: event.target.value })}
+                disabled={item.isOngoing}
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <CheckboxField label="Ongoing / upcoming" checked={item.isOngoing} onChange={(checked) => onChange({ ...item, isOngoing: checked, endDate: checked ? "" : item.endDate })} />
+              <CheckboxField label="Visible on public profile" checked={item.visibility === "public"} onChange={(checked) => onChange({ ...item, visibility: checked ? "public" : "private" })} />
+            </div>
+          </div>
+        ) : null}
+        {step === 2 ? (
+          <div className="space-y-4">
+            <Input label="Link" value={item.link} onChange={(event) => onChange({ ...item, link: event.target.value })} />
+            <Textarea label="Description" value={item.description} onChange={(event) => onChange({ ...item, description: event.target.value })} />
+            <ImageUploader label="Cover image" kind="other" items={coverItems} onChange={handleCoverChange} />
+          </div>
+        ) : null}
+        {step === 3 ? (
+          <div className="rounded-[1.75rem] bg-white px-4 py-4 text-sm leading-7 text-neutral-600">
+            <div><span className="font-medium text-neutral-900">Title:</span> {item.title || "Not set"}</div>
+            <div><span className="font-medium text-neutral-900">Venue:</span> {[item.venue, item.exhibitionType].filter(Boolean).join(" · ") || "Not set"}</div>
+            <div><span className="font-medium text-neutral-900">Dates:</span> {formatDateRange(item.startDate, item.endDate, item.isOngoing, "Ongoing") || "Not set"}</div>
+            <div><span className="font-medium text-neutral-900">Location:</span> {[item.city, item.country].filter(Boolean).join(", ") || "Not set"}</div>
+            <div><span className="font-medium text-neutral-900">Visibility:</span> {item.visibility}</div>
+          </div>
+        ) : null}
+        <div className="pt-1">
+          <Button type="button" tone="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </MultiStepForm>
     </div>
   );
 }

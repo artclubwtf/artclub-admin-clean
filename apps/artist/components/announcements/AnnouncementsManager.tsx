@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { CheckboxField } from "@/components/forms/CheckboxField";
+import { MultiStepForm } from "@/components/forms/MultiStepForm";
 import { StatusMessage } from "@/components/forms/StatusMessage";
 import { Textarea } from "@/components/forms/Textarea";
 import { Button } from "@/components/primitives/Button";
@@ -188,30 +189,85 @@ function AnnouncementForm({
   onCancel: () => void;
   submitLabel: string;
 }) {
+  const [step, setStep] = useState(0);
+  const [stepError, setStepError] = useState<string | null>(null);
+
+  const steps = [
+    { key: "content", title: "Content", description: "Write the announcement headline and message." },
+    { key: "cta", title: "CTA", description: "Optional call-to-action text and link." },
+    { key: "schedule", title: "Schedule", description: "Set timing, publish state and pinning." },
+    { key: "review", title: "Review", description: "Check the announcement before saving." },
+  ];
+
+  function validateCurrentStep() {
+    if (step === 0 && !item.title.trim()) return "Enter a title.";
+    if (step === 0 && !item.body.trim()) return "Enter announcement content.";
+    return null;
+  }
+
   return (
-    <div className="space-y-4 rounded-[2rem] bg-neutral-50 p-4">
-      <Input label="Title" value={item.title} onChange={(event) => onChange({ ...item, title: event.target.value })} />
-      <Textarea label="Body" value={item.body} onChange={(event) => onChange({ ...item, body: event.target.value })} />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Input label="CTA label" value={item.ctaLabel} onChange={(event) => onChange({ ...item, ctaLabel: event.target.value })} />
-        <Input label="CTA URL" value={item.ctaUrl} onChange={(event) => onChange({ ...item, ctaUrl: event.target.value })} />
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Input label="Starts at" type="date" value={item.startsAt} onChange={(event) => onChange({ ...item, startsAt: event.target.value })} />
-        <Input label="Ends at" type="date" value={item.endsAt} onChange={(event) => onChange({ ...item, endsAt: event.target.value })} />
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <CheckboxField label="Published" checked={item.isPublished} onChange={(checked) => onChange({ ...item, isPublished: checked })} />
-        <CheckboxField label="Pinned" checked={item.isPinned} onChange={(checked) => onChange({ ...item, isPinned: checked })} />
-      </div>
-      <div className="flex flex-wrap gap-3">
-        <Button type="button" onClick={onSubmit}>
-          {submitLabel}
-        </Button>
-        <Button type="button" tone="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
+    <div className="rounded-[2rem] bg-neutral-50 p-4">
+      <MultiStepForm
+        steps={steps}
+        currentStep={step}
+        onBack={() => {
+          setStepError(null);
+          setStep((current) => Math.max(current - 1, 0));
+        }}
+        onNext={() => {
+          const error = validateCurrentStep();
+          if (error) {
+            setStepError(error);
+            return;
+          }
+          setStepError(null);
+          setStep((current) => Math.min(current + 1, steps.length - 1));
+        }}
+        onSubmit={() => void onSubmit()}
+        canGoBack={step > 0}
+        isLastStep={step === steps.length - 1}
+        submitLabel={submitLabel}
+        footerHint={stepError ? <StatusMessage tone="error">{stepError}</StatusMessage> : null}
+      >
+        {step === 0 ? (
+          <div className="space-y-4">
+            <Input label="Title" value={item.title} onChange={(event) => onChange({ ...item, title: event.target.value })} />
+            <Textarea label="Body" value={item.body} onChange={(event) => onChange({ ...item, body: event.target.value })} />
+          </div>
+        ) : null}
+        {step === 1 ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input label="CTA label" value={item.ctaLabel} onChange={(event) => onChange({ ...item, ctaLabel: event.target.value })} />
+            <Input label="CTA URL" value={item.ctaUrl} onChange={(event) => onChange({ ...item, ctaUrl: event.target.value })} />
+          </div>
+        ) : null}
+        {step === 2 ? (
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input label="Starts at" type="date" value={item.startsAt} onChange={(event) => onChange({ ...item, startsAt: event.target.value })} />
+              <Input label="Ends at" type="date" value={item.endsAt} onChange={(event) => onChange({ ...item, endsAt: event.target.value })} />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <CheckboxField label="Published" checked={item.isPublished} onChange={(checked) => onChange({ ...item, isPublished: checked })} />
+              <CheckboxField label="Pinned" checked={item.isPinned} onChange={(checked) => onChange({ ...item, isPinned: checked })} />
+            </div>
+          </div>
+        ) : null}
+        {step === 3 ? (
+          <div className="rounded-[1.75rem] bg-white px-4 py-4 text-sm leading-7 text-neutral-600">
+            <div><span className="font-medium text-neutral-900">Title:</span> {item.title || "Not set"}</div>
+            <div><span className="font-medium text-neutral-900">Body:</span> {item.body || "Not set"}</div>
+            <div><span className="font-medium text-neutral-900">CTA:</span> {[item.ctaLabel, item.ctaUrl].filter(Boolean).join(" · ") || "No CTA"}</div>
+            <div><span className="font-medium text-neutral-900">Schedule:</span> {[item.startsAt, item.endsAt].filter(Boolean).join(" - ") || "No schedule"}</div>
+            <div><span className="font-medium text-neutral-900">State:</span> {item.isPublished ? "Published" : "Draft"}{item.isPinned ? " · Pinned" : ""}</div>
+          </div>
+        ) : null}
+        <div className="pt-1">
+          <Button type="button" tone="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </MultiStepForm>
     </div>
   );
 }
