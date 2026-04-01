@@ -1,49 +1,79 @@
 import { WorkspaceShell } from "@/components/layout/WorkspaceShell";
-import { Button } from "@/components/primitives/Button";
-import { PageTitle } from "@/components/primitives/PageTitle";
-import { Section } from "@/components/primitives/Section";
+import { OverviewPanels } from "@/components/overview/OverviewPanels";
+import { requireArtistContext } from "@/lib/server/artist-context";
+import { connectMongo } from "@/lib/server/mongodb";
+import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel } from "@/lib/server/models";
 
-const foundationItems = [
-  "CanonicalArtist remains the profile source through admin-owned APIs.",
-  "CanonicalProduct drives artwork listing and draft workflow.",
-  "CanonicalVariant stays behind the same backend boundary for edition data.",
-];
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
-const launchAreas = ["Onboarding flow", "Artwork creation", "Media library", "Profile publishing"];
+function computeProfileCompleteness(input: {
+  displayName?: string;
+  bio?: string;
+  locationCity?: string;
+  locationCountry?: string;
+  avatarUrl?: string;
+  heroUrl?: string;
+  galleryUrls?: string[];
+}) {
+  const checks = [
+    Boolean(input.displayName),
+    Boolean(input.bio),
+    Boolean(input.locationCity || input.locationCountry),
+    Boolean(input.avatarUrl),
+    Boolean(input.heroUrl),
+    Boolean((input.galleryUrls || []).length),
+  ];
+  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+}
 
-export default function HomePage() {
+export default async function HomePage() {
+  await connectMongo();
+  const context = await requireArtistContext();
+
+  const [artworkCount, seriesCount, recentMedia] = await Promise.all([
+    CanonicalProductModel.countDocuments({
+      shopDomain: context.user.shopDomain,
+      artistKey: context.user.artistKey,
+      type: "artwork",
+    }),
+    ArtistSeriesModel.countDocuments({
+      shopDomain: context.user.shopDomain,
+      artistKey: context.user.artistKey,
+    }),
+    ArtistMediaV2Model.find({
+      shopDomain: context.user.shopDomain,
+      artistKey: context.user.artistKey,
+    })
+      .sort({ createdAt: -1 })
+      .limit(3)
+      .lean(),
+  ]);
+
   return (
     <WorkspaceShell>
-      <div className="space-y-8">
-        <PageTitle
-          title="Home"
-          subtitle="A quiet starting point for the new artist product. This app is intentionally minimal, mobile-first and ready for auth, onboarding and workspace logic."
-          action={<Button href="/artworks/new">New artwork</Button>}
-        />
-
-        <Section
-          title="Product foundation"
-          subtitle="The frontend stays clean while admin remains the backend and integration hub."
-        >
-          <div className="space-y-3 text-sm leading-6 text-neutral-600">
-            {foundationItems.map((item) => (
-              <div key={item} className="rounded-3xl bg-neutral-50 px-4 py-4">
-                {item}
-              </div>
-            ))}
-          </div>
-        </Section>
-
-        <Section title="Now in scope" subtitle="These are the first surfaces prepared in the new workspace.">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {launchAreas.map((item) => (
-              <div key={item} className="rounded-3xl bg-neutral-50 px-4 py-5 text-sm font-medium text-neutral-700">
-                {item}
-              </div>
-            ))}
-          </div>
-        </Section>
-      </div>
+      <OverviewPanels
+        overview={{
+          artworkCount,
+          seriesCount,
+          profileCompleteness: computeProfileCompleteness({
+            displayName: context.canonicalArtist.displayName,
+            bio: context.canonicalArtist.bio,
+            locationCity: context.canonicalArtist.locationCity,
+            locationCountry: context.canonicalArtist.locationCountry,
+            avatarUrl: context.canonicalArtist.profileImages?.avatarUrl,
+            heroUrl: context.canonicalArtist.profileImages?.heroUrl,
+            galleryUrls: context.canonicalArtist.profileImages?.galleryUrls,
+          }),
+          recentMedia: recentMedia.map((item) => ({
+            id: item._id.toString(),
+            kind: item.kind,
+            url: item.previewUrl || item.url,
+            previewUrl: item.previewUrl || item.url,
+            filename: item.filename || item.kind,
+          })),
+        }}
+      />
     </WorkspaceShell>
   );
 }

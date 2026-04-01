@@ -1,34 +1,46 @@
-import { Button } from "@/components/primitives/Button";
-import { Input } from "@/components/primitives/Input";
-import { PageTitle } from "@/components/primitives/PageTitle";
-import { Section } from "@/components/primitives/Section";
+import { redirect } from "next/navigation";
 
-export default function OnboardingPage() {
+import { OnboardingForm } from "@/components/onboarding/OnboardingForm";
+import { requireOnboardingContext } from "@/lib/server/artist-context";
+import { connectMongo } from "@/lib/server/mongodb";
+import { TermsAcceptanceModel } from "@/lib/server/models";
+import { ensureTermsDocument, loadActiveTermsModules } from "@/lib/server/terms";
+
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+
+export default async function OnboardingPage() {
+  await connectMongo();
+  await ensureTermsDocument("artist_registration_terms");
+  const context = await requireOnboardingContext();
+  if (context.user.onboardingComplete) {
+    redirect("/");
+  }
+
+  const activeTerms = await loadActiveTermsModules();
+  await TermsAcceptanceModel.find({ userId: context.user._id }).sort({ acceptedAt: -1 }).lean();
+
   return (
-    <div className="space-y-8 pb-8">
-      <PageTitle
-        title="Onboarding"
-        subtitle="Early onboarding shell for artist identity, profile and publishing intent. The final flow will persist through admin-owned APIs and canonical models."
-      />
-
-      <Section title="Identity" subtitle="Collect the basics before profile and artwork setup.">
-        <div className="space-y-4">
-          <Input label="Display name" placeholder="Your public artist name" />
-          <Input label="Handle" placeholder="artist-handle" />
-          <Input label="City" placeholder="Berlin" />
-        </div>
-      </Section>
-
-      <Section title="Publishing intent" subtitle="Keep scope narrow and extend later without redesigning the layout.">
-        <div className="grid gap-3">
-          <div className="rounded-3xl bg-neutral-50 px-4 py-4 text-sm leading-6 text-neutral-600">Originals, prints and rental preferences will live here.</div>
-          <div className="rounded-3xl bg-neutral-50 px-4 py-4 text-sm leading-6 text-neutral-600">Profile imagery and bio completion will follow as the next step.</div>
-        </div>
-      </Section>
-
-      <Button type="button" className="w-full">
-        Continue onboarding
-      </Button>
-    </div>
+    <OnboardingForm
+      initial={{
+        fullName: context.user.name || context.canonicalArtist.displayName || "",
+        email: context.user.email,
+        city: context.canonicalArtist.locationCity || "",
+        country: context.canonicalArtist.locationCountry || "",
+        bio: context.canonicalArtist.bio || "",
+        handle: context.canonicalArtist.handle || context.user.artistKey,
+        displayName: context.canonicalArtist.displayName || context.user.name || "",
+        avatarUrl: context.canonicalArtist.profileImages?.avatarUrl || "",
+        heroUrl: context.canonicalArtist.profileImages?.heroUrl || "",
+        galleryUrls: Array.isArray(context.canonicalArtist.profileImages?.galleryUrls) ? context.canonicalArtist.profileImages.galleryUrls : [],
+        consents: {
+          allowOriginalSales: context.canonicalArtist.consents?.allowOriginalSales === true,
+          allowPrintSales: context.canonicalArtist.consents?.allowPrintSales === true,
+          allowRental: context.canonicalArtist.consents?.allowRental === true,
+          allowExhibitions: context.canonicalArtist.consents?.allowExhibitions === true,
+        },
+        activeTerms,
+      }}
+    />
   );
 }

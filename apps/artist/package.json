@@ -11,16 +11,22 @@
     "start": "sh -c 'next start -p \"${PORT:-3000}\"'"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.954.0",
+    "@aws-sdk/s3-request-presigner": "^3.954.0",
     "@artclub/api-client": "workspace:*",
     "@artclub/models": "workspace:*",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "bcryptjs": "^3.0.3",
+    "mongoose": "^9.0.2",
     "next": "16.0.10",
+    "next-auth": "^4.24.13",
     "react": "19.2.1",
     "react-dom": "19.2.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "zod": "^4.2.1"
   }
 }
