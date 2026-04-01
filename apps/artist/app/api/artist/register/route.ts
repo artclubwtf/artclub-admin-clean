@@ -30,6 +30,19 @@ function isDuplicateKeyError(err: unknown) {
   return Boolean(err && typeof err === "object" && "code" in err && (err as { code?: number }).code === 11000);
 }
 
+function getDuplicateKeyFields(err: unknown) {
+  if (!err || typeof err !== "object") return [];
+  const keyPattern =
+    "keyPattern" in err && err.keyPattern && typeof err.keyPattern === "object"
+      ? Object.keys(err.keyPattern as Record<string, unknown>)
+      : [];
+  const keyValue =
+    "keyValue" in err && err.keyValue && typeof err.keyValue === "object"
+      ? Object.keys(err.keyValue as Record<string, unknown>)
+      : [];
+  return Array.from(new Set([...keyPattern, ...keyValue]));
+}
+
 async function resolveExistingArtistAccount(params: {
   existing: {
     _id: Types.ObjectId;
@@ -248,6 +261,10 @@ export async function POST(req: Request) {
       ).catch(() => null);
 
       if (isDuplicateKeyError(err)) {
+        const duplicateFields = getDuplicateKeyFields(err);
+        const isEmailConflict = duplicateFields.includes("email");
+        const isArtistKeyConflict = duplicateFields.includes("artistKey");
+        const isCanonicalArtistConflict = duplicateFields.includes("shopDomain") && duplicateFields.includes("artistKey");
         const latestUser = await UserModel.findOne({ email })
           .select({ _id: 1, role: 1, artistKey: 1, artistId: 1, pendingRegistrationId: 1, shopDomain: 1, isActive: 1, passwordHash: 1, onboardingComplete: 1 })
           .lean()
@@ -256,10 +273,13 @@ export async function POST(req: Request) {
         if (existingAccount) {
           return NextResponse.json(existingAccount, { status: 200 });
         }
+        if (!isEmailConflict && (isArtistKeyConflict || isCanonicalArtistConflict)) {
+          return NextResponse.json({ ok: false, error: "register_conflict" }, { status: 409 });
+        }
         return NextResponse.json(
           {
             ok: false,
-            error: latestUser?.role === "artist" ? "email_exists" : "email_in_use_other_account",
+            error: latestUser ? (latestUser.role === "artist" ? "email_exists" : "email_in_use_other_account") : "register_conflict",
           },
           { status: 409 },
         );

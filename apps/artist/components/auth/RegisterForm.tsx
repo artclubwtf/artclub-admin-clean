@@ -23,6 +23,8 @@ function mapError(code: string | undefined) {
       return "An account with this email already exists.";
     case "email_in_use_other_account":
       return "This email is already linked to another ARTCLUB account.";
+    case "register_conflict":
+      return "Registration could not be completed because the invitation key or registration state is inconsistent.";
     default:
       return "Registration failed.";
   }
