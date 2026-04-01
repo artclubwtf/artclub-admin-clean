@@ -5,20 +5,24 @@ import { requireArtistApiContext } from "@/lib/server/artist-context";
 import { getS3ObjectUrl, tryExtractS3KeyFromUrl } from "@/lib/server/s3";
 import { ArtistMediaV2Model } from "@/lib/server/models";
 
-export async function resolveArtistMediaFileResponse(id: string) {
-  const auth = await requireArtistApiContext({ allowIncompleteOnboarding: true });
-  if (!auth.ok) return auth.response;
-  const { context } = auth;
-
+export async function resolveArtistMediaFileResponse(id: string, options?: { requireOwnership?: boolean }) {
   if (!Types.ObjectId.isValid(id)) {
     return NextResponse.json({ ok: false, error: "invalid_media_id" }, { status: 400 });
   }
 
-  const media = await ArtistMediaV2Model.findOne({
-    _id: id,
-    shopDomain: context.user.shopDomain,
-    artistKey: context.user.artistKey,
-  })
+  const requireOwnership = options?.requireOwnership !== false;
+  const auth = requireOwnership ? await requireArtistApiContext({ allowIncompleteOnboarding: true }) : null;
+  if (requireOwnership && (!auth || !auth.ok)) {
+    return auth?.response || NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  }
+
+  const filter: Record<string, unknown> = { _id: id };
+  if (requireOwnership && auth?.ok) {
+    filter.shopDomain = auth.context.user.shopDomain;
+    filter.artistKey = auth.context.user.artistKey;
+  }
+
+  const media = await ArtistMediaV2Model.findOne(filter)
     .select({ s3Key: 1, previewUrl: 1, url: 1 })
     .lean();
   if (!media) {

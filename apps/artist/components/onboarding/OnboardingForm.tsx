@@ -11,6 +11,7 @@ import { Button } from "@/components/primitives/Button";
 import { Input } from "@/components/primitives/Input";
 import { PageTitle } from "@/components/primitives/PageTitle";
 import { Section } from "@/components/primitives/Section";
+import { requestJson } from "@/lib/client/request";
 import type { ActiveTermsModule, ArtistMediaItem } from "@/lib/types";
 
 type OnboardingFormProps = {
@@ -70,46 +71,53 @@ export function OnboardingForm({ initial }: OnboardingFormProps) {
     setSuccess(null);
 
     startTransition(async () => {
-      const res = await fetch("/api/artist/onboarding", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          personal: {
-            fullName,
-            city,
-            country,
-            bio,
+      try {
+        const { response: res, json } = await requestJson<{ ok?: boolean; error?: string; documentSlug?: string }>(
+          "/api/artist/onboarding",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              personal: {
+                fullName,
+                city,
+                country,
+                bio,
+              },
+              profile: {
+                handle,
+                displayName,
+                avatarUrl: avatarItems[0]?.url || "",
+                heroUrl: heroItems[0]?.url || "",
+                galleryUrls: galleryItems.map((item) => item.url),
+              },
+              consents: {
+                allowOriginalSales,
+                allowPrintSales,
+                allowRental,
+                allowExhibitions,
+              },
+              terms: {
+                acceptedDocumentSlugs: initial.activeTerms.map((item) => item.document.slug),
+                acceptedName,
+                accepted,
+              },
+            }),
+            retries: 2,
           },
-          profile: {
-            handle,
-            displayName,
-            avatarUrl: avatarItems[0]?.url || "",
-            heroUrl: heroItems[0]?.url || "",
-            galleryUrls: galleryItems.map((item) => item.url),
-          },
-          consents: {
-            allowOriginalSales,
-            allowPrintSales,
-            allowRental,
-            allowExhibitions,
-          },
-          terms: {
-            acceptedDocumentSlugs: initial.activeTerms.map((item) => item.document.slug),
-            acceptedName,
-            accepted,
-          },
-        }),
-      });
-      const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; documentSlug?: string } | null;
+        );
 
-      if (!res.ok || !json?.ok) {
-        setError(json?.error === "missing_terms_acceptance" ? `Missing acceptance for ${json.documentSlug}.` : json?.error || "Could not save onboarding.");
-        return;
+        if (!res.ok || !json?.ok) {
+          setError(json?.error === "missing_terms_acceptance" ? `Missing acceptance for ${json.documentSlug}.` : json?.error || "Could not save onboarding.");
+          return;
+        }
+
+        setSuccess("Onboarding saved.");
+        router.replace("/");
+        router.refresh();
+      } catch (error) {
+        setError(error instanceof Error ? error.message : "Could not save onboarding.");
       }
-
-      setSuccess("Onboarding saved.");
-      router.replace("/");
-      router.refresh();
     });
   }
 

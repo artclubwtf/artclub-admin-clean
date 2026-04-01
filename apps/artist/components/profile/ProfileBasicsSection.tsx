@@ -9,6 +9,7 @@ import { Textarea } from "@/components/forms/Textarea";
 import { Button } from "@/components/primitives/Button";
 import { Input } from "@/components/primitives/Input";
 import { Section } from "@/components/primitives/Section";
+import { requestJson } from "@/lib/client/request";
 import type { ArtistMediaItem, ArtistProfileData } from "@/lib/types";
 import { asSingleMedia } from "@/components/profile/section-utils";
 
@@ -41,29 +42,33 @@ export function ProfileBasicsSection({ initialProfile }: ProfileBasicsSectionPro
     setSuccess(null);
 
     startTransition(async () => {
-      const res = await fetch("/api/artist/profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          displayName,
-          handle,
-          locationCity,
-          locationCountry,
-          bio,
-          publicProfileVisible,
-          avatarUrl: avatarItems[0]?.url || "",
-          heroUrl: heroItems[0]?.url || "",
-          galleryUrls: galleryItems.map((item) => item.url),
-        }),
-      });
-      const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
-      if (!res.ok || !json?.ok) {
-        setError(json?.error || "Could not save profile.");
-        return;
-      }
+      try {
+        const { response: res, json } = await requestJson<{ ok?: boolean; error?: string }>("/api/artist/profile", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            displayName,
+            handle,
+            locationCity,
+            locationCountry,
+            bio,
+            publicProfileVisible,
+            avatarUrl: avatarItems[0]?.url || "",
+            heroUrl: heroItems[0]?.url || "",
+            galleryUrls: galleryItems.map((item) => item.url),
+          }),
+          retries: 2,
+        });
+        if (!res.ok || !json?.ok) {
+          setError(json?.error || "Could not save profile.");
+          return;
+        }
 
-      setSuccess("Profile saved.");
-      router.refresh();
+        setSuccess("Profile saved.");
+        router.refresh();
+      } catch (error) {
+        setError(error instanceof Error ? error.message : "Could not save profile.");
+      }
     });
   }
 

@@ -10,7 +10,7 @@ import {
 import { artistApiErrorResponse } from "@/lib/server/api-errors";
 import { buildProductSyncPatch } from "@/lib/server/artist-sync";
 import { requireArtistApiContext } from "@/lib/server/artist-context";
-import { parseArtistMediaIdFromUrl, resolveArtistMediaUrls } from "@/lib/server/artist-media";
+import { parseArtistMediaIdFromUrl, resolvePublicArtistMediaUrls } from "@/lib/server/artist-media";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 
 const patchSchema = z
@@ -186,9 +186,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     const primaryImage = media[0];
-    const primaryUrls = media.length ? resolveArtistMediaUrls(primaryImage) : null;
+    const primaryUrls = media.length ? resolvePublicArtistMediaUrls(primaryImage) : null;
     const galleryUrls = media.length
-      ? dedupeTrimmed(media.map((item) => resolveArtistMediaUrls(item).previewUrl).filter(Boolean))
+      ? dedupeTrimmed(media.map((item) => resolvePublicArtistMediaUrls(item).previewUrl).filter(Boolean))
       : Array.isArray(artwork.images?.galleryUrls)
         ? artwork.images.galleryUrls
         : [];

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 
 import { Button } from "@/components/primitives/Button";
 import { StatusMessage } from "@/components/forms/StatusMessage";
+import { requestJson } from "@/lib/client/request";
 import type { ArtistMediaItem } from "@/lib/types";
 
 type ImageUploaderProps = {
@@ -24,35 +25,38 @@ export function ImageUploader({ label, hint, kind, items, onChange, multiple = f
     const formData = new FormData();
     formData.append("file", file);
 
-    const uploadRes = await fetch("/api/artist/media/upload", {
+    const { response: uploadRes, json: uploadJson } = await requestJson<
+      {
+        ok?: boolean;
+        error?: string;
+        file?: { s3Key?: string; filename: string; mimeType: string; sizeBytes: number; url: string; previewUrl: string };
+      }
+    >("/api/artist/media/upload", {
       method: "POST",
       body: formData,
+      retries: 2,
     });
-    const uploadJson = (await uploadRes.json().catch(() => null)) as
-      | {
-          ok?: boolean;
-          error?: string;
-          file?: { s3Key?: string; filename: string; mimeType: string; sizeBytes: number; url: string; previewUrl: string };
-        }
-      | null;
     if (!uploadRes.ok || !uploadJson?.file) {
       throw new Error(uploadJson?.error || "Upload failed");
     }
 
-    const mediaRes = await fetch("/api/artist/media", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        kind,
-        s3Key: uploadJson.file.s3Key,
+    const { response: mediaRes, json: mediaJson } = await requestJson<{ ok?: boolean; error?: string; media?: ArtistMediaItem }>(
+      "/api/artist/media",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind,
+          s3Key: uploadJson.file.s3Key,
         filename: uploadJson.file.filename,
         mimeType: uploadJson.file.mimeType,
         sizeBytes: uploadJson.file.sizeBytes,
-        url: uploadJson.file.url,
-        previewUrl: uploadJson.file.previewUrl,
-      }),
-    });
-    const mediaJson = (await mediaRes.json().catch(() => null)) as { ok?: boolean; error?: string; media?: ArtistMediaItem } | null;
+          url: uploadJson.file.url,
+          previewUrl: uploadJson.file.previewUrl,
+        }),
+        retries: 2,
+      },
+    );
     if (!mediaRes.ok || !mediaJson?.media) {
       throw new Error(mediaJson?.error || "Failed to save media");
     }

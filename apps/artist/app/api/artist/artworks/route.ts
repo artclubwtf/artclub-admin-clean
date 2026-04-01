@@ -9,7 +9,7 @@ import {
 } from "@/lib/server/artist-print-pricing";
 import { artistApiErrorResponse } from "@/lib/server/api-errors";
 import { requireArtistApiContext } from "@/lib/server/artist-context";
-import { resolveArtistMediaUrls } from "@/lib/server/artist-media";
+import { resolvePublicArtistMediaUrls } from "@/lib/server/artist-media";
 import { ensureCanonicalProductIndexes } from "@/lib/server/canonical-product-indexes";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 
@@ -181,8 +181,8 @@ export async function POST(req: Request) {
     }
 
     const primaryImage = media[0];
-    const primaryUrls = resolveArtistMediaUrls(primaryImage);
-    const galleryUrls = dedupeTrimmed(media.map((item) => resolveArtistMediaUrls(item).previewUrl).filter(Boolean));
+    const primaryUrls = resolvePublicArtistMediaUrls(primaryImage);
+    const galleryUrls = dedupeTrimmed(media.map((item) => resolvePublicArtistMediaUrls(item).previewUrl).filter(Boolean));
 
     const variantsToInsert: Array<{
       shopDomain: string;

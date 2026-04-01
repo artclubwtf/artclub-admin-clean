@@ -1,4 +1,6 @@
 import { connectMongo } from "@/lib/server/mongodb";
+import { normalizePublicArtistMediaUrls } from "@/lib/server/artist-media";
+import { createArtistMediaUrlRewriter } from "@/lib/server/artist-media-rewrite";
 import { buildPublicArtistProfileShape } from "@/lib/server/public-artist-profile";
 import { ArtistAnnouncementModel, CanonicalArtistModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 import type { PublicArtistArtworkItem, PublicArtistProfilePageData } from "@/lib/types";
@@ -76,6 +78,25 @@ export async function loadPublicArtistPageBySlug(rawSlug: string): Promise<Publi
       .lean(),
   ]);
 
+  const rewriteMediaUrl = await createArtistMediaUrlRewriter({
+    shopDomain: artist.shopDomain,
+    artistKey: artist.artistKey,
+    candidateUrls: [
+      artist.profileImages?.avatarUrl,
+      artist.profileImages?.heroUrl,
+      ...(Array.isArray(artist.profileImages?.galleryUrls) ? artist.profileImages.galleryUrls : []),
+      ...(Array.isArray(artist.experience) ? artist.experience.map((item: any) => item?.imageUrl) : []),
+      ...(Array.isArray(artist.education) ? artist.education.map((item: any) => item?.imageUrl) : []),
+      ...(Array.isArray(artist.exhibitions) ? artist.exhibitions.map((item: any) => item?.coverImageUrl) : []),
+      ...artworks.flatMap((item) => [
+        item.images?.thumbUrl,
+        item.images?.mediumUrl,
+        item.images?.originalUrl,
+        ...(Array.isArray(item.images?.galleryUrls) ? item.images.galleryUrls : []),
+      ]),
+    ],
+  });
+
   const variants = artworks.length
     ? await CanonicalVariantModel.find({
         shopDomain: artist.shopDomain,
@@ -101,6 +122,7 @@ export async function loadPublicArtistPageBySlug(rawSlug: string): Promise<Publi
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     })),
+    rewriteMediaUrl,
   });
 
   const variantsByProduct = variants.reduce<Record<string, typeof variants>>((acc, item) => {
@@ -121,8 +143,8 @@ export async function loadPublicArtistPageBySlug(rawSlug: string): Promise<Publi
         title: item.title,
         year: item.year ?? null,
         description: item.description || "",
-        imageUrl: item.images?.mediumUrl || item.images?.thumbUrl || item.images?.originalUrl || "",
-        galleryUrls,
+        imageUrl: rewriteMediaUrl(item.images?.mediumUrl || item.images?.thumbUrl || item.images?.originalUrl || ""),
+        galleryUrls: normalizePublicArtistMediaUrls(galleryUrls.map((value) => rewriteMediaUrl(value))),
         seriesName: item.seriesName || "",
         status: item.status,
         priceLabel: buildArtworkPriceLabel({

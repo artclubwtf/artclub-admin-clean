@@ -1,4 +1,5 @@
 import { ProfileForm } from "@/components/profile/ProfileForm";
+import { createArtistMediaUrlRewriter } from "@/lib/server/artist-media-rewrite";
 import { buildPublicArtistProfileShape } from "@/lib/server/public-artist-profile";
 import {
   serializeEducation,
@@ -33,6 +34,25 @@ export default async function ProfilePage() {
       .lean(),
   ]);
 
+  const rewriteMediaUrl = await createArtistMediaUrlRewriter({
+    shopDomain: context.user.shopDomain,
+    artistKey: context.user.artistKey,
+    candidateUrls: [
+      artist?.profileImages?.avatarUrl,
+      artist?.profileImages?.heroUrl,
+      ...(Array.isArray(artist?.profileImages?.galleryUrls) ? artist?.profileImages?.galleryUrls : []),
+      ...(Array.isArray(artist?.experience) ? artist.experience.map((item: any) => item?.imageUrl) : []),
+      ...(Array.isArray(artist?.education) ? artist.education.map((item: any) => item?.imageUrl) : []),
+      ...(Array.isArray(artist?.exhibitions) ? artist.exhibitions.map((item: any) => item?.coverImageUrl) : []),
+      ...featuredWorks.flatMap((item) => [
+        item.images?.thumbUrl,
+        item.images?.mediumUrl,
+        item.images?.originalUrl,
+        ...(Array.isArray(item.images?.galleryUrls) ? item.images.galleryUrls : []),
+      ]),
+    ],
+  });
+
   const serializedAnnouncements = announcements.map((item) => ({
     id: item._id.toString(),
     title: item.title,
@@ -50,6 +70,7 @@ export default async function ProfilePage() {
   const publicProfile = buildPublicArtistProfileShape({
     artist,
     announcements: serializedAnnouncements,
+    rewriteMediaUrl,
   });
 
   return (
@@ -64,20 +85,22 @@ export default async function ProfilePage() {
         bio: context.canonicalArtist.bio || "",
         publicProfileVisible: artist?.publicProfile?.isVisible !== false,
         profileImages: {
-          avatarUrl: context.canonicalArtist.profileImages?.avatarUrl || "",
-          heroUrl: context.canonicalArtist.profileImages?.heroUrl || "",
-          galleryUrls: Array.isArray(context.canonicalArtist.profileImages?.galleryUrls) ? context.canonicalArtist.profileImages.galleryUrls : [],
+          avatarUrl: rewriteMediaUrl(context.canonicalArtist.profileImages?.avatarUrl || ""),
+          heroUrl: rewriteMediaUrl(context.canonicalArtist.profileImages?.heroUrl || ""),
+          galleryUrls: Array.isArray(context.canonicalArtist.profileImages?.galleryUrls)
+            ? context.canonicalArtist.profileImages.galleryUrls.map((value) => rewriteMediaUrl(value))
+            : [],
         },
         profileLinks: serializeProfileLinks(artist?.profileLinks),
-        experience: serializeExperience(artist?.experience),
-        education: serializeEducation(artist?.education),
-        exhibitions: serializeExhibitions(artist?.exhibitions),
+        experience: serializeExperience(artist?.experience).map((item) => ({ ...item, imageUrl: rewriteMediaUrl(item.imageUrl) })),
+        education: serializeEducation(artist?.education).map((item) => ({ ...item, imageUrl: rewriteMediaUrl(item.imageUrl) })),
+        exhibitions: serializeExhibitions(artist?.exhibitions).map((item) => ({ ...item, coverImageUrl: rewriteMediaUrl(item.coverImageUrl) })),
       }}
       featuredWorks={featuredWorks.map((item) => ({
         productKey: item.productKey,
         title: item.title,
         seriesName: item.seriesName || "",
-        imageUrl: item.images?.thumbUrl || item.images?.mediumUrl || item.images?.originalUrl || "",
+        imageUrl: rewriteMediaUrl(item.images?.thumbUrl || item.images?.mediumUrl || item.images?.originalUrl || ""),
         status: item.status,
       }))}
       announcementPreview={publicProfile.announcements.slice(0, 3)}

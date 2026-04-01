@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 
 import { requireArtistApiContext } from "@/lib/server/artist-context";
-import { buildArtistMediaAssetUrl } from "@/lib/server/artist-media";
+import { buildArtistMediaAssetUrl, buildPublicArtistMediaAssetUrl } from "@/lib/server/artist-media";
 import { resolveArtistMediaFileResponse } from "@/lib/server/artist-media-response";
 import { ArtistMediaV2Model, CanonicalArtistModel } from "@/lib/server/models";
 
@@ -36,7 +36,12 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
 
   await ArtistMediaV2Model.deleteOne({ _id: media._id });
 
-  const targetUrls = [media.url, media.previewUrl, media.s3Key ? buildArtistMediaAssetUrl(media._id) : ""].filter(Boolean) as string[];
+  const targetUrls = [
+    media.url,
+    media.previewUrl,
+    buildArtistMediaAssetUrl(media._id),
+    buildPublicArtistMediaAssetUrl(media._id),
+  ].filter(Boolean) as string[];
   const currentGallery = Array.isArray(context.canonicalArtist.profileImages?.galleryUrls)
     ? context.canonicalArtist.profileImages.galleryUrls
     : [];

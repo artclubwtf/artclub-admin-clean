@@ -6,6 +6,7 @@ import {
   serializeExperience,
   serializeProfileLinks,
 } from "@/lib/server/artist-profile-content";
+import { normalizePublicArtistMediaUrl, normalizePublicArtistMediaUrls } from "@/lib/server/artist-media";
 
 function isActiveAnnouncement(item: ArtistAnnouncementItem) {
   if (!item.isPublished) return false;
@@ -68,8 +69,15 @@ function mergeLegacyLinks(input: {
 export function buildPublicArtistProfileShape(input: {
   artist: any;
   announcements: ArtistAnnouncementItem[];
+  rewriteMediaUrl?: (value: string | undefined | null) => string;
 }) {
-  const exhibitions = serializeExhibitions(input.artist?.exhibitions).filter((item) => item.visibility === "public");
+  const rewriteMediaUrl = input.rewriteMediaUrl || ((value: string | undefined | null) => normalizePublicArtistMediaUrl(value));
+  const exhibitions = serializeExhibitions(input.artist?.exhibitions)
+    .filter((item) => item.visibility === "public")
+    .map((item) => ({
+      ...item,
+      coverImageUrl: rewriteMediaUrl(item.coverImageUrl),
+    }));
   const links = mergeLegacyLinks({
     links: serializeProfileLinks(input.artist?.profileLinks).filter((item: ArtistProfileLinkItem) => item.isVisible),
     websiteUrl: input.artist?.websiteUrl,
@@ -81,14 +89,24 @@ export function buildPublicArtistProfileShape(input: {
     displayName: input.artist?.displayName || "",
     bio: input.artist?.bio || "",
     profileImages: {
-      avatarUrl: input.artist?.profileImages?.avatarUrl || "",
-      heroUrl: input.artist?.profileImages?.heroUrl || "",
-      galleryUrls: Array.isArray(input.artist?.profileImages?.galleryUrls) ? input.artist.profileImages.galleryUrls : [],
+      avatarUrl: rewriteMediaUrl(input.artist?.profileImages?.avatarUrl || ""),
+      heroUrl: rewriteMediaUrl(input.artist?.profileImages?.heroUrl || ""),
+      galleryUrls: normalizePublicArtistMediaUrls(
+        (Array.isArray(input.artist?.profileImages?.galleryUrls) ? input.artist.profileImages.galleryUrls : []).map((value: string) =>
+          rewriteMediaUrl(value),
+        ),
+      ),
     },
     links,
     socialLinks: links.filter((item) => ["instagram", "website", "linkedin", "tiktok", "youtube", "behance"].includes(item.type)).slice(0, 5),
-    experience: serializeExperience(input.artist?.experience),
-    education: serializeEducation(input.artist?.education),
+    experience: serializeExperience(input.artist?.experience).map((item) => ({
+      ...item,
+      imageUrl: rewriteMediaUrl(item.imageUrl),
+    })),
+    education: serializeEducation(input.artist?.education).map((item) => ({
+      ...item,
+      imageUrl: rewriteMediaUrl(item.imageUrl),
+    })),
     exhibitions,
     exhibitionHistory: exhibitions.filter((item: ArtistExhibitionItem) => !isUpcomingOrOngoingExhibition(item)),
     upcomingExhibitions: exhibitions.filter((item: ArtistExhibitionItem) => isUpcomingOrOngoingExhibition(item)),
