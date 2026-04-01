@@ -20,9 +20,10 @@ type SeriesManagerProps = {
     imageUrl: string;
     assignedSeriesId: string;
   }>;
+  initialOpenCreate?: boolean;
 };
 
-export function SeriesManager({ initialSeries, artworks: initialArtworks }: SeriesManagerProps) {
+export function SeriesManager({ initialSeries, artworks: initialArtworks, initialOpenCreate = false }: SeriesManagerProps) {
   const [series, setSeries] = useState(initialSeries);
   const [artworks, setArtworks] = useState(initialArtworks);
   const [createName, setCreateName] = useState("");
@@ -136,7 +137,7 @@ export function SeriesManager({ initialSeries, artworks: initialArtworks }: Seri
 
       <Section title="New series" subtitle="Create a series record for the current artist.">
         <form className="space-y-4" onSubmit={createSeries}>
-          <Input label="Name" value={createName} onChange={(event) => setCreateName(event.target.value)} />
+          <Input label="Name" value={createName} onChange={(event) => setCreateName(event.target.value)} autoFocus={initialOpenCreate} />
           <Textarea label="Description" value={createDescription} onChange={(event) => setCreateDescription(event.target.value)} />
           <ImageUploader label="Cover image" kind="other" items={createCoverItems} onChange={(items) => setCreateCoverItems(items.slice(-1))} />
           <Button type="submit">Create series</Button>

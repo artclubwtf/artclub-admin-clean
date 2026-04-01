@@ -13,6 +13,7 @@ import type { ArtistProfileLinkItem } from "@/lib/types";
 type ProfileLinksSectionProps = {
   initialItems: ArtistProfileLinkItem[];
   onItemsChange?: (items: ArtistProfileLinkItem[]) => void;
+  initialOpenCreate?: boolean;
 };
 
 const emptyDraft: ArtistProfileLinkItem = {
@@ -27,10 +28,10 @@ const emptyDraft: ArtistProfileLinkItem = {
 
 const typeOptions = ["instagram", "website", "shop", "behance", "linkedin", "tiktok", "youtube", "custom"];
 
-export function ProfileLinksSection({ initialItems, onItemsChange }: ProfileLinksSectionProps) {
+export function ProfileLinksSection({ initialItems, onItemsChange, initialOpenCreate = false }: ProfileLinksSectionProps) {
   const [items, setItems] = useState(initialItems);
   const [draft, setDraft] = useState<ArtistProfileLinkItem>(emptyDraft);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(initialOpenCreate ? "__new__" : null);
   const [status, setStatus] = useState<{ tone: "error" | "success"; text: string } | null>(null);
 
   async function createItem() {

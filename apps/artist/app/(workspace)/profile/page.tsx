@@ -39,8 +39,16 @@ function buildArtworkPriceLabel(params: {
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
-export default async function ProfilePage() {
+export default async function ProfilePage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const context = await requireArtistContext();
+  const resolvedSearchParams = (await searchParams) || {};
+  const createIntent = Array.isArray(resolvedSearchParams.create)
+    ? resolvedSearchParams.create[0]
+    : resolvedSearchParams.create;
   const [artist, announcements, artworks] = await Promise.all([
     CanonicalArtistModel.findById(context.canonicalArtist._id).lean(),
     ArtistAnnouncementModel.find({
@@ -172,6 +180,7 @@ export default async function ProfilePage() {
       }}
       artworksPreview={artworksPreview}
       initialAnnouncements={serializedAnnouncements}
+      initialCreateIntent={createIntent || ""}
     />
   );
 }

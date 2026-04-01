@@ -6,8 +6,16 @@ import { ArtistSeriesModel, CanonicalProductModel } from "@/lib/server/models";
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
-export default async function SeriesPage() {
+export default async function SeriesPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const context = await requireArtistContext();
+  const resolvedSearchParams = (await searchParams) || {};
+  const createIntent = Array.isArray(resolvedSearchParams.create)
+    ? resolvedSearchParams.create[0]
+    : resolvedSearchParams.create;
 
   const [series, artworks] = await Promise.all([
     ArtistSeriesModel.find({
@@ -49,6 +57,7 @@ export default async function SeriesPage() {
         imageUrl: item.images?.thumbUrl || item.images?.mediumUrl || item.images?.originalUrl || "",
         assignedSeriesId: item.seriesId || "",
       }))}
+      initialOpenCreate={createIntent === "1" || createIntent === "true" || createIntent === "series"}
     />
   );
 }

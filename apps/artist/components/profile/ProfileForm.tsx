@@ -33,6 +33,7 @@ type ProfileFormProps = {
   initialProfile: ArtistProfileData;
   artworksPreview: PublicArtistArtworkItem[];
   initialAnnouncements: ArtistAnnouncementItem[];
+  initialCreateIntent?: string;
 };
 
 const tabs = [
@@ -423,12 +424,33 @@ function FeaturedWorksModal({ open, onClose }: { open: boolean; onClose: () => v
   );
 }
 
-export function ProfileForm({ initialProfile, artworksPreview, initialAnnouncements }: ProfileFormProps) {
+function normalizeCreateIntent(value: string | undefined) {
+  switch ((value || "").trim().toLowerCase()) {
+    case "exhibition":
+    case "exhibitions":
+      return { modal: "exhibitions" as const, tab: "exhibitions" as const, createSection: "exhibitions" as const };
+    case "education":
+      return { modal: "education" as const, tab: "education" as const, createSection: "education" as const };
+    case "experience":
+      return { modal: "experience" as const, tab: "experience" as const, createSection: "experience" as const };
+    case "link":
+    case "links":
+      return { modal: "links" as const, tab: "links" as const, createSection: "links" as const };
+    case "announcement":
+    case "announcements":
+      return { modal: "announcements" as const, tab: "artworks" as const, createSection: "announcements" as const };
+    default:
+      return null;
+  }
+}
+
+export function ProfileForm({ initialProfile, artworksPreview, initialAnnouncements, initialCreateIntent }: ProfileFormProps) {
+  const initialIntent = normalizeCreateIntent(initialCreateIntent);
   const [profile, setProfile] = useState(initialProfile);
   const [announcements, setAnnouncements] = useState(initialAnnouncements);
-  const [activeTab, setActiveTab] = useState<TabKey>("artworks");
+  const [activeTab, setActiveTab] = useState<TabKey>(initialIntent?.tab || "artworks");
   const [selectedArtwork, setSelectedArtwork] = useState<PublicArtistArtworkItem | null>(null);
-  const [openModal, setOpenModal] = useState<ModalKey>(null);
+  const [openModal, setOpenModal] = useState<ModalKey>(initialIntent?.modal || null);
   const [status, setStatus] = useState<{ tone: "error" | "success"; text: string } | null>(null);
 
   const visibleLinks = useMemo(
@@ -839,7 +861,11 @@ export function ProfileForm({ initialProfile, artworksPreview, initialAnnounceme
       ) : null}
 
       <Modal open={openModal === "links"} title="Edit links" subtitle="Add, reorder, hide or highlight the public links for your profile." onClose={() => setOpenModal(null)} className="max-w-4xl">
-        <ProfileLinksSection initialItems={profile.profileLinks} onItemsChange={(items) => handleItemsChange("profileLinks", items)} />
+        <ProfileLinksSection
+          initialItems={profile.profileLinks}
+          onItemsChange={(items) => handleItemsChange("profileLinks", items)}
+          initialOpenCreate={initialIntent?.createSection === "links"}
+        />
       </Modal>
 
       <Modal
@@ -849,7 +875,11 @@ export function ProfileForm({ initialProfile, artworksPreview, initialAnnounceme
         onClose={() => setOpenModal(null)}
         className="max-w-4xl"
       >
-        <ExperienceSection initialItems={profile.experience} onItemsChange={(items) => handleItemsChange("experience", items)} />
+        <ExperienceSection
+          initialItems={profile.experience}
+          onItemsChange={(items) => handleItemsChange("experience", items)}
+          initialOpenCreate={initialIntent?.createSection === "experience"}
+        />
       </Modal>
 
       <Modal
@@ -859,7 +889,11 @@ export function ProfileForm({ initialProfile, artworksPreview, initialAnnounceme
         onClose={() => setOpenModal(null)}
         className="max-w-4xl"
       >
-        <EducationSection initialItems={profile.education} onItemsChange={(items) => handleItemsChange("education", items)} />
+        <EducationSection
+          initialItems={profile.education}
+          onItemsChange={(items) => handleItemsChange("education", items)}
+          initialOpenCreate={initialIntent?.createSection === "education"}
+        />
       </Modal>
 
       <Modal
@@ -869,7 +903,11 @@ export function ProfileForm({ initialProfile, artworksPreview, initialAnnounceme
         onClose={() => setOpenModal(null)}
         className="max-w-4xl"
       >
-        <ExhibitionsSection initialItems={profile.exhibitions} onItemsChange={(items) => handleItemsChange("exhibitions", items)} />
+        <ExhibitionsSection
+          initialItems={profile.exhibitions}
+          onItemsChange={(items) => handleItemsChange("exhibitions", items)}
+          initialOpenCreate={initialIntent?.createSection === "exhibitions"}
+        />
       </Modal>
 
       <Modal
@@ -879,7 +917,12 @@ export function ProfileForm({ initialProfile, artworksPreview, initialAnnounceme
         onClose={() => setOpenModal(null)}
         className="max-w-4xl"
       >
-        <AnnouncementsManager embedded initialItems={announcements} onItemsChange={setAnnouncements} />
+        <AnnouncementsManager
+          embedded
+          initialItems={announcements}
+          onItemsChange={setAnnouncements}
+          initialOpenCreate={initialIntent?.createSection === "announcements"}
+        />
       </Modal>
 
       {openModal === "featured-works" ? <FeaturedWorksModal open onClose={() => setOpenModal(null)} /> : null}

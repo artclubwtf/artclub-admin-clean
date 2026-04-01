@@ -16,6 +16,7 @@ type AnnouncementsManagerProps = {
   initialItems: ArtistAnnouncementItem[];
   embedded?: boolean;
   onItemsChange?: (items: ArtistAnnouncementItem[]) => void;
+  initialOpenCreate?: boolean;
 };
 
 const emptyAnnouncement: ArtistAnnouncementItem = {
@@ -44,10 +45,10 @@ function toAnnouncementPayload(item: ArtistAnnouncementItem) {
   };
 }
 
-export function AnnouncementsManager({ initialItems, embedded = false, onItemsChange }: AnnouncementsManagerProps) {
+export function AnnouncementsManager({ initialItems, embedded = false, onItemsChange, initialOpenCreate = false }: AnnouncementsManagerProps) {
   const [items, setItems] = useState(initialItems);
   const [draft, setDraft] = useState(emptyAnnouncement);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(initialOpenCreate ? "__new__" : null);
   const [status, setStatus] = useState<{ tone: "error" | "success"; text: string } | null>(null);
 
   async function createItem() {

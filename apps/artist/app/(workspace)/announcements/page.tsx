@@ -5,8 +5,16 @@ import { ArtistAnnouncementModel } from "@/lib/server/models";
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
-export default async function AnnouncementsPage() {
+export default async function AnnouncementsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const context = await requireArtistContext();
+  const resolvedSearchParams = (await searchParams) || {};
+  const createIntent = Array.isArray(resolvedSearchParams.create)
+    ? resolvedSearchParams.create[0]
+    : resolvedSearchParams.create;
   const announcements = await ArtistAnnouncementModel.find({
     shopDomain: context.user.shopDomain,
     artistKey: context.user.artistKey,
@@ -30,6 +38,7 @@ export default async function AnnouncementsPage() {
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       }))}
+      initialOpenCreate={createIntent === "1" || createIntent === "true" || createIntent === "announcement"}
     />
   );
 }

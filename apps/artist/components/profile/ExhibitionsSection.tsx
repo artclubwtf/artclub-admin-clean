@@ -15,6 +15,7 @@ import type { ArtistExhibitionItem, ArtistMediaItem } from "@/lib/types";
 type ExhibitionsSectionProps = {
   initialItems: ArtistExhibitionItem[];
   onItemsChange?: (items: ArtistExhibitionItem[]) => void;
+  initialOpenCreate?: boolean;
 };
 
 const emptyItem: ArtistExhibitionItem = {
@@ -51,10 +52,10 @@ function toExhibitionPayload(item: ArtistExhibitionItem) {
   };
 }
 
-export function ExhibitionsSection({ initialItems, onItemsChange }: ExhibitionsSectionProps) {
+export function ExhibitionsSection({ initialItems, onItemsChange, initialOpenCreate = false }: ExhibitionsSectionProps) {
   const [items, setItems] = useState(initialItems);
   const [draft, setDraft] = useState(emptyItem);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(initialOpenCreate ? "__new__" : null);
   const [status, setStatus] = useState<{ tone: "error" | "success"; text: string } | null>(null);
 
   const upcoming = items.filter((item) => isUpcomingOrOngoingDateRange(item));

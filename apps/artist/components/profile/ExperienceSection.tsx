@@ -15,6 +15,7 @@ import type { ArtistExperienceItem, ArtistMediaItem } from "@/lib/types";
 type ExperienceSectionProps = {
   initialItems: ArtistExperienceItem[];
   onItemsChange?: (items: ArtistExperienceItem[]) => void;
+  initialOpenCreate?: boolean;
 };
 
 const emptyItem: ArtistExperienceItem = {
@@ -47,10 +48,10 @@ function toExperiencePayload(item: ArtistExperienceItem) {
   };
 }
 
-export function ExperienceSection({ initialItems, onItemsChange }: ExperienceSectionProps) {
+export function ExperienceSection({ initialItems, onItemsChange, initialOpenCreate = false }: ExperienceSectionProps) {
   const [items, setItems] = useState(initialItems);
   const [draft, setDraft] = useState(emptyItem);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(initialOpenCreate ? "__new__" : null);
   const [status, setStatus] = useState<{ tone: "error" | "success"; text: string } | null>(null);
 
   async function createItem() {

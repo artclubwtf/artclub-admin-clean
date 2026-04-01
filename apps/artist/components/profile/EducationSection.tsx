@@ -14,6 +14,7 @@ import type { ArtistEducationItem, ArtistMediaItem } from "@/lib/types";
 type EducationSectionProps = {
   initialItems: ArtistEducationItem[];
   onItemsChange?: (items: ArtistEducationItem[]) => void;
+  initialOpenCreate?: boolean;
 };
 
 const emptyItem: ArtistEducationItem = {
@@ -46,10 +47,10 @@ function toEducationPayload(item: ArtistEducationItem) {
   };
 }
 
-export function EducationSection({ initialItems, onItemsChange }: EducationSectionProps) {
+export function EducationSection({ initialItems, onItemsChange, initialOpenCreate = false }: EducationSectionProps) {
   const [items, setItems] = useState(initialItems);
   const [draft, setDraft] = useState(emptyItem);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(initialOpenCreate ? "__new__" : null);
   const [status, setStatus] = useState<{ tone: "error" | "success"; text: string } | null>(null);
 
   async function createItem() {
