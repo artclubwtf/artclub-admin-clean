@@ -14,3 +14,4 @@ export { TermsVersionModel } from "../../../admin/models/TermsVersion";
 export { ArtistRegistrationKeyModel } from "../../../admin/models/ArtistRegistrationKey";
 export { ArtistWorkspaceThreadModel } from "../../../admin/models/ArtistWorkspaceThread";
 export { ArtistWorkspaceMessageModel } from "../../../admin/models/ArtistWorkspaceMessage";
+export { ArtistAnnouncementModel } from "../../../admin/models/ArtistAnnouncement";

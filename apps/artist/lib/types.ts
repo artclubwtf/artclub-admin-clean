@@ -15,6 +15,8 @@ export type ArtistSeriesItem = {
   name: string;
   description: string;
   coverImageUrl: string;
+  artworkCount?: number;
+  artworkProductKeys?: string[];
   createdAt?: string | Date;
   updatedAt?: string | Date;
 };
@@ -62,6 +64,90 @@ export type ArtistProfileData = {
     heroUrl: string;
     galleryUrls: string[];
   };
+  profileLinks: ArtistProfileLinkItem[];
+  experience: ArtistExperienceItem[];
+  education: ArtistEducationItem[];
+  exhibitions: ArtistExhibitionItem[];
+};
+
+export type ArtistExperienceItem = {
+  id: string;
+  title: string;
+  organization: string;
+  employmentType: string;
+  location: string;
+  locationType: string;
+  startDate: string;
+  endDate: string;
+  isCurrent: boolean;
+  description: string;
+  imageUrl: string;
+  sortOrder: number;
+};
+
+export type ArtistEducationItem = {
+  id: string;
+  school: string;
+  degree: string;
+  fieldOfStudy: string;
+  startDate: string;
+  endDate: string;
+  grade: string;
+  activities: string;
+  description: string;
+  courses: string;
+  imageUrl: string;
+  sortOrder: number;
+};
+
+export type ArtistExhibitionItem = {
+  id: string;
+  title: string;
+  venue: string;
+  exhibitionType: string;
+  city: string;
+  country: string;
+  startDate: string;
+  endDate: string;
+  isOngoing: boolean;
+  description: string;
+  link: string;
+  coverImageUrl: string;
+  sortOrder: number;
+  visibility: "public" | "private";
+};
+
+export type ArtistProfileLinkItem = {
+  id: string;
+  label: string;
+  url: string;
+  type: string;
+  sortOrder: number;
+  isVisible: boolean;
+  isHighlighted: boolean;
+};
+
+export type ArtistAnnouncementItem = {
+  id: string;
+  title: string;
+  body: string;
+  ctaLabel: string;
+  ctaUrl: string;
+  startsAt: string;
+  endsAt: string;
+  isPinned: boolean;
+  isPublished: boolean;
+  sortOrder: number;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+};
+
+export type ArtistFeaturedWorkItem = {
+  productKey: string;
+  title: string;
+  seriesName: string;
+  imageUrl: string;
+  status: string;
 };
 
 export type ActiveTermsModule = {

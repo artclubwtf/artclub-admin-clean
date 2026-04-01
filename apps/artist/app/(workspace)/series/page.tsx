@@ -1,4 +1,5 @@
 import { SeriesManager } from "@/components/series/SeriesManager";
+import { resolveArtistMediaUrls } from "@/lib/server/artist-media";
 import { requireArtistContext } from "@/lib/server/artist-context";
 import { ArtistSeriesModel, CanonicalProductModel } from "@/lib/server/models";
 
@@ -19,9 +20,9 @@ export default async function SeriesPage() {
       shopDomain: context.user.shopDomain,
       artistKey: context.user.artistKey,
       type: "artwork",
-      seriesId: { $exists: true, $ne: null },
     })
-      .select({ seriesId: 1 })
+      .select({ productKey: 1, title: 1, seriesId: 1, images: 1 })
+      .sort({ updatedAt: -1, createdAt: -1 })
       .lean(),
   ]);
 
@@ -40,6 +41,13 @@ export default async function SeriesPage() {
         description: item.description || "",
         coverImageUrl: item.coverImageUrl || "",
         artworkCount: counts[item._id.toString()] || 0,
+        artworkProductKeys: artworks.filter((artwork) => artwork.seriesId === item._id.toString()).map((artwork) => artwork.productKey),
+      }))}
+      artworks={artworks.map((item) => ({
+        productKey: item.productKey,
+        title: item.title,
+        imageUrl: item.images?.thumbUrl || item.images?.mediumUrl || item.images?.originalUrl || "",
+        assignedSeriesId: item.seriesId || "",
       }))}
     />
   );

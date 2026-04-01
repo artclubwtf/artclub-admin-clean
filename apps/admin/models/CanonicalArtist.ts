@@ -20,6 +20,75 @@ const canonicalArtistConsentsSchema = new Schema(
   { _id: false },
 );
 
+const canonicalArtistExperienceSchema = new Schema(
+  {
+    id: { type: String, required: true, trim: true },
+    title: { type: String, required: true, trim: true },
+    organization: { type: String, required: true, trim: true },
+    employmentType: { type: String, trim: true },
+    location: { type: String, trim: true },
+    locationType: { type: String, trim: true },
+    startDate: { type: Date },
+    endDate: { type: Date },
+    isCurrent: { type: Boolean, default: false },
+    description: { type: String, trim: true },
+    imageUrl: { type: String, trim: true },
+    sortOrder: { type: Number, default: 0 },
+  },
+  { _id: false },
+);
+
+const canonicalArtistEducationSchema = new Schema(
+  {
+    id: { type: String, required: true, trim: true },
+    school: { type: String, required: true, trim: true },
+    degree: { type: String, trim: true },
+    fieldOfStudy: { type: String, trim: true },
+    startDate: { type: Date },
+    endDate: { type: Date },
+    grade: { type: String, trim: true },
+    activities: { type: String, trim: true },
+    description: { type: String, trim: true },
+    courses: { type: String, trim: true },
+    imageUrl: { type: String, trim: true },
+    sortOrder: { type: Number, default: 0 },
+  },
+  { _id: false },
+);
+
+const canonicalArtistExhibitionSchema = new Schema(
+  {
+    id: { type: String, required: true, trim: true },
+    title: { type: String, required: true, trim: true },
+    venue: { type: String, required: true, trim: true },
+    exhibitionType: { type: String, trim: true },
+    city: { type: String, trim: true },
+    country: { type: String, trim: true },
+    startDate: { type: Date },
+    endDate: { type: Date },
+    isOngoing: { type: Boolean, default: false },
+    description: { type: String, trim: true },
+    link: { type: String, trim: true },
+    coverImageUrl: { type: String, trim: true },
+    sortOrder: { type: Number, default: 0 },
+    visibility: { type: String, enum: ["public", "private"], default: "public" },
+  },
+  { _id: false },
+);
+
+const canonicalArtistProfileLinkSchema = new Schema(
+  {
+    id: { type: String, required: true, trim: true },
+    label: { type: String, required: true, trim: true },
+    url: { type: String, required: true, trim: true },
+    type: { type: String, trim: true },
+    sortOrder: { type: Number, default: 0 },
+    isVisible: { type: Boolean, default: true },
+    isHighlighted: { type: Boolean, default: false },
+  },
+  { _id: false },
+);
+
 const canonicalArtistShopifySchema = new Schema(
   {
     metaobjectGid: { type: String },
@@ -52,6 +121,10 @@ const canonicalArtistSchema = new Schema(
     instagram: { type: String, trim: true },
     profileImages: { type: canonicalArtistProfileImagesSchema, default: () => ({ galleryUrls: [] }) },
     consents: { type: canonicalArtistConsentsSchema, default: () => ({}) },
+    experience: { type: [canonicalArtistExperienceSchema], default: [] },
+    education: { type: [canonicalArtistEducationSchema], default: [] },
+    exhibitions: { type: [canonicalArtistExhibitionSchema], default: [] },
+    profileLinks: { type: [canonicalArtistProfileLinkSchema], default: [] },
     shopify: { type: canonicalArtistShopifySchema, default: () => ({}) },
     sync: { type: canonicalArtistSyncSchema, default: () => ({ dirtyFields: [] }) },
   },
