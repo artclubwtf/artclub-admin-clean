@@ -31,6 +31,21 @@ const emptyItem: ArtistExperienceItem = {
   sortOrder: 0,
 };
 
+function toExperiencePayload(item: ArtistExperienceItem) {
+  return {
+    title: item.title,
+    organization: item.organization,
+    employmentType: item.employmentType,
+    location: item.location,
+    locationType: item.locationType,
+    startDate: item.startDate,
+    endDate: item.endDate,
+    isCurrent: item.isCurrent,
+    description: item.description,
+    imageUrl: item.imageUrl,
+  };
+}
+
 export function ExperienceSection({ initialItems }: ExperienceSectionProps) {
   const [items, setItems] = useState(initialItems);
   const [draft, setDraft] = useState(emptyItem);
@@ -41,7 +56,7 @@ export function ExperienceSection({ initialItems }: ExperienceSectionProps) {
     const res = await fetch("/api/artist/profile/sections/experience", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(draft),
+      body: JSON.stringify(toExperiencePayload(draft)),
     });
     const json = (await res.json().catch(() => null)) as { ok?: boolean; item?: ArtistExperienceItem; error?: string } | null;
     if (!res.ok || !json?.item) {
@@ -59,7 +74,7 @@ export function ExperienceSection({ initialItems }: ExperienceSectionProps) {
     const res = await fetch(`/api/artist/profile/sections/experience/${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(next),
+      body: JSON.stringify(toExperiencePayload(next)),
     });
     const json = (await res.json().catch(() => null)) as { ok?: boolean; item?: ArtistExperienceItem; error?: string } | null;
     if (!res.ok || !json?.item) {

@@ -30,6 +30,21 @@ const emptyItem: ArtistEducationItem = {
   sortOrder: 0,
 };
 
+function toEducationPayload(item: ArtistEducationItem) {
+  return {
+    school: item.school,
+    degree: item.degree,
+    fieldOfStudy: item.fieldOfStudy,
+    startDate: item.startDate,
+    endDate: item.endDate,
+    grade: item.grade,
+    activities: item.activities,
+    description: item.description,
+    courses: item.courses,
+    imageUrl: item.imageUrl,
+  };
+}
+
 export function EducationSection({ initialItems }: EducationSectionProps) {
   const [items, setItems] = useState(initialItems);
   const [draft, setDraft] = useState(emptyItem);
@@ -40,7 +55,7 @@ export function EducationSection({ initialItems }: EducationSectionProps) {
     const res = await fetch("/api/artist/profile/sections/education", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(draft),
+      body: JSON.stringify(toEducationPayload(draft)),
     });
     const json = (await res.json().catch(() => null)) as { ok?: boolean; item?: ArtistEducationItem; error?: string } | null;
     if (!res.ok || !json?.item) {
@@ -58,7 +73,7 @@ export function EducationSection({ initialItems }: EducationSectionProps) {
     const res = await fetch(`/api/artist/profile/sections/education/${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(next),
+      body: JSON.stringify(toEducationPayload(next)),
     });
     const json = (await res.json().catch(() => null)) as { ok?: boolean; item?: ArtistEducationItem; error?: string } | null;
     if (!res.ok || !json?.item) {

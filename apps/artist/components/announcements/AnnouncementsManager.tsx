@@ -29,6 +29,19 @@ const emptyAnnouncement: ArtistAnnouncementItem = {
   sortOrder: 0,
 };
 
+function toAnnouncementPayload(item: ArtistAnnouncementItem) {
+  return {
+    title: item.title,
+    body: item.body,
+    ctaLabel: item.ctaLabel,
+    ctaUrl: item.ctaUrl,
+    startsAt: item.startsAt,
+    endsAt: item.endsAt,
+    isPinned: item.isPinned,
+    isPublished: item.isPublished,
+  };
+}
+
 export function AnnouncementsManager({ initialItems }: AnnouncementsManagerProps) {
   const [items, setItems] = useState(initialItems);
   const [draft, setDraft] = useState(emptyAnnouncement);
@@ -39,7 +52,7 @@ export function AnnouncementsManager({ initialItems }: AnnouncementsManagerProps
     const res = await fetch("/api/artist/announcements", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(draft),
+      body: JSON.stringify(toAnnouncementPayload(draft)),
     });
     const json = (await res.json().catch(() => null)) as { ok?: boolean; announcement?: ArtistAnnouncementItem; error?: string } | null;
     if (!res.ok || !json?.announcement) {
@@ -57,7 +70,7 @@ export function AnnouncementsManager({ initialItems }: AnnouncementsManagerProps
     const res = await fetch(`/api/artist/announcements/${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(next),
+      body: JSON.stringify(toAnnouncementPayload(next)),
     });
     const json = (await res.json().catch(() => null)) as { ok?: boolean; announcement?: ArtistAnnouncementItem; error?: string } | null;
     if (!res.ok || !json?.announcement) {

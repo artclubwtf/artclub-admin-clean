@@ -33,6 +33,23 @@ const emptyItem: ArtistExhibitionItem = {
   visibility: "public",
 };
 
+function toExhibitionPayload(item: ArtistExhibitionItem) {
+  return {
+    title: item.title,
+    venue: item.venue,
+    exhibitionType: item.exhibitionType,
+    city: item.city,
+    country: item.country,
+    startDate: item.startDate,
+    endDate: item.endDate,
+    isOngoing: item.isOngoing,
+    description: item.description,
+    link: item.link,
+    coverImageUrl: item.coverImageUrl,
+    visibility: item.visibility,
+  };
+}
+
 export function ExhibitionsSection({ initialItems }: ExhibitionsSectionProps) {
   const [items, setItems] = useState(initialItems);
   const [draft, setDraft] = useState(emptyItem);
@@ -46,7 +63,7 @@ export function ExhibitionsSection({ initialItems }: ExhibitionsSectionProps) {
     const res = await fetch("/api/artist/profile/sections/exhibitions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(draft),
+      body: JSON.stringify(toExhibitionPayload(draft)),
     });
     const json = (await res.json().catch(() => null)) as { ok?: boolean; item?: ArtistExhibitionItem; error?: string } | null;
     if (!res.ok || !json?.item) {
@@ -64,7 +81,7 @@ export function ExhibitionsSection({ initialItems }: ExhibitionsSectionProps) {
     const res = await fetch(`/api/artist/profile/sections/exhibitions/${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(next),
+      body: JSON.stringify(toExhibitionPayload(next)),
     });
     const json = (await res.json().catch(() => null)) as { ok?: boolean; item?: ArtistExhibitionItem; error?: string } | null;
     if (!res.ok || !json?.item) {
