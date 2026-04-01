@@ -1,3 +1,4 @@
+import { ArtistTopbar } from "@/components/layout/ArtistTopbar";
 import { WorkspaceShell } from "@/components/layout/WorkspaceShell";
 import { OverviewPanels } from "@/components/overview/OverviewPanels";
 import { requireArtistContext } from "@/lib/server/artist-context";
@@ -50,7 +51,7 @@ export default async function HomePage() {
   ]);
 
   return (
-    <WorkspaceShell>
+    <WorkspaceShell topbar={<ArtistTopbar context={context} />}>
       <OverviewPanels
         overview={{
           artworkCount,
