@@ -89,6 +89,13 @@ const canonicalArtistProfileLinkSchema = new Schema(
   { _id: false },
 );
 
+const canonicalArtistPublicProfileSchema = new Schema(
+  {
+    isVisible: { type: Boolean, default: true },
+  },
+  { _id: false },
+);
+
 const canonicalArtistShopifySchema = new Schema(
   {
     metaobjectGid: { type: String },
@@ -125,6 +132,7 @@ const canonicalArtistSchema = new Schema(
     education: { type: [canonicalArtistEducationSchema], default: [] },
     exhibitions: { type: [canonicalArtistExhibitionSchema], default: [] },
     profileLinks: { type: [canonicalArtistProfileLinkSchema], default: [] },
+    publicProfile: { type: canonicalArtistPublicProfileSchema, default: () => ({ isVisible: true }) },
     shopify: { type: canonicalArtistShopifySchema, default: () => ({}) },
     sync: { type: canonicalArtistSyncSchema, default: () => ({ dirtyFields: [] }) },
   },

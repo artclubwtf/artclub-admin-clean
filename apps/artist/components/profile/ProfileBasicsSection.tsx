@@ -27,6 +27,7 @@ export function ProfileBasicsSection({ initialProfile }: ProfileBasicsSectionPro
   const [locationCity, setLocationCity] = useState(initialProfile.locationCity);
   const [locationCountry, setLocationCountry] = useState(initialProfile.locationCountry);
   const [bio, setBio] = useState(initialProfile.bio);
+  const [publicProfileVisible, setPublicProfileVisible] = useState(initialProfile.publicProfileVisible);
   const [avatarItems, setAvatarItems] = useState<ArtistMediaItem[]>(asSingleMedia(initialProfile.profileImages.avatarUrl, "avatar"));
   const [heroItems, setHeroItems] = useState<ArtistMediaItem[]>(asSingleMedia(initialProfile.profileImages.heroUrl, "hero"));
   const [galleryItems, setGalleryItems] = useState<ArtistMediaItem[]>(asGalleryMedia(initialProfile.profileImages.galleryUrls));
@@ -49,6 +50,7 @@ export function ProfileBasicsSection({ initialProfile }: ProfileBasicsSectionPro
           locationCity,
           locationCountry,
           bio,
+          publicProfileVisible,
           avatarUrl: avatarItems[0]?.url || "",
           heroUrl: heroItems[0]?.url || "",
           galleryUrls: galleryItems.map((item) => item.url),
@@ -76,6 +78,21 @@ export function ProfileBasicsSection({ initialProfile }: ProfileBasicsSectionPro
             <Input label="Country" value={locationCountry} onChange={(event) => setLocationCountry(event.target.value)} disabled={isPending} />
           </div>
           <Textarea label="About" value={bio} onChange={(event) => setBio(event.target.value)} disabled={isPending} />
+          <label className="flex items-center gap-3 rounded-[1.75rem] bg-neutral-50 px-4 py-4">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-neutral-950"
+              checked={publicProfileVisible}
+              onChange={(event) => setPublicProfileVisible(event.target.checked)}
+              disabled={isPending}
+            />
+            <span className="text-sm text-neutral-700">Public profile visible</span>
+          </label>
+          <div className="flex flex-wrap gap-3">
+            <Button href={`/artist/${encodeURIComponent(handle)}`} tone="secondary">
+              Preview public page
+            </Button>
+          </div>
         </div>
       </Section>
 

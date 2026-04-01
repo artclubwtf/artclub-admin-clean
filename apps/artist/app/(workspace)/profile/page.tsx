@@ -62,6 +62,7 @@ export default async function ProfilePage() {
         locationCity: context.canonicalArtist.locationCity || "",
         locationCountry: context.canonicalArtist.locationCountry || "",
         bio: context.canonicalArtist.bio || "",
+        publicProfileVisible: artist?.publicProfile?.isVisible !== false,
         profileImages: {
           avatarUrl: context.canonicalArtist.profileImages?.avatarUrl || "",
           heroUrl: context.canonicalArtist.profileImages?.heroUrl || "",

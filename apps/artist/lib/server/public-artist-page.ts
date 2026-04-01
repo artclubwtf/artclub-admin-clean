@@ -1,0 +1,153 @@
+import { connectMongo } from "@/lib/server/mongodb";
+import { buildPublicArtistProfileShape } from "@/lib/server/public-artist-profile";
+import { ArtistAnnouncementModel, CanonicalArtistModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
+import type { PublicArtistArtworkItem, PublicArtistProfilePageData } from "@/lib/types";
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function formatCurrency(cents: number) {
+  return new Intl.NumberFormat("en-DE", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(Math.max(0, cents) / 100);
+}
+
+function buildArtworkPriceLabel(params: {
+  forSale: boolean;
+  originalAvailable: boolean;
+  allowPrints: boolean;
+  variants: Array<{ priceCents: number; finish?: string; sizeCode?: string }>;
+}) {
+  if (!params.forSale) return "Not for Sale at ARTCLUB";
+
+  const positive = params.variants.filter((item) => item.priceCents > 0).sort((a, b) => a.priceCents - b.priceCents);
+  const cheapest = positive[0];
+
+  if (params.originalAvailable && cheapest) return formatCurrency(cheapest.priceCents);
+  if (params.allowPrints && cheapest) return `From ${formatCurrency(cheapest.priceCents)}`;
+  if (params.originalAvailable) return "Available on request";
+  if (params.allowPrints) return "Prints available";
+  return "Not for Sale at ARTCLUB";
+}
+
+export async function loadPublicArtistPageBySlug(rawSlug: string): Promise<PublicArtistProfilePageData | null> {
+  const slug = rawSlug.trim();
+  if (!slug) return null;
+
+  await connectMongo();
+
+  const artist = await CanonicalArtistModel.findOne({
+    handle: { $regex: `^${escapeRegex(slug)}$`, $options: "i" },
+    "publicProfile.isVisible": { $ne: false },
+  }).lean();
+
+  if (!artist) return null;
+
+  const [announcements, artworks] = await Promise.all([
+    ArtistAnnouncementModel.find({
+      shopDomain: artist.shopDomain,
+      artistKey: artist.artistKey,
+      isPublished: true,
+    })
+      .sort({ isPinned: -1, sortOrder: 1, createdAt: -1 })
+      .lean(),
+    CanonicalProductModel.find({
+      shopDomain: artist.shopDomain,
+      artistKey: artist.artistKey,
+      type: "artwork",
+      status: { $ne: "archived" },
+    })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .select({
+        productKey: 1,
+        title: 1,
+        description: 1,
+        year: 1,
+        forSale: 1,
+        originalAvailable: 1,
+        allowPrints: 1,
+        seriesName: 1,
+        status: 1,
+        images: 1,
+      })
+      .lean(),
+  ]);
+
+  const variants = artworks.length
+    ? await CanonicalVariantModel.find({
+        shopDomain: artist.shopDomain,
+        productKey: { $in: artworks.map((item) => item.productKey) },
+      })
+        .select({ productKey: 1, priceCents: 1, finish: 1, sizeCode: 1 })
+        .lean()
+    : [];
+
+  const profile = buildPublicArtistProfileShape({
+    artist,
+    announcements: announcements.map((item) => ({
+      id: item._id.toString(),
+      title: item.title,
+      body: item.body || "",
+      ctaLabel: item.ctaLabel || "",
+      ctaUrl: item.ctaUrl || "",
+      startsAt: item.startsAt ? new Date(item.startsAt).toISOString().slice(0, 10) : "",
+      endsAt: item.endsAt ? new Date(item.endsAt).toISOString().slice(0, 10) : "",
+      isPinned: item.isPinned === true,
+      isPublished: item.isPublished === true,
+      sortOrder: typeof item.sortOrder === "number" ? item.sortOrder : 0,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    })),
+  });
+
+  const variantsByProduct = variants.reduce<Record<string, typeof variants>>((acc, item) => {
+    const key = item.productKey || "";
+    if (!key) return acc;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(item);
+    return acc;
+  }, {});
+
+  const publicArtworks: PublicArtistArtworkItem[] = artworks
+    .filter((item) => item.title && (item.images?.thumbUrl || item.images?.mediumUrl || item.images?.originalUrl))
+    .map((item) => {
+      const galleryUrls = Array.isArray(item.images?.galleryUrls) ? item.images.galleryUrls.filter(Boolean) : [];
+      const variantsForProduct = variantsByProduct[item.productKey] || [];
+      return {
+        productKey: item.productKey,
+        title: item.title,
+        year: item.year ?? null,
+        description: item.description || "",
+        imageUrl: item.images?.mediumUrl || item.images?.thumbUrl || item.images?.originalUrl || "",
+        galleryUrls,
+        seriesName: item.seriesName || "",
+        status: item.status,
+        priceLabel: buildArtworkPriceLabel({
+          forSale: item.forSale !== false,
+          originalAvailable: item.originalAvailable === true,
+          allowPrints: item.allowPrints === true,
+          variants: variantsForProduct,
+        }),
+        detailLabel: "more about the artwork",
+      };
+    });
+
+  return {
+    slug: profile.handle || slug,
+    displayName: profile.displayName,
+    bio: profile.bio,
+    avatarUrl: profile.profileImages.avatarUrl || profile.profileImages.galleryUrls[0] || publicArtworks[0]?.imageUrl || "",
+    heroUrl: profile.profileImages.heroUrl || profile.profileImages.galleryUrls[0] || publicArtworks[0]?.imageUrl || "",
+    socialLinks: profile.socialLinks || [],
+    links: profile.links || [],
+    artworks: publicArtworks,
+    upcomingExhibitions: profile.upcomingExhibitions || [],
+    exhibitionHistory: profile.exhibitionHistory || [],
+    education: profile.education || [],
+    experience: profile.experience || [],
+    announcements: profile.announcements || [],
+  };
+}

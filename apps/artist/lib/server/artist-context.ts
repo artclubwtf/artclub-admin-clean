@@ -43,6 +43,9 @@ export type ArtistContext = {
       allowExhibitions?: boolean;
       presentationOnly?: boolean;
     };
+    publicProfile?: {
+      isVisible?: boolean;
+    };
     shopify?: {
       metaobjectGid?: string;
     };
@@ -157,6 +160,11 @@ async function loadArtistContext(): Promise<ArtistContext | null> {
           }
         : undefined,
       consents: canonicalArtist.consents,
+      publicProfile: canonicalArtist.publicProfile
+        ? {
+            isVisible: canonicalArtist.publicProfile.isVisible !== false,
+          }
+        : undefined,
       shopify: canonicalArtist.shopify
         ? {
             metaobjectGid: canonicalArtist.shopify.metaobjectGid || undefined,

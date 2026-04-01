@@ -12,6 +12,7 @@ const patchSchema = z
     locationCity: z.string().trim().optional().default(""),
     locationCountry: z.string().trim().optional().default(""),
     bio: z.string().trim().max(4000).optional().default(""),
+    publicProfileVisible: z.boolean().optional(),
     avatarUrl: z.string().trim().optional().default(""),
     heroUrl: z.string().trim().optional().default(""),
     galleryUrls: z.array(z.string().trim()).optional().default([]),
@@ -44,6 +45,9 @@ export async function PATCH(req: Request) {
   if ((context.canonicalArtist.bio || "") !== parsed.data.bio.trim()) changedFields.push("bio");
   if ((context.canonicalArtist.profileImages?.avatarUrl || "") !== parsed.data.avatarUrl.trim()) changedFields.push("profileImages.avatarUrl");
   if ((context.canonicalArtist.profileImages?.heroUrl || "") !== parsed.data.heroUrl.trim()) changedFields.push("profileImages.heroUrl");
+  if ((context.canonicalArtist.publicProfile?.isVisible !== false) !== (parsed.data.publicProfileVisible !== false)) {
+    changedFields.push("publicProfile.isVisible");
+  }
   if (JSON.stringify(context.canonicalArtist.profileImages?.galleryUrls || []) !== JSON.stringify(galleryUrls)) {
     changedFields.push("profileImages.galleryUrls");
   }
@@ -62,6 +66,9 @@ export async function PATCH(req: Request) {
         locationCity: parsed.data.locationCity.trim() || undefined,
         locationCountry: parsed.data.locationCountry.trim() || undefined,
         bio: parsed.data.bio.trim() || undefined,
+        publicProfile: {
+          isVisible: parsed.data.publicProfileVisible !== false,
+        },
         profileImages: {
           avatarUrl: parsed.data.avatarUrl.trim() || undefined,
           heroUrl: parsed.data.heroUrl.trim() || undefined,
@@ -86,6 +93,7 @@ export async function PATCH(req: Request) {
         locationCity: updated?.locationCity || "",
         locationCountry: updated?.locationCountry || "",
         bio: updated?.bio || "",
+        publicProfileVisible: updated?.publicProfile?.isVisible !== false,
         profileImages: {
           avatarUrl: updated?.profileImages?.avatarUrl || "",
           heroUrl: updated?.profileImages?.heroUrl || "",

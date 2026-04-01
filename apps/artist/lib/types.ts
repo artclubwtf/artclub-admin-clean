@@ -64,6 +64,7 @@ export type ArtistProfileData = {
     heroUrl: string;
     galleryUrls: string[];
   };
+  publicProfileVisible: boolean;
   profileLinks: ArtistProfileLinkItem[];
   experience: ArtistExperienceItem[];
   education: ArtistEducationItem[];
@@ -148,6 +149,35 @@ export type ArtistFeaturedWorkItem = {
   seriesName: string;
   imageUrl: string;
   status: string;
+};
+
+export type PublicArtistArtworkItem = {
+  productKey: string;
+  title: string;
+  year: number | null;
+  description: string;
+  imageUrl: string;
+  galleryUrls: string[];
+  seriesName: string;
+  status: string;
+  priceLabel: string;
+  detailLabel: string;
+};
+
+export type PublicArtistProfilePageData = {
+  slug: string;
+  displayName: string;
+  bio: string;
+  avatarUrl: string;
+  heroUrl: string;
+  socialLinks: ArtistProfileLinkItem[];
+  links: ArtistProfileLinkItem[];
+  artworks: PublicArtistArtworkItem[];
+  upcomingExhibitions: ArtistExhibitionItem[];
+  exhibitionHistory: ArtistExhibitionItem[];
+  education: ArtistEducationItem[];
+  experience: ArtistExperienceItem[];
+  announcements: ArtistAnnouncementItem[];
 };
 
 export type ActiveTermsModule = {
