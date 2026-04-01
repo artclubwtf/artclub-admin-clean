@@ -1,4 +1,4 @@
-import { hash } from "bcryptjs";
+import { compare, hash } from "bcryptjs";
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import { z } from "zod";
@@ -30,6 +30,41 @@ function isDuplicateKeyError(err: unknown) {
   return Boolean(err && typeof err === "object" && "code" in err && (err as { code?: number }).code === 11000);
 }
 
+async function resolveExistingArtistAccount(params: {
+  existing: {
+    _id: Types.ObjectId;
+    role?: string;
+    shopDomain?: string;
+    artistKey?: string | null;
+    onboardingComplete?: boolean;
+    isActive?: boolean;
+    passwordHash?: string;
+  } | null;
+  password: string;
+  shopDomain: string;
+}) {
+  const { existing, password, shopDomain } = params;
+  if (!existing || existing.role !== "artist" || existing.isActive !== true || existing.shopDomain !== shopDomain) {
+    return null;
+  }
+  if (!existing.passwordHash) {
+    return null;
+  }
+
+  const passwordMatches = await compare(password, existing.passwordHash).catch(() => false);
+  if (!passwordMatches) {
+    return null;
+  }
+
+  return {
+    ok: true as const,
+    artistKey: existing.artistKey || null,
+    onboardingComplete: existing.onboardingComplete === true,
+    existingAccount: true,
+    userId: existing._id.toString(),
+  };
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => null)) as unknown;
@@ -50,19 +85,40 @@ export async function POST(req: Request) {
 
     await connectMongo();
 
-    const keyDoc = await ArtistRegistrationKeyModel.findOne({ code }).select({ _id: 1, expiresAt: 1, usedAt: 1 }).lean();
+    const existing = await UserModel.findOne({ email })
+      .select({
+        _id: 1,
+        role: 1,
+        shopDomain: 1,
+        artistKey: 1,
+        onboardingComplete: 1,
+        isActive: 1,
+        passwordHash: 1,
+      })
+      .lean();
+
+    const keyDoc = await ArtistRegistrationKeyModel.findOne({ code })
+      .select({ _id: 1, expiresAt: 1, usedAt: 1, usedByUserId: 1 })
+      .lean();
     if (!keyDoc) {
       return NextResponse.json({ ok: false, error: "invalid_key" }, { status: 404 });
     }
     if (keyDoc.usedAt) {
+      const existingAccount = await resolveExistingArtistAccount({ existing, password, shopDomain });
+      if (existingAccount && keyDoc.usedByUserId?.toString() === existingAccount.userId) {
+        return NextResponse.json(existingAccount, { status: 200 });
+      }
       return NextResponse.json({ ok: false, error: "key_already_used" }, { status: 409 });
     }
     if (keyDoc.expiresAt.getTime() <= now.getTime()) {
       return NextResponse.json({ ok: false, error: "key_expired" }, { status: 410 });
     }
 
-    const existing = await UserModel.findOne({ email }).select({ _id: 1 }).lean();
     if (existing) {
+      const existingAccount = await resolveExistingArtistAccount({ existing, password, shopDomain });
+      if (existingAccount) {
+        return NextResponse.json(existingAccount, { status: 200 });
+      }
       return NextResponse.json({ ok: false, error: "email_exists" }, { status: 409 });
     }
 
