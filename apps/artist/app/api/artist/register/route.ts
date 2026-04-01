@@ -4,6 +4,7 @@ import { Types } from "mongoose";
 import { z } from "zod";
 
 import { connectMongo } from "@/lib/server/mongodb";
+import { ensureCanonicalArtistIndexes } from "@/lib/server/canonical-artist-indexes";
 import { resolveShopDomain } from "@/lib/server/shop-domain";
 import { ArtistRegistrationKeyModel, CanonicalArtistModel, UserModel } from "@/lib/server/models";
 
@@ -123,6 +124,7 @@ export async function POST(req: Request) {
     }
 
     await connectMongo();
+    await ensureCanonicalArtistIndexes();
 
     const existing = await UserModel.findOne({ email })
       .select({

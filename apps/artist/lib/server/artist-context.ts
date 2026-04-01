@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 
 import { authOptions } from "@/lib/server/auth";
+import { ensureCanonicalArtistIndexes } from "@/lib/server/canonical-artist-indexes";
 import { connectMongo } from "@/lib/server/mongodb";
 import { CanonicalArtistModel, UserModel } from "@/lib/server/models";
 
@@ -103,6 +104,7 @@ async function ensureCanonicalArtistForUser(user: {
 
 async function loadArtistContext(): Promise<ArtistContext | null> {
   await connectMongo();
+  await ensureCanonicalArtistIndexes();
 
   const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== "artist" || !session.user.id || !Types.ObjectId.isValid(session.user.id)) {

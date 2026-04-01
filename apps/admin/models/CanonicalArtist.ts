@@ -59,7 +59,15 @@ const canonicalArtistSchema = new Schema(
 );
 
 canonicalArtistSchema.index({ shopDomain: 1, artistKey: 1 }, { unique: true });
-canonicalArtistSchema.index({ shopDomain: 1, "shopify.metaobjectGid": 1 }, { unique: true, sparse: true });
+canonicalArtistSchema.index(
+  { shopDomain: 1, "shopify.metaobjectGid": 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      "shopify.metaobjectGid": { $type: "string" },
+    },
+  },
+);
 canonicalArtistSchema.index({ shopDomain: 1, "sync.needsPush": 1, "sync.dirtyAt": 1 });
 
 type CanonicalArtist = InferSchemaType<typeof canonicalArtistSchema>;
