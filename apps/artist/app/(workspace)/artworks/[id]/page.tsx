@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 
 import { ArtworkForm } from "@/components/artworks/ArtworkForm";
 import { requireArtistContext } from "@/lib/server/artist-context";
-import { ARTIST_PRINT_SIZES } from "@/lib/server/artist-print-pricing";
 import { parseArtistMediaIdFromUrl, resolveArtistMediaUrls } from "@/lib/server/artist-media";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 
@@ -33,6 +32,8 @@ export default async function EditArtworkPage({ params }: { params: Promise<{ id
   ]);
 
   if (!artwork) notFound();
+
+  const originalVariant = variants.find((variant) => variant.finish === "original");
 
   const galleryUrls = Array.isArray(artwork.images?.galleryUrls) ? artwork.images.galleryUrls : [];
   const galleryMediaIds = galleryUrls.map((url) => parseArtistMediaIdFromUrl(url)).filter(Boolean) as string[];
@@ -68,13 +69,14 @@ export default async function EditArtworkPage({ params }: { params: Promise<{ id
         title: artwork.title,
         description: artwork.description || "",
         year: artwork.year ?? null,
-        widthCm: artwork.dimensions?.widthCm ?? null,
-        heightCm: artwork.dimensions?.heightCm ?? null,
+        originalWidthCm: artwork.dimensions?.widthCm ?? null,
+        originalHeightCm: artwork.dimensions?.heightCm ?? null,
+        originalPriceCents: originalVariant?.priceCents ?? null,
         forSale: artwork.forSale !== false,
         originalAvailable: artwork.originalAvailable === true,
         printsEnabled: artwork.allowPrints === true,
         seriesId: artwork.seriesId || "",
-        printSizeCodes: variants.filter((variant) => variant.finish === "print").map((variant) => variant.sizeCode),
+        printSizeCodes: Array.from(new Set(variants.filter((variant) => variant.finish !== "original").map((variant) => variant.sizeCode))),
         mediaItems,
       }}
       series={series.map((item) => ({
@@ -83,7 +85,6 @@ export default async function EditArtworkPage({ params }: { params: Promise<{ id
         description: item.description || "",
         coverImageUrl: item.coverImageUrl || "",
       }))}
-      printSizes={ARTIST_PRINT_SIZES.map((item) => ({ code: item.code, label: item.label }))}
     />
   );
 }

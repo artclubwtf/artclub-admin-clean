@@ -1,6 +1,5 @@
 import { ArtworkForm } from "@/components/artworks/ArtworkForm";
 import { requireArtistContext } from "@/lib/server/artist-context";
-import { ARTIST_PRINT_SIZES } from "@/lib/server/artist-print-pricing";
 import { ArtistSeriesModel } from "@/lib/server/models";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +23,6 @@ export default async function NewArtworkPage() {
         description: item.description || "",
         coverImageUrl: item.coverImageUrl || "",
       }))}
-      printSizes={ARTIST_PRINT_SIZES.map((item) => ({ code: item.code, label: item.label }))}
     />
   );
 }

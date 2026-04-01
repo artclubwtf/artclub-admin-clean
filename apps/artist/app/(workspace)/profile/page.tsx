@@ -26,11 +26,12 @@ function buildArtworkPriceLabel(params: {
 }) {
   if (!params.forSale) return "Not for Sale at ARTCLUB";
 
-  const positive = params.variants.filter((item) => item.priceCents > 0).sort((a, b) => a.priceCents - b.priceCents);
-  const cheapest = positive[0];
+  const originalVariant = params.variants.find((item) => item.finish === "original" && item.priceCents > 0);
+  const printVariants = params.variants.filter((item) => item.finish !== "original" && item.priceCents > 0).sort((a, b) => a.priceCents - b.priceCents);
+  const cheapestPrint = printVariants[0];
 
-  if (params.originalAvailable && cheapest) return formatCurrency(cheapest.priceCents);
-  if (params.allowPrints && cheapest) return `From ${formatCurrency(cheapest.priceCents)}`;
+  if (params.allowPrints && cheapestPrint) return `From ${formatCurrency(cheapestPrint.priceCents)}`;
+  if (params.originalAvailable && originalVariant) return formatCurrency(originalVariant.priceCents);
   if (params.originalAvailable) return "Available on request";
   if (params.allowPrints) return "Prints available";
   return "Not for Sale at ARTCLUB";

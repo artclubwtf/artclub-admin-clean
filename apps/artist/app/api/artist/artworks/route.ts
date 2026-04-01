@@ -3,13 +3,12 @@ import { Types } from "mongoose";
 import { z } from "zod";
 
 import {
-  ARTIST_PRINT_SIZES,
-  calculatePrintPriceCents,
-  getArtistPrintSizeByCode,
+  generateAspectRatioPrintSizes,
 } from "@/lib/server/artist-print-pricing";
 import { artistApiErrorResponse } from "@/lib/server/api-errors";
 import { requireArtistApiContext } from "@/lib/server/artist-context";
 import { resolvePublicArtistMediaUrls } from "@/lib/server/artist-media";
+import { buildPrintVariants, buildArtworkSku, dedupeTrimmed, normalizeSelectedPrintSizeCodes } from "@/lib/server/artwork-variants";
 import { ensureCanonicalProductIndexes } from "@/lib/server/canonical-product-indexes";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 
@@ -18,8 +17,9 @@ const createArtworkSchema = z
     title: z.string().trim().min(1),
     description: z.string().trim().max(4000).optional().default(""),
     year: z.number().int().min(1000).max(9999).nullable().optional(),
-    widthCm: z.number().positive().max(1000).nullable().optional(),
-    heightCm: z.number().positive().max(1000).nullable().optional(),
+    originalWidthCm: z.number().positive().max(1000).nullable().optional(),
+    originalHeightCm: z.number().positive().max(1000).nullable().optional(),
+    originalPriceEur: z.number().positive().max(100000).nullable().optional(),
     seriesId: z.string().trim().optional().or(z.literal("")),
     mediaIds: z.array(z.string().trim().min(1)).min(1),
     forSale: z.boolean(),
@@ -31,21 +31,6 @@ const createArtworkSchema = z
 
 function makeProductKey() {
   return `prod_${new Types.ObjectId().toString()}`;
-}
-
-function formatSkuPiece(input: string) {
-  return input.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
-}
-
-function buildSku(artistKey: string, productKey: string, sizeCode: string) {
-  const artistPart = formatSkuPiece(artistKey).slice(-6) || "ARTIST";
-  const productPart = formatSkuPiece(productKey).slice(-6) || "PRD";
-  const sizePart = formatSkuPiece(sizeCode).slice(0, 10) || "SIZE";
-  return `${artistPart}-${productPart}-${sizePart}`;
-}
-
-function dedupeTrimmed(values: string[]) {
-  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 }
 
 export async function GET() {
@@ -80,7 +65,6 @@ export async function GET() {
     return NextResponse.json(
       {
         ok: true,
-        printSizes: ARTIST_PRINT_SIZES,
         artworks: products.map((product) => ({
           id: product._id.toString(),
           productKey: product.productKey,
@@ -134,13 +118,29 @@ export async function POST(req: Request) {
     }
 
     const data = parsed.data;
-    const printSizeCodes = dedupeTrimmed(data.printSizeCodes).map((code) => code.toUpperCase());
+    const originalWidthCm = data.originalWidthCm ?? null;
+    const originalHeightCm = data.originalHeightCm ?? null;
+    const originalPriceCents = Number.isFinite(data.originalPriceEur) ? Math.round((data.originalPriceEur ?? 0) * 100) : null;
+    const generatedPrintSizes = generateAspectRatioPrintSizes({ originalWidthCm, originalHeightCm });
+    const printSizeCodes = normalizeSelectedPrintSizeCodes(data.printSizeCodes, { originalWidthCm, originalHeightCm });
+
+    if (data.originalAvailable && data.forSale && !data.originalPriceEur) {
+      return NextResponse.json({ ok: false, error: "original_price_required" }, { status: 400 });
+    }
+    if (data.originalAvailable && data.forSale && (!originalPriceCents || originalPriceCents <= 0)) {
+      return NextResponse.json({ ok: false, error: "invalid_original_price" }, { status: 400 });
+    }
+    if (data.printsEnabled && (!originalWidthCm || !originalHeightCm)) {
+      return NextResponse.json({ ok: false, error: "original_dimensions_required" }, { status: 400 });
+    }
+    if (data.printsEnabled && generatedPrintSizes.length === 0) {
+      return NextResponse.json({ ok: false, error: "invalid_print_configuration" }, { status: 400 });
+    }
     if (data.printsEnabled && printSizeCodes.length === 0) {
       return NextResponse.json({ ok: false, error: "print_sizes_required" }, { status: 400 });
     }
-    const unknownSize = printSizeCodes.find((code) => !getArtistPrintSizeByCode(code));
-    if (unknownSize) {
-      return NextResponse.json({ ok: false, error: "invalid_print_size", sizeCode: unknownSize }, { status: 400 });
+    if (data.printsEnabled && printSizeCodes.length !== dedupeTrimmed(data.printSizeCodes).map((code) => code.toUpperCase()).length) {
+      return NextResponse.json({ ok: false, error: "invalid_print_size_selection" }, { status: 400 });
     }
 
     const mediaObjectIds = data.mediaIds.filter((id) => Types.ObjectId.isValid(id)).map((id) => new Types.ObjectId(id));
@@ -202,27 +202,23 @@ export async function POST(req: Request) {
         variantKey: "original",
         finish: "original",
         sizeCode: "ORIGINAL",
-        sku: buildSku(context.user.artistKey, productKey, "ORIGINAL"),
-        priceCents: 0,
+        sku: buildArtworkSku(context.user.artistKey, productKey, "ORIGINAL"),
+        priceCents: originalPriceCents && originalPriceCents > 0 ? originalPriceCents : 0,
         inventory: { tracked: true },
       });
     }
 
     if (data.printsEnabled) {
-      for (const sizeCode of printSizeCodes) {
-        const size = getArtistPrintSizeByCode(sizeCode);
-        if (!size) continue;
-        variantsToInsert.push({
+      variantsToInsert.push(
+        ...buildPrintVariants({
           shopDomain: context.user.shopDomain,
+          artistKey: context.user.artistKey,
           productKey,
-          variantKey: `print_${size.code.toLowerCase()}`,
-          finish: "print",
-          sizeCode: size.code,
-          sku: buildSku(context.user.artistKey, productKey, size.code),
-          priceCents: calculatePrintPriceCents({ widthCm: size.widthCm, heightCm: size.heightCm }),
-          inventory: { tracked: false },
-        });
-      }
+          selectedSizeCodes: printSizeCodes,
+          originalWidthCm: originalWidthCm!,
+          originalHeightCm: originalHeightCm!,
+        }),
+      );
     }
 
     if (!variantsToInsert.length) {
@@ -259,8 +255,8 @@ export async function POST(req: Request) {
         galleryUrls,
       },
       dimensions: {
-        widthCm: data.widthCm ?? undefined,
-        heightCm: data.heightCm ?? undefined,
+        widthCm: originalWidthCm ?? undefined,
+        heightCm: originalHeightCm ?? undefined,
       },
       sync: {
         needsPush: false,

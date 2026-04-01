@@ -3,14 +3,13 @@ import { Types } from "mongoose";
 import { z } from "zod";
 
 import {
-  ARTIST_PRINT_SIZES,
-  calculatePrintPriceCents,
-  getArtistPrintSizeByCode,
+  generateAspectRatioPrintSizes,
 } from "@/lib/server/artist-print-pricing";
 import { artistApiErrorResponse } from "@/lib/server/api-errors";
 import { buildProductSyncPatch } from "@/lib/server/artist-sync";
 import { requireArtistApiContext } from "@/lib/server/artist-context";
 import { parseArtistMediaIdFromUrl, resolvePublicArtistMediaUrls } from "@/lib/server/artist-media";
+import { buildPrintVariants, buildArtworkSku, dedupeTrimmed, normalizeSelectedPrintSizeCodes } from "@/lib/server/artwork-variants";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 
 const patchSchema = z
@@ -18,8 +17,9 @@ const patchSchema = z
     title: z.string().trim().min(1),
     description: z.string().trim().max(4000).optional().default(""),
     year: z.number().int().min(1000).max(9999).nullable().optional(),
-    widthCm: z.number().positive().max(1000).nullable().optional(),
-    heightCm: z.number().positive().max(1000).nullable().optional(),
+    originalWidthCm: z.number().positive().max(1000).nullable().optional(),
+    originalHeightCm: z.number().positive().max(1000).nullable().optional(),
+    originalPriceEur: z.number().positive().max(100000).nullable().optional(),
     seriesId: z.string().trim().optional().or(z.literal("")),
     mediaIds: z.array(z.string().trim().min(1)).default([]),
     forSale: z.boolean(),
@@ -28,21 +28,6 @@ const patchSchema = z
     printSizeCodes: z.array(z.string().trim().min(1)).default([]),
   })
   .strict();
-
-function dedupeTrimmed(values: string[]) {
-  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
-}
-
-function formatSkuPiece(input: string) {
-  return input.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
-}
-
-function buildSku(artistKey: string, productKey: string, sizeCode: string) {
-  const artistPart = formatSkuPiece(artistKey).slice(-6) || "ARTIST";
-  const productPart = formatSkuPiece(productKey).slice(-6) || "PRD";
-  const sizePart = formatSkuPiece(sizeCode).slice(0, 10) || "SIZE";
-  return `${artistPart}-${productPart}-${sizePart}`;
-}
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -66,6 +51,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       shopDomain: context.user.shopDomain,
       productKey: artwork.productKey,
     }).lean();
+    const originalVariant = variants.find((variant) => variant.finish === "original");
 
     const galleryUrls = Array.isArray(artwork.images?.galleryUrls) ? artwork.images.galleryUrls : [];
     const galleryMediaIds = galleryUrls.map((url) => parseArtistMediaIdFromUrl(url)).filter(Boolean) as string[];
@@ -84,15 +70,19 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     return NextResponse.json(
       {
         ok: true,
-        printSizes: ARTIST_PRINT_SIZES,
+        printSizes: generateAspectRatioPrintSizes({
+          originalWidthCm: artwork.dimensions?.widthCm ?? null,
+          originalHeightCm: artwork.dimensions?.heightCm ?? null,
+        }),
         artwork: {
           id: artwork._id.toString(),
           productKey: artwork.productKey,
           title: artwork.title,
           description: artwork.description || "",
           year: artwork.year ?? null,
-          widthCm: artwork.dimensions?.widthCm ?? null,
-          heightCm: artwork.dimensions?.heightCm ?? null,
+          originalWidthCm: artwork.dimensions?.widthCm ?? null,
+          originalHeightCm: artwork.dimensions?.heightCm ?? null,
+          originalPriceCents: originalVariant?.priceCents ?? null,
           forSale: artwork.forSale !== false,
           originalAvailable: artwork.originalAvailable === true,
           printsEnabled: artwork.allowPrints === true,
@@ -106,7 +96,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
             galleryUrls: Array.isArray(artwork.images?.galleryUrls) ? artwork.images.galleryUrls : [],
           },
           mediaIds: media.map((item) => item._id.toString()),
-          printSizeCodes: variants.filter((variant) => variant.finish === "print").map((variant) => variant.sizeCode),
+          printSizeCodes: Array.from(new Set(variants.filter((variant) => variant.finish !== "original").map((variant) => variant.sizeCode))),
         },
       },
       { status: 200 },
@@ -141,13 +131,30 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     const data = parsed.data;
-    const printSizeCodes = dedupeTrimmed(data.printSizeCodes).map((code) => code.toUpperCase());
+    const originalWidthCm = data.originalWidthCm ?? null;
+    const originalHeightCm = data.originalHeightCm ?? null;
+    const originalPriceCents = Number.isFinite(data.originalPriceEur) ? Math.round((data.originalPriceEur ?? 0) * 100) : null;
+    const generatedPrintSizes = generateAspectRatioPrintSizes({ originalWidthCm, originalHeightCm });
+    const submittedSizeCodes = dedupeTrimmed(data.printSizeCodes).map((code) => code.toUpperCase());
+    const printSizeCodes = normalizeSelectedPrintSizeCodes(data.printSizeCodes, { originalWidthCm, originalHeightCm });
+
+    if (data.originalAvailable && data.forSale && !data.originalPriceEur) {
+      return NextResponse.json({ ok: false, error: "original_price_required" }, { status: 400 });
+    }
+    if (data.originalAvailable && data.forSale && (!originalPriceCents || originalPriceCents <= 0)) {
+      return NextResponse.json({ ok: false, error: "invalid_original_price" }, { status: 400 });
+    }
+    if (data.printsEnabled && (!originalWidthCm || !originalHeightCm)) {
+      return NextResponse.json({ ok: false, error: "original_dimensions_required" }, { status: 400 });
+    }
+    if (data.printsEnabled && generatedPrintSizes.length === 0) {
+      return NextResponse.json({ ok: false, error: "invalid_print_configuration" }, { status: 400 });
+    }
     if (data.printsEnabled && printSizeCodes.length === 0) {
       return NextResponse.json({ ok: false, error: "print_sizes_required" }, { status: 400 });
     }
-    const unknownSize = printSizeCodes.find((code) => !getArtistPrintSizeByCode(code));
-    if (unknownSize) {
-      return NextResponse.json({ ok: false, error: "invalid_print_size", sizeCode: unknownSize }, { status: 400 });
+    if (data.printsEnabled && printSizeCodes.length !== submittedSizeCodes.length) {
+      return NextResponse.json({ ok: false, error: "invalid_print_size_selection" }, { status: 400 });
     }
 
     const mediaObjectIds = data.mediaIds.filter((mediaId) => Types.ObjectId.isValid(mediaId)).map((mediaId) => new Types.ObjectId(mediaId));
@@ -246,8 +253,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
               }
             : artwork.images,
           dimensions: {
-            widthCm: data.widthCm ?? undefined,
-            heightCm: data.heightCm ?? undefined,
+            widthCm: originalWidthCm ?? undefined,
+            heightCm: originalHeightCm ?? undefined,
           },
           ...syncPatch,
         },
@@ -277,27 +284,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         variantKey: "original",
         finish: "original",
         sizeCode: "ORIGINAL",
-        sku: buildSku(context.user.artistKey, id, "ORIGINAL"),
-        priceCents: 0,
+        sku: buildArtworkSku(context.user.artistKey, id, "ORIGINAL"),
+        priceCents: originalPriceCents && originalPriceCents > 0 ? originalPriceCents : 0,
         inventory: { tracked: true },
       });
     }
 
     if (data.printsEnabled) {
-      for (const sizeCode of printSizeCodes) {
-        const size = getArtistPrintSizeByCode(sizeCode);
-        if (!size) continue;
-        variantsToInsert.push({
+      variantsToInsert.push(
+        ...buildPrintVariants({
           shopDomain: context.user.shopDomain,
+          artistKey: context.user.artistKey,
           productKey: id,
-          variantKey: `print_${size.code.toLowerCase()}`,
-          finish: "print",
-          sizeCode: size.code,
-          sku: buildSku(context.user.artistKey, id, size.code),
-          priceCents: calculatePrintPriceCents({ widthCm: size.widthCm, heightCm: size.heightCm }),
-          inventory: { tracked: false },
-        });
-      }
+          selectedSizeCodes: printSizeCodes,
+          originalWidthCm: originalWidthCm!,
+          originalHeightCm: originalHeightCm!,
+        }),
+      );
     }
 
     if (variantsToInsert.length) {
