@@ -47,6 +47,35 @@ const emptyValue = {
   mediaItems: [] as ArtistMediaItem[],
 };
 
+function mapArtworkError(code: string | undefined) {
+  switch (code) {
+    case "print_sizes_required":
+      return "Select at least one print size.";
+    case "invalid_print_size":
+      return "One of the selected print sizes is invalid.";
+    case "invalid_media_ids":
+      return "At least one selected image is invalid.";
+    case "media_not_found":
+      return "At least one selected image could not be found anymore.";
+    case "series_not_found":
+      return "The selected series could not be found.";
+    case "no_variants_generated":
+      return "Enable an original or at least one print size before saving.";
+    case "database_unavailable":
+      return "The database is currently unavailable.";
+    case "database_write_forbidden":
+      return "The server can read data, but is currently not allowed to write to the database.";
+    case "duplicate_key_conflict":
+      return "A conflicting artwork record already exists.";
+    case "artwork_create_failed":
+      return "The artwork could not be created due to a server-side write error.";
+    case "artwork_update_failed":
+      return "The artwork could not be updated due to a server-side write error.";
+    default:
+      return code || "Could not save artwork.";
+  }
+}
+
 export function ArtworkForm({ mode, productKey, initialValue, series, printSizes }: ArtworkFormProps) {
   const router = useRouter();
   const value = initialValue || emptyValue;
@@ -97,7 +126,7 @@ export function ArtworkForm({ mode, productKey, initialValue, series, printSizes
       });
       const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; productKey?: string } | null;
       if (!res.ok || !json?.ok) {
-        setError(json?.error || "Could not save artwork.");
+        setError(mapArtworkError(json?.error));
         return;
       }
 

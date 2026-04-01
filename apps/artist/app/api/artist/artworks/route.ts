@@ -159,6 +159,9 @@ export async function POST(req: Request) {
     let seriesId: string | undefined;
     let seriesName: string | undefined;
     if (data.seriesId) {
+      if (!Types.ObjectId.isValid(data.seriesId)) {
+        return NextResponse.json({ ok: false, error: "invalid_series_id" }, { status: 400 });
+      }
       const series = await ArtistSeriesModel.findOne({
         _id: data.seriesId,
         shopDomain: context.user.shopDomain,
@@ -261,7 +264,15 @@ export async function POST(req: Request) {
       },
     });
 
-    await CanonicalVariantModel.insertMany(variantsToInsert, { ordered: true });
+    try {
+      await CanonicalVariantModel.insertMany(variantsToInsert, { ordered: true });
+    } catch (error) {
+      await CanonicalProductModel.deleteOne({
+        shopDomain: context.user.shopDomain,
+        productKey,
+      }).catch(() => null);
+      throw error;
+    }
 
     return NextResponse.json({ ok: true, productKey }, { status: 201 });
   } catch (error) {

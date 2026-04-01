@@ -2,8 +2,8 @@
 
 :root {
   color-scheme: light;
-  --font-artist-sans: "Avenir Next", "Helvetica Neue", "Segoe UI", sans-serif;
-  --font-artist-mono: "SF Mono", "IBM Plex Mono", "Menlo", monospace;
+  --font-artist-sans: "Helvetica Neue", sans-serif;
+  --font-artist-mono: "Helvetica Neue", sans-serif;
 }
 
 html {

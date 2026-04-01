@@ -36,6 +36,8 @@ async function resolveExistingArtistAccount(params: {
     role?: string;
     shopDomain?: string;
     artistKey?: string | null;
+    artistId?: Types.ObjectId | null;
+    pendingRegistrationId?: Types.ObjectId | null;
     onboardingComplete?: boolean;
     isActive?: boolean;
     passwordHash?: string;
@@ -65,6 +67,30 @@ async function resolveExistingArtistAccount(params: {
   };
 }
 
+function canInitializeExistingArtistUser(params: {
+  existing: {
+    role?: string;
+    shopDomain?: string;
+    artistKey?: string | null;
+    artistId?: Types.ObjectId | null;
+    pendingRegistrationId?: Types.ObjectId | null;
+    isActive?: boolean;
+  } | null;
+  shopDomain: string;
+}) {
+  const { existing, shopDomain } = params;
+  if (!existing || existing.role !== "artist" || existing.isActive !== true) {
+    return false;
+  }
+  if (existing.artistKey || existing.artistId) {
+    return false;
+  }
+  if (existing.shopDomain && existing.shopDomain !== shopDomain) {
+    return false;
+  }
+  return Boolean(existing.pendingRegistrationId) || !existing.shopDomain;
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => null)) as unknown;
@@ -91,6 +117,8 @@ export async function POST(req: Request) {
         role: 1,
         shopDomain: 1,
         artistKey: 1,
+        artistId: 1,
+        pendingRegistrationId: 1,
         onboardingComplete: 1,
         isActive: 1,
         passwordHash: 1,
@@ -114,15 +142,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "key_expired" }, { status: 410 });
     }
 
-    if (existing) {
+    const canInitializeExisting = canInitializeExistingArtistUser({ existing, shopDomain });
+
+    if (existing && !canInitializeExisting) {
       const existingAccount = await resolveExistingArtistAccount({ existing, password, shopDomain });
       if (existingAccount) {
         return NextResponse.json(existingAccount, { status: 200 });
       }
-      return NextResponse.json({ ok: false, error: "email_exists" }, { status: 409 });
+      return NextResponse.json(
+        {
+          ok: false,
+          error: existing.role === "artist" ? "email_exists" : "email_in_use_other_account",
+        },
+        { status: 409 },
+      );
     }
 
-    const userId = new Types.ObjectId();
+    const userId = existing?._id || new Types.ObjectId();
     const usedAt = new Date();
     const claim = await ArtistRegistrationKeyModel.findOneAndUpdate(
       {
@@ -153,35 +189,80 @@ export async function POST(req: Request) {
     const passwordHash = await hash(password, PASSWORD_HASH_ROUNDS);
 
     try {
-      await UserModel.create({
-        _id: userId,
-        email,
-        role: "artist",
-        shopDomain,
-        passwordHash,
-        artistKey,
-        onboardingComplete: false,
-        isActive: true,
-        mustChangePassword: false,
-      });
+      if (canInitializeExisting) {
+        await UserModel.updateOne(
+          { _id: userId },
+          {
+            $set: {
+              email,
+              role: "artist",
+              shopDomain,
+              passwordHash,
+              artistKey,
+              onboardingComplete: false,
+              isActive: true,
+              mustChangePassword: false,
+            },
+            $unset: {
+              pendingRegistrationId: 1,
+              onboardingStatus: 1,
+              artistId: 1,
+            },
+          },
+        );
+      } else {
+        await UserModel.create({
+          _id: userId,
+          email,
+          role: "artist",
+          shopDomain,
+          passwordHash,
+          artistKey,
+          onboardingComplete: false,
+          isActive: true,
+          mustChangePassword: false,
+        });
+      }
 
-      await CanonicalArtistModel.create({
-        shopDomain,
-        artistKey,
-        handle: artistKey,
-        displayName,
-        email,
-      });
+      await CanonicalArtistModel.updateOne(
+        { shopDomain, artistKey },
+        {
+          $setOnInsert: {
+            shopDomain,
+            artistKey,
+            handle: artistKey,
+            displayName,
+            email,
+          },
+        },
+        { upsert: true },
+      );
     } catch (err) {
-      await CanonicalArtistModel.deleteOne({ shopDomain, artistKey }).catch(() => null);
-      await UserModel.deleteOne({ _id: userId }).catch(() => null);
+      if (!canInitializeExisting) {
+        await CanonicalArtistModel.deleteOne({ shopDomain, artistKey }).catch(() => null);
+        await UserModel.deleteOne({ _id: userId }).catch(() => null);
+      }
       await ArtistRegistrationKeyModel.updateOne(
         { _id: claim._id, usedByUserId: userId },
         { $unset: { usedAt: 1, usedByUserId: 1 } },
       ).catch(() => null);
 
       if (isDuplicateKeyError(err)) {
-        return NextResponse.json({ ok: false, error: "email_exists" }, { status: 409 });
+        const latestUser = await UserModel.findOne({ email })
+          .select({ _id: 1, role: 1, artistKey: 1, artistId: 1, pendingRegistrationId: 1, shopDomain: 1, isActive: 1, passwordHash: 1, onboardingComplete: 1 })
+          .lean()
+          .catch(() => null);
+        const existingAccount = await resolveExistingArtistAccount({ existing: latestUser, password, shopDomain });
+        if (existingAccount) {
+          return NextResponse.json(existingAccount, { status: 200 });
+        }
+        return NextResponse.json(
+          {
+            ok: false,
+            error: latestUser?.role === "artist" ? "email_exists" : "email_in_use_other_account",
+          },
+          { status: 409 },
+        );
       }
 
       console.error("Artist register failed", err);

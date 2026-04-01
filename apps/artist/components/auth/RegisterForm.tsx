@@ -21,6 +21,8 @@ function mapError(code: string | undefined) {
       return "This registration key has expired.";
     case "email_exists":
       return "An account with this email already exists.";
+    case "email_in_use_other_account":
+      return "This email is already linked to another ARTCLUB account.";
     default:
       return "Registration failed.";
   }
