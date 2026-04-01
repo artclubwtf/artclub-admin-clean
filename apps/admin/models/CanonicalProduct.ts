@@ -69,7 +69,15 @@ const canonicalProductSchema = new Schema(
 
 canonicalProductSchema.index({ shopDomain: 1, productKey: 1 }, { unique: true });
 canonicalProductSchema.index({ shopDomain: 1, artistKey: 1, createdAt: -1 });
-canonicalProductSchema.index({ shopDomain: 1, "shopify.productGid": 1 }, { unique: true, sparse: true });
+canonicalProductSchema.index(
+  { shopDomain: 1, "shopify.productGid": 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      "shopify.productGid": { $type: "string" },
+    },
+  },
+);
 canonicalProductSchema.index({ shopDomain: 1, "sync.needsPush": 1, "sync.dirtyAt": 1 });
 
 type CanonicalProduct = InferSchemaType<typeof canonicalProductSchema>;

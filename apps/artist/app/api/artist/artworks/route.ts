@@ -10,6 +10,7 @@ import {
 import { artistApiErrorResponse } from "@/lib/server/api-errors";
 import { requireArtistApiContext } from "@/lib/server/artist-context";
 import { resolveArtistMediaUrls } from "@/lib/server/artist-media";
+import { ensureCanonicalProductIndexes } from "@/lib/server/canonical-product-indexes";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 
 const createArtworkSchema = z
@@ -119,6 +120,8 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    await ensureCanonicalProductIndexes();
+
     const auth = await requireArtistApiContext();
     if (!auth.ok) return auth.response;
     const { context } = auth;

@@ -160,8 +160,18 @@ export async function POST(req: Request) {
     if (existing && !canInitializeExisting) {
       const existingAccount = await resolveExistingArtistAccount({ existing, password, shopDomain });
       if (existingAccount) {
+        console.info("[artist-register] existing_artist_account_reused");
         return NextResponse.json(existingAccount, { status: 200 });
       }
+      console.warn("[artist-register] blocked_existing_account", {
+        role: existing.role || null,
+        hasArtistKey: Boolean(existing.artistKey),
+        hasArtistId: Boolean(existing.artistId),
+        hasPendingRegistrationId: Boolean(existing.pendingRegistrationId),
+        hasShopDomain: Boolean(existing.shopDomain),
+        matchesShopDomain: existing.shopDomain === shopDomain,
+        isActive: existing.isActive === true,
+      });
       return NextResponse.json(
         {
           ok: false,
@@ -265,6 +275,12 @@ export async function POST(req: Request) {
         const isEmailConflict = duplicateFields.includes("email");
         const isArtistKeyConflict = duplicateFields.includes("artistKey");
         const isCanonicalArtistConflict = duplicateFields.includes("shopDomain") && duplicateFields.includes("artistKey");
+        console.warn("[artist-register] duplicate_key", {
+          duplicateFields,
+          isEmailConflict,
+          isArtistKeyConflict,
+          isCanonicalArtistConflict,
+        });
         const latestUser = await UserModel.findOne({ email })
           .select({ _id: 1, role: 1, artistKey: 1, artistId: 1, pendingRegistrationId: 1, shopDomain: 1, isActive: 1, passwordHash: 1, onboardingComplete: 1 })
           .lean()
