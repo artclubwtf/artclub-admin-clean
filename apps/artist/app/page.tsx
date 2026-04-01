@@ -1,6 +1,7 @@
 import { WorkspaceShell } from "@/components/layout/WorkspaceShell";
 import { OverviewPanels } from "@/components/overview/OverviewPanels";
 import { requireArtistContext } from "@/lib/server/artist-context";
+import { resolveArtistMediaUrls } from "@/lib/server/artist-media";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel } from "@/lib/server/models";
 
 export const dynamic = "force-dynamic";
@@ -66,8 +67,8 @@ export default async function HomePage() {
           recentMedia: recentMedia.map((item) => ({
             id: item._id.toString(),
             kind: item.kind,
-            url: item.previewUrl || item.url,
-            previewUrl: item.previewUrl || item.url,
+            url: resolveArtistMediaUrls(item).url,
+            previewUrl: resolveArtistMediaUrls(item).previewUrl,
             filename: item.filename || item.kind,
           })),
         }}

@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireArtistApiContext } from "@/lib/server/artist-context";
+import { resolveArtistMediaUrls } from "@/lib/server/artist-media";
 import { ArtistMediaV2Model, artistMediaV2Kinds } from "@/lib/server/models";
 
 const createMediaSchema = z
   .object({
     kind: z.enum(artistMediaV2Kinds).default("artwork"),
     fileIdGid: z.string().trim().optional(),
+    s3Key: z.string().trim().optional(),
     filename: z.string().trim().optional(),
     mimeType: z.string().trim().optional(),
     sizeBytes: z.number().int().nonnegative().optional(),
@@ -35,17 +37,21 @@ export async function GET(req: Request) {
   return NextResponse.json(
     {
       ok: true,
-      media: media.map((item) => ({
-        id: item._id.toString(),
-        kind: item.kind,
-        fileIdGid: item.fileIdGid || null,
-        filename: item.filename || "",
-        mimeType: item.mimeType || "",
-        sizeBytes: item.sizeBytes ?? null,
-        url: item.url,
-        previewUrl: item.previewUrl || item.url,
-        createdAt: item.createdAt,
-      })),
+      media: media.map((item) => {
+        const urls = resolveArtistMediaUrls(item);
+        return {
+          id: item._id.toString(),
+          kind: item.kind,
+          s3Key: item.s3Key || "",
+          fileIdGid: item.fileIdGid || null,
+          filename: item.filename || "",
+          mimeType: item.mimeType || "",
+          sizeBytes: item.sizeBytes ?? null,
+          url: urls.url,
+          previewUrl: urls.previewUrl,
+          createdAt: item.createdAt,
+        };
+      }),
     },
     { status: 200 },
   );
@@ -69,12 +75,14 @@ export async function POST(req: Request) {
     userId: context.user._id,
     kind: parsed.data.kind,
     fileIdGid: parsed.data.fileIdGid || undefined,
+    s3Key: parsed.data.s3Key || undefined,
     filename: parsed.data.filename || undefined,
     mimeType: parsed.data.mimeType || undefined,
     sizeBytes: parsed.data.sizeBytes,
     url: parsed.data.url,
     previewUrl: parsed.data.previewUrl || parsed.data.url,
   });
+  const urls = resolveArtistMediaUrls(created);
 
   return NextResponse.json(
     {
@@ -82,12 +90,13 @@ export async function POST(req: Request) {
       media: {
         id: created._id.toString(),
         kind: created.kind,
+        s3Key: created.s3Key || "",
         fileIdGid: created.fileIdGid || null,
         filename: created.filename || "",
         mimeType: created.mimeType || "",
         sizeBytes: created.sizeBytes ?? null,
-        url: created.url,
-        previewUrl: created.previewUrl || created.url,
+        url: urls.url,
+        previewUrl: urls.previewUrl,
         createdAt: created.createdAt,
       },
     },

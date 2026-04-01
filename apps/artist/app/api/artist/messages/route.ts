@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 
 import { requireArtistApiContext } from "@/lib/server/artist-context";
+import { resolveArtistMediaUrls } from "@/lib/server/artist-media";
 import { ArtistMediaV2Model, ArtistWorkspaceMessageModel, ArtistWorkspaceThreadModel } from "@/lib/server/models";
 
 const MAX_MESSAGES = 100;
@@ -39,10 +40,11 @@ export async function GET() {
       artistKey: context.user.artistKey,
     }).lean();
     for (const doc of docs) {
+      const urls = resolveArtistMediaUrls(doc);
       mediaMap[doc._id.toString()] = {
         id: doc._id.toString(),
-        url: doc.url,
-        previewUrl: doc.previewUrl || doc.url,
+        url: urls.url,
+        previewUrl: urls.previewUrl,
         filename: doc.filename || "attachment",
       };
     }

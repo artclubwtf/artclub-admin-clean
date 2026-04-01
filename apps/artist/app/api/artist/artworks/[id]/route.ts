@@ -10,6 +10,7 @@ import {
 import { artistApiErrorResponse } from "@/lib/server/api-errors";
 import { buildProductSyncPatch } from "@/lib/server/artist-sync";
 import { requireArtistApiContext } from "@/lib/server/artist-context";
+import { parseArtistMediaIdFromUrl, resolveArtistMediaUrls } from "@/lib/server/artist-media";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 
 const patchSchema = z
@@ -66,11 +67,17 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       productKey: artwork.productKey,
     }).lean();
 
-    const media = Array.isArray(artwork.images?.galleryUrls) && artwork.images.galleryUrls.length
+    const galleryUrls = Array.isArray(artwork.images?.galleryUrls) ? artwork.images.galleryUrls : [];
+    const galleryMediaIds = galleryUrls.map((url) => parseArtistMediaIdFromUrl(url)).filter(Boolean) as string[];
+    const media = galleryUrls.length
       ? await ArtistMediaV2Model.find({
           shopDomain: context.user.shopDomain,
           artistKey: context.user.artistKey,
-          $or: [{ url: { $in: artwork.images.galleryUrls } }, { previewUrl: { $in: artwork.images.galleryUrls } }],
+          $or: [
+            ...(galleryMediaIds.length ? [{ _id: { $in: galleryMediaIds } }] : []),
+            { url: { $in: galleryUrls } },
+            { previewUrl: { $in: galleryUrls } },
+          ],
         }).lean()
       : [];
 
@@ -179,8 +186,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     const primaryImage = media[0];
+    const primaryUrls = media.length ? resolveArtistMediaUrls(primaryImage) : null;
     const galleryUrls = media.length
-      ? dedupeTrimmed(media.map((item) => item.previewUrl || item.url || "").filter(Boolean))
+      ? dedupeTrimmed(media.map((item) => resolveArtistMediaUrls(item).previewUrl).filter(Boolean))
       : Array.isArray(artwork.images?.galleryUrls)
         ? artwork.images.galleryUrls
         : [];
@@ -231,9 +239,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           year: data.year ?? undefined,
           images: media.length
             ? {
-                thumbUrl: primaryImage.previewUrl || primaryImage.url,
-                mediumUrl: primaryImage.previewUrl || primaryImage.url,
-                originalUrl: primaryImage.url,
+                thumbUrl: primaryUrls?.previewUrl || "",
+                mediumUrl: primaryUrls?.previewUrl || "",
+                originalUrl: primaryUrls?.url || "",
                 galleryUrls,
               }
             : artwork.images,

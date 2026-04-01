@@ -9,6 +9,7 @@ const artistMediaV2Schema = new Schema(
     userId: { type: Types.ObjectId, ref: "User", required: true },
     kind: { type: String, enum: artistMediaV2Kinds, default: "artwork", required: true },
     fileIdGid: { type: String, trim: true },
+    s3Key: { type: String, trim: true },
     filename: { type: String, trim: true },
     mimeType: { type: String, trim: true },
     sizeBytes: { type: Number },

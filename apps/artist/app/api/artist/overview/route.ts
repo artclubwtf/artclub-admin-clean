@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireArtistApiContext } from "@/lib/server/artist-context";
+import { resolveArtistMediaUrls } from "@/lib/server/artist-media";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel } from "@/lib/server/models";
 
 function computeProfileCompleteness(input: {
@@ -65,7 +66,7 @@ export async function GET() {
         recentMedia: recentMedia.map((item) => ({
           id: item._id.toString(),
           kind: item.kind,
-          url: item.previewUrl || item.url,
+          url: resolveArtistMediaUrls(item).previewUrl,
           createdAt: item.createdAt,
         })),
       },

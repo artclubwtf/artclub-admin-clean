@@ -9,6 +9,7 @@ import {
 } from "@/lib/server/artist-print-pricing";
 import { artistApiErrorResponse } from "@/lib/server/api-errors";
 import { requireArtistApiContext } from "@/lib/server/artist-context";
+import { resolveArtistMediaUrls } from "@/lib/server/artist-media";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 
 const createArtworkSchema = z
@@ -177,7 +178,8 @@ export async function POST(req: Request) {
     }
 
     const primaryImage = media[0];
-    const galleryUrls = dedupeTrimmed(media.map((item) => item.previewUrl || item.url || "").filter(Boolean));
+    const primaryUrls = resolveArtistMediaUrls(primaryImage);
+    const galleryUrls = dedupeTrimmed(media.map((item) => resolveArtistMediaUrls(item).previewUrl).filter(Boolean));
 
     const variantsToInsert: Array<{
       shopDomain: string;
@@ -248,9 +250,9 @@ export async function POST(req: Request) {
       status: "db_only",
       year: data.year ?? undefined,
       images: {
-        thumbUrl: primaryImage.previewUrl || primaryImage.url,
-        mediumUrl: primaryImage.previewUrl || primaryImage.url,
-        originalUrl: primaryImage.url,
+        thumbUrl: primaryUrls.previewUrl,
+        mediumUrl: primaryUrls.previewUrl,
+        originalUrl: primaryUrls.url,
         galleryUrls,
       },
       dimensions: {

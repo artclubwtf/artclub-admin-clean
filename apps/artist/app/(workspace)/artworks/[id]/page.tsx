@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArtworkForm } from "@/components/artworks/ArtworkForm";
 import { requireArtistContext } from "@/lib/server/artist-context";
 import { ARTIST_PRINT_SIZES } from "@/lib/server/artist-print-pricing";
+import { parseArtistMediaIdFromUrl, resolveArtistMediaUrls } from "@/lib/server/artist-media";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 
 export const dynamic = "force-dynamic";
@@ -34,11 +35,16 @@ export default async function EditArtworkPage({ params }: { params: Promise<{ id
   if (!artwork) notFound();
 
   const galleryUrls = Array.isArray(artwork.images?.galleryUrls) ? artwork.images.galleryUrls : [];
+  const galleryMediaIds = galleryUrls.map((url) => parseArtistMediaIdFromUrl(url)).filter(Boolean) as string[];
   const linkedMedia = galleryUrls.length
     ? await ArtistMediaV2Model.find({
         shopDomain: context.user.shopDomain,
         artistKey: context.user.artistKey,
-        $or: [{ url: { $in: galleryUrls } }, { previewUrl: { $in: galleryUrls } }],
+        $or: [
+          ...(galleryMediaIds.length ? [{ _id: { $in: galleryMediaIds } }] : []),
+          { url: { $in: galleryUrls } },
+          { previewUrl: { $in: galleryUrls } },
+        ],
       }).lean()
     : [];
 
@@ -47,8 +53,9 @@ export default async function EditArtworkPage({ params }: { params: Promise<{ id
     return {
       id: matched?._id.toString() || "",
       kind: "artwork" as const,
-      url,
-      previewUrl: matched?.previewUrl || url,
+      s3Key: matched?.s3Key || "",
+      url: matched ? resolveArtistMediaUrls(matched).url : url,
+      previewUrl: matched ? resolveArtistMediaUrls(matched).previewUrl : url,
       filename: matched?.filename || `Artwork ${index + 1}`,
     };
   });

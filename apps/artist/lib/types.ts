@@ -1,6 +1,7 @@
 export type ArtistMediaItem = {
   id: string;
   kind: "artwork" | "gallery" | "avatar" | "hero" | "other";
+  s3Key?: string;
   url: string;
   previewUrl: string;
   filename: string;

@@ -46,6 +46,35 @@ export function getPublicS3Url(key: string) {
   return `${base}/${key}`;
 }
 
+export function tryExtractS3KeyFromUrl(raw: string | null | undefined) {
+  if (!raw) return undefined;
+
+  const publicBase = process.env.S3_PUBLIC_BASE_URL?.replace(/\/$/, "");
+  if (publicBase && raw.startsWith(`${publicBase}/`)) {
+    return decodeURIComponent(raw.slice(publicBase.length + 1));
+  }
+
+  try {
+    const url = new URL(raw);
+    const hostname = url.hostname.toLowerCase();
+    const looksLikeObjectStorage =
+      hostname.includes("amazonaws.com") || hostname.includes("digitaloceanspaces.com") || hostname.includes("cloudfront.net");
+    if (!looksLikeObjectStorage) return undefined;
+
+    const path = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
+    if (!path) return undefined;
+
+    const bucket = process.env.S3_BUCKET?.trim();
+    if (bucket && path.startsWith(`${bucket}/`)) {
+      return path.slice(bucket.length + 1);
+    }
+
+    return path;
+  } catch {
+    return undefined;
+  }
+}
+
 function getClient() {
   if (!client) {
     const cfg = resolveConfig();

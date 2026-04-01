@@ -53,7 +53,7 @@ export function MediaLibrary({ initialMedia }: MediaLibraryProps) {
           | {
               ok?: boolean;
               error?: string;
-              file?: { filename: string; mimeType: string; sizeBytes: number; url: string; previewUrl: string };
+              file?: { s3Key?: string; filename: string; mimeType: string; sizeBytes: number; url: string; previewUrl: string };
             }
           | null;
         if (!uploadRes.ok || !uploadJson?.file) throw new Error(uploadJson?.error || "Upload failed");
@@ -63,6 +63,7 @@ export function MediaLibrary({ initialMedia }: MediaLibraryProps) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             kind,
+            s3Key: uploadJson.file.s3Key,
             filename: uploadJson.file.filename,
             mimeType: uploadJson.file.mimeType,
             sizeBytes: uploadJson.file.sizeBytes,

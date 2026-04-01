@@ -1,5 +1,6 @@
 import { MediaLibrary } from "@/components/media/MediaLibrary";
 import { requireArtistContext } from "@/lib/server/artist-context";
+import { resolveArtistMediaUrls } from "@/lib/server/artist-media";
 import { ArtistMediaV2Model } from "@/lib/server/models";
 
 export const dynamic = "force-dynamic";
@@ -19,8 +20,9 @@ export default async function MediaPage() {
       initialMedia={media.map((item) => ({
         id: item._id.toString(),
         kind: item.kind,
-        url: item.url,
-        previewUrl: item.previewUrl || item.url,
+        s3Key: item.s3Key || "",
+        url: resolveArtistMediaUrls(item).url,
+        previewUrl: resolveArtistMediaUrls(item).previewUrl,
         filename: item.filename || "",
         mimeType: item.mimeType || "",
         sizeBytes: item.sizeBytes ?? null,
