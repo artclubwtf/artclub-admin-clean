@@ -1,13 +1,11 @@
 import { MessagesPanel } from "@/components/messages/MessagesPanel";
 import { requireArtistContext } from "@/lib/server/artist-context";
-import { connectMongo } from "@/lib/server/mongodb";
 import { ArtistWorkspaceMessageModel, ArtistWorkspaceThreadModel } from "@/lib/server/models";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
 export default async function MessagesPage() {
-  await connectMongo();
   const context = await requireArtistContext();
 
   let thread = await ArtistWorkspaceThreadModel.findOne({

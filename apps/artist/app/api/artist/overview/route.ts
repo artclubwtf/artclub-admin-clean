@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import { requireArtistApiContext } from "@/lib/server/artist-context";
-import { connectMongo } from "@/lib/server/mongodb";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel } from "@/lib/server/models";
 
 function computeProfileCompleteness(input: {
@@ -25,7 +24,6 @@ function computeProfileCompleteness(input: {
 }
 
 export async function GET() {
-  await connectMongo();
   const auth = await requireArtistApiContext();
   if (!auth.ok) return auth.response;
   const { context } = auth;

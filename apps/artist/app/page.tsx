@@ -1,7 +1,6 @@
 import { WorkspaceShell } from "@/components/layout/WorkspaceShell";
 import { OverviewPanels } from "@/components/overview/OverviewPanels";
 import { requireArtistContext } from "@/lib/server/artist-context";
-import { connectMongo } from "@/lib/server/mongodb";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel } from "@/lib/server/models";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +27,6 @@ function computeProfileCompleteness(input: {
 }
 
 export default async function HomePage() {
-  await connectMongo();
   const context = await requireArtistContext();
 
   const [artworkCount, seriesCount, recentMedia] = await Promise.all([

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireArtistApiContext } from "@/lib/server/artist-context";
-import { connectMongo } from "@/lib/server/mongodb";
 import { ArtistSeriesModel } from "@/lib/server/models";
 
 const createSchema = z
@@ -14,7 +13,6 @@ const createSchema = z
   .strict();
 
 export async function GET() {
-  await connectMongo();
   const auth = await requireArtistApiContext();
   if (!auth.ok) return auth.response;
   const { context } = auth;
@@ -43,7 +41,6 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  await connectMongo();
   const auth = await requireArtistApiContext();
   if (!auth.ok) return auth.response;
   const { context } = auth;

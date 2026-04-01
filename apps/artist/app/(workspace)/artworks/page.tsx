@@ -4,14 +4,12 @@ import { Button } from "@/components/primitives/Button";
 import { PageTitle } from "@/components/primitives/PageTitle";
 import { Section } from "@/components/primitives/Section";
 import { requireArtistContext } from "@/lib/server/artist-context";
-import { connectMongo } from "@/lib/server/mongodb";
 import { CanonicalProductModel } from "@/lib/server/models";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
 export default async function ArtworksPage() {
-  await connectMongo();
   const context = await requireArtistContext();
   const artworks = await CanonicalProductModel.find({
     shopDomain: context.user.shopDomain,

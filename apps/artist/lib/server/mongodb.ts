@@ -13,7 +13,17 @@ export async function connectMongo() {
   if (!cached.promise) {
     const uri = process.env.MONGODB_URI;
     if (!uri) throw new Error("Missing MONGODB_URI environment variable");
-    cached.promise = mongoose.connect(uri).then((m) => m);
+    cached.promise = mongoose
+      .connect(uri)
+      .then((m) => {
+        cached.conn = m;
+        return m;
+      })
+      .catch((err) => {
+        cached.conn = null;
+        cached.promise = null;
+        throw err;
+      });
   }
 
   cached.conn = await cached.promise;

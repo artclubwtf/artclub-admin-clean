@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 
 import { requireArtistApiContext } from "@/lib/server/artist-context";
-import { connectMongo } from "@/lib/server/mongodb";
 import { ArtistMediaV2Model, CanonicalArtistModel } from "@/lib/server/models";
 
 function matchesUrl(candidate: string | undefined, targets: string[]) {
@@ -10,7 +9,6 @@ function matchesUrl(candidate: string | undefined, targets: string[]) {
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  await connectMongo();
   const auth = await requireArtistApiContext({ allowIncompleteOnboarding: true });
   if (!auth.ok) return auth.response;
   const { context } = auth;

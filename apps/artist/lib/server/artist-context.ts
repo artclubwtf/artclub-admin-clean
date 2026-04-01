@@ -52,6 +52,55 @@ export type ArtistContext = {
   sessionUserId: string;
 };
 
+function isDuplicateKeyError(err: unknown) {
+  return Boolean(err && typeof err === "object" && "code" in err && (err as { code?: number }).code === 11000);
+}
+
+async function ensureCanonicalArtistForUser(user: {
+  _id: Types.ObjectId;
+  artistKey: string;
+  shopDomain: string;
+  email: string;
+  name?: string | null;
+}) {
+  let canonicalArtist = await CanonicalArtistModel.findOne({
+    shopDomain: user.shopDomain,
+    artistKey: user.artistKey,
+  }).lean();
+
+  if (canonicalArtist) return canonicalArtist;
+
+  const fallbackDisplayName = user.name?.trim() || user.email.split("@")[0] || "Artist";
+  try {
+    await CanonicalArtistModel.updateOne(
+      { shopDomain: user.shopDomain, artistKey: user.artistKey },
+      {
+        $setOnInsert: {
+          shopDomain: user.shopDomain,
+          artistKey: user.artistKey,
+          handle: user.artistKey,
+          displayName: fallbackDisplayName,
+          email: user.email,
+        },
+      },
+      { upsert: true },
+    );
+  } catch (err) {
+    if (!isDuplicateKeyError(err)) throw err;
+  }
+
+  canonicalArtist = await CanonicalArtistModel.findOne({
+    shopDomain: user.shopDomain,
+    artistKey: user.artistKey,
+  }).lean();
+
+  if (!canonicalArtist) {
+    throw new Error(`Failed to provision canonical artist for user ${user._id.toString()}`);
+  }
+
+  return canonicalArtist;
+}
+
 async function loadArtistContext(): Promise<ArtistContext | null> {
   await connectMongo();
 
@@ -65,22 +114,13 @@ async function loadArtistContext(): Promise<ArtistContext | null> {
     return null;
   }
 
-  let canonicalArtist = await CanonicalArtistModel.findOne({
-    shopDomain: user.shopDomain,
+  const canonicalArtist = await ensureCanonicalArtistForUser({
+    _id: user._id,
     artistKey: user.artistKey,
-  }).lean();
-
-  if (!canonicalArtist) {
-    const fallbackDisplayName = user.name?.trim() || user.email.split("@")[0] || "Artist";
-    const created = await CanonicalArtistModel.create({
-      shopDomain: user.shopDomain,
-      artistKey: user.artistKey,
-      handle: user.artistKey,
-      displayName: fallbackDisplayName,
-      email: user.email,
-    });
-    canonicalArtist = created.toObject();
-  }
+    shopDomain: user.shopDomain,
+    email: user.email,
+    name: user.name,
+  });
 
   return {
     user: {
@@ -146,7 +186,16 @@ export async function requireOnboardingContext() {
 }
 
 export async function requireArtistApiContext(options?: { allowIncompleteOnboarding?: boolean }) {
-  const context = await loadArtistContext();
+  let context: ArtistContext | null = null;
+  try {
+    context = await loadArtistContext();
+  } catch (err) {
+    console.error("Failed to load artist API context", err);
+    return {
+      ok: false as const,
+      response: NextResponse.json({ ok: false, error: "database_unavailable" }, { status: 503 }),
+    };
+  }
   if (!context) {
     return { ok: false as const, response: NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 }) };
   }

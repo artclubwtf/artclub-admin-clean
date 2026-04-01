@@ -1,13 +1,11 @@
 import { MediaLibrary } from "@/components/media/MediaLibrary";
 import { requireArtistContext } from "@/lib/server/artist-context";
-import { connectMongo } from "@/lib/server/mongodb";
 import { ArtistMediaV2Model } from "@/lib/server/models";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
 export default async function MediaPage() {
-  await connectMongo();
   const context = await requireArtistContext();
   const media = await ArtistMediaV2Model.find({
     shopDomain: context.user.shopDomain,

@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 
 import { OnboardingForm } from "@/components/onboarding/OnboardingForm";
 import { requireOnboardingContext } from "@/lib/server/artist-context";
-import { connectMongo } from "@/lib/server/mongodb";
 import { TermsAcceptanceModel } from "@/lib/server/models";
 import { ensureTermsDocument, loadActiveTermsModules } from "@/lib/server/terms";
 
@@ -10,9 +9,8 @@ export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
 export default async function OnboardingPage() {
-  await connectMongo();
-  await ensureTermsDocument("artist_registration_terms");
   const context = await requireOnboardingContext();
+  await ensureTermsDocument("artist_registration_terms");
   if (context.user.onboardingComplete) {
     redirect("/");
   }

@@ -3,7 +3,6 @@ import { z } from "zod";
 
 import { buildArtistSyncPatch } from "@/lib/server/artist-sync";
 import { requireArtistApiContext } from "@/lib/server/artist-context";
-import { connectMongo } from "@/lib/server/mongodb";
 import { buildTermsSnapshotHash, ensureTermsDocument, loadActiveTermsModules } from "@/lib/server/terms";
 import { CanonicalArtistModel, TermsAcceptanceModel, UserModel } from "@/lib/server/models";
 
@@ -58,12 +57,10 @@ function getRequestIp(req: Request) {
 }
 
 export async function GET() {
-  await connectMongo();
-  await ensureTermsDocument("artist_registration_terms");
-
   const auth = await requireArtistApiContext({ allowIncompleteOnboarding: true });
   if (!auth.ok) return auth.response;
   const { context } = auth;
+  await ensureTermsDocument("artist_registration_terms");
 
   const activeTermsModules = await loadActiveTermsModules();
   const accepted = await TermsAcceptanceModel.find({ userId: context.user._id }).sort({ acceptedAt: -1 }).lean();
@@ -113,12 +110,10 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  await connectMongo();
-  await ensureTermsDocument("artist_registration_terms");
-
   const auth = await requireArtistApiContext({ allowIncompleteOnboarding: true });
   if (!auth.ok) return auth.response;
   const { context } = auth;
+  await ensureTermsDocument("artist_registration_terms");
 
   const body = (await req.json().catch(() => null)) as unknown;
   const parsed = onboardingSubmitSchema.safeParse(body || {});

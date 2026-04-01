@@ -1,13 +1,11 @@
 import { SeriesManager } from "@/components/series/SeriesManager";
 import { requireArtistContext } from "@/lib/server/artist-context";
-import { connectMongo } from "@/lib/server/mongodb";
 import { ArtistSeriesModel, CanonicalProductModel } from "@/lib/server/models";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
 export default async function SeriesPage() {
-  await connectMongo();
   const context = await requireArtistContext();
 
   const [series, artworks] = await Promise.all([

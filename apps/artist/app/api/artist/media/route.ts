@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireArtistApiContext } from "@/lib/server/artist-context";
-import { connectMongo } from "@/lib/server/mongodb";
 import { ArtistMediaV2Model, artistMediaV2Kinds } from "@/lib/server/models";
 
 const createMediaSchema = z
@@ -18,7 +17,6 @@ const createMediaSchema = z
   .strict();
 
 export async function GET(req: Request) {
-  await connectMongo();
   const auth = await requireArtistApiContext({ allowIncompleteOnboarding: true });
   if (!auth.ok) return auth.response;
   const { context } = auth;
@@ -54,7 +52,6 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  await connectMongo();
   const auth = await requireArtistApiContext({ allowIncompleteOnboarding: true });
   if (!auth.ok) return auth.response;
   const { context } = auth;

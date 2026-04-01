@@ -3,7 +3,6 @@ import { Types } from "mongoose";
 import { z } from "zod";
 
 import { requireArtistApiContext } from "@/lib/server/artist-context";
-import { connectMongo } from "@/lib/server/mongodb";
 import { ArtistSeriesModel, CanonicalProductModel } from "@/lib/server/models";
 
 const patchSchema = z
@@ -15,7 +14,6 @@ const patchSchema = z
   .strict();
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  await connectMongo();
   const auth = await requireArtistApiContext();
   if (!auth.ok) return auth.response;
   const { context } = auth;
@@ -75,7 +73,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  await connectMongo();
   const auth = await requireArtistApiContext();
   if (!auth.ok) return auth.response;
   const { context } = auth;

@@ -3,14 +3,12 @@ import { notFound } from "next/navigation";
 import { ArtworkForm } from "@/components/artworks/ArtworkForm";
 import { requireArtistContext } from "@/lib/server/artist-context";
 import { ARTIST_PRINT_SIZES } from "@/lib/server/artist-print-pricing";
-import { connectMongo } from "@/lib/server/mongodb";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
 export default async function EditArtworkPage({ params }: { params: Promise<{ id: string }> }) {
-  await connectMongo();
   const context = await requireArtistContext();
   const { id } = await params;
 

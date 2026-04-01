@@ -3,7 +3,6 @@ import { z } from "zod";
 
 import { buildArtistSyncPatch } from "@/lib/server/artist-sync";
 import { requireArtistApiContext } from "@/lib/server/artist-context";
-import { connectMongo } from "@/lib/server/mongodb";
 import { CanonicalArtistModel } from "@/lib/server/models";
 
 const schema = z
@@ -16,7 +15,6 @@ const schema = z
   .strict();
 
 export async function PATCH(req: Request) {
-  await connectMongo();
   const auth = await requireArtistApiContext();
   if (!auth.ok) return auth.response;
   const { context } = auth;

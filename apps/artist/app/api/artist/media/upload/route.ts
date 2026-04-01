@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import { requireArtistApiContext } from "@/lib/server/artist-context";
-import { connectMongo } from "@/lib/server/mongodb";
 import { getPublicS3Url, getS3ObjectUrl, uploadToS3 } from "@/lib/server/s3";
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -13,7 +12,6 @@ function sanitizeFilename(name: string) {
 }
 
 export async function POST(req: Request) {
-  await connectMongo();
   const auth = await requireArtistApiContext({ allowIncompleteOnboarding: true });
   if (!auth.ok) return auth.response;
   const { context } = auth;

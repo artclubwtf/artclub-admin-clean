@@ -2,13 +2,11 @@ import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 
 import { requireArtistApiContext } from "@/lib/server/artist-context";
-import { connectMongo } from "@/lib/server/mongodb";
 import { ArtistMediaV2Model, ArtistWorkspaceMessageModel, ArtistWorkspaceThreadModel } from "@/lib/server/models";
 
 const MAX_MESSAGES = 100;
 
 export async function GET() {
-  await connectMongo();
   const auth = await requireArtistApiContext();
   if (!auth.ok) return auth.response;
   const { context } = auth;
@@ -69,7 +67,6 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  await connectMongo();
   const auth = await requireArtistApiContext();
   if (!auth.ok) return auth.response;
   const { context } = auth;
