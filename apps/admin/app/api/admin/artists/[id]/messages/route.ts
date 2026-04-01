@@ -1,144 +1,136 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
-import { Types } from "mongoose";
 
 import { authOptions } from "@/lib/auth";
-import { connectMongo } from "@/lib/mongodb";
-import { MediaModel } from "@/models/Media";
-import { getS3ObjectUrl } from "@/lib/s3";
-import { MessageModel } from "@/models/Message";
-import { MessageThreadModel } from "@/models/MessageThread";
+import {
+  createWorkspaceConversation,
+  getWorkspaceConversationDetail,
+  getOrCreateGeneralConversation,
+  listWorkspaceConversations,
+  resolveWorkspaceOwnerByLegacyArtistId,
+  sendWorkspaceMessage,
+} from "@/lib/artistWorkspaceMessages";
+import { workspaceConversationCreateInputSchema, workspaceConversationMessageInputSchema } from "@artclub/models";
 
-const MAX_MESSAGES = 50;
-
-export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+async function requireTeamSession() {
   const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== "team") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return null;
   }
-
-  const { id } = await params;
-  if (!Types.ObjectId.isValid(id)) {
-    return NextResponse.json({ error: "Invalid artist id" }, { status: 400 });
-  }
-
-  await connectMongo();
-  const thread = await MessageThreadModel.findOne({ artistId: id }).lean();
-  if (!thread) {
-    return NextResponse.json({ thread: null, messages: [] }, { status: 200 });
-  }
-
-  const messages = await MessageModel.find({ threadId: thread._id })
-    .sort({ createdAt: -1 })
-    .limit(MAX_MESSAGES)
-    .lean();
-
-  const mediaIds = Array.from(
-    new Set(
-      messages
-        .flatMap((m) => m.mediaIds || [])
-        .map((mid) => mid?.toString())
-        .filter(Boolean),
-    ),
-  ) as string[];
-
-  const mediaMap =
-    mediaIds.length > 0
-      ? await MediaModel.find({ _id: { $in: mediaIds.map((mid) => new Types.ObjectId(mid)) }, artistId: id })
-          .select({ filename: 1, url: 1, mimeType: 1, s3Key: 1 })
-          .lean()
-          .then(async (rows) => {
-            const map: Record<string, { id: string; filename?: string; url?: string; mimeType?: string }> = {};
-            for (const m of rows) {
-              const signedUrl = await getS3ObjectUrl(m.s3Key).catch(() => m.url ?? undefined);
-              map[m._id.toString()] = {
-                id: m._id.toString(),
-                filename: m.filename ?? undefined,
-                url: signedUrl ?? m.url ?? undefined,
-                mimeType: m.mimeType ?? undefined,
-              };
-            }
-            return map;
-          })
-      : {};
-
-  const payload = messages
-    .map((m) => ({
-      id: m._id.toString(),
-      senderRole: m.senderRole,
-      text: m.text,
-      mediaIds: (m.mediaIds || []).map((mid) => mid.toString()),
-      attachments: (m.mediaIds || [])
-        .map((mid) => mediaMap[mid.toString()])
-        .filter(Boolean),
-      createdAt: m.createdAt,
-    }))
-    .reverse();
-
-  return NextResponse.json({ thread: { id: thread._id.toString() }, messages: payload }, { status: 200 });
+  return session;
 }
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== "team") {
+export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await requireTeamSession();
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id } = await params;
-  if (!Types.ObjectId.isValid(id)) {
-    return NextResponse.json({ error: "Invalid artist id" }, { status: 400 });
+  const owner = await resolveWorkspaceOwnerByLegacyArtistId(id);
+  if (!owner) {
+    return NextResponse.json({ thread: null, conversations: [], messages: [] }, { status: 200 });
   }
 
-  const body = (await req.json().catch(() => null)) as { text?: string; mediaIds?: string[] } | null;
-  const text = body?.text?.toString().trim() ?? "";
-  const mediaIdsRaw = Array.isArray(body?.mediaIds) ? body?.mediaIds : [];
-  const mediaIds = mediaIdsRaw.map((mid) => mid?.toString()).filter(Boolean);
-
-  if (!text && mediaIds.length === 0) {
-    return NextResponse.json({ error: "Message requires text or attachment" }, { status: 400 });
-  }
-
-  await connectMongo();
-
-  let thread = await MessageThreadModel.findOne({ artistId: id });
-  if (!thread) {
-    thread = await MessageThreadModel.create({
-      artistId: id,
-      lastMessageAt: new Date(),
-    });
-  }
-
-  let allowedMediaIds: Types.ObjectId[] = [];
-  if (mediaIds.length) {
-    const ownedMedia = await MediaModel.find({
-      _id: { $in: mediaIds.map((mid) => new Types.ObjectId(mid)) },
-      artistId: id,
-    })
-      .select({ _id: 1 })
-      .lean();
-    allowedMediaIds = ownedMedia.map((m) => new Types.ObjectId(m._id));
-  }
-
-  const message = await MessageModel.create({
-    threadId: thread._id,
-    artistId: id,
-    senderRole: "team",
-    text,
-    mediaIds: allowedMediaIds,
+  const conversations = await listWorkspaceConversations({
+    shopDomain: owner.shopDomain,
+    artistKey: owner.artistKey,
+    viewerRole: "team",
   });
 
-  thread.lastMessageAt = new Date();
-  await thread.save();
+  const compatibilityThread = conversations[0]
+    ? await getWorkspaceConversationDetail({
+        shopDomain: owner.shopDomain,
+        artistKey: owner.artistKey,
+        threadId: conversations[0].id,
+        viewerRole: "team",
+      })
+    : null;
 
   return NextResponse.json(
     {
-      message: {
-        id: message._id.toString(),
-        senderRole: message.senderRole,
-        text: message.text,
-        mediaIds: allowedMediaIds.map((mid) => mid.toString()),
-        createdAt: message.createdAt,
-      },
+      ok: true,
+      conversations,
+      thread: compatibilityThread ? { id: compatibilityThread.conversation.id } : null,
+      messages: compatibilityThread?.messages || [],
+    },
+    { status: 200 },
+  );
+}
+
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await requireTeamSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const teamUser = session.user;
+
+  const { id } = await params;
+  const owner = await resolveWorkspaceOwnerByLegacyArtistId(id);
+  if (!owner) {
+    return NextResponse.json({ error: "artist_workspace_not_available" }, { status: 404 });
+  }
+
+  const payload = (await req.json().catch(() => null)) as unknown;
+  const createIntent =
+    Boolean(payload && typeof payload === "object" && ("subject" in payload || "type" in payload || "references" in payload));
+  const createParsed = workspaceConversationCreateInputSchema.safeParse(payload || {});
+  if (createIntent) {
+    if (!createParsed.success) {
+      const issue = createParsed.error.issues[0];
+      return NextResponse.json({ error: issue?.message || "invalid_payload" }, { status: 400 });
+    }
+    const detail = await createWorkspaceConversation({
+      shopDomain: owner.shopDomain,
+      artistKey: owner.artistKey,
+      userId: owner.userId,
+      senderUserId: teamUser?.id || undefined,
+      senderRole: "team",
+      senderLabel: teamUser?.name || "ARTCLUB Team",
+      subject: createParsed.data.subject,
+      type: createParsed.data.type,
+      text: createParsed.data.text?.trim() || "",
+      mediaIds: createParsed.data.mediaIds,
+      references: createParsed.data.references,
+    });
+
+    return NextResponse.json({ ok: true, conversation: detail?.conversation, messages: detail?.messages || [] }, { status: 201 });
+  }
+
+  const messageParsed = workspaceConversationMessageInputSchema.safeParse(payload || {});
+  if (!messageParsed.success) {
+    const issue = messageParsed.error.issues[0];
+    return NextResponse.json({ error: issue?.message || "invalid_payload" }, { status: 400 });
+  }
+
+  const detail = await getOrCreateGeneralConversation({
+    shopDomain: owner.shopDomain,
+    artistKey: owner.artistKey,
+    userId: owner.userId,
+    viewerRole: "team",
+  });
+
+  if (!detail) {
+    return NextResponse.json({ error: "conversation_not_found" }, { status: 404 });
+  }
+
+  const sent = await sendWorkspaceMessage({
+    shopDomain: owner.shopDomain,
+    artistKey: owner.artistKey,
+    threadId: detail.conversation.id,
+    senderRole: "team",
+    senderUserId: teamUser?.id || undefined,
+    senderLabel: teamUser?.name || "ARTCLUB Team",
+    text: messageParsed.data.text?.trim() || "",
+    mediaIds: messageParsed.data.mediaIds,
+  });
+
+  return NextResponse.json(
+    {
+      ok: true,
+      message: sent?.messages[sent.messages.length - 1] || null,
+      conversation: sent?.conversation || null,
+      messages: sent?.messages || [],
     },
     { status: 201 },
   );

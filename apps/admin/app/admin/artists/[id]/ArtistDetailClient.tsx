@@ -3,6 +3,7 @@
 import type { ReactElement } from "react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import ArtistWorkspaceMessagesPanel from "./ArtistWorkspaceMessagesPanel";
 
 type Props = {
   artistId: string;
@@ -2849,105 +2850,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
     </div>
   );
 
-  const messagesPanel = (
-    <div className="space-y-3">
-      <div className="ac-card space-y-1">
-        <div className="text-lg font-semibold text-slate-800">Messages</div>
-        <div className="text-xs text-slate-500">Chat with the artist. Attach existing media if needed.</div>
-      </div>
-
-      {messagesError && <div className="ac-card text-sm text-red-600">Error: {messagesError}</div>}
-      {messagesLoading && <div className="ac-card text-sm text-slate-600">Loading messages...</div>}
-
-      <div className="ac-card space-y-3" style={{ maxHeight: 420, overflowY: "auto" }}>
-        {messages.length === 0 && !messagesLoading ? (
-          <div className="text-sm text-slate-600">No messages yet.</div>
-        ) : (
-          messages.map((m) => {
-            const isTeam = m.senderRole === "team";
-            const isImage = (mime?: string) => (mime || "").startsWith("image/");
-            return (
-              <div key={m.id} className={`flex ${isTeam ? "justify-end" : "justify-start"}`}>
-                <div
-                  className="rounded-2xl px-3 py-2 shadow-sm"
-                  style={{
-                    background: isTeam ? "var(--primary)" : "color-mix(in srgb, var(--surface2) 92%, transparent)",
-                    color: isTeam ? "var(--primaryText)" : "var(--text)",
-                    maxWidth: "80%",
-                  }}
-                >
-                  {m.text && <div className="text-sm whitespace-pre-wrap">{m.text}</div>}
-                  {m.attachments?.length ? (
-                    <div className="mt-2 space-y-1">
-                      {m.attachments.map((att) => (
-                        <a
-                          key={att.id}
-                          href={att.url || "#"}
-                          target={att.url ? "_blank" : undefined}
-                          rel="noreferrer"
-                          className="block rounded bg-white/20 px-2 py-1 text-xs underline"
-                        >
-                          {isImage(att.mimeType) ? "Image" : att.mimeType || "File"} · {att.filename || att.id}
-                        </a>
-                      ))}
-                    </div>
-                  ) : null}
-                  <div className="mt-1 text-[10px] opacity-70">
-                    {m.createdAt ? new Date(m.createdAt).toLocaleString() : ""}
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      <div className="ac-card space-y-2">
-        <label className="field">
-          <span>Reply</span>
-          <textarea
-            value={messageText}
-            onChange={(e) => setMessageText(e.target.value)}
-            rows={3}
-            placeholder="Type a message to the artist..."
-          />
-        </label>
-
-        <div className="space-y-2">
-          <div className="text-xs text-slate-600">Attach media (optional)</div>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {media.map((m) => {
-              const selected = messageAttachmentIds.includes(m._id);
-              const isImage = (mime?: string) => (mime || "").startsWith("image/");
-              return (
-                <button
-                  key={m._id}
-                  type="button"
-                  onClick={() => toggleMessageAttachment(m._id)}
-                  className={`rounded-lg border px-2 py-2 text-left ${selected ? "border-slate-900" : "border-slate-200"}`}
-                >
-                  <div className="text-sm font-semibold text-slate-900">{m.filename || "Media"}</div>
-                  <div className="text-xs text-slate-500">{isImage(m.mimeType) ? "Image" : m.mimeType || "File"}</div>
-                </button>
-              );
-            })}
-          </div>
-          {messageAttachmentIds.length > 0 && (
-            <div className="text-xs text-slate-600">{messageAttachmentIds.length} attachment(s) selected</div>
-          )}
-        </div>
-
-        <div className="flex gap-2">
-          <button type="button" className="btnPrimary" onClick={handleSendMessage} disabled={messageSending}>
-            {messageSending ? "Sending..." : "Send"}
-          </button>
-          <button type="button" className="btnGhost" onClick={() => setMessageAttachmentIds([])}>
-            Clear attachments
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  const messagesPanel = <ArtistWorkspaceMessagesPanel artistId={artistId} />;
 
   const renderShopifySlot = (
     key: ShopifyFileFieldKey,

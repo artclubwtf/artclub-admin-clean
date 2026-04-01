@@ -180,6 +180,51 @@ export type PublicArtistProfilePageData = {
   announcements: ArtistAnnouncementItem[];
 };
 
+export type ArtistMessageConversationSummary = {
+  id: string;
+  subject: string;
+  type: "general" | "support" | "inquiry" | "exhibition" | "sales" | "logistics" | "request";
+  status: "open" | "archived";
+  lastMessageAt?: string | Date | null;
+  lastMessagePreview: string;
+  lastMessageSenderRole?: "artist" | "team" | null;
+  unreadCount: number;
+  createdAt?: string | Date | null;
+  updatedAt?: string | Date | null;
+  referenceCount: number;
+};
+
+export type ArtistMessageAttachment = {
+  id: string;
+  filename: string;
+  mimeType: string;
+  kind: string;
+  url: string;
+  previewUrl: string;
+};
+
+export type ArtistMessageItem = {
+  id: string;
+  senderRole: "artist" | "team";
+  senderLabel: string;
+  text: string;
+  attachments: ArtistMessageAttachment[];
+  createdAt?: string | Date | null;
+};
+
+export type ArtistMessageConversationDetail = {
+  conversation: ArtistMessageConversationSummary & {
+    artistLastReadAt?: string | Date | null;
+    teamLastReadAt?: string | Date | null;
+    references: Array<{
+      kind: "artwork" | "exhibition" | "request" | "announcement" | "sale" | "logistics";
+      refId: string;
+      label?: string;
+    }>;
+  };
+  messages: ArtistMessageItem[];
+};
+
 export type ActiveTermsModule = {
   document: {
     id: string;

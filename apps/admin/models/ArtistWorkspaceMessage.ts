@@ -1,6 +1,7 @@
 import { InferSchemaType, Model, Schema, Types, model, models } from "mongoose";
+import { workspaceSenderRoles } from "@artclub/models";
 
-export const artistWorkspaceSenderRoles = ["artist", "team"] as const;
+export const artistWorkspaceSenderRoles = workspaceSenderRoles.options;
 
 const artistWorkspaceMessageSchema = new Schema(
   {
@@ -8,6 +9,8 @@ const artistWorkspaceMessageSchema = new Schema(
     shopDomain: { type: String, required: true, lowercase: true, trim: true },
     artistKey: { type: String, required: true, trim: true },
     senderRole: { type: String, enum: artistWorkspaceSenderRoles, required: true },
+    senderUserId: { type: Types.ObjectId, ref: "User" },
+    senderLabel: { type: String, trim: true },
     text: { type: String, default: "" },
     mediaIds: [{ type: Types.ObjectId, ref: "ArtistMediaV2" }],
   },
