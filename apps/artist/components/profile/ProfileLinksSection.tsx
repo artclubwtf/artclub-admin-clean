@@ -12,6 +12,7 @@ import type { ArtistProfileLinkItem } from "@/lib/types";
 
 type ProfileLinksSectionProps = {
   initialItems: ArtistProfileLinkItem[];
+  onItemsChange?: (items: ArtistProfileLinkItem[]) => void;
 };
 
 const emptyDraft: ArtistProfileLinkItem = {
@@ -26,7 +27,7 @@ const emptyDraft: ArtistProfileLinkItem = {
 
 const typeOptions = ["instagram", "website", "shop", "behance", "linkedin", "tiktok", "youtube", "custom"];
 
-export function ProfileLinksSection({ initialItems }: ProfileLinksSectionProps) {
+export function ProfileLinksSection({ initialItems, onItemsChange }: ProfileLinksSectionProps) {
   const [items, setItems] = useState(initialItems);
   const [draft, setDraft] = useState<ArtistProfileLinkItem>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -50,7 +51,9 @@ export function ProfileLinksSection({ initialItems }: ProfileLinksSectionProps) 
       return;
     }
     const createdItem = json.item;
-    setItems((current) => [...current, createdItem]);
+    const nextItems = [...items, createdItem];
+    setItems(nextItems);
+    onItemsChange?.(nextItems);
     setDraft(emptyDraft);
     setStatus({ tone: "success", text: "Link added." });
   }
@@ -73,7 +76,9 @@ export function ProfileLinksSection({ initialItems }: ProfileLinksSectionProps) 
       return;
     }
     const updatedItem = json.item;
-    setItems((current) => current.map((item) => (item.id === id ? updatedItem : item)));
+    const nextItems = items.map((item) => (item.id === id ? updatedItem : item));
+    setItems(nextItems);
+    onItemsChange?.(nextItems);
     setEditingId(null);
     setStatus({ tone: "success", text: "Link updated." });
   }
@@ -85,7 +90,9 @@ export function ProfileLinksSection({ initialItems }: ProfileLinksSectionProps) 
       setStatus({ tone: "error", text: json?.error || "Could not delete link." });
       return;
     }
-    setItems((current) => current.filter((item) => item.id !== id));
+    const nextItems = items.filter((item) => item.id !== id);
+    setItems(nextItems);
+    onItemsChange?.(nextItems);
     setStatus({ tone: "success", text: "Link removed." });
   }
 
@@ -102,6 +109,7 @@ export function ProfileLinksSection({ initialItems }: ProfileLinksSectionProps) 
       return;
     }
     setItems(json.items);
+    onItemsChange?.(json.items);
   }
 
   return (

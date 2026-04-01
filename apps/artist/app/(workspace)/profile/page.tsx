@@ -1,6 +1,6 @@
 import { ProfileForm } from "@/components/profile/ProfileForm";
+import { normalizePublicArtistMediaUrls } from "@/lib/server/artist-media";
 import { createArtistMediaUrlRewriter } from "@/lib/server/artist-media-rewrite";
-import { buildPublicArtistProfileShape } from "@/lib/server/public-artist-profile";
 import {
   serializeEducation,
   serializeExhibitions,
@@ -8,14 +8,40 @@ import {
   serializeProfileLinks,
 } from "@/lib/server/artist-profile-content";
 import { requireArtistContext } from "@/lib/server/artist-context";
-import { ArtistAnnouncementModel, CanonicalArtistModel, CanonicalProductModel } from "@/lib/server/models";
+import { ArtistAnnouncementModel, CanonicalArtistModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
+
+function formatCurrency(cents: number) {
+  return new Intl.NumberFormat("en-DE", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(Math.max(0, cents) / 100);
+}
+
+function buildArtworkPriceLabel(params: {
+  forSale: boolean;
+  originalAvailable: boolean;
+  allowPrints: boolean;
+  variants: Array<{ priceCents: number; finish?: string; sizeCode?: string }>;
+}) {
+  if (!params.forSale) return "Not for Sale at ARTCLUB";
+
+  const positive = params.variants.filter((item) => item.priceCents > 0).sort((a, b) => a.priceCents - b.priceCents);
+  const cheapest = positive[0];
+
+  if (params.originalAvailable && cheapest) return formatCurrency(cheapest.priceCents);
+  if (params.allowPrints && cheapest) return `From ${formatCurrency(cheapest.priceCents)}`;
+  if (params.originalAvailable) return "Available on request";
+  if (params.allowPrints) return "Prints available";
+  return "Not for Sale at ARTCLUB";
+}
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
 export default async function ProfilePage() {
   const context = await requireArtistContext();
-  const [artist, announcements, featuredWorks] = await Promise.all([
+  const [artist, announcements, artworks] = await Promise.all([
     CanonicalArtistModel.findById(context.canonicalArtist._id).lean(),
     ArtistAnnouncementModel.find({
       shopDomain: context.user.shopDomain,
@@ -27,12 +53,33 @@ export default async function ProfilePage() {
       shopDomain: context.user.shopDomain,
       artistKey: context.user.artistKey,
       type: "artwork",
+      status: { $ne: "archived" },
     })
       .sort({ updatedAt: -1, createdAt: -1 })
-      .select({ productKey: 1, title: 1, seriesName: 1, status: 1, images: 1 })
-      .limit(4)
+      .select({
+        productKey: 1,
+        title: 1,
+        description: 1,
+        year: 1,
+        forSale: 1,
+        originalAvailable: 1,
+        allowPrints: 1,
+        seriesName: 1,
+        status: 1,
+        images: 1,
+      })
+      .limit(12)
       .lean(),
   ]);
+
+  const variants = artworks.length
+    ? await CanonicalVariantModel.find({
+        shopDomain: context.user.shopDomain,
+        productKey: { $in: artworks.map((item) => item.productKey) },
+      })
+        .select({ productKey: 1, priceCents: 1, finish: 1, sizeCode: 1 })
+        .lean()
+    : [];
 
   const rewriteMediaUrl = await createArtistMediaUrlRewriter({
     shopDomain: context.user.shopDomain,
@@ -44,7 +91,7 @@ export default async function ProfilePage() {
       ...(Array.isArray(artist?.experience) ? artist.experience.map((item: any) => item?.imageUrl) : []),
       ...(Array.isArray(artist?.education) ? artist.education.map((item: any) => item?.imageUrl) : []),
       ...(Array.isArray(artist?.exhibitions) ? artist.exhibitions.map((item: any) => item?.coverImageUrl) : []),
-      ...featuredWorks.flatMap((item) => [
+      ...artworks.flatMap((item) => [
         item.images?.thumbUrl,
         item.images?.mediumUrl,
         item.images?.originalUrl,
@@ -67,11 +114,38 @@ export default async function ProfilePage() {
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   }));
-  const publicProfile = buildPublicArtistProfileShape({
-    artist,
-    announcements: serializedAnnouncements,
-    rewriteMediaUrl,
-  });
+  const variantsByProduct = variants.reduce<Record<string, typeof variants>>((acc, item) => {
+    const key = item.productKey || "";
+    if (!key) return acc;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(item);
+    return acc;
+  }, {});
+
+  const artworksPreview = artworks
+    .filter((item) => item.title && (item.images?.thumbUrl || item.images?.mediumUrl || item.images?.originalUrl))
+    .map((item) => {
+      const galleryUrls = Array.isArray(item.images?.galleryUrls) ? item.images.galleryUrls.filter(Boolean) : [];
+      const variantsForProduct = variantsByProduct[item.productKey] || [];
+
+      return {
+        productKey: item.productKey,
+        title: item.title,
+        year: item.year ?? null,
+        description: item.description || "",
+        imageUrl: rewriteMediaUrl(item.images?.mediumUrl || item.images?.thumbUrl || item.images?.originalUrl || ""),
+        galleryUrls: normalizePublicArtistMediaUrls(galleryUrls.map((value) => rewriteMediaUrl(value))),
+        seriesName: item.seriesName || "",
+        status: item.status,
+        priceLabel: buildArtworkPriceLabel({
+          forSale: item.forSale !== false,
+          originalAvailable: item.originalAvailable === true,
+          allowPrints: item.allowPrints === true,
+          variants: variantsForProduct,
+        }),
+        detailLabel: "more about the artwork",
+      };
+    });
 
   return (
     <ProfileForm
@@ -96,14 +170,8 @@ export default async function ProfilePage() {
         education: serializeEducation(artist?.education).map((item) => ({ ...item, imageUrl: rewriteMediaUrl(item.imageUrl) })),
         exhibitions: serializeExhibitions(artist?.exhibitions).map((item) => ({ ...item, coverImageUrl: rewriteMediaUrl(item.coverImageUrl) })),
       }}
-      featuredWorks={featuredWorks.map((item) => ({
-        productKey: item.productKey,
-        title: item.title,
-        seriesName: item.seriesName || "",
-        imageUrl: rewriteMediaUrl(item.images?.thumbUrl || item.images?.mediumUrl || item.images?.originalUrl || ""),
-        status: item.status,
-      }))}
-      announcementPreview={publicProfile.announcements.slice(0, 3)}
+      artworksPreview={artworksPreview}
+      initialAnnouncements={serializedAnnouncements}
     />
   );
 }

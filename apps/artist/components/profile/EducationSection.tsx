@@ -13,6 +13,7 @@ import type { ArtistEducationItem, ArtistMediaItem } from "@/lib/types";
 
 type EducationSectionProps = {
   initialItems: ArtistEducationItem[];
+  onItemsChange?: (items: ArtistEducationItem[]) => void;
 };
 
 const emptyItem: ArtistEducationItem = {
@@ -45,7 +46,7 @@ function toEducationPayload(item: ArtistEducationItem) {
   };
 }
 
-export function EducationSection({ initialItems }: EducationSectionProps) {
+export function EducationSection({ initialItems, onItemsChange }: EducationSectionProps) {
   const [items, setItems] = useState(initialItems);
   const [draft, setDraft] = useState(emptyItem);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -63,7 +64,9 @@ export function EducationSection({ initialItems }: EducationSectionProps) {
       return;
     }
     const createdItem = json.item;
-    setItems((current) => [...current, createdItem]);
+    const nextItems = [...items, createdItem];
+    setItems(nextItems);
+    onItemsChange?.(nextItems);
     setDraft(emptyItem);
     setEditingId(null);
     setStatus({ tone: "success", text: "Education entry added." });
@@ -81,7 +84,9 @@ export function EducationSection({ initialItems }: EducationSectionProps) {
       return;
     }
     const updatedItem = json.item;
-    setItems((current) => current.map((item) => (item.id === id ? updatedItem : item)));
+    const nextItems = items.map((item) => (item.id === id ? updatedItem : item));
+    setItems(nextItems);
+    onItemsChange?.(nextItems);
     setEditingId(null);
     setStatus({ tone: "success", text: "Education entry updated." });
   }
@@ -93,7 +98,9 @@ export function EducationSection({ initialItems }: EducationSectionProps) {
       setStatus({ tone: "error", text: json?.error || "Could not delete education entry." });
       return;
     }
-    setItems((current) => current.filter((item) => item.id !== id));
+    const nextItems = items.filter((item) => item.id !== id);
+    setItems(nextItems);
+    onItemsChange?.(nextItems);
     setStatus({ tone: "success", text: "Education entry removed." });
   }
 
@@ -110,6 +117,7 @@ export function EducationSection({ initialItems }: EducationSectionProps) {
       return;
     }
     setItems(json.items);
+    onItemsChange?.(json.items);
   }
 
   return (

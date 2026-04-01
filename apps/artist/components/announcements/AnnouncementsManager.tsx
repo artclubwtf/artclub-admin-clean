@@ -14,6 +14,8 @@ import type { ArtistAnnouncementItem } from "@/lib/types";
 
 type AnnouncementsManagerProps = {
   initialItems: ArtistAnnouncementItem[];
+  embedded?: boolean;
+  onItemsChange?: (items: ArtistAnnouncementItem[]) => void;
 };
 
 const emptyAnnouncement: ArtistAnnouncementItem = {
@@ -42,7 +44,7 @@ function toAnnouncementPayload(item: ArtistAnnouncementItem) {
   };
 }
 
-export function AnnouncementsManager({ initialItems }: AnnouncementsManagerProps) {
+export function AnnouncementsManager({ initialItems, embedded = false, onItemsChange }: AnnouncementsManagerProps) {
   const [items, setItems] = useState(initialItems);
   const [draft, setDraft] = useState(emptyAnnouncement);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -60,7 +62,9 @@ export function AnnouncementsManager({ initialItems }: AnnouncementsManagerProps
       return;
     }
     const createdAnnouncement = json.announcement;
-    setItems((current) => [...current, createdAnnouncement]);
+    const nextItems = [...items, createdAnnouncement];
+    setItems(nextItems);
+    onItemsChange?.(nextItems);
     setDraft(emptyAnnouncement);
     setEditingId(null);
     setStatus({ tone: "success", text: "Announcement created." });
@@ -78,7 +82,9 @@ export function AnnouncementsManager({ initialItems }: AnnouncementsManagerProps
       return;
     }
     const updatedAnnouncement = json.announcement;
-    setItems((current) => current.map((item) => (item.id === id ? updatedAnnouncement : item)));
+    const nextItems = items.map((item) => (item.id === id ? updatedAnnouncement : item));
+    setItems(nextItems);
+    onItemsChange?.(nextItems);
     setEditingId(null);
     setStatus({ tone: "success", text: "Announcement updated." });
   }
@@ -90,7 +96,9 @@ export function AnnouncementsManager({ initialItems }: AnnouncementsManagerProps
       setStatus({ tone: "error", text: json?.error || "Could not delete announcement." });
       return;
     }
-    setItems((current) => current.filter((item) => item.id !== id));
+    const nextItems = items.filter((item) => item.id !== id);
+    setItems(nextItems);
+    onItemsChange?.(nextItems);
     setStatus({ tone: "success", text: "Announcement deleted." });
   }
 
@@ -107,11 +115,14 @@ export function AnnouncementsManager({ initialItems }: AnnouncementsManagerProps
       return;
     }
     setItems(json.announcements);
+    onItemsChange?.(json.announcements);
   }
 
   return (
     <div className="space-y-8">
-      <PageTitle title="Announcements" subtitle="Draft, publish and pin announcement entries for future artist profile pages." />
+      {embedded ? null : (
+        <PageTitle title="Announcements" subtitle="Draft, publish and pin announcement entries for future artist profile pages." />
+      )}
 
       <Section
         title="Manage announcements"

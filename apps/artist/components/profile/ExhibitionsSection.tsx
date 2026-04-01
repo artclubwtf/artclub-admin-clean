@@ -14,6 +14,7 @@ import type { ArtistExhibitionItem, ArtistMediaItem } from "@/lib/types";
 
 type ExhibitionsSectionProps = {
   initialItems: ArtistExhibitionItem[];
+  onItemsChange?: (items: ArtistExhibitionItem[]) => void;
 };
 
 const emptyItem: ArtistExhibitionItem = {
@@ -50,7 +51,7 @@ function toExhibitionPayload(item: ArtistExhibitionItem) {
   };
 }
 
-export function ExhibitionsSection({ initialItems }: ExhibitionsSectionProps) {
+export function ExhibitionsSection({ initialItems, onItemsChange }: ExhibitionsSectionProps) {
   const [items, setItems] = useState(initialItems);
   const [draft, setDraft] = useState(emptyItem);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -71,7 +72,9 @@ export function ExhibitionsSection({ initialItems }: ExhibitionsSectionProps) {
       return;
     }
     const createdItem = json.item;
-    setItems((current) => [...current, createdItem]);
+    const nextItems = [...items, createdItem];
+    setItems(nextItems);
+    onItemsChange?.(nextItems);
     setDraft(emptyItem);
     setEditingId(null);
     setStatus({ tone: "success", text: "Exhibition added." });
@@ -89,7 +92,9 @@ export function ExhibitionsSection({ initialItems }: ExhibitionsSectionProps) {
       return;
     }
     const updatedItem = json.item;
-    setItems((current) => current.map((item) => (item.id === id ? updatedItem : item)));
+    const nextItems = items.map((item) => (item.id === id ? updatedItem : item));
+    setItems(nextItems);
+    onItemsChange?.(nextItems);
     setEditingId(null);
     setStatus({ tone: "success", text: "Exhibition updated." });
   }
@@ -101,7 +106,9 @@ export function ExhibitionsSection({ initialItems }: ExhibitionsSectionProps) {
       setStatus({ tone: "error", text: json?.error || "Could not delete exhibition." });
       return;
     }
-    setItems((current) => current.filter((item) => item.id !== id));
+    const nextItems = items.filter((item) => item.id !== id);
+    setItems(nextItems);
+    onItemsChange?.(nextItems);
     setStatus({ tone: "success", text: "Exhibition removed." });
   }
 
@@ -118,6 +125,7 @@ export function ExhibitionsSection({ initialItems }: ExhibitionsSectionProps) {
       return;
     }
     setItems(json.items);
+    onItemsChange?.(json.items);
   }
 
   return (
