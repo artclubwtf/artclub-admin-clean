@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import MigrationMatchingClient from "../migration/MigrationMatchingClient";
@@ -54,9 +53,27 @@ type Meta = {
   };
 };
 
+type SyncQueueRow = {
+  kind: "artist" | "product";
+  key: string;
+  title: string;
+  artistKey: string;
+  artistLabel: string;
+  destination: string;
+  operation: "create" | "update";
+  status: "open" | "completed" | "error";
+  shopifyId: string;
+  approvalStatus: string;
+  needsPush: boolean;
+  lastPushAt: string | null;
+  lastPullAt: string | null;
+  lastError: string | null;
+};
+
 type Props = {
   initialArtists: ArtistRow[];
   meta: Meta;
+  initialSyncQueue: SyncQueueRow[];
 };
 
 type ActionState = {
@@ -65,7 +82,8 @@ type ActionState = {
   message: string | null;
 };
 
-type StepStatus = "not_started" | "in_progress" | "needs_review" | "completed";
+type StepKey = "accounts" | "artworks" | "shopify";
+type Bucket = "open" | "completed" | "error";
 
 function formatDate(value: string | null) {
   if (!value) return "—";
@@ -80,170 +98,294 @@ function formatDate(value: string | null) {
   });
 }
 
-function statusBadgeTone(status: string) {
+function badgeTone(status: string) {
   switch (status) {
-    case "linked":
-    case "approved":
-    case "published":
-    case "assigned":
     case "completed":
+    case "linked":
+    case "assigned":
+    case "open":
       return "bg-emerald-50 text-emerald-700";
-    case "needs_review":
-    case "pending_review":
-    case "suggested":
     case "in_progress":
+    case "needs_review":
       return "bg-amber-50 text-amber-700";
-    case "imported_unlinked":
-    case "imported_unmapped":
-    case "unlinked":
-    case "unassigned":
-    case "not_started":
-      return "bg-slate-100 text-slate-700";
-    case "archived":
+    case "error":
       return "bg-rose-50 text-rose-700";
     default:
       return "bg-slate-100 text-slate-700";
   }
 }
 
-function processCopy() {
-  return [
-    {
-      id: "import",
-      step: 1,
-      title: "Import data",
-      description: "Reads artists and products from Shopify and legacy data into the DB. Does not write anything to Shopify.",
+function queueCounts(meta: Meta, syncQueue: SyncQueueRow[]) {
+  return {
+    accounts: {
+      open: meta.review.artistMatches + meta.review.unlinkedAccounts,
+      completed: 0,
+      error: 0,
     },
-    {
-      id: "match",
-      step: 2,
-      title: "Match artists",
-      description: "Links imported artist records to canonical artists. Can be changed later by admin.",
+    artworks: {
+      open: meta.review.productAssignments,
+      completed: 0,
+      error: 0,
     },
-    {
-      id: "assign",
-      step: 3,
-      title: "Assign products",
-      description: "Assigns imported products to the correct artist. Does not sync to Shopify yet.",
+    shopify: {
+      open: syncQueue.filter((item) => item.status === "open").length,
+      completed: syncQueue.filter((item) => item.status === "completed").length,
+      error: syncQueue.filter((item) => item.status === "error").length,
     },
-    {
-      id: "link",
-      step: 4,
-      title: "Link accounts",
-      description: "Connects app user accounts to canonical artists. Controls who can access the new artist app.",
-    },
-    {
-      id: "dryrun",
-      step: 5,
-      title: "Dry run",
-      description: "Shows what would be created or updated in Shopify. No real writes.",
-    },
-    {
-      id: "push",
-      step: 6,
-      title: "Push to Shopify",
-      description: "Creates or updates Metaobjects and Products in Shopify. Only for approved and syncable records.",
-    },
-  ] as const;
+  };
 }
 
-function deriveStepState(meta: Meta) {
-  const importStatus: StepStatus = meta.activity.lastImportAt ? "completed" : "not_started";
-  const matchStatus: StepStatus =
-    meta.review.artistMatches > 0 ? "needs_review" : meta.activity.lastImportAt ? "completed" : "not_started";
-  const assignStatus: StepStatus =
-    meta.review.productAssignments > 0 ? "needs_review" : meta.activity.lastImportAt ? "completed" : "not_started";
-  const linkStatus: StepStatus =
-    meta.review.unlinkedAccounts > 0 ? "needs_review" : meta.activity.lastImportAt ? "completed" : "not_started";
-  const dryRunStatus: StepStatus =
-    !meta.flags.shopifyWriteEnabled ? "not_started" : meta.review.syncReady > 0 ? "in_progress" : "completed";
-  const pushStatus: StepStatus =
-    !meta.flags.shopifyWriteEnabled ? "not_started" : meta.review.syncReady > 0 ? "in_progress" : meta.activity.lastSyncAt ? "completed" : "not_started";
-
-  const steps = [
-    { id: "import", status: importStatus, count: meta.activity.lastImportAt ? 1 : 0 },
-    { id: "match", status: matchStatus, count: meta.review.artistMatches },
-    { id: "assign", status: assignStatus, count: meta.review.productAssignments },
-    { id: "link", status: linkStatus, count: meta.review.unlinkedAccounts },
-    { id: "dryrun", status: dryRunStatus, count: meta.review.syncReady },
-    { id: "push", status: pushStatus, count: meta.review.syncReady },
-  ];
-
-  const activeStep =
-    steps.find((step) => step.status === "needs_review")?.id ||
-    steps.find((step) => step.status === "in_progress")?.id ||
-    steps.find((step) => step.status === "not_started")?.id ||
-    "push";
-
-  return { steps, activeStep };
+function stepStatus(openCount: number, hasStarted: boolean) {
+  if (openCount > 0) return "in_progress";
+  if (hasStarted) return "completed";
+  return "not_started";
 }
 
-export default function ArtistsV2Client({ initialArtists, meta }: Props) {
+function nextOpenStep(meta: Meta, syncQueue: SyncQueueRow[]): StepKey {
+  if (meta.review.artistMatches + meta.review.unlinkedAccounts > 0) return "accounts";
+  if (meta.review.productAssignments > 0) return "artworks";
+  if (syncQueue.some((item) => item.status === "open")) return "shopify";
+  return "shopify";
+}
+
+function stepCopy(step: StepKey) {
+  switch (step) {
+    case "accounts":
+      return {
+        title: "Accounts verbinden",
+        description: "Bestehende Künstlerdatensätze mit einem App-User verknüpfen oder einen neuen User anlegen.",
+      };
+    case "artworks":
+      return {
+        title: "Kunstwerke zuordnen",
+        description: "Importierte Werke dem richtigen Künstler zuweisen. Danach erscheinen sie in seiner Artist App.",
+      };
+    default:
+      return {
+        title: "Shopify synchronisieren",
+        description: "Nur freigegebene Datensätze per Dry Run prüfen und danach kontrolliert nach Shopify schreiben.",
+      };
+  }
+}
+
+function isStepUnlocked(step: StepKey, meta: Meta) {
+  if (step === "accounts") return true;
+  if (step === "artworks") return meta.review.artistMatches + meta.review.unlinkedAccounts === 0;
+  return meta.review.artistMatches + meta.review.unlinkedAccounts === 0 && meta.review.productAssignments === 0;
+}
+
+function ShopifyQueuePanel({
+  items,
+  bucket,
+  nextSignal,
+  onResult,
+  writeEnabled,
+}: {
+  items: SyncQueueRow[];
+  bucket: Bucket;
+  nextSignal: number;
+  onResult?: (message: string) => void;
+  writeEnabled: boolean;
+}) {
   const router = useRouter();
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [sourceFilter, setSourceFilter] = useState("all");
-  const [selectedArtistKeys, setSelectedArtistKeys] = useState<string[]>([]);
-  const [actionState, setActionState] = useState<ActionState>({ loading: false, error: null, message: null });
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [state, setState] = useState<ActionState>({ loading: false, error: null, message: null });
+  const previousNextSignal = useRef(nextSignal);
 
-  const processSteps = useMemo(() => processCopy(), []);
-  const processState = useMemo(() => deriveStepState(meta), [meta]);
+  const queue = useMemo(() => items.filter((item) => item.status === bucket), [items, bucket]);
+  const currentItem = queue[currentIndex] || null;
 
-  const filteredArtists = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+  useEffect(() => {
+    setCurrentIndex((current) => (queue.length === 0 ? 0 : Math.min(current, queue.length - 1)));
+  }, [queue.length, bucket]);
 
-    return initialArtists.filter((artist) => {
-      const matchesQuery =
-        !normalizedQuery ||
-        [
-          artist.displayName,
-          artist.email,
-          artist.artistKey,
-          artist.publicSlug,
-          artist.shopifyMetaobjectId,
-          artist.legacyArtistId,
-          artist.linkedUser?.email,
-          artist.linkedUser?.name,
-        ]
-          .filter(Boolean)
-          .some((value) => value!.toLowerCase().includes(normalizedQuery));
+  useEffect(() => {
+    if (previousNextSignal.current === nextSignal) return;
+    previousNextSignal.current = nextSignal;
+    if (!queue.length) return;
+    setCurrentIndex((current) => (current + 1) % queue.length);
+  }, [nextSignal, queue.length]);
 
-      if (!matchesQuery) return false;
+  async function run(item: SyncQueueRow, dryRun: boolean) {
+    const consequence = dryRun
+      ? `${item.title} wird geprüft. Es wird nichts nach Shopify geschrieben.`
+      : `Dieser Datensatz wird jetzt nach Shopify geschrieben.`;
+    if (!window.confirm(`${consequence}\n\nBestätigen?`)) return;
 
-      if (sourceFilter === "legacy" && !artist.legacyArtistId) return false;
-      if (sourceFilter === "shopify" && !artist.shopifyMetaobjectId) return false;
+    setState({ loading: true, error: null, message: null });
+    try {
+      const body =
+        item.kind === "artist"
+          ? { scope: "artists", artistKeys: [item.artistKey], limit: 1, dryRun }
+          : { scope: "products", productKeys: [item.key], limit: 1, dryRun };
+      const res = await fetch("/api/admin/sync/shopify/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const payload = (await res.json().catch(() => null)) as
+        | { error?: string; items?: Array<{ key?: string; status?: string; message?: string }> }
+        | null;
+      if (!res.ok) throw new Error(payload?.error || "Shopify action failed");
+      const itemResult = payload?.items?.find((entry) => entry.key === item.key) || payload?.items?.[0];
+      const message = itemResult?.message || (dryRun ? "Dry run abgeschlossen." : "Shopify Sync abgeschlossen.");
+      setState({ loading: false, error: null, message });
+      onResult?.(message);
+      router.refresh();
+    } catch (error) {
+      setState({
+        loading: false,
+        error: error instanceof Error ? error.message : "Shopify action failed",
+        message: null,
+      });
+    }
+  }
 
-      switch (statusFilter) {
-        case "linked":
-          return artist.linkStatus === "linked";
-        case "imported":
-          return artist.migrationStatus === "imported_unlinked";
-        case "needs_review":
-          return artist.reviewStatus === "needs_review" || artist.linkStatus === "needs_review";
-        case "sync_needed":
-          return artist.syncStatus.needsPush;
-        default:
-          return true;
-      }
-    });
-  }, [initialArtists, query, statusFilter, sourceFilter]);
+  return (
+    <section className="space-y-4">
+      {state.error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{state.error}</div> : null}
+      {state.message ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{state.message}</div> : null}
 
-  const summary = useMemo(
-    () => ({
-      total: initialArtists.length,
-      imported: initialArtists.filter((artist) => artist.migrationStatus === "imported_unlinked").length,
-      linked: initialArtists.filter((artist) => artist.linkStatus === "linked").length,
-      needsReview: initialArtists.filter((artist) => artist.reviewStatus === "needs_review" || artist.linkStatus === "needs_review").length,
-      syncNeeded: initialArtists.filter((artist) => artist.syncStatus.needsPush).length,
-    }),
-    [initialArtists],
+      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Shopify Queue</div>
+            <h3 className="text-lg font-semibold text-slate-900">
+              {queue.length ? `Fall ${currentIndex + 1} von ${queue.length}` : "Keine Fälle in dieser Ansicht"}
+            </h3>
+            <p className="text-sm text-slate-600">Nur ein Shopify-Fall gleichzeitig. Erst prüfen, dann gezielt senden.</p>
+          </div>
+          {queue.length > 1 ? (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentIndex((current) => (current - 1 + queue.length) % queue.length)}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700"
+              >
+                Zurück
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentIndex((current) => (current + 1) % queue.length)}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700"
+              >
+                Weiter
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        {!currentItem ? (
+          <div className="mt-6 rounded-xl bg-slate-50 px-4 py-4 text-sm text-slate-500">In dieser Ansicht gibt es aktuell keine Shopify-Fälle.</div>
+        ) : (
+          <div className="mt-6 space-y-5">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <h4 className="text-xl font-semibold text-slate-900">{currentItem.title}</h4>
+                <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${badgeTone(currentItem.status)}`}>{currentItem.status}</span>
+              </div>
+              <div className="text-sm text-slate-500">
+                {currentItem.artistLabel} · {currentItem.destination}
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 px-4 py-4">
+              <div className="text-xs uppercase tracking-wide text-slate-400">Was passiert hier?</div>
+              <div className="mt-2 text-sm text-slate-700">
+                {currentItem.operation === "create" ? "Shopify erstellt einen neuen Datensatz." : "Ein bestehender Shopify-Datensatz wird aktualisiert."}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                Ziel: {currentItem.destination}
+                {currentItem.shopifyId ? ` · bestehende Shopify-ID ${currentItem.shopifyId}` : " · noch keine Shopify-ID vorhanden"}
+              </div>
+              {currentItem.kind === "product" ? (
+                <div className="mt-1 text-xs text-slate-500">Approval Status: {currentItem.approvalStatus || "—"}</div>
+              ) : null}
+              {currentItem.lastError ? <div className="mt-2 text-sm text-rose-700">{currentItem.lastError}</div> : null}
+            </div>
+
+            <div className="grid gap-3 text-sm text-slate-600 md:grid-cols-2">
+              <div>Last pull: {formatDate(currentItem.lastPullAt)}</div>
+              <div>Last push: {formatDate(currentItem.lastPushAt)}</div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => void run(currentItem, true)}
+                disabled={state.loading}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-50"
+              >
+                {state.loading ? "Läuft…" : "Dry run"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void run(currentItem, false)}
+                disabled={state.loading || !writeEnabled}
+                className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {state.loading ? "Läuft…" : "Jetzt zu Shopify senden"}
+              </button>
+            </div>
+
+            <div className="text-xs text-slate-500">
+              {writeEnabled
+                ? "Dry run zeigt die Änderung ohne Write. Der Push schreibt genau diesen Datensatz nach Shopify."
+                : "Shopify Write ist aktuell deaktiviert. Dry run bleibt möglich, echter Push nicht."}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
   );
+}
+
+export default function ArtistsV2Client({ meta, initialSyncQueue }: Props) {
+  const router = useRouter();
+  const [bucket, setBucket] = useState<Bucket>("open");
+  const [activeStep, setActiveStep] = useState<StepKey>(() => nextOpenStep(meta, initialSyncQueue));
+  const [actionState, setActionState] = useState<ActionState>({ loading: false, error: null, message: null });
+  const [nextSignal, setNextSignal] = useState(0);
+
+  const counts = useMemo(() => queueCounts(meta, initialSyncQueue), [meta, initialSyncQueue]);
+
+  useEffect(() => {
+    if (bucket !== "open") return;
+    setActiveStep((current) => (isStepUnlocked(current, meta) ? current : nextOpenStep(meta, initialSyncQueue)));
+  }, [bucket, meta, initialSyncQueue]);
+
+  const processSteps = [
+    {
+      key: "accounts" as const,
+      number: 1,
+      title: "Accounts verbinden",
+      description: "User-Accounts mit Künstlern verbinden oder neue Accounts anlegen.",
+      status: stepStatus(counts.accounts.open, Boolean(meta.activity.lastImportAt)),
+      count: counts.accounts.open,
+    },
+    {
+      key: "artworks" as const,
+      number: 2,
+      title: "Kunstwerke zuordnen",
+      description: "Importierte Werke dem richtigen Künstler zuweisen.",
+      status: stepStatus(counts.artworks.open, Boolean(meta.activity.lastImportAt)),
+      count: counts.artworks.open,
+    },
+    {
+      key: "shopify" as const,
+      number: 3,
+      title: "Shopify synchronisieren",
+      description: "Nur freigegebene Datensätze per Dry run prüfen und danach schreiben.",
+      status: stepStatus(counts.shopify.open, Boolean(meta.activity.lastSyncAt)),
+      count: counts.shopify.open,
+    },
+  ];
 
   async function runAction(
     label: string,
-    input: { url: string; body?: Record<string, unknown>; confirmText?: string },
+    input: { url: string; body?: Record<string, unknown>; confirmText: string; successText: (payload: any) => string },
   ) {
-    if (input.confirmText && !window.confirm(input.confirmText)) return;
+    if (!window.confirm(input.confirmText)) return;
 
     setActionState({ loading: true, error: null, message: null });
     try {
@@ -252,45 +394,9 @@ export default function ArtistsV2Client({ initialArtists, meta }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input.body || {}),
       });
-      const payload = (await res.json().catch(() => null)) as
-        | {
-            error?: string;
-            results?: Array<{ scope: string; importedCount?: number }>;
-            importedCount?: number;
-            artists?: { upsertedCount?: number; conflictCount?: number };
-            products?: { upsertedCount?: number; conflictCount?: number };
-            referenced?: Record<string, number>;
-            pushedCount?: number;
-            failedCount?: number;
-            skippedCount?: number;
-          }
-        | null;
+      const payload = await res.json().catch(() => null);
       if (!res.ok) throw new Error(payload?.error || `${label} failed`);
-
-      const summaryText =
-        label === "Legacy import"
-          ? [
-              payload?.artists ? `artists: ${payload.artists.upsertedCount ?? 0}` : "",
-              payload?.products ? `products: ${payload.products.upsertedCount ?? 0}` : "",
-              payload?.referenced ? `referenced: ${Object.values(payload.referenced).reduce((sum, value) => sum + (Number(value) || 0), 0)}` : "",
-              (payload?.artists?.conflictCount || payload?.products?.conflictCount)
-                ? `conflicts: ${(payload?.artists?.conflictCount || 0) + (payload?.products?.conflictCount || 0)}`
-                : "",
-            ]
-              .filter(Boolean)
-              .join(" · ")
-          : payload?.results?.length
-            ? payload.results.map((result) => `${result.scope}: ${result.importedCount ?? 0}`).join(" · ")
-            : payload?.pushedCount !== undefined
-              ? `success ${payload.pushedCount ?? 0} · skipped ${payload.skippedCount ?? 0} · errors ${payload.failedCount ?? 0}`
-              : payload?.importedCount != null
-                ? `${payload.importedCount} items`
-                : "Done";
-
-      setActionState({ loading: false, error: null, message: `${label} completed. ${summaryText}` });
-      if (label.startsWith("Sync selected") || label.startsWith("Dry run selected")) {
-        setSelectedArtistKeys([]);
-      }
+      setActionState({ loading: false, error: null, message: input.successText(payload) });
       router.refresh();
     } catch (error) {
       setActionState({
@@ -301,342 +407,185 @@ export default function ArtistsV2Client({ initialArtists, meta }: Props) {
     }
   }
 
-  const activeStepCopy = processSteps.find((step) => step.id === processState.activeStep) || processSteps[0];
+  const activeCopy = stepCopy(activeStep);
 
   return (
     <section className="space-y-6">
       <div className="rounded-2xl border border-slate-200 bg-white p-5">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="space-y-1">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-2">
             <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Migration status</div>
-            <h2 className="text-xl font-semibold">Current system state</h2>
-            <p className="text-sm text-slate-600">This banner tells you whether you are still in safe import/review mode or already able to write back to Shopify.</p>
+            <h2 className="text-xl font-semibold text-slate-900">Einfacher Migrations-Workflow</h2>
+            <p className="text-sm text-slate-600">
+              Arbeite immer nur am nächsten offenen Fall. Read-only-Import bleibt sicher, Shopify-Write bleibt kontrolliert.
+            </p>
           </div>
-          <div className="grid gap-3 text-sm text-slate-600 sm:grid-cols-2 xl:min-w-[520px]">
-            <div className="rounded-xl border border-slate-200 p-3">
-              <div className="text-xs uppercase tracking-wide text-slate-400">Migration mode</div>
-              <div className={`mt-1 inline-flex rounded-full px-2 py-1 text-[11px] font-medium ${statusBadgeTone(meta.flags.migrationMode ? "in_progress" : "not_started")}`}>
-                {meta.flags.migrationMode ? "active" : "inactive"}
-              </div>
-            </div>
-            <div className="rounded-xl border border-slate-200 p-3">
-              <div className="text-xs uppercase tracking-wide text-slate-400">Shopify write</div>
-              <div className={`mt-1 inline-flex rounded-full px-2 py-1 text-[11px] font-medium ${statusBadgeTone(meta.flags.shopifyWriteEnabled ? "in_progress" : "not_started")}`}>
-                {meta.flags.shopifyWriteEnabled ? "enabled" : "disabled"}
-              </div>
-            </div>
-            <div className="rounded-xl border border-slate-200 p-3">
-              <div className="text-xs uppercase tracking-wide text-slate-400">Last import</div>
-              <div className="mt-1 text-sm font-medium text-slate-900">{formatDate(meta.activity.lastImportAt)}</div>
-            </div>
-            <div className="rounded-xl border border-slate-200 p-3">
-              <div className="text-xs uppercase tracking-wide text-slate-400">Last sync</div>
-              <div className="mt-1 text-sm font-medium text-slate-900">{formatDate(meta.activity.lastSyncAt)}</div>
-            </div>
-            <div className="rounded-xl border border-slate-200 p-3 sm:col-span-2">
-              <div className="text-xs uppercase tracking-wide text-slate-400">Open review items</div>
-              <div className="mt-1 text-sm font-medium text-slate-900">
-                {meta.review.openItems} total · {meta.review.artistMatches} artist matches · {meta.review.productAssignments} product assignments · {meta.review.unlinkedAccounts} account links
-              </div>
-            </div>
+          <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+            <div>Migration mode: <span className="font-medium text-slate-900">{meta.flags.migrationMode ? "aktiv" : "inaktiv"}</span></div>
+            <div>Shopify write: <span className="font-medium text-slate-900">{meta.flags.shopifyWriteEnabled ? "aktiv" : "deaktiviert"}</span></div>
+            <div>Last import: <span className="font-medium text-slate-900">{formatDate(meta.activity.lastImportAt)}</span></div>
+            <div>Last sync: <span className="font-medium text-slate-900">{formatDate(meta.activity.lastSyncAt)}</span></div>
           </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
+          <button
+            type="button"
+            className="rounded-lg border border-slate-300 px-4 py-3 text-left text-sm font-medium text-slate-900 disabled:opacity-50"
+            disabled={actionState.loading}
+            onClick={() =>
+              runAction("Shopify import", {
+                url: "/api/admin/sync/shopify/import",
+                body: { scope: "all", limit: 100 },
+                confirmText: "Es werden Künstler und Produkte read-only aus Shopify in die kanonische DB eingelesen. Shopify wird nicht verändert.\n\nBestätigen?",
+                successText: (payload) =>
+                  `Shopify-Import abgeschlossen. ${Array.isArray(payload?.results) ? payload.results.map((result: { scope: string; importedCount?: number }) => `${result.scope}: ${result.importedCount ?? 0}`).join(" · ") : "Import fertig."}`,
+              })
+            }
+          >
+            Import from Shopify
+            <div className="mt-1 text-xs font-normal text-slate-500">Read-only import from Shopify into canonical DB.</div>
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border border-slate-300 px-4 py-3 text-left text-sm font-medium text-slate-900 disabled:opacity-50"
+            disabled={actionState.loading}
+            onClick={() =>
+              runAction("Legacy import", {
+                url: "/api/admin/sync/legacy/import",
+                body: { scope: "all", limit: 250 },
+                confirmText: "Alte interne Artist- und Produktdaten werden in das neue kanonische System gespiegelt oder referenziert. Shopify bleibt unverändert.\n\nBestätigen?",
+                successText: (payload) =>
+                  `Legacy-Import abgeschlossen. Artists: ${payload?.artists?.upsertedCount ?? 0} · Products: ${payload?.products?.upsertedCount ?? 0} · Konflikte: ${(payload?.artists?.conflictCount || 0) + (payload?.products?.conflictCount || 0)}`,
+              })
+            }
+          >
+            Import from Legacy
+            <div className="mt-1 text-xs font-normal text-slate-500">Spiegelt alte interne Daten ins kanonische System.</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setNextSignal((current) => current + 1)}
+            className="rounded-lg bg-black px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
+            disabled={
+              (activeStep === "accounts" && counts.accounts[bucket] === 0) ||
+              (activeStep === "artworks" && counts.artworks[bucket] === 0) ||
+              (activeStep === "shopify" && counts.shopify[bucket] === 0)
+            }
+          >
+            Nächsten offenen Fall öffnen
+          </button>
         </div>
       </div>
 
+      {actionState.error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{actionState.error}</div> : null}
+      {actionState.message ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{actionState.message}</div> : null}
+
       <section className="space-y-4">
         <div className="space-y-1">
-          <h2 className="text-lg font-semibold">Migration process</h2>
-          <p className="text-sm text-slate-600">Follow the steps in order. The highlighted step is the next meaningful action based on the current data state.</p>
+          <h2 className="text-lg font-semibold text-slate-900">3 Schritte</h2>
+          <p className="text-sm text-slate-600">Nur der nächste sinnvolle Schritt ist aktiv. Spätere Schritte bleiben gesperrt, bis der vorherige sauber erledigt ist.</p>
         </div>
-        <div className="grid gap-3 xl:grid-cols-6">
+        <div className="grid gap-3 lg:grid-cols-3">
           {processSteps.map((step) => {
-            const state = processState.steps.find((item) => item.id === step.id);
-            const isActive = processState.activeStep === step.id;
+            const active = activeStep === step.key;
+            const unlocked = bucket !== "open" || isStepUnlocked(step.key, meta);
             return (
-              <div
-                key={step.id}
-                className={`rounded-2xl border p-4 ${isActive ? "border-black bg-slate-50" : "border-slate-200 bg-white"}`}
+              <button
+                key={step.key}
+                type="button"
+                disabled={!unlocked}
+                onClick={() => setActiveStep(step.key)}
+                className={`rounded-2xl border p-4 text-left disabled:opacity-50 ${active ? "border-black bg-slate-50" : "border-slate-200 bg-white"}`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <div className="text-xs uppercase tracking-wide text-slate-400">Step {step.step}</div>
-                  <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${statusBadgeTone(state?.status || "not_started")}`}>
-                    {state?.status?.replace("_", " ") || "not started"}
-                  </span>
+                  <div className="text-xs uppercase tracking-wide text-slate-400">Schritt {step.number}</div>
+                  <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${badgeTone(step.status)}`}>{step.status.replace("_", " ")}</span>
                 </div>
                 <div className="mt-3 text-sm font-semibold text-slate-900">{step.title}</div>
                 <div className="mt-2 text-xs leading-5 text-slate-600">{step.description}</div>
-                {state?.count ? <div className="mt-3 text-xs text-slate-500">{state.count} open items</div> : null}
-              </div>
+                {step.count > 0 ? <div className="mt-3 text-xs text-slate-500">{step.count} offen</div> : null}
+              </button>
             );
           })}
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-          <div className="space-y-1">
-            <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Current focus</div>
-            <h2 className="text-lg font-semibold">{activeStepCopy.title}</h2>
-            <p className="text-sm text-slate-600">{activeStepCopy.description}</p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[420px]">
-            <label className="space-y-1">
-              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Search artists or products</span>
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Name, slug, email, vendor, ids"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none"
-              />
-            </label>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="space-y-1">
-                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Filter by status</span>
-                <select
-                  value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none"
-                >
-                  <option value="all">All</option>
-                  <option value="linked">Linked</option>
-                  <option value="imported">Imported</option>
-                  <option value="needs_review">Needs review</option>
-                  <option value="sync_needed">Sync needed</option>
-                </select>
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Filter by source</span>
-                <select
-                  value={sourceFilter}
-                  onChange={(event) => setSourceFilter(event.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none"
-                >
-                  <option value="all">All</option>
-                  <option value="shopify">Shopify-linked</option>
-                  <option value="legacy">Legacy-linked</option>
-                </select>
-              </label>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          <div className="text-sm font-semibold text-slate-900">Import data</div>
-          <div className="mt-2 text-sm text-slate-600">Reads artists and products from Shopify and legacy data into the DB. Does not write anything to Shopify.</div>
-          <div className="mt-4 space-y-2">
-            <button
-              type="button"
-              className="w-full rounded-lg bg-black px-4 py-2 text-left text-sm font-medium text-white disabled:opacity-60"
-              disabled={actionState.loading}
-              onClick={() =>
-                runAction("Shopify import", {
-                  url: "/api/admin/sync/shopify/import",
-                  body: { scope: "all", limit: 100 },
-                  confirmText: "Run a read-only Shopify import?\n\nThis reads artists and products into the canonical DB and does not write anything back to Shopify.",
-                })
-              }
-            >
-              Import from Shopify
-            </button>
-            <div className="text-xs text-slate-500">Read-only import from Shopify into canonical DB.</div>
-            <button
-              type="button"
-              className="w-full rounded-lg border border-slate-300 px-4 py-2 text-left text-sm font-medium text-slate-700 disabled:opacity-60"
-              disabled={actionState.loading}
-              onClick={() =>
-                runAction("Legacy import", {
-                  url: "/api/admin/sync/legacy/import",
-                  body: { scope: "all", limit: 250 },
-                  confirmText: "Import legacy internal artist and product data into canonical records?\n\nThis updates canonical records and stores legacy references, but it does not write to Shopify.",
-                })
-              }
-            >
-              Import from Legacy
-            </button>
-            <div className="text-xs text-slate-500">Reads legacy admin data, mirrors it into canonical records and preserves references.</div>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          <div className="text-sm font-semibold text-slate-900">Dry run</div>
-          <div className="mt-2 text-sm text-slate-600">Shows what would be created or updated in Shopify. No real writes happen.</div>
-          <div className="mt-4 space-y-2">
-            <button
-              type="button"
-              className="w-full rounded-lg border border-slate-300 px-4 py-2 text-left text-sm font-medium text-slate-700 disabled:opacity-60"
-              disabled={actionState.loading || selectedArtistKeys.length === 0}
-              onClick={() =>
-                runAction("Dry run selected artists", {
-                  url: "/api/admin/sync/shopify/push",
-                  body: { scope: "artists", artistKeys: selectedArtistKeys, limit: selectedArtistKeys.length, dryRun: true },
-                  confirmText: `Dry run ${selectedArtistKeys.length} selected artists?\n\nThis shows which artist metaobjects would be created or updated in Shopify without writing anything.`,
-                })
-              }
-            >
-              Dry run selected artists
-            </button>
-            <div className="text-xs text-slate-500">Shows Shopify metaobject changes without writing.</div>
-            <button
-              type="button"
-              className="w-full rounded-lg border border-slate-300 px-4 py-2 text-left text-sm font-medium text-slate-700 disabled:opacity-60"
-              disabled={actionState.loading}
-              onClick={() =>
-                runAction("Dry run approved products", {
-                  url: "/api/admin/sync/shopify/push",
-                  body: { scope: "products", approvedOnly: true, limit: 100, dryRun: true },
-                  confirmText: "Dry run all approved products?\n\nThis shows product and variant updates without writing anything to Shopify.",
-                })
-              }
-            >
-              Dry run approved products
-            </button>
-            <div className="text-xs text-slate-500">Shows product and variant changes for approved works only.</div>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          <div className="text-sm font-semibold text-slate-900">Push to Shopify</div>
-          <div className="mt-2 text-sm text-slate-600">Creates or updates Metaobjects and Products in Shopify. Only for approved and syncable records.</div>
-          <div className="mt-4 space-y-2">
-            <button
-              type="button"
-              className="w-full rounded-lg bg-black px-4 py-2 text-left text-sm font-medium text-white disabled:opacity-60"
-              disabled={actionState.loading || selectedArtistKeys.length === 0 || !meta.flags.shopifyWriteEnabled}
-              onClick={() =>
-                runAction("Sync selected artists", {
-                  url: "/api/admin/sync/shopify/push",
-                  body: { scope: "artists", artistKeys: selectedArtistKeys, limit: selectedArtistKeys.length },
-                  confirmText: `This will write ${selectedArtistKeys.length} artist metaobject(s) to Shopify.\n\nContinue?`,
-                })
-              }
-            >
-              Sync selected artists
-            </button>
-            <div className="text-xs text-slate-500">Writes selected canonical artists to Shopify as `kunstler` metaobjects.</div>
-            <button
-              type="button"
-              className="w-full rounded-lg border border-slate-300 px-4 py-2 text-left text-sm font-medium text-slate-700 disabled:opacity-60"
-              disabled={actionState.loading || !meta.flags.shopifyWriteEnabled}
-              onClick={() =>
-                runAction("Sync all approved products", {
-                  url: "/api/admin/sync/shopify/push",
-                  body: { scope: "products", approvedOnly: true, limit: 100 },
-                  confirmText: "This will write approved, syncable products and variants to Shopify.\n\nUnapproved saleable works stay skipped. Continue?",
-                })
-              }
-            >
-              Sync all approved products
-            </button>
-            <div className="text-xs text-slate-500">Writes approved products and variants to Shopify. Unapproved saleable works are skipped.</div>
-          </div>
-        </div>
-      </section>
-
-      {actionState.error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{actionState.error}</div> : null}
-      {actionState.message ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{actionState.message}</div> : null}
-
-      <section className="space-y-4">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-5">
         <div className="space-y-1">
-          <h2 className="text-lg font-semibold">Review queues</h2>
-          <p className="text-sm text-slate-600">These are the records that still need human review before account linking, dry runs or Shopify writes are safe.</p>
+          <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Aktiver Schritt</div>
+          <h2 className="text-lg font-semibold text-slate-900">{activeCopy.title}</h2>
+          <p className="text-sm text-slate-600">{activeCopy.description}</p>
         </div>
-        <MigrationMatchingClient
-          onResult={(message) => setActionState({ loading: false, error: null, message })}
-        />
+
+        <div className="flex flex-wrap gap-2">
+          {(["open", "completed", "error"] as Bucket[]).map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setBucket(value)}
+              className={`rounded-full px-4 py-2 text-sm font-medium ${bucket === value ? "bg-black text-white" : "bg-slate-100 text-slate-700"}`}
+            >
+              {value === "open" ? "Offen" : value === "completed" ? "Erledigt" : "Fehler"}
+            </button>
+          ))}
+        </div>
+
+        {bucket === "open" ? (
+          <div className="flex flex-wrap gap-2">
+            {(["accounts", "artworks", "shopify"] as StepKey[]).map((step) => {
+              const unlocked = isStepUnlocked(step, meta);
+              return (
+                <button
+                  key={step}
+                  type="button"
+                  disabled={!unlocked}
+                  onClick={() => setActiveStep(step)}
+                  className={`rounded-full px-4 py-2 text-sm font-medium disabled:opacity-50 ${activeStep === step ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}
+                >
+                  {step === "accounts" ? "Accounts" : step === "artworks" ? "Artworks" : "Shopify"}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
       </section>
 
-      <details className="rounded-2xl border border-slate-200 bg-white" open={processState.activeStep === "push" || processState.activeStep === "dryrun"}>
-        <summary className="cursor-pointer px-5 py-4 text-lg font-semibold text-slate-900">Canonical artist overview</summary>
-        <div className="border-t border-slate-200">
-          <div className="grid gap-3 px-5 py-4 md:grid-cols-4">
-            <div className="rounded-xl border border-slate-200 p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-500">Artists</div>
-              <div className="mt-2 text-2xl font-semibold">{summary.total}</div>
-            </div>
-            <div className="rounded-xl border border-slate-200 p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-500">Imported</div>
-              <div className="mt-2 text-2xl font-semibold">{summary.imported}</div>
-            </div>
-            <div className="rounded-xl border border-slate-200 p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-500">Linked</div>
-              <div className="mt-2 text-2xl font-semibold">{summary.linked}</div>
-            </div>
-            <div className="rounded-xl border border-slate-200 p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-500">Sync needed</div>
-              <div className="mt-2 text-2xl font-semibold">{summary.syncNeeded}</div>
-            </div>
-          </div>
-          <div className="divide-y divide-slate-200">
-            {filteredArtists.length === 0 ? <div className="px-5 py-8 text-sm text-slate-500">No artists match the current filters.</div> : null}
-            {filteredArtists.map((artist) => (
-              <div key={artist.artistKey} className="px-5 py-4 transition hover:bg-slate-50">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label className="mr-1 inline-flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={selectedArtistKeys.includes(artist.artistKey)}
-                          onChange={(event) =>
-                            setSelectedArtistKeys((current) =>
-                              event.target.checked
-                                ? Array.from(new Set([...current, artist.artistKey]))
-                                : current.filter((key) => key !== artist.artistKey),
-                            )
-                          }
-                        />
-                      </label>
-                      <Link href={`/admin/artists-v2/${encodeURIComponent(artist.artistKey)}`} className="text-base font-semibold text-slate-900 hover:underline">
-                        {artist.displayName}
-                      </Link>
-                      <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${statusBadgeTone(artist.canonicalStatus)}`}>{artist.canonicalStatus}</span>
-                      <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${statusBadgeTone(artist.linkStatus)}`}>{artist.linkStatus}</span>
-                      <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${statusBadgeTone(artist.reviewStatus)}`}>{artist.reviewStatus}</span>
-                    </div>
-                    <div className="text-sm text-slate-500">
-                      {[artist.email, artist.publicSlug ? `/${artist.publicSlug}` : "", artist.artistKey].filter(Boolean).join(" · ")}
-                    </div>
-                    <div className="grid gap-1 text-xs text-slate-500 md:grid-cols-2">
-                      <div>Linked account: {artist.linkedUser ? `${artist.linkedUser.name || artist.linkedUser.email} (${artist.linkedUser.email})` : "Not linked"}</div>
-                      <div>Shopify ref: {artist.shopifyMetaobjectId || "—"}</div>
-                      <div>Legacy ref: {artist.legacyArtistId || "—"}</div>
-                      <div>Last touched: {formatDate(artist.updatedAt)}</div>
-                    </div>
-                  </div>
+      {activeStep === "accounts" ? (
+        <MigrationMatchingClient
+          mode="accounts"
+          bucket={bucket}
+          nextSignal={nextSignal}
+          onResult={(message) => {
+            setActionState({ loading: false, error: null, message });
+            router.refresh();
+          }}
+        />
+      ) : null}
 
-                  <div className="grid gap-3 text-sm text-slate-600 sm:grid-cols-4 xl:min-w-[460px]">
-                    <div>
-                      <div className="text-xs uppercase tracking-wide text-slate-400">Products</div>
-                      <div className="mt-1 font-medium text-slate-900">{artist.productCount}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs uppercase tracking-wide text-slate-400">Pending review</div>
-                      <div className="mt-1 font-medium text-slate-900">{artist.pendingReviewCount}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs uppercase tracking-wide text-slate-400">Published</div>
-                      <div className="mt-1 font-medium text-slate-900">{artist.publishedCount}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs uppercase tracking-wide text-slate-400">Prints enabled</div>
-                      <div className="mt-1 font-medium text-slate-900">{artist.printsEnabledCount}</div>
-                    </div>
-                    <div className="sm:col-span-4">
-                      <div className="text-xs uppercase tracking-wide text-slate-400">Sync state</div>
-                      <div className="mt-1 text-xs text-slate-500">
-                        {artist.syncStatus.needsPush ? "Needs push" : "In sync"} · pull {formatDate(artist.syncStatus.lastPullAt)} · push {formatDate(artist.syncStatus.lastPushAt)}
-                      </div>
-                      {artist.syncStatus.lastError ? <div className="mt-1 text-xs text-red-600">{artist.syncStatus.lastError}</div> : null}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </details>
+      {activeStep === "artworks" ? (
+        <MigrationMatchingClient
+          mode="artworks"
+          bucket={bucket}
+          nextSignal={nextSignal}
+          onResult={(message) => {
+            setActionState({ loading: false, error: null, message });
+            router.refresh();
+          }}
+        />
+      ) : null}
+
+      {activeStep === "shopify" ? (
+        <ShopifyQueuePanel
+          items={initialSyncQueue}
+          bucket={bucket}
+          nextSignal={nextSignal}
+          writeEnabled={meta.flags.shopifyWriteEnabled}
+          onResult={(message) => {
+            setActionState({ loading: false, error: null, message });
+          }}
+        />
+      ) : null}
     </section>
   );
 }

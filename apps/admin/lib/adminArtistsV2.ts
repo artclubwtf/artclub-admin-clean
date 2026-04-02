@@ -174,6 +174,23 @@ export type ArtistV2Meta = {
   };
 };
 
+export type ArtistV2SyncQueueRow = {
+  kind: "artist" | "product";
+  key: string;
+  title: string;
+  artistKey: string;
+  artistLabel: string;
+  destination: string;
+  operation: "create" | "update";
+  status: "open" | "completed" | "error";
+  shopifyId: string;
+  approvalStatus: string;
+  needsPush: boolean;
+  lastPushAt: string | null;
+  lastPullAt: string | null;
+  lastError: string | null;
+};
+
 function optionalString(value: unknown) {
   return typeof value === "string" ? value : "";
 }
@@ -206,6 +223,13 @@ function deriveProductReviewStatus(input: { status?: string | null; approvalStat
 
 function isObjectIdString(value: string | null | undefined): value is string {
   return Boolean(value && Types.ObjectId.isValid(value));
+}
+
+function deriveSyncQueueStatus(input: { needsPush?: boolean | null; lastError?: string | null; lastPushAt?: Date | string | null }) {
+  if (optionalString(input.lastError)) return "error" as const;
+  if (input.needsPush) return "open" as const;
+  if (input.lastPushAt) return "completed" as const;
+  return "completed" as const;
 }
 
 export async function loadAdminArtistsV2Meta() {
@@ -349,6 +373,104 @@ export async function loadAdminArtistsV2Overview() {
       updatedAt: toIsoString(artist.updatedAt),
     } satisfies ArtistV2OverviewRow;
   });
+}
+
+export async function loadAdminArtistsV2SyncQueue() {
+  const shopDomain = resolveShopDomain();
+  if (!shopDomain) throw new Error("Missing shop domain");
+
+  await connectMongo();
+
+  const [artistsNeedingSync, productsNeedingSync] = await Promise.all([
+    CanonicalArtistModel.find({
+      shopDomain,
+      $or: [{ "sync.needsPush": true }, { "sync.lastError": { $exists: true, $ne: null } }, { "sync.lastPushAt": { $exists: true, $ne: null } }],
+    })
+      .select({
+        artistKey: 1,
+        displayName: 1,
+        publicSlug: 1,
+        handle: 1,
+        shopifyMetaobjectId: 1,
+        shopify: 1,
+        sync: 1,
+      })
+      .sort({ "sync.lastError": -1, "sync.needsPush": -1, updatedAt: -1 })
+      .lean(),
+    CanonicalProductModel.find({
+      shopDomain,
+      type: "artwork",
+      $or: [{ "sync.needsPush": true }, { "sync.lastError": { $exists: true, $ne: null } }, { "sync.lastPushAt": { $exists: true, $ne: null } }],
+    })
+      .select({
+        productKey: 1,
+        title: 1,
+        artistKey: 1,
+        shopifyProductId: 1,
+        shopify: 1,
+        approvalStatus: 1,
+        sync: 1,
+      })
+      .sort({ "sync.lastError": -1, "sync.needsPush": -1, updatedAt: -1 })
+      .lean(),
+  ]);
+
+  const artistKeys = Array.from(new Set(productsNeedingSync.map((product) => optionalString(product.artistKey)).filter(Boolean)));
+  const productArtists = artistKeys.length
+    ? await CanonicalArtistModel.find({ shopDomain, artistKey: { $in: artistKeys } })
+        .select({ artistKey: 1, displayName: 1, publicSlug: 1, handle: 1 })
+        .lean()
+    : [];
+  const artistByKey = new Map(
+    productArtists.map((artist) => [
+      artist.artistKey,
+      optionalString(artist.displayName) || optionalString(artist.publicSlug) || optionalString(artist.handle) || artist.artistKey,
+    ]),
+  );
+
+  const artistRows = artistsNeedingSync.map((artist) => ({
+    kind: "artist",
+    key: artist.artistKey,
+    title: optionalString(artist.displayName) || optionalString(artist.publicSlug) || optionalString(artist.handle) || artist.artistKey,
+    artistKey: artist.artistKey,
+    artistLabel: optionalString(artist.displayName) || optionalString(artist.publicSlug) || optionalString(artist.handle) || artist.artistKey,
+    destination: "Shopify metaobject `kunstler`",
+    operation: optionalString(artist.shopifyMetaobjectId) || optionalString(artist.shopify?.metaobjectGid) ? "update" : "create",
+    status: deriveSyncQueueStatus({
+      needsPush: artist.sync?.needsPush,
+      lastError: artist.sync?.lastError,
+      lastPushAt: artist.sync?.lastPushAt,
+    }),
+    shopifyId: optionalString(artist.shopifyMetaobjectId) || optionalString(artist.shopify?.metaobjectGid),
+    approvalStatus: "approved",
+    needsPush: Boolean(artist.sync?.needsPush),
+    lastPushAt: toIsoString(artist.sync?.lastPushAt),
+    lastPullAt: toIsoString(artist.sync?.lastPullAt),
+    lastError: optionalString(artist.sync?.lastError) || null,
+  })) satisfies ArtistV2SyncQueueRow[];
+
+  const productRows = productsNeedingSync.map((product) => ({
+    kind: "product",
+    key: product.productKey,
+    title: optionalString(product.title) || product.productKey,
+    artistKey: optionalString(product.artistKey),
+    artistLabel: artistByKey.get(optionalString(product.artistKey)) || optionalString(product.artistKey) || "Unassigned artist",
+    destination: "Shopify product",
+    operation: optionalString(product.shopifyProductId) || optionalString(product.shopify?.productGid) ? "update" : "create",
+    status: deriveSyncQueueStatus({
+      needsPush: product.sync?.needsPush,
+      lastError: product.sync?.lastError,
+      lastPushAt: product.sync?.lastPushAt,
+    }),
+    shopifyId: optionalString(product.shopifyProductId) || optionalString(product.shopify?.productGid),
+    approvalStatus: normalizeStatus(product.approvalStatus),
+    needsPush: Boolean(product.sync?.needsPush),
+    lastPushAt: toIsoString(product.sync?.lastPushAt),
+    lastPullAt: toIsoString(product.sync?.lastPullAt),
+    lastError: optionalString(product.sync?.lastError) || null,
+  })) satisfies ArtistV2SyncQueueRow[];
+
+  return [...artistRows, ...productRows];
 }
 
 export async function loadAdminArtistV2Detail(artistKey: string) {

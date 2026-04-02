@@ -45,6 +45,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ artist
   }
 
   let linkedUserId: Types.ObjectId | undefined;
+  let linkedUser:
+    | {
+        _id: Types.ObjectId;
+        artistKey?: string | null;
+        artistId?: Types.ObjectId | null;
+      }
+    | null = null;
   const rawLinkedUserId = parsed.data.linkedUserId?.trim();
   if (rawLinkedUserId) {
     if (!Types.ObjectId.isValid(rawLinkedUserId)) {
@@ -55,15 +62,56 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ artist
       shopDomain,
       role: "artist",
     })
-      .select({ _id: 1 })
+      .select({ _id: 1, artistKey: 1, artistId: 1 })
       .lean();
     if (!user) {
       return NextResponse.json({ ok: false, error: "linked_user_not_found" }, { status: 404 });
     }
+    const conflictingUser = await UserModel.findOne({
+      shopDomain,
+      role: "artist",
+      artistKey,
+      _id: { $ne: user._id },
+    })
+      .select({ _id: 1 })
+      .lean();
+    if (conflictingUser) {
+      return NextResponse.json({ ok: false, error: "artist_key_already_used_by_other_account" }, { status: 409 });
+    }
+    linkedUser = user;
     linkedUserId = new Types.ObjectId(rawLinkedUserId);
   }
 
   const linkStatus = parsed.data.linkStatus || (linkedUserId ? "linked" : "needs_review");
+
+  if (linkedUserId && linkedUser) {
+    const legacyArtistObjectId =
+      artist.legacyArtistId && Types.ObjectId.isValid(artist.legacyArtistId) ? new Types.ObjectId(artist.legacyArtistId) : undefined;
+
+    await UserModel.updateOne(
+      { _id: linkedUser._id, shopDomain, role: "artist" },
+      {
+        $set: {
+          artistKey,
+          ...(legacyArtistObjectId ? { artistId: legacyArtistObjectId } : {}),
+        },
+      },
+    );
+
+    await CanonicalArtistModel.updateMany(
+      {
+        shopDomain,
+        linkedUserId,
+        artistKey: { $ne: artistKey },
+      },
+      {
+        $set: {
+          linkedUserId: null,
+          linkStatus: "needs_review",
+        },
+      },
+    );
+  }
 
   await CanonicalArtistModel.updateOne(
     { shopDomain, artistKey },

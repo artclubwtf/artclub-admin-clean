@@ -188,8 +188,11 @@ export async function loadArtistMatchingOverview() {
     CanonicalArtistModel.find({
       shopDomain,
       $or: [
-        { migrationStatus: "imported_unlinked" },
-        { linkStatus: { $in: ["unlinked", "suggested", "needs_review"] } },
+        { migrationStatus: { $exists: true, $ne: null } },
+        { linkStatus: { $exists: true, $ne: null } },
+        { linkedUserId: { $exists: true, $ne: null } },
+        { legacyArtistId: { $exists: true, $ne: null } },
+        { shopifyMetaobjectId: { $exists: true, $ne: null } },
       ],
     })
       .sort({ updatedAt: -1, createdAt: -1 })
@@ -284,9 +287,14 @@ export async function loadProductMatchingOverview() {
   const [products, artists] = await Promise.all([
     CanonicalProductModel.find({
       shopDomain,
-      migrationStatus: { $in: ["imported_unmapped", "suggested", "unassigned", "needs_review"] },
+      $or: [
+        { migrationStatus: { $exists: true, $ne: null } },
+        { artistKey: { $exists: true, $ne: null } },
+        { shopifyProductId: { $exists: true, $ne: null } },
+      ],
     })
       .sort({ updatedAt: -1, createdAt: -1 })
+      .select({ productKey: 1, title: 1, vendor: 1, handle: 1, artistKey: 1, artistRef: 1, shopifyProductId: 1, shopify: 1, migrationStatus: 1, images: 1 })
       .lean(),
     CanonicalArtistModel.find({ shopDomain })
       .select({
@@ -344,6 +352,7 @@ export async function loadProductMatchingOverview() {
       title: product.title,
       vendor: product.vendor || "",
       handle: product.handle || "",
+      thumbUrl: product.images?.thumbUrl || product.images?.mediumUrl || product.images?.originalUrl || "",
       artistKey: product.artistKey || "",
       artistRef: product.artistRef || "",
       shopifyProductId: product.shopifyProductId || product.shopify?.productGid || "",

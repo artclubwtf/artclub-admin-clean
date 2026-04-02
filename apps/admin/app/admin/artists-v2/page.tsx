@@ -1,8 +1,12 @@
-import { loadAdminArtistsV2Meta, loadAdminArtistsV2Overview } from "@/lib/adminArtistsV2";
+import { loadAdminArtistsV2Meta, loadAdminArtistsV2Overview, loadAdminArtistsV2SyncQueue } from "@/lib/adminArtistsV2";
 import ArtistsV2Client from "./ArtistsV2Client";
 
 export default async function ArtistsV2Page() {
-  const [artists, meta] = await Promise.all([loadAdminArtistsV2Overview(), loadAdminArtistsV2Meta()]);
+  const [artists, meta, syncQueue] = await Promise.all([
+    loadAdminArtistsV2Overview(),
+    loadAdminArtistsV2Meta(),
+    loadAdminArtistsV2SyncQueue(),
+  ]);
 
   return (
     <main className="p-6 space-y-6">
@@ -11,7 +15,7 @@ export default async function ArtistsV2Page() {
         <p className="text-sm text-slate-600">Canonical-first artist operations with matching, legacy bridges and sync control in one place.</p>
       </header>
 
-      <ArtistsV2Client initialArtists={artists} meta={meta} />
+      <ArtistsV2Client initialArtists={artists} meta={meta} initialSyncQueue={syncQueue} />
     </main>
   );
 }
