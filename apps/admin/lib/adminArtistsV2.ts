@@ -59,6 +59,8 @@ export type ArtistV2ProductRow = {
   legacyProductId: string;
   migrationStatus: string;
   needsPush: boolean;
+  lastPushAt: string | null;
+  lastPullAt: string | null;
   lastError: string;
   variantCount: number;
   publishedVariantCount: number;
@@ -71,6 +73,7 @@ export type ArtistV2Detail = {
     displayName: string;
     handle: string;
     publicSlug: string;
+    appUrl: string;
     email: string;
     bio: string;
     locationCity: string;
@@ -343,6 +346,7 @@ export async function loadAdminArtistV2Detail(artistKey: string) {
       displayName: optionalString(artist.displayName),
       handle: optionalString(artist.handle),
       publicSlug: optionalString(artist.publicSlug),
+      appUrl: optionalString(artist.appUrl),
       email: optionalString(artist.email),
       bio: optionalString(artist.bio),
       locationCity: optionalString(artist.locationCity),
@@ -379,6 +383,8 @@ export async function loadAdminArtistV2Detail(artistKey: string) {
         legacyProductId: optionalString(product.legacyProductId),
         migrationStatus: optionalString(product.migrationStatus),
         needsPush: Boolean(product.sync?.needsPush),
+        lastPushAt: toIsoString(product.sync?.lastPushAt),
+        lastPullAt: toIsoString(product.sync?.lastPullAt),
         lastError: optionalString(product.sync?.lastError),
         variantCount: variantSummary.total,
         publishedVariantCount: variantSummary.published,

@@ -92,6 +92,7 @@ export default function ArtistsV2Client({ initialArtists }: Props) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedArtistKeys, setSelectedArtistKeys] = useState<string[]>([]);
   const [actionState, setActionState] = useState<ActionState>({ loading: false, error: null, message: null });
 
   const filteredArtists = useMemo(() => {
@@ -177,6 +178,9 @@ export default function ArtistsV2Client({ initialArtists }: Props) {
             : "Done";
 
       setActionState({ loading: false, error: null, message: `${label} completed. ${summaryText}` });
+      if (label.startsWith("Sync selected") || label.startsWith("Dry run selected")) {
+        setSelectedArtistKeys([]);
+      }
       router.refresh();
     } catch (error) {
       setActionState({
@@ -228,6 +232,58 @@ export default function ArtistsV2Client({ initialArtists }: Props) {
                 onClick={() => runAction("Product push", { url: "/api/admin/sync/shopify/push", body: { scope: "products", limit: 50 } })}
               >
                 Push Products
+              </button>
+              <button
+                type="button"
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60"
+                disabled={actionState.loading || selectedArtistKeys.length === 0}
+                onClick={() =>
+                  runAction("Sync selected artists", {
+                    url: "/api/admin/sync/shopify/push",
+                    body: { scope: "artists", artistKeys: selectedArtistKeys, limit: selectedArtistKeys.length },
+                  })
+                }
+              >
+                Sync selected
+              </button>
+              <button
+                type="button"
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60"
+                disabled={actionState.loading || selectedArtistKeys.length === 0}
+                onClick={() =>
+                  runAction("Dry run selected artists", {
+                    url: "/api/admin/sync/shopify/push",
+                    body: { scope: "artists", artistKeys: selectedArtistKeys, limit: selectedArtistKeys.length, dryRun: true },
+                  })
+                }
+              >
+                Dry run selected
+              </button>
+              <button
+                type="button"
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60"
+                disabled={actionState.loading}
+                onClick={() =>
+                  runAction("Sync all approved products", {
+                    url: "/api/admin/sync/shopify/push",
+                    body: { scope: "products", approvedOnly: true, limit: 100 },
+                  })
+                }
+              >
+                Sync all approved
+              </button>
+              <button
+                type="button"
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60"
+                disabled={actionState.loading}
+                onClick={() =>
+                  runAction("Dry run approved products", {
+                    url: "/api/admin/sync/shopify/push",
+                    body: { scope: "products", approvedOnly: true, limit: 100, dryRun: true },
+                  })
+                }
+              >
+                Dry run approved
               </button>
             </div>
           </div>
@@ -297,15 +353,26 @@ export default function ArtistsV2Client({ initialArtists }: Props) {
             <div className="px-5 py-8 text-sm text-slate-500">No artists match the current filters.</div>
           ) : null}
           {filteredArtists.map((artist) => (
-            <Link
-              key={artist.artistKey}
-              href={`/admin/artists-v2/${encodeURIComponent(artist.artistKey)}`}
-              className="block px-5 py-4 transition hover:bg-slate-50"
-            >
+            <div key={artist.artistKey} className="px-5 py-4 transition hover:bg-slate-50">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="text-base font-semibold text-slate-900">{artist.displayName}</div>
+                    <label className="mr-1 inline-flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedArtistKeys.includes(artist.artistKey)}
+                        onChange={(event) =>
+                          setSelectedArtistKeys((current) =>
+                            event.target.checked
+                              ? Array.from(new Set([...current, artist.artistKey]))
+                              : current.filter((key) => key !== artist.artistKey),
+                          )
+                        }
+                      />
+                    </label>
+                    <Link href={`/admin/artists-v2/${encodeURIComponent(artist.artistKey)}`} className="text-base font-semibold text-slate-900 hover:underline">
+                      {artist.displayName}
+                    </Link>
                     <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${statusBadgeTone(artist.canonicalStatus)}`}>{artist.canonicalStatus}</span>
                     <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${statusBadgeTone(artist.linkStatus)}`}>{artist.linkStatus}</span>
                     <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${statusBadgeTone(artist.reviewStatus)}`}>{artist.reviewStatus}</span>
@@ -321,7 +388,7 @@ export default function ArtistsV2Client({ initialArtists }: Props) {
                   </div>
                 </div>
 
-                <div className="grid gap-3 text-sm text-slate-600 sm:grid-cols-4 xl:min-w-[460px]">
+                  <div className="grid gap-3 text-sm text-slate-600 sm:grid-cols-4 xl:min-w-[460px]">
                   <div>
                     <div className="text-xs uppercase tracking-wide text-slate-400">Products</div>
                     <div className="mt-1 font-medium text-slate-900">{artist.productCount}</div>
@@ -345,9 +412,9 @@ export default function ArtistsV2Client({ initialArtists }: Props) {
                     </div>
                     {artist.syncStatus.lastError ? <div className="mt-1 text-xs text-red-600">{artist.syncStatus.lastError}</div> : null}
                   </div>
+                  </div>
                 </div>
-              </div>
-            </Link>
+            </div>
           ))}
         </div>
       </section>

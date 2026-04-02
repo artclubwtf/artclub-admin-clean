@@ -12,6 +12,10 @@ import { SyncStateModel } from "@/models/SyncState";
 const payloadSchema = z.object({
   scope: z.enum(["artists", "products"]),
   limit: z.number().int().min(1).max(250).optional(),
+  artistKeys: z.array(z.string().trim().min(1)).optional(),
+  productKeys: z.array(z.string().trim().min(1)).optional(),
+  dryRun: z.boolean().optional(),
+  approvedOnly: z.boolean().optional(),
 });
 
 export async function POST(req: Request) {
@@ -40,7 +44,21 @@ export async function POST(req: Request) {
   await connectMongo();
 
   try {
-    const result = scope === "artists" ? await pushArtists({ shopDomain, limit }) : await pushProducts({ shopDomain, limit });
+    const result =
+      scope === "artists"
+        ? await pushArtists({
+            shopDomain,
+            limit,
+            artistKeys: parsed.data.artistKeys,
+            dryRun: parsed.data.dryRun,
+          })
+        : await pushProducts({
+            shopDomain,
+            limit,
+            productKeys: parsed.data.productKeys,
+            dryRun: parsed.data.dryRun,
+            approvedOnly: parsed.data.approvedOnly,
+          });
     const artistSyncMode = scope === "artists" ? getArtistShopifySyncMode() : undefined;
 
     await SyncStateModel.findOneAndUpdate(
@@ -65,8 +83,11 @@ export async function POST(req: Request) {
         scope,
         pushedCount: result.pushedCount,
         failedCount: result.failedCount,
+        skippedCount: result.skippedCount,
         durationMs: Date.now() - startedAt,
         errors: result.errors,
+        items: result.items,
+        dryRun: Boolean(parsed.data.dryRun),
         ...(artistSyncMode ? { artistSyncMode } : {}),
       },
       { status: 200 },

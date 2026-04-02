@@ -12,6 +12,7 @@ type Detail = {
     displayName: string;
     handle: string;
     publicSlug: string;
+    appUrl: string;
     email: string;
     bio: string;
     locationCity: string;
@@ -51,6 +52,8 @@ type Detail = {
     legacyProductId: string;
     migrationStatus: string;
     needsPush: boolean;
+    lastPushAt: string | null;
+    lastPullAt: string | null;
     lastError: string;
     variantCount: number;
     publishedVariantCount: number;
@@ -162,7 +165,9 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
   const router = useRouter();
   const [detail, setDetail] = useState(initialDetail);
   const [savingProductKey, setSavingProductKey] = useState<string | null>(null);
+  const [pushingArtist, setPushingArtist] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const overviewStats = useMemo(
     () => ({
@@ -221,6 +226,64 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
     }
   }
 
+  async function pushArtist(dryRun = false) {
+    setPushingArtist(true);
+    setActionError(null);
+    setActionMessage(null);
+    try {
+      const res = await fetch("/api/admin/sync/shopify/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scope: "artists",
+          artistKeys: [detail.artist.artistKey],
+          limit: 1,
+          dryRun,
+        }),
+      });
+      const payload = (await res.json().catch(() => null)) as
+        | { error?: string; items?: Array<{ status: string; message: string }> }
+        | null;
+      if (!res.ok) throw new Error(payload?.error || "Failed to push artist");
+      const item = payload?.items?.[0];
+      setActionMessage(item?.message || (dryRun ? "Artist dry run completed" : "Artist pushed to Shopify"));
+      router.refresh();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to push artist");
+    } finally {
+      setPushingArtist(false);
+    }
+  }
+
+  async function pushProduct(productKey: string, dryRun = false) {
+    setSavingProductKey(productKey);
+    setActionError(null);
+    setActionMessage(null);
+    try {
+      const res = await fetch("/api/admin/sync/shopify/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scope: "products",
+          productKeys: [productKey],
+          limit: 1,
+          dryRun,
+        }),
+      });
+      const payload = (await res.json().catch(() => null)) as
+        | { error?: string; items?: Array<{ key: string; status: string; message: string }> }
+        | null;
+      if (!res.ok) throw new Error(payload?.error || "Failed to push product");
+      const item = payload?.items?.find((entry) => entry.key === productKey) || payload?.items?.[0];
+      setActionMessage(item?.message || (dryRun ? "Product dry run completed" : "Product pushed to Shopify"));
+      router.refresh();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to push product");
+    } finally {
+      setSavingProductKey(null);
+    }
+  }
+
   return (
     <section className="space-y-6">
       <div className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -245,6 +308,7 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
               <div>Linked user: {detail.artist.linkedUser ? `${detail.artist.linkedUser.name || detail.artist.linkedUser.email} (${detail.artist.linkedUser.email})` : "Not linked"}</div>
               <div>Public profile: {detail.artist.publicVisible ? "Visible" : "Hidden"}</div>
               <div>Shopify metaobject: {detail.artist.shopifyMetaobjectId || "—"}</div>
+              <div>app_url: {detail.artist.appUrl || "—"}</div>
               <div>Legacy artist ref: {detail.artist.legacyArtistId || "—"}</div>
               <div>Location: {[detail.artist.locationCity, detail.artist.locationCountry].filter(Boolean).join(", ") || "—"}</div>
               <div>Instagram: {detail.artist.instagram || "—"}</div>
@@ -257,6 +321,24 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
               <div className="mt-1 font-medium text-slate-900">{detail.artist.syncStatus.needsPush ? "Needs push" : "In sync"}</div>
               <div className="mt-2 text-xs text-slate-500">pull {formatDate(detail.artist.syncStatus.lastPullAt)}</div>
               <div className="text-xs text-slate-500">push {formatDate(detail.artist.syncStatus.lastPushAt)}</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg bg-black px-3 py-2 text-xs font-medium text-white disabled:opacity-60"
+                  disabled={pushingArtist}
+                  onClick={() => pushArtist(false)}
+                >
+                  Push artist to Shopify
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 disabled:opacity-60"
+                  disabled={pushingArtist}
+                  onClick={() => pushArtist(true)}
+                >
+                  Dry run
+                </button>
+              </div>
               {detail.artist.syncStatus.lastError ? <div className="mt-2 text-xs text-red-600">{detail.artist.syncStatus.lastError}</div> : null}
             </div>
             <div className="rounded-xl border border-slate-200 p-4">
@@ -274,6 +356,7 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
       </div>
 
       {actionError ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div> : null}
+      {actionMessage ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{actionMessage}</div> : null}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.9fr)]">
         <section className="space-y-6">
@@ -301,6 +384,8 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
                         <div>Legacy ref: {product.legacyProductId || "—"}</div>
                         <div>Variants: {product.variantCount} total / {product.publishedVariantCount} published</div>
                         <div>Updated: {formatDate(product.updatedAt)}</div>
+                        <div>Last push: {formatDate(product.lastPushAt)}</div>
+                        <div>Last pull: {formatDate(product.lastPullAt)}</div>
                       </div>
                     </div>
 
@@ -336,6 +421,22 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="rounded-lg bg-black px-3 py-2 text-xs font-medium text-white disabled:opacity-60"
+                      disabled={savingProductKey === product.productKey}
+                      onClick={() => pushProduct(product.productKey, false)}
+                    >
+                      Push product to Shopify
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 disabled:opacity-60"
+                      disabled={savingProductKey === product.productKey}
+                      onClick={() => pushProduct(product.productKey, true)}
+                    >
+                      Dry run
+                    </button>
                     <button
                       type="button"
                       className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 disabled:opacity-60"

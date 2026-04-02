@@ -9,12 +9,20 @@ import { CanonicalVariantModel } from "@/models/CanonicalVariant";
 type PushInput = {
   shopDomain: string;
   limit?: number;
+  artistKeys?: string[];
+  productKeys?: string[];
+  dryRun?: boolean;
+  approvedOnly?: boolean;
 };
+
+type PushItemStatus = "created" | "updated" | "skipped" | "error" | "dry_run";
 
 type PushResult = {
   pushedCount: number;
   failedCount: number;
+  skippedCount: number;
   errors: string[];
+  items: Array<{ key: string; status: PushItemStatus; message: string }>;
 };
 
 type ShopifyVariantNode = {
@@ -37,6 +45,32 @@ function normalizeShopStatus(status: CanonicalProduct["status"]): "DRAFT" | "ACT
 
 function normalizePrice(priceCents: number): string {
   return (Math.max(0, Number.isFinite(priceCents) ? priceCents : 0) / 100).toFixed(2);
+}
+
+function resolveArtistAppUrl(artist: { appUrl?: string | null; publicSlug?: string | null; handle?: string | null }) {
+  const direct = (artist.appUrl || "").trim();
+  if (direct) return direct;
+
+  const slug = (artist.publicSlug || artist.handle || "").trim();
+  const base =
+    (process.env.ARTIST_APP_BASE_URL || process.env.NEXT_PUBLIC_ARTIST_APP_URL || process.env.NEXT_PUBLIC_APP_URL || "").trim();
+
+  if (base && slug) {
+    return `${base.replace(/\/$/, "")}/artist/${encodeURIComponent(slug)}`;
+  }
+
+  return "";
+}
+
+function canPushSaleableProduct(product: Pick<CanonicalProduct, "forSale" | "allowPrints" | "approvalStatus">) {
+  const saleable = product.forSale === true || product.allowPrints === true;
+  if (!saleable) {
+    return { ok: false, reason: "Product is neither for sale nor prints-enabled" };
+  }
+  if (product.approvalStatus !== "approved" && product.approvalStatus !== "published") {
+    return { ok: false, reason: "Approval required before pushing saleable work" };
+  }
+  return { ok: true, reason: "" };
 }
 
 async function callShopifyAdmin<TData>(query: string, variables: Record<string, unknown>): Promise<TData | undefined> {
@@ -268,7 +302,7 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
   const limit = Math.min(Math.max(input.limit ?? 20, 1), 250);
   const artists = await CanonicalArtistModel.find({
     shopDomain: input.shopDomain,
-    "sync.needsPush": true,
+    ...(input.artistKeys?.length ? { artistKey: { $in: input.artistKeys } } : { "sync.needsPush": true }),
   })
     .sort({ "sync.dirtyAt": 1, updatedAt: 1 })
     .limit(limit)
@@ -278,13 +312,28 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
 
   let pushedCount = 0;
   let failedCount = 0;
+  let skippedCount = 0;
   const errors: string[] = [];
+  const items: Array<{ key: string; status: PushItemStatus; message: string }> = [];
 
   for (const artist of artists) {
     try {
+      const appUrl = resolveArtistAppUrl(artist);
+      if (!artist.displayName?.trim()) {
+        skippedCount += 1;
+        items.push({ key: artist.artistKey, status: "skipped", message: "Missing artist name" });
+        continue;
+      }
+      if (!appUrl) {
+        skippedCount += 1;
+        items.push({ key: artist.artistKey, status: "skipped", message: "Missing app_url for Shopify metaobject" });
+        continue;
+      }
+
       const fields =
         syncMode === "legacy"
           ? {
+              app_url: appUrl,
               name: artist.displayName,
               instagram: artist.instagram || undefined,
               bilder: artist.profileImages?.heroUrl || undefined,
@@ -292,11 +341,24 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
             }
           : {
               // Minimal mode intentionally syncs only identifiers.
+              app_url: appUrl,
               name: artist.displayName,
             };
 
+      const willUpdate = Boolean(artist.shopifyMetaobjectId || artist.shopify?.metaobjectGid);
+      if (input.dryRun) {
+        skippedCount += 1;
+        items.push({
+          key: artist.artistKey,
+          status: "dry_run",
+          message: willUpdate ? "Would update Shopify artist metaobject" : "Would create Shopify artist metaobject",
+        });
+        continue;
+      }
+
       const result = await upsertArtistMetaobject({
-        metaobjectId: syncMode === "legacy" ? artist.shopify?.metaobjectGid || undefined : undefined,
+        metaobjectId:
+          artist.shopifyMetaobjectId || (syncMode === "legacy" ? artist.shopify?.metaobjectGid || undefined : undefined),
         handle: artist.handle,
         fields,
       });
@@ -321,6 +383,11 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
       );
 
       pushedCount += 1;
+      items.push({
+        key: artist.artistKey,
+        status: willUpdate ? "updated" : "created",
+        message: willUpdate ? "Updated Shopify artist metaobject" : "Created Shopify artist metaobject",
+      });
     } catch (error) {
       await CanonicalArtistModel.updateOne(
         { shopDomain: input.shopDomain, artistKey: artist.artistKey },
@@ -331,11 +398,13 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
         },
       );
       failedCount += 1;
-      errors.push(`${artist.artistKey} [mode=${syncMode}]: ${error instanceof Error ? error.message : "push_failed"}`);
+      const message = `${artist.artistKey} [mode=${syncMode}]: ${error instanceof Error ? error.message : "push_failed"}`;
+      errors.push(message);
+      items.push({ key: artist.artistKey, status: "error", message });
     }
   }
 
-  return { pushedCount, failedCount, errors };
+  return { pushedCount, failedCount, skippedCount, errors, items };
 }
 
 export async function pushProducts(input: PushInput): Promise<PushResult> {
@@ -345,7 +414,8 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
   const limit = Math.min(Math.max(input.limit ?? 20, 1), 250);
   const products = await CanonicalProductModel.find({
     shopDomain: input.shopDomain,
-    "sync.needsPush": true,
+    ...(input.productKeys?.length ? { productKey: { $in: input.productKeys } } : { "sync.needsPush": true }),
+    ...(input.approvedOnly ? { approvalStatus: { $in: ["approved", "published"] } } : {}),
   })
     .sort({ "sync.dirtyAt": 1, updatedAt: 1 })
     .limit(limit)
@@ -353,11 +423,25 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
 
   let pushedCount = 0;
   let failedCount = 0;
+  let skippedCount = 0;
   const errors: string[] = [];
+  const items: Array<{ key: string; status: PushItemStatus; message: string }> = [];
 
   for (const product of products) {
     try {
+      const saleableCheck = canPushSaleableProduct(product);
+      if (!saleableCheck.ok) {
+        skippedCount += 1;
+        items.push({ key: product.productKey, status: "skipped", message: saleableCheck.reason });
+        continue;
+      }
+
       if (product.status === "db_only") {
+        if (input.dryRun) {
+          skippedCount += 1;
+          items.push({ key: product.productKey, status: "dry_run", message: "Would mark db_only product as synced without Shopify write" });
+          continue;
+        }
         await CanonicalProductModel.updateOne(
           { shopDomain: input.shopDomain, productKey: product.productKey },
           {
@@ -372,12 +456,24 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
           },
         );
         pushedCount += 1;
+        items.push({ key: product.productKey, status: "updated", message: "Marked db_only product as synced" });
         continue;
       }
 
       let productGid = product.shopifyProductId || product.shopify?.productGid || "";
       let defaultVariantId: string | null = null;
       let defaultInventoryItemId: string | null = null;
+      const willUpdate = Boolean(productGid);
+
+      if (input.dryRun) {
+        skippedCount += 1;
+        items.push({
+          key: product.productKey,
+          status: "dry_run",
+          message: willUpdate ? "Would update Shopify product and variants" : "Would create Shopify product and variants",
+        });
+        continue;
+      }
 
       if (productGid) {
         await updateShopifyProduct(productGid, product);
@@ -462,6 +558,11 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
       );
 
       pushedCount += 1;
+      items.push({
+        key: product.productKey,
+        status: willUpdate ? "updated" : "created",
+        message: willUpdate ? "Updated Shopify product and variants" : "Created Shopify product and variants",
+      });
     } catch (error) {
       await CanonicalProductModel.updateOne(
         { shopDomain: input.shopDomain, productKey: product.productKey },
@@ -472,9 +573,11 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
         },
       );
       failedCount += 1;
-      errors.push(`${product.productKey}: ${error instanceof Error ? error.message : "push_failed"}`);
+      const message = `${product.productKey}: ${error instanceof Error ? error.message : "push_failed"}`;
+      errors.push(message);
+      items.push({ key: product.productKey, status: "error", message });
     }
   }
 
-  return { pushedCount, failedCount, errors };
+  return { pushedCount, failedCount, skippedCount, errors, items };
 }

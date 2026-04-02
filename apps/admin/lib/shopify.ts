@@ -27,6 +27,7 @@ type ShopifyMetaobjectNode = {
 export const SHOPIFY_METAOBJECT_TYPE_KUENSTLER = "kunstler" as const;
 
 export const KUENSTLER_FIELD_KEYS = {
+  app_url: "app_url",
   bilder: "bilder",
   bild_1: "bild_1",
   bild_2: "bild_2",
@@ -50,6 +51,7 @@ export const PRODUCT_METAFIELD_KEYS = {
 } as const;
 
 type ShopifyKuenstlerFields = {
+  [KUENSTLER_FIELD_KEYS.app_url]: string | null;
   [KUENSTLER_FIELD_KEYS.name]: string | null;
   [KUENSTLER_FIELD_KEYS.instagram]: string | null;
   [KUENSTLER_FIELD_KEYS.quote]: string | null;
@@ -77,6 +79,7 @@ function mustEnv(name: string): string {
 }
 
 const emptyKuenstlerFields: ShopifyKuenstlerFields = {
+  [KUENSTLER_FIELD_KEYS.app_url]: null,
   [KUENSTLER_FIELD_KEYS.name]: null,
   [KUENSTLER_FIELD_KEYS.instagram]: null,
   [KUENSTLER_FIELD_KEYS.quote]: null,
