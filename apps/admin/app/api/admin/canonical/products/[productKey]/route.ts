@@ -12,6 +12,7 @@ import {
   canonicalProductStatuses,
   canonicalProductTypes,
 } from "@/models/CanonicalProduct";
+import { canonicalStatusValues } from "@/models/canonicalStates";
 
 const nullableTrimmedString = z.union([z.string(), z.null()]).transform((value) => {
   if (value === null) return null;
@@ -42,6 +43,10 @@ const productPatchSchema = z
       .optional(),
     offerings: z.enum(canonicalProductOfferings).optional(),
     status: z.enum(canonicalProductStatuses).optional(),
+    approvalStatus: z.enum(canonicalStatusValues).nullable().optional(),
+    forSale: z.boolean().optional(),
+    allowPrints: z.boolean().optional(),
+    originalAvailable: z.boolean().optional(),
     year: z.union([z.number().int(), z.null()]).optional(),
     dimensions: z
       .object({
@@ -67,6 +72,10 @@ const editablePaths = [
   "images.galleryUrls",
   "offerings",
   "status",
+  "approvalStatus",
+  "forSale",
+  "allowPrints",
+  "originalAvailable",
   "year",
   "dimensions.widthCm",
   "dimensions.heightCm",
