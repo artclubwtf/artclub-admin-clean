@@ -1,7 +1,10 @@
 export const canonicalStatusValues = [
+  "unlinked",
+  "suggested",
+  "unassigned",
+  "assigned",
   "imported_unlinked",
   "imported_unmapped",
-  "suggested",
   "linked",
   "needs_review",
   "approved",
