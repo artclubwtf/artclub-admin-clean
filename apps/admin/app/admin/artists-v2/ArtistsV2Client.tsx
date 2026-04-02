@@ -46,6 +46,12 @@ type ActionState = {
   message: string | null;
 };
 
+type LegacyImportPayload = {
+  artists?: { upsertedCount?: number; linkedCount?: number; conflictCount?: number };
+  products?: { upsertedCount?: number; conflictCount?: number };
+  referenced?: Record<string, number>;
+};
+
 function formatDate(value: string | null) {
   if (!value) return "—";
   const date = new Date(value);
@@ -145,11 +151,26 @@ export default function ArtistsV2Client({ initialArtists }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input.body || {}),
       });
-      const payload = (await res.json().catch(() => null)) as { error?: string; results?: Array<{ scope: string; importedCount?: number }>; importedCount?: number } | null;
+      const payload = (await res.json().catch(() => null)) as
+        | ({ error?: string; results?: Array<{ scope: string; importedCount?: number }>; importedCount?: number } & LegacyImportPayload)
+        | null;
       if (!res.ok) throw new Error(payload?.error || `${label} failed`);
 
       const summaryText =
-        payload?.results?.length
+        label === "Legacy import"
+          ? [
+              payload?.artists ? `artists: ${payload.artists.upsertedCount ?? 0}` : "",
+              payload?.products ? `products: ${payload.products.upsertedCount ?? 0}` : "",
+              payload?.referenced
+                ? `referenced: ${Object.values(payload.referenced).reduce((sum, value) => sum + (Number(value) || 0), 0)}`
+                : "",
+              (payload?.artists?.conflictCount || payload?.products?.conflictCount)
+                ? `conflicts: ${(payload?.artists?.conflictCount || 0) + (payload?.products?.conflictCount || 0)}`
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" · ")
+          : payload?.results?.length
           ? payload.results.map((result) => `${result.scope}: ${result.importedCount ?? 0}`).join(" · ")
           : payload?.importedCount != null
             ? `${payload.importedCount} items`
@@ -185,7 +206,7 @@ export default function ArtistsV2Client({ initialArtists }: Props) {
                 type="button"
                 className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60"
                 disabled={actionState.loading}
-                onClick={() => runAction("Legacy import", { url: "/api/admin/sync/legacy/import", body: { limit: 250 } })}
+                onClick={() => runAction("Legacy import", { url: "/api/admin/sync/legacy/import", body: { scope: "all", limit: 250 } })}
               >
                 Import from Legacy
               </button>

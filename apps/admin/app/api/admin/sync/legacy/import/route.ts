@@ -4,9 +4,10 @@ import { z } from "zod";
 import { connectMongo } from "@/lib/mongodb";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { resolveShopDomain } from "@/lib/shopDomain";
-import { importLegacyArtistsToCanonical } from "@/lib/sync/legacyImport";
+import { importLegacyDataToCanonical } from "@/lib/sync/legacyImport";
 
 const payloadSchema = z.object({
+  scope: z.enum(["artists", "products", "all"]).optional(),
   limit: z.number().int().min(1).max(1000).optional(),
 });
 
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
   await connectMongo();
 
   try {
-    const result = await importLegacyArtistsToCanonical({
+    const result = await importLegacyDataToCanonical({
       shopDomain,
       limit: parsed.data.limit,
     });
@@ -37,7 +38,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         ok: true,
-        scope: "legacy_artists",
+        scope: parsed.data.scope || "all",
         ...result,
       },
       { status: 200 },
