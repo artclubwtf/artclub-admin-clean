@@ -227,6 +227,11 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
   }
 
   async function pushArtist(dryRun = false) {
+    const writeSummary = dryRun
+      ? "This dry run shows whether one artist metaobject would be created or updated in Shopify. No write happens."
+      : "This will write one artist metaobject to Shopify using the canonical artist data.";
+    if (!window.confirm(`${writeSummary}\n\nContinue?`)) return;
+
     setPushingArtist(true);
     setActionError(null);
     setActionMessage(null);
@@ -256,6 +261,13 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
   }
 
   async function pushProduct(productKey: string, dryRun = false) {
+    const target = detail.products.find((item) => item.productKey === productKey) || null;
+    const variantCount = target?.variantCount || 0;
+    const writeSummary = dryRun
+      ? `This dry run shows whether 1 product and ${variantCount} variant(s) would be created or updated in Shopify. No write happens.`
+      : `This will write 1 product and ${variantCount} variant(s) to Shopify if the work is approved and saleable.`;
+    if (!window.confirm(`${writeSummary}\n\nContinue?`)) return;
+
     setSavingProductKey(productKey);
     setActionError(null);
     setActionMessage(null);
@@ -305,13 +317,18 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
               </div>
             </div>
             <div className="grid gap-2 text-sm text-slate-600 md:grid-cols-2">
-              <div>Linked user: {detail.artist.linkedUser ? `${detail.artist.linkedUser.name || detail.artist.linkedUser.email} (${detail.artist.linkedUser.email})` : "Not linked"}</div>
+              <div className="md:col-span-2 mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">Identity</div>
               <div>Public profile: {detail.artist.publicVisible ? "Visible" : "Hidden"}</div>
-              <div>Shopify metaobject: {detail.artist.shopifyMetaobjectId || "—"}</div>
-              <div>app_url: {detail.artist.appUrl || "—"}</div>
-              <div>Legacy artist ref: {detail.artist.legacyArtistId || "—"}</div>
               <div>Location: {[detail.artist.locationCity, detail.artist.locationCountry].filter(Boolean).join(", ") || "—"}</div>
               <div>Instagram: {detail.artist.instagram || "—"}</div>
+              <div>Website: {detail.artist.websiteUrl || "—"}</div>
+              <div className="md:col-span-2 mt-2 text-xs font-medium uppercase tracking-wide text-slate-400">Linked account</div>
+              <div className="md:col-span-2">Linked user: {detail.artist.linkedUser ? `${detail.artist.linkedUser.name || detail.artist.linkedUser.email} (${detail.artist.linkedUser.email})` : "Not linked"}</div>
+              <div className="md:col-span-2 mt-2 text-xs font-medium uppercase tracking-wide text-slate-400">Shopify references</div>
+              <div>Shopify metaobject: {detail.artist.shopifyMetaobjectId || "—"}</div>
+              <div>app_url: {detail.artist.appUrl || "—"}</div>
+              <div className="md:col-span-2 mt-2 text-xs font-medium uppercase tracking-wide text-slate-400">Legacy references</div>
+              <div>Legacy artist ref: {detail.artist.legacyArtistId || "—"}</div>
             </div>
           </div>
 
@@ -319,6 +336,7 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
             <div className="rounded-xl border border-slate-200 p-4">
               <div className="text-xs uppercase tracking-wide text-slate-400">Sync</div>
               <div className="mt-1 font-medium text-slate-900">{detail.artist.syncStatus.needsPush ? "Needs push" : "In sync"}</div>
+              <div className="mt-2 text-xs text-slate-500">Push artist to Shopify creates or updates the `kunstler` metaobject from canonical artist data.</div>
               <div className="mt-2 text-xs text-slate-500">pull {formatDate(detail.artist.syncStatus.lastPullAt)}</div>
               <div className="text-xs text-slate-500">push {formatDate(detail.artist.syncStatus.lastPushAt)}</div>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -363,7 +381,7 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
           <div className="rounded-2xl border border-slate-200 bg-white">
             <div className="border-b border-slate-200 px-5 py-4">
               <h3 className="text-lg font-semibold">Canonical products</h3>
-              <p className="text-sm text-slate-600">Review artwork status, sale flags and sync readiness directly on canonical products.</p>
+              <p className="text-sm text-slate-600">Review artwork status, sale flags and sync readiness directly on canonical products. Approved and saleable works can then be written to Shopify.</p>
             </div>
             <div className="divide-y divide-slate-200">
               {detail.products.length === 0 ? <div className="px-5 py-8 text-sm text-slate-500">No canonical products assigned yet.</div> : null}
@@ -495,6 +513,7 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
         <aside className="space-y-6">
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <h3 className="text-lg font-semibold">Shortcuts</h3>
+            <p className="mt-1 text-sm text-slate-600">Use these links when you need supporting legacy context while the new canonical view is the main working surface.</p>
             <div className="mt-4 grid gap-2">
               {detail.bridge.oldAdminHref ? (
                 <Link href={detail.bridge.oldAdminHref} className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700">
@@ -519,6 +538,7 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <h3 className="text-lg font-semibold">Requests</h3>
+            <p className="mt-1 text-sm text-slate-600">Legacy request records stay visible here until the full request workflow is migrated.</p>
             <div className="mt-4 space-y-3">
               {detail.requests.length === 0 ? <div className="text-sm text-slate-500">No legacy requests linked yet.</div> : null}
               {detail.requests.map((request) => (
@@ -536,6 +556,7 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <h3 className="text-lg font-semibold">Contracts & payouts</h3>
+            <p className="mt-1 text-sm text-slate-600">These blocks are legacy bridges. They remain read-only context in the new artist detail until full canonical finance migration exists.</p>
             <div className="mt-4 space-y-4">
               <div>
                 <div className="text-xs uppercase tracking-wide text-slate-400">Contracts</div>
@@ -587,6 +608,7 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <h3 className="text-lg font-semibold">Legacy data inspector</h3>
+            <p className="mt-1 text-sm text-slate-600">Use this inspector to compare old records and confirm that the canonical artist is linked to the correct historical data.</p>
             <div className="mt-4 space-y-4">
               {detail.legacy.artist ? (
                 <div className="rounded-xl border border-slate-200 p-3 text-sm text-slate-600">

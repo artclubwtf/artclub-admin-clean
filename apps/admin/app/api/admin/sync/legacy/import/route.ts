@@ -5,6 +5,7 @@ import { connectMongo } from "@/lib/mongodb";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { resolveShopDomain } from "@/lib/shopDomain";
 import { importLegacyDataToCanonical } from "@/lib/sync/legacyImport";
+import { SyncStateModel } from "@/models/SyncState";
 
 const payloadSchema = z.object({
   scope: z.enum(["artists", "products", "all"]).optional(),
@@ -35,6 +36,19 @@ export async function POST(req: Request) {
       limit: parsed.data.limit,
     });
 
+    await SyncStateModel.findOneAndUpdate(
+      { shopDomain, scope: "legacy_import" },
+      {
+        $set: {
+          lastRunAt: new Date(),
+          lastSuccessAt: new Date(),
+          lastError: null,
+          cursor: null,
+        },
+      },
+      { upsert: true, setDefaultsOnInsert: true },
+    );
+
     return NextResponse.json(
       {
         ok: true,
@@ -44,6 +58,17 @@ export async function POST(req: Request) {
       { status: 200 },
     );
   } catch (error) {
+    await SyncStateModel.findOneAndUpdate(
+      { shopDomain, scope: "legacy_import" },
+      {
+        $set: {
+          lastRunAt: new Date(),
+          lastError: error instanceof Error ? error.message : "legacy_import_failed",
+          cursor: null,
+        },
+      },
+      { upsert: true, setDefaultsOnInsert: true },
+    );
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "legacy_import_failed" },
       { status: 500 },

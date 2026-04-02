@@ -53,7 +53,29 @@ type ImportedProductRow = {
   suggestions: ProductSuggestion[];
 };
 
-export default function MigrationMatchingClient() {
+type Props = {
+  onResult?: (message: string) => void;
+};
+
+type ResultState = {
+  tone: "success" | "error";
+  message: string;
+} | null;
+
+function badgeTone(status: string) {
+  switch (status) {
+    case "linked":
+    case "assigned":
+      return "bg-emerald-50 text-emerald-700";
+    case "suggested":
+    case "needs_review":
+      return "bg-amber-50 text-amber-700";
+    default:
+      return "bg-slate-100 text-slate-700";
+  }
+}
+
+export default function MigrationMatchingClient({ onResult }: Props) {
   const [artists, setArtists] = useState<ImportedArtistRow[]>([]);
   const [userOptions, setUserOptions] = useState<UserOption[]>([]);
   const [products, setProducts] = useState<ImportedProductRow[]>([]);
@@ -63,6 +85,7 @@ export default function MigrationMatchingClient() {
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [artistSelections, setArtistSelections] = useState<Record<string, { linkedUserId: string; linkStatus: string }>>({});
   const [productSelections, setProductSelections] = useState<Record<string, { artistKey: string; migrationStatus: string }>>({});
+  const [result, setResult] = useState<ResultState>(null);
 
   async function load() {
     setLoading(true);
@@ -123,52 +146,76 @@ export default function MigrationMatchingClient() {
   const summary = useMemo(
     () => ({
       artistTotal: artists.length,
-      artistLinked: artists.filter((item) => item.linkStatus === "linked").length,
+      artistSuggested: artists.filter((item) => item.suggestions.length > 0 || item.linkStatus === "suggested").length,
       productTotal: products.length,
-      productAssigned: products.filter((item) => item.migrationStatus === "assigned").length,
+      productSuggested: products.filter((item) => item.suggestions.length > 0 || item.migrationStatus === "suggested").length,
     }),
     [artists, products],
   );
 
-  async function confirmArtist(artistKey: string) {
-    const selection = artistSelections[artistKey];
+  async function confirmArtist(artist: ImportedArtistRow) {
+    const selection = artistSelections[artist.artistKey];
     if (!selection) return;
+    const selectedUser = userOptions.find((option) => option.id === selection.linkedUserId) || artist.suggestions[0] || null;
+    const summaryText = selectedUser
+      ? `This links ${artist.displayName || artist.artistKey} to ${selectedUser.label}.`
+      : `This stores ${artist.displayName || artist.artistKey} as ${selection.linkStatus}.`;
+    if (!window.confirm(`${summaryText}\n\nThis only changes canonical matching data. Shopify stays untouched.`)) return;
 
-    setSavingKey(`artist:${artistKey}`);
+    setSavingKey(`artist:${artist.artistKey}`);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/migration/matches/artists/${encodeURIComponent(artistKey)}`, {
+      const res = await fetch(`/api/admin/migration/matches/artists/${encodeURIComponent(artist.artistKey)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(selection),
       });
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.error || "Failed to confirm artist match");
+      const message = selectedUser
+        ? `Artist match saved. ${artist.displayName || artist.artistKey} is now linked to ${selectedUser.label}.`
+        : `Artist status saved for ${artist.displayName || artist.artistKey}.`;
+      setResult({ tone: "success", message });
+      onResult?.(message);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to confirm artist match");
+      const message = err instanceof Error ? err.message : "Failed to confirm artist match";
+      setError(message);
+      setResult({ tone: "error", message });
     } finally {
       setSavingKey(null);
     }
   }
 
-  async function confirmProduct(productKey: string) {
-    const selection = productSelections[productKey];
+  async function confirmProduct(product: ImportedProductRow) {
+    const selection = productSelections[product.productKey];
     if (!selection) return;
+    const selectedArtist = artistOptions.find((option) => option.artistKey === selection.artistKey) || product.suggestions[0] || null;
+    const summaryText = selectedArtist
+      ? `This assigns ${product.title || product.productKey} to ${selectedArtist.label}.`
+      : `This stores ${product.title || product.productKey} as ${selection.migrationStatus}.`;
+    if (!window.confirm(`${summaryText}\n\nThis only updates canonical assignment. Shopify stays untouched.`)) return;
 
-    setSavingKey(`product:${productKey}`);
+    setSavingKey(`product:${product.productKey}`);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/migration/matches/products/${encodeURIComponent(productKey)}`, {
+      const res = await fetch(`/api/admin/migration/matches/products/${encodeURIComponent(product.productKey)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(selection),
       });
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.error || "Failed to confirm product match");
+      const message = selectedArtist
+        ? `Product assignment saved. ${product.title || product.productKey} is now assigned to ${selectedArtist.label}.`
+        : `Product status saved for ${product.title || product.productKey}.`;
+      setResult({ tone: "success", message });
+      onResult?.(message);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to confirm product match");
+      const message = err instanceof Error ? err.message : "Failed to confirm product match";
+      setError(message);
+      setResult({ tone: "error", message });
     } finally {
       setSavingKey(null);
     }
@@ -178,82 +225,91 @@ export default function MigrationMatchingClient() {
     <section className="space-y-6">
       <div className="grid gap-3 md:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Imported artists</div>
+          <div className="text-xs uppercase tracking-wide text-slate-500">Artist queue</div>
           <div className="mt-2 text-2xl font-semibold">{summary.artistTotal}</div>
+          <div className="mt-1 text-xs text-slate-500">{summary.artistSuggested} with suggestions</div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Linked artists</div>
-          <div className="mt-2 text-2xl font-semibold">{summary.artistLinked}</div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Imported products</div>
+          <div className="text-xs uppercase tracking-wide text-slate-500">Product queue</div>
           <div className="mt-2 text-2xl font-semibold">{summary.productTotal}</div>
+          <div className="mt-1 text-xs text-slate-500">{summary.productSuggested} with suggestions</div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Assigned products</div>
-          <div className="mt-2 text-2xl font-semibold">{summary.productAssigned}</div>
+          <div className="text-xs uppercase tracking-wide text-slate-500">What happens here?</div>
+          <div className="mt-2 text-sm text-slate-600">Links imported artist records to canonical artists and existing artist users. Can be changed later by admin.</div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Safety</div>
+          <div className="mt-2 text-sm text-slate-600">All actions here are DB-only. Nothing in Shopify is written from these review queues.</div>
         </div>
       </div>
 
       {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+      {result ? (
+        <div className={`rounded-xl px-4 py-3 text-sm ${result.tone === "success" ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "border border-red-200 bg-red-50 text-red-700"}`}>
+          {result.message}
+        </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-2">
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold">Artist matching</h2>
-              <p className="text-sm text-slate-600">Review imported Shopify artists and link them to existing artist user accounts.</p>
-            </div>
-            {loading ? <span className="text-xs text-slate-500">Loading…</span> : null}
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold">Artist matching queue</h2>
+            <p className="text-sm text-slate-600">Review imported artist records, understand the suggestion and confirm the final account link.</p>
+            <p className="text-xs text-slate-500">Primary action: confirm the suggested user or choose one manually. Secondary action: keep the item as needs review.</p>
           </div>
 
           <div className="mt-5 space-y-4">
-            {!loading && artists.length === 0 ? <div className="text-sm text-slate-500">No imported artists waiting for review.</div> : null}
+            {!loading && artists.length === 0 ? <div className="text-sm text-slate-500">No artist records need review right now.</div> : null}
             {artists.map((artist) => {
               const selection = artistSelections[artist.artistKey] || { linkedUserId: "", linkStatus: artist.linkStatus };
+              const selectedUser = userOptions.find((option) => option.id === selection.linkedUserId) || artist.suggestions[0] || null;
               return (
                 <div key={artist.artistKey} className="rounded-xl border border-slate-200 p-4 space-y-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-1">
-                      <div className="font-medium">{artist.displayName || "Unnamed artist"}</div>
+                      <div className="text-xs uppercase tracking-wide text-slate-400">Imported artist</div>
+                      <div className="font-medium text-slate-900">{artist.displayName || "Unnamed artist"}</div>
                       <div className="text-xs text-slate-500">{[artist.email, artist.handle, artist.publicSlug].filter(Boolean).join(" · ") || artist.artistKey}</div>
-                      {artist.appUrl ? <div className="text-xs text-slate-500">app_url: {artist.appUrl}</div> : null}
-                      {artist.vendorHints.length ? <div className="text-xs text-slate-500">Vendor hints: {artist.vendorHints.join(", ")}</div> : null}
+                      <div className="text-xs text-slate-500">Source: Shopify import{artist.appUrl ? ` · app_url ${artist.appUrl}` : ""}</div>
                     </div>
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700">{artist.linkStatus}</span>
+                    <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${badgeTone(selection.linkStatus)}`}>{selection.linkStatus}</span>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Suggestions</div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                    <div className="text-xs uppercase tracking-wide text-slate-400">Suggested match</div>
                     {artist.suggestions.length ? (
-                      artist.suggestions.map((suggestion) => (
-                        <button
-                          key={suggestion.id}
-                          type="button"
-                          onClick={() =>
-                            setArtistSelections((current) => ({
-                              ...current,
-                              [artist.artistKey]: { linkedUserId: suggestion.id, linkStatus: "suggested" },
-                            }))
-                          }
-                          className="w-full rounded-lg border border-slate-200 px-3 py-3 text-left hover:bg-slate-50"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <div className="text-sm font-medium text-slate-900">{suggestion.label}</div>
-                              <div className="text-xs text-slate-500">{[suggestion.email, suggestion.artistKey].filter(Boolean).join(" · ")}</div>
-                            </div>
-                            <div className="text-xs text-slate-500">{suggestion.score}</div>
+                      <div className="mt-2 space-y-2">
+                        {artist.suggestions.slice(0, 1).map((suggestion) => (
+                          <div key={suggestion.id} className="space-y-1">
+                            <div className="text-sm font-medium text-slate-900">{suggestion.label}</div>
+                            <div className="text-xs text-slate-500">{[suggestion.email, suggestion.artistKey].filter(Boolean).join(" · ")}</div>
+                            <div className="text-xs text-slate-600">Why this suggestion: {suggestion.reasons.join(" · ")}</div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setArtistSelections((current) => ({
+                                  ...current,
+                                  [artist.artistKey]: { linkedUserId: suggestion.id, linkStatus: "suggested" },
+                                }))
+                              }
+                              className="mt-2 rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700"
+                            >
+                              Use suggested match
+                            </button>
                           </div>
-                          <div className="mt-1 text-xs text-slate-500">{suggestion.reasons.join(" · ")}</div>
-                        </button>
-                      ))
+                        ))}
+                      </div>
                     ) : (
-                      <div className="text-sm text-slate-500">No strong suggestions yet.</div>
+                      <div className="mt-2 text-sm text-slate-500">No strong suggestion yet. Use manual selection below or leave it in review.</div>
                     )}
                   </div>
 
-                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto]">
+                  {artist.vendorHints.length ? (
+                    <div className="text-xs text-slate-500">Additional context: vendor hints {artist.vendorHints.join(", ")}</div>
+                  ) : null}
+
+                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
                     <label className="space-y-1">
                       <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Manual user selection</span>
                       <select
@@ -279,7 +335,7 @@ export default function MigrationMatchingClient() {
                     </label>
 
                     <label className="space-y-1">
-                      <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Status</span>
+                      <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Review status</span>
                       <select
                         value={selection.linkStatus}
                         onChange={(event) =>
@@ -290,22 +346,25 @@ export default function MigrationMatchingClient() {
                         }
                         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                       >
-                        <option value="unlinked">unlinked</option>
-                        <option value="suggested">suggested</option>
-                        <option value="linked">linked</option>
-                        <option value="needs_review">needs_review</option>
+                        <option value="unlinked">Not started</option>
+                        <option value="suggested">In progress</option>
+                        <option value="linked">Completed</option>
+                        <option value="needs_review">Needs review</option>
                       </select>
                     </label>
+                  </div>
 
-                    <div className="flex items-end">
-                      <button
-                        type="button"
-                        onClick={() => void confirmArtist(artist.artistKey)}
-                        disabled={savingKey === `artist:${artist.artistKey}`}
-                        className="inline-flex items-center rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-                      >
-                        {savingKey === `artist:${artist.artistKey}` ? "Saving..." : "Confirm"}
-                      </button>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => void confirmArtist(artist)}
+                      disabled={savingKey === `artist:${artist.artistKey}`}
+                      className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                    >
+                      {savingKey === `artist:${artist.artistKey}` ? "Saving..." : "Confirm match"}
+                    </button>
+                    <div className="text-xs text-slate-500">
+                      Links this imported artist to {selectedUser ? selectedUser.label : "the selected account"} in the canonical system.
                     </div>
                   </div>
                 </div>
@@ -315,60 +374,59 @@ export default function MigrationMatchingClient() {
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold">Product matching</h2>
-              <p className="text-sm text-slate-600">Assign imported Shopify products to canonical artists without changing Shopify data.</p>
-            </div>
-            {loading ? <span className="text-xs text-slate-500">Loading…</span> : null}
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold">Product matching queue</h2>
+            <p className="text-sm text-slate-600">Assign imported products to the correct artist before any dry run or Shopify write happens.</p>
+            <p className="text-xs text-slate-500">Primary action: confirm the proposed artist assignment. Secondary action: leave the item in review.</p>
           </div>
 
           <div className="mt-5 space-y-4">
-            {!loading && products.length === 0 ? <div className="text-sm text-slate-500">No imported products waiting for review.</div> : null}
+            {!loading && products.length === 0 ? <div className="text-sm text-slate-500">No imported products need review right now.</div> : null}
             {products.map((product) => {
               const selection = productSelections[product.productKey] || { artistKey: "", migrationStatus: product.migrationStatus };
+              const selectedArtist = artistOptions.find((option) => option.artistKey === selection.artistKey) || product.suggestions[0] || null;
               return (
                 <div key={product.productKey} className="rounded-xl border border-slate-200 p-4 space-y-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-1">
-                      <div className="font-medium">{product.title || "Untitled product"}</div>
+                      <div className="text-xs uppercase tracking-wide text-slate-400">Imported product</div>
+                      <div className="font-medium text-slate-900">{product.title || "Untitled product"}</div>
                       <div className="text-xs text-slate-500">{[product.vendor, product.handle].filter(Boolean).join(" · ") || product.productKey}</div>
-                      {product.artistRef ? <div className="text-xs text-slate-500">Shopify artist ref: {product.artistRef}</div> : null}
+                      <div className="text-xs text-slate-500">Source: Shopify product import{product.artistRef ? ` · artist ref ${product.artistRef}` : ""}</div>
                     </div>
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700">{product.migrationStatus}</span>
+                    <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${badgeTone(selection.migrationStatus)}`}>{selection.migrationStatus}</span>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Suggestions</div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                    <div className="text-xs uppercase tracking-wide text-slate-400">Suggested artist</div>
                     {product.suggestions.length ? (
-                      product.suggestions.map((suggestion) => (
-                        <button
-                          key={suggestion.artistKey}
-                          type="button"
-                          onClick={() =>
-                            setProductSelections((current) => ({
-                              ...current,
-                              [product.productKey]: { artistKey: suggestion.artistKey, migrationStatus: "suggested" },
-                            }))
-                          }
-                          className="w-full rounded-lg border border-slate-200 px-3 py-3 text-left hover:bg-slate-50"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <div className="text-sm font-medium text-slate-900">{suggestion.label}</div>
-                              <div className="text-xs text-slate-500">{[suggestion.publicSlug, suggestion.artistKey].filter(Boolean).join(" · ")}</div>
-                            </div>
-                            <div className="text-xs text-slate-500">{suggestion.score}</div>
+                      <div className="mt-2 space-y-2">
+                        {product.suggestions.slice(0, 1).map((suggestion) => (
+                          <div key={suggestion.artistKey} className="space-y-1">
+                            <div className="text-sm font-medium text-slate-900">{suggestion.label}</div>
+                            <div className="text-xs text-slate-500">{[suggestion.publicSlug, suggestion.artistKey].filter(Boolean).join(" · ")}</div>
+                            <div className="text-xs text-slate-600">Why this suggestion: {suggestion.reasons.join(" · ")}</div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setProductSelections((current) => ({
+                                  ...current,
+                                  [product.productKey]: { artistKey: suggestion.artistKey, migrationStatus: "suggested" },
+                                }))
+                              }
+                              className="mt-2 rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700"
+                            >
+                              Use suggested artist
+                            </button>
                           </div>
-                          <div className="mt-1 text-xs text-slate-500">{suggestion.reasons.join(" · ")}</div>
-                        </button>
-                      ))
+                        ))}
+                      </div>
                     ) : (
-                      <div className="text-sm text-slate-500">No strong artist suggestions yet.</div>
+                      <div className="mt-2 text-sm text-slate-500">No strong artist suggestion yet. Choose manually or keep it in review.</div>
                     )}
                   </div>
 
-                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto]">
+                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
                     <label className="space-y-1">
                       <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Manual artist selection</span>
                       <select
@@ -394,7 +452,7 @@ export default function MigrationMatchingClient() {
                     </label>
 
                     <label className="space-y-1">
-                      <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Status</span>
+                      <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Review status</span>
                       <select
                         value={selection.migrationStatus}
                         onChange={(event) =>
@@ -405,22 +463,25 @@ export default function MigrationMatchingClient() {
                         }
                         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                       >
-                        <option value="unassigned">unassigned</option>
-                        <option value="suggested">suggested</option>
-                        <option value="assigned">assigned</option>
-                        <option value="needs_review">needs_review</option>
+                        <option value="unassigned">Not started</option>
+                        <option value="suggested">In progress</option>
+                        <option value="assigned">Completed</option>
+                        <option value="needs_review">Needs review</option>
                       </select>
                     </label>
+                  </div>
 
-                    <div className="flex items-end">
-                      <button
-                        type="button"
-                        onClick={() => void confirmProduct(product.productKey)}
-                        disabled={savingKey === `product:${product.productKey}`}
-                        className="inline-flex items-center rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-                      >
-                        {savingKey === `product:${product.productKey}` ? "Saving..." : "Confirm"}
-                      </button>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => void confirmProduct(product)}
+                      disabled={savingKey === `product:${product.productKey}`}
+                      className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                    >
+                      {savingKey === `product:${product.productKey}` ? "Saving..." : "Assign product"}
+                    </button>
+                    <div className="text-xs text-slate-500">
+                      Connects this product to {selectedArtist ? selectedArtist.label : "the selected artist"} in the canonical DB.
                     </div>
                   </div>
                 </div>

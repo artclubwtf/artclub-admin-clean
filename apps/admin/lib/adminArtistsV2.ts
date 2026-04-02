@@ -2,6 +2,7 @@ import { Types } from "mongoose";
 
 import { connectMongo } from "@/lib/mongodb";
 import { resolveShopDomain } from "@/lib/shopDomain";
+import { isMigrationModeEnabled, isShopifyWriteEnabled } from "@/lib/featureFlags";
 import { ArtistApplicationModel } from "@/models/ArtistApplication";
 import { ArtistModel } from "@/models/Artist";
 import { CanonicalArtistModel } from "@/models/CanonicalArtist";
@@ -11,6 +12,7 @@ import { ContractModel } from "@/models/Contract";
 import { PayoutDetailsModel } from "@/models/PayoutDetails";
 import { PayoutTransactionModel } from "@/models/PayoutTransaction";
 import { RequestModel } from "@/models/Request";
+import { SyncStateModel } from "@/models/SyncState";
 import { UserModel } from "@/models/User";
 
 type LinkedUserSummary = {
@@ -154,6 +156,24 @@ export type ArtistV2Detail = {
   };
 };
 
+export type ArtistV2Meta = {
+  flags: {
+    migrationMode: boolean;
+    shopifyWriteEnabled: boolean;
+  };
+  activity: {
+    lastImportAt: string | null;
+    lastSyncAt: string | null;
+  };
+  review: {
+    openItems: number;
+    artistMatches: number;
+    productAssignments: number;
+    unlinkedAccounts: number;
+    syncReady: number;
+  };
+};
+
 function optionalString(value: unknown) {
   return typeof value === "string" ? value : "";
 }
@@ -186,6 +206,66 @@ function deriveProductReviewStatus(input: { status?: string | null; approvalStat
 
 function isObjectIdString(value: string | null | undefined): value is string {
   return Boolean(value && Types.ObjectId.isValid(value));
+}
+
+export async function loadAdminArtistsV2Meta() {
+  const shopDomain = resolveShopDomain();
+  if (!shopDomain) throw new Error("Missing shop domain");
+
+  await connectMongo();
+
+  const [artistMatches, productAssignments, unlinkedAccounts, syncReady, syncStates] = await Promise.all([
+    CanonicalArtistModel.countDocuments({
+      shopDomain,
+      $or: [{ migrationStatus: "imported_unlinked" }, { linkStatus: { $in: ["unlinked", "suggested", "needs_review"] } }],
+    }),
+    CanonicalProductModel.countDocuments({
+      shopDomain,
+      migrationStatus: { $in: ["imported_unmapped", "suggested", "unassigned", "needs_review"] },
+    }),
+    CanonicalArtistModel.countDocuments({
+      shopDomain,
+      $or: [{ linkedUserId: { $exists: false } }, { linkedUserId: null }],
+    }),
+    CanonicalProductModel.countDocuments({
+      shopDomain,
+      "sync.needsPush": true,
+      approvalStatus: { $in: ["approved", "published"] },
+    }),
+    SyncStateModel.find({
+      shopDomain,
+      scope: { $in: ["shopify_import_artists", "shopify_import_products", "legacy_import", "shopify_push"] },
+    })
+      .select({ scope: 1, lastSuccessAt: 1, lastRunAt: 1 })
+      .lean(),
+  ]);
+
+  const importTimes = syncStates
+    .filter((state) => state.scope !== "shopify_push")
+    .map((state) => state.lastSuccessAt || state.lastRunAt)
+    .filter(Boolean);
+  const pushTimes = syncStates
+    .filter((state) => state.scope === "shopify_push")
+    .map((state) => state.lastSuccessAt || state.lastRunAt)
+    .filter(Boolean);
+
+  return {
+    flags: {
+      migrationMode: isMigrationModeEnabled(),
+      shopifyWriteEnabled: isShopifyWriteEnabled(),
+    },
+    activity: {
+      lastImportAt: importTimes.length ? toIsoString(importTimes.sort((a, b) => new Date(b!).getTime() - new Date(a!).getTime())[0]) : null,
+      lastSyncAt: pushTimes.length ? toIsoString(pushTimes.sort((a, b) => new Date(b!).getTime() - new Date(a!).getTime())[0]) : null,
+    },
+    review: {
+      openItems: artistMatches + productAssignments + unlinkedAccounts,
+      artistMatches,
+      productAssignments,
+      unlinkedAccounts,
+      syncReady,
+    },
+  } satisfies ArtistV2Meta;
 }
 
 export async function loadAdminArtistsV2Overview() {
