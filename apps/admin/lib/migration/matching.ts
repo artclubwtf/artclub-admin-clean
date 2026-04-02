@@ -294,7 +294,21 @@ export async function loadProductMatchingOverview() {
       ],
     })
       .sort({ updatedAt: -1, createdAt: -1 })
-      .select({ productKey: 1, title: 1, vendor: 1, handle: 1, artistKey: 1, artistRef: 1, shopifyProductId: 1, shopify: 1, migrationStatus: 1, images: 1 })
+      .select({
+        productKey: 1,
+        title: 1,
+        vendor: 1,
+        handle: 1,
+        artistKey: 1,
+        artistRef: 1,
+        shopifyProductId: 1,
+        shopify: 1,
+        legacyProductId: 1,
+        migrationStatus: 1,
+        approvalStatus: 1,
+        type: 1,
+        images: 1,
+      })
       .lean(),
     CanonicalArtistModel.find({ shopDomain })
       .select({
@@ -356,6 +370,9 @@ export async function loadProductMatchingOverview() {
       artistKey: product.artistKey || "",
       artistRef: product.artistRef || "",
       shopifyProductId: product.shopifyProductId || product.shopify?.productGid || "",
+      legacyProductId: product.legacyProductId || "",
+      approvalStatus: product.approvalStatus || "",
+      type: product.type || "",
       migrationStatus: status,
       suggestions,
     };

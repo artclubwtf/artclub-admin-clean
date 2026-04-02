@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -475,6 +476,12 @@ export default function ArtistsV2Client({ meta, initialSyncQueue }: Props) {
           >
             Nächsten offenen Fall öffnen
           </button>
+        </div>
+
+        <div className="mt-3">
+          <Link href="/admin/artists-v2/artworks" className="text-sm font-medium text-slate-700 hover:text-slate-900">
+            Separate Artwork-Matching-Ansicht öffnen
+          </Link>
         </div>
       </div>
 
