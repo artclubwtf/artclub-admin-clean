@@ -211,6 +211,47 @@ function optionValue(
   return undefined;
 }
 
+function artistImportFilter(shopDomain: string, metaobjectGid: string, artistKey: string, existingId?: string) {
+  if (existingId) {
+    return { _id: existingId };
+  }
+
+  return {
+    shopDomain,
+    $or: [
+      { shopifyMetaobjectId: metaobjectGid },
+      { "shopify.metaobjectGid": metaobjectGid },
+      { artistKey },
+    ],
+  };
+}
+
+function productImportFilter(shopDomain: string, productGid: string, productKey: string, existingId?: string) {
+  if (existingId) {
+    return { _id: existingId };
+  }
+
+  return {
+    shopDomain,
+    $or: [
+      { shopifyProductId: productGid },
+      { "shopify.productGid": productGid },
+      { productKey },
+    ],
+  };
+}
+
+function variantImportFilter(shopDomain: string, productKey: string, variantGid: string) {
+  return {
+    shopDomain,
+    $or: [
+      { shopifyVariantId: variantGid },
+      { "shopify.variantGid": variantGid },
+      { productKey, variantKey: variantGid },
+    ],
+  };
+}
+
 async function pullArtistsInternal(input: PullInput, mode: PullMode): Promise<PullResult> {
   await connectMongo();
 
@@ -220,7 +261,7 @@ async function pullArtistsInternal(input: PullInput, mode: PullMode): Promise<Pu
   }
 
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 250);
-    const query = `
+  const query = `
     query PullArtists($first: Int!, $after: String) {
       metaobjects(type: "${SHOPIFY_METAOBJECT_TYPE_KUENSTLER}", first: $first, after: $after) {
         edges {
@@ -248,6 +289,27 @@ async function pullArtistsInternal(input: PullInput, mode: PullMode): Promise<Pu
 
   const now = new Date();
   const edges = data?.metaobjects?.edges || [];
+  const importedMetaobjectIds = edges.map((edge) => edge?.node?.id?.trim()).filter((value): value is string => Boolean(value));
+  const existingArtists = importedMetaobjectIds.length
+    ? await CanonicalArtistModel.find({
+        shopDomain,
+        $or: [
+          { shopifyMetaobjectId: { $in: importedMetaobjectIds } },
+          { "shopify.metaobjectGid": { $in: importedMetaobjectIds } },
+          { artistKey: { $in: importedMetaobjectIds } },
+        ],
+      }).lean()
+    : [];
+  const existingArtistByMetaobjectId = new Map(
+    existingArtists.flatMap((artist) => {
+      const keys = [
+        artist.shopifyMetaobjectId?.trim(),
+        artist.shopify?.metaobjectGid?.trim(),
+        artist.artistKey?.trim(),
+      ].filter((value): value is string => Boolean(value));
+      return keys.map((key) => [key, artist] as const);
+    }),
+  );
   const ops: Array<Record<string, unknown>> = [];
   let importedCount = 0;
 
@@ -268,22 +330,29 @@ async function pullArtistsInternal(input: PullInput, mode: PullMode): Promise<Pu
 
     const avatarUrl = firstTruthy([fieldMap[KUENSTLER_FIELD_KEYS.bild_1], galleryUrls[0]]);
     const heroUrl = firstTruthy([fieldMap[KUENSTLER_FIELD_KEYS.bilder], galleryUrls[0]]);
+    const existingArtist = existingArtistByMetaobjectId.get(metaobjectGid) || null;
+    const targetArtistKey = existingArtist?.artistKey || metaobjectGid;
 
     ops.push({
       updateOne: {
-        filter: { shopDomain, artistKey: metaobjectGid },
+        filter: artistImportFilter(shopDomain, metaobjectGid, targetArtistKey, existingArtist?._id?.toString()),
         update: {
           $set: {
             shopDomain,
-            artistKey: metaobjectGid,
-            handle,
-            publicSlug: handle,
+            artistKey: targetArtistKey,
+            handle: existingArtist?.handle || handle,
+            publicSlug: existingArtist?.publicSlug || handle,
             displayName,
             appUrl: fieldMap.app_url || fieldMap.appUrl || undefined,
             instagram: fieldMap[KUENSTLER_FIELD_KEYS.instagram] || undefined,
             shopifyMetaobjectId: metaobjectGid,
             migrationStatus: mode === "import" ? "imported_unlinked" : "linked",
-            linkStatus: mode === "import" ? "imported_unlinked" : "linked",
+            linkStatus:
+              existingArtist?.linkedUserId && mode === "import"
+                ? "linked"
+                : mode === "import"
+                  ? "imported_unlinked"
+                  : "linked",
             profileImages: {
               avatarUrl,
               heroUrl,
@@ -407,6 +476,27 @@ async function pullProductsInternal(input: PullInput, mode: PullMode): Promise<P
 
   const now = new Date();
   const edges = data?.products?.edges || [];
+  const importedProductIds = edges.map((edge) => edge?.node?.id?.trim()).filter((value): value is string => Boolean(value));
+  const existingProducts = importedProductIds.length
+    ? await CanonicalProductModel.find({
+        shopDomain,
+        $or: [
+          { shopifyProductId: { $in: importedProductIds } },
+          { "shopify.productGid": { $in: importedProductIds } },
+          { productKey: { $in: importedProductIds } },
+        ],
+      }).lean()
+    : [];
+  const existingProductByShopifyId = new Map(
+    existingProducts.flatMap((product) => {
+      const keys = [
+        product.shopifyProductId?.trim(),
+        product.shopify?.productGid?.trim(),
+        product.productKey?.trim(),
+      ].filter((value): value is string => Boolean(value));
+      return keys.map((key) => [key, product] as const);
+    }),
+  );
   const productOps: Array<Record<string, unknown>> = [];
   const variantOps: Array<Record<string, unknown>> = [];
   const variantScopes: Array<{ productKey: string; variantKeys: string[] }> = [];
@@ -417,7 +507,8 @@ async function pullProductsInternal(input: PullInput, mode: PullMode): Promise<P
     const productGid = node?.id?.trim();
     if (!productGid) continue;
 
-    const productKey = productGid;
+    const existingProduct = existingProductByShopifyId.get(productGid) || null;
+    const productKey = existingProduct?.productKey || productGid;
     const title = firstTruthy([node?.title || undefined]) || "Untitled";
     const handle = firstTruthy([node?.handle || undefined]) || productFallbackHandle(productGid, title);
     const tags = normalizeTags(node?.tags);
@@ -432,7 +523,7 @@ async function pullProductsInternal(input: PullInput, mode: PullMode): Promise<P
 
     productOps.push({
       updateOne: {
-        filter: { shopDomain, productKey },
+        filter: productImportFilter(shopDomain, productGid, productKey, existingProduct?._id?.toString()),
         update: {
           $set: {
             shopDomain,
@@ -510,7 +601,7 @@ async function pullProductsInternal(input: PullInput, mode: PullMode): Promise<P
 
       variantOps.push({
         updateOne: {
-          filter: { shopDomain, productKey, variantKey },
+          filter: variantImportFilter(shopDomain, productKey, variantGid),
           update: {
             $set: {
               shopDomain,
