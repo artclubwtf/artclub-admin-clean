@@ -4,6 +4,7 @@ import { canonicalStatusValues } from "./canonicalStates";
 const canonicalVariantInventorySchema = new Schema(
   {
     tracked: { type: Boolean, default: true },
+    quantity: { type: Number },
   },
   { _id: false },
 );

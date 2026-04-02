@@ -126,6 +126,7 @@ const canonicalArtistSchema = new Schema(
     publicSlug: { type: String, trim: true },
     displayName: { type: String, required: true, trim: true },
     email: { type: String, lowercase: true, trim: true },
+    appUrl: { type: String, trim: true },
     locationCity: { type: String, trim: true },
     locationCountry: { type: String, trim: true },
     bio: { type: String, trim: true },

@@ -16,6 +16,8 @@ type PullInput = {
   cursor?: string | null;
 };
 
+type PullMode = "sync" | "import";
+
 type PullResult = {
   importedCount: number;
   cursor: string | null;
@@ -43,6 +45,7 @@ type ProductVariantNode = {
   id?: string | null;
   sku?: string | null;
   price?: string | null;
+  inventoryQuantity?: number | null;
   selectedOptions?: Array<{ name?: string | null; value?: string | null }> | null;
   inventoryItem?: { id?: string | null; tracked?: boolean | null } | null;
 };
@@ -52,6 +55,8 @@ type ProductNode = {
   title?: string | null;
   handle?: string | null;
   description?: string | null;
+  descriptionHtml?: string | null;
+  vendor?: string | null;
   tags?: string[] | null;
   status?: string | null;
   featuredImage?: { url?: string | null } | null;
@@ -206,7 +211,7 @@ function optionValue(
   return undefined;
 }
 
-export async function pullArtists(input: PullInput): Promise<PullResult> {
+async function pullArtistsInternal(input: PullInput, mode: PullMode): Promise<PullResult> {
   await connectMongo();
 
   const shopDomain = resolveShopDomain(input.shopDomain);
@@ -215,7 +220,7 @@ export async function pullArtists(input: PullInput): Promise<PullResult> {
   }
 
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 250);
-  const query = `
+    const query = `
     query PullArtists($first: Int!, $after: String) {
       metaobjects(type: "${SHOPIFY_METAOBJECT_TYPE_KUENSTLER}", first: $first, after: $after) {
         edges {
@@ -274,10 +279,11 @@ export async function pullArtists(input: PullInput): Promise<PullResult> {
             handle,
             publicSlug: handle,
             displayName,
+            appUrl: fieldMap.app_url || fieldMap.appUrl || undefined,
             instagram: fieldMap[KUENSTLER_FIELD_KEYS.instagram] || undefined,
             shopifyMetaobjectId: metaobjectGid,
-            migrationStatus: "linked",
-            linkStatus: "linked",
+            migrationStatus: mode === "import" ? "imported_unlinked" : "linked",
+            linkStatus: mode === "import" ? "imported_unlinked" : "linked",
             profileImages: {
               avatarUrl,
               heroUrl,
@@ -319,7 +325,15 @@ export async function pullArtists(input: PullInput): Promise<PullResult> {
   return { importedCount, cursor: nextCursor };
 }
 
-export async function pullProducts(input: PullInput): Promise<PullResult> {
+export async function pullArtists(input: PullInput): Promise<PullResult> {
+  return pullArtistsInternal(input, "sync");
+}
+
+export async function importArtistsReadOnly(input: PullInput): Promise<PullResult> {
+  return pullArtistsInternal(input, "import");
+}
+
+async function pullProductsInternal(input: PullInput, mode: PullMode): Promise<PullResult> {
   await connectMongo();
 
   const shopDomain = resolveShopDomain(input.shopDomain);
@@ -337,6 +351,8 @@ export async function pullProducts(input: PullInput): Promise<PullResult> {
             title
             handle
             description
+            descriptionHtml
+            vendor
             tags
             status
             featuredImage { url }
@@ -363,6 +379,7 @@ export async function pullProducts(input: PullInput): Promise<PullResult> {
                 id
                 sku
                 price
+                inventoryQuantity
                 selectedOptions {
                   name
                   value
@@ -422,12 +439,22 @@ export async function pullProducts(input: PullInput): Promise<PullResult> {
             productKey,
             type: toProductType(tags),
             title,
+            handle,
+            vendor: node?.vendor || undefined,
             description: node?.description || undefined,
+            bodyHtml: node?.descriptionHtml || undefined,
             tags,
             artistRef: artistMetaobjectGid,
             shopifyProductId: productGid,
-            migrationStatus: "linked",
-            approvalStatus: node?.status === "ARCHIVED" ? "archived" : node?.status === "ACTIVE" ? "published" : "approved",
+            migrationStatus: mode === "import" ? "imported_unmapped" : "linked",
+            approvalStatus:
+              mode === "import"
+                ? "needs_review"
+                : node?.status === "ARCHIVED"
+                  ? "archived"
+                  : node?.status === "ACTIVE"
+                    ? "published"
+                    : "approved",
             images: {
               thumbUrl: imageCandidates[0],
               mediumUrl: imageCandidates[0],
@@ -494,10 +521,18 @@ export async function pullProducts(input: PullInput): Promise<PullResult> {
               sku,
               priceCents: parsePriceCents(variant.price),
               shopifyVariantId: variantGid,
-              published: node?.status === "ACTIVE",
-              syncState: node?.status === "ARCHIVED" ? "archived" : node?.status === "ACTIVE" ? "published" : "approved",
+              published: mode === "import" ? false : node?.status === "ACTIVE",
+              syncState:
+                mode === "import"
+                  ? "imported_unmapped"
+                  : node?.status === "ARCHIVED"
+                    ? "archived"
+                    : node?.status === "ACTIVE"
+                      ? "published"
+                      : "approved",
               inventory: {
                 tracked: variant.inventoryItem?.tracked !== false,
+                quantity: typeof variant.inventoryQuantity === "number" ? variant.inventoryQuantity : undefined,
               },
               shopify: {
                 variantGid,
@@ -537,4 +572,12 @@ export async function pullProducts(input: PullInput): Promise<PullResult> {
   const nextCursor = hasNextPage ? data?.products?.pageInfo?.endCursor || null : null;
 
   return { importedCount, cursor: nextCursor };
+}
+
+export async function pullProducts(input: PullInput): Promise<PullResult> {
+  return pullProductsInternal(input, "sync");
+}
+
+export async function importProductsReadOnly(input: PullInput): Promise<PullResult> {
+  return pullProductsInternal(input, "import");
 }
