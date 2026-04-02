@@ -83,6 +83,52 @@ function offeringFromApplicationArtwork(offering: string | null | undefined): Ca
   return offering === "print_only" ? "prints_only" : "original_plus_prints";
 }
 
+function legacyArtistImportFilter(input: {
+  shopDomain: string;
+  artistKey: string;
+  legacyArtistId: string;
+  shopifyMetaobjectId: string;
+  existingId?: string;
+}) {
+  if (input.existingId) {
+    return { _id: input.existingId };
+  }
+
+  const or: Array<Record<string, string>> = [{ legacyArtistId: input.legacyArtistId }, { artistKey: input.artistKey }];
+  if (input.shopifyMetaobjectId) {
+    or.push({ shopifyMetaobjectId: input.shopifyMetaobjectId });
+    or.push({ "shopify.metaobjectGid": input.shopifyMetaobjectId });
+  }
+
+  return {
+    shopDomain: input.shopDomain,
+    $or: or,
+  };
+}
+
+function legacyProductImportFilter(input: {
+  shopDomain: string;
+  productKey: string;
+  legacyProductId: string;
+  shopifyProductId: string;
+  existingId?: string;
+}) {
+  if (input.existingId) {
+    return { _id: input.existingId };
+  }
+
+  const or: Array<Record<string, string>> = [{ legacyProductId: input.legacyProductId }, { productKey: input.productKey }];
+  if (input.shopifyProductId) {
+    or.push({ shopifyProductId: input.shopifyProductId });
+    or.push({ "shopify.productGid": input.shopifyProductId });
+  }
+
+  return {
+    shopDomain: input.shopDomain,
+    $or: or,
+  };
+}
+
 async function syncLegacyArtists(input: { shopDomain: string; limit?: number }) {
   const legacyArtists = await ArtistModel.find({})
     .sort({ updatedAt: -1, createdAt: -1 })
@@ -116,7 +162,16 @@ async function syncLegacyArtists(input: { shopDomain: string; limit?: number }) 
     const existing =
       (await CanonicalArtistModel.findOne({
         shopDomain: input.shopDomain,
-        $or: [{ legacyArtistId }, { artistKey: lookupArtistKey }],
+        $or: [
+          { legacyArtistId },
+          { artistKey: lookupArtistKey },
+          ...(legacyArtist.shopifySync?.metaobjectId
+            ? [
+                { shopifyMetaobjectId: legacyArtist.shopifySync.metaobjectId },
+                { "shopify.metaobjectGid": legacyArtist.shopifySync.metaobjectId },
+              ]
+            : []),
+        ],
       }).lean()) || null;
     const artistKey = firstNonEmpty(linkedUser?.artistKey, existing?.artistKey, `legacy_${legacyArtistId}`);
     const handle =
@@ -136,10 +191,13 @@ async function syncLegacyArtists(input: { shopDomain: string; limit?: number }) 
     }
 
     await CanonicalArtistModel.findOneAndUpdate(
-      {
+      legacyArtistImportFilter({
         shopDomain: input.shopDomain,
         artistKey: existing?.artistKey || artistKey,
-      },
+        legacyArtistId,
+        shopifyMetaobjectId,
+        existingId: existing?._id?.toString(),
+      }),
       {
         $set: {
           handle,
@@ -269,7 +327,13 @@ async function syncLegacyProducts(input: {
     const firstImage = artwork.images?.[0];
 
     await CanonicalProductModel.findOneAndUpdate(
-      { shopDomain: input.shopDomain, productKey },
+      legacyProductImportFilter({
+        shopDomain: input.shopDomain,
+        productKey,
+        legacyProductId,
+        shopifyProductId: firstNonEmpty(existing?.shopifyProductId, artwork.shopify?.productId),
+        existingId: existing?._id?.toString(),
+      }),
       {
         $set: {
           type: "artwork",
@@ -349,7 +413,13 @@ async function syncLegacyProducts(input: {
       .filter(Boolean);
 
     await CanonicalProductModel.findOneAndUpdate(
-      { shopDomain: input.shopDomain, productKey },
+      legacyProductImportFilter({
+        shopDomain: input.shopDomain,
+        productKey,
+        legacyProductId,
+        shopifyProductId: firstNonEmpty(existing?.shopifyProductId, artwork.shopifyProductId),
+        existingId: existing?._id?.toString(),
+      }),
       {
         $set: {
           type: "artwork",
