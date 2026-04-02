@@ -1,4 +1,5 @@
 import { InferSchemaType, Model, Schema, model, models } from "mongoose";
+import { canonicalStatusValues } from "./canonicalStates";
 
 export const canonicalProductTypes = ["artwork", "merch", "service"] as const;
 export const canonicalProductOfferings = ["original_only", "prints_only", "original_plus_prints"] as const;
@@ -36,6 +37,9 @@ const canonicalProductSyncSchema = new Schema(
     dirtyFields: { type: [String], default: [] },
     dirtyAt: { type: Date },
     needsPush: { type: Boolean, default: false },
+    lastPushAt: { type: Date },
+    lastPullAt: { type: Date },
+    lastError: { type: String },
   },
   { _id: false },
 );
@@ -50,6 +54,10 @@ const canonicalProductSchema = new Schema(
     tags: { type: [String], default: [] },
     artistKey: { type: String, trim: true },
     artistRef: { type: String, trim: true },
+    shopifyProductId: { type: String, trim: true },
+    legacyProductId: { type: String, trim: true },
+    migrationStatus: { type: String, enum: canonicalStatusValues },
+    approvalStatus: { type: String, enum: canonicalStatusValues },
     seriesId: { type: String, trim: true },
     seriesName: { type: String, trim: true },
     images: { type: canonicalProductImagesSchema, default: () => ({ galleryUrls: [] }) },
@@ -70,6 +78,15 @@ const canonicalProductSchema = new Schema(
 canonicalProductSchema.index({ shopDomain: 1, productKey: 1 }, { unique: true });
 canonicalProductSchema.index({ shopDomain: 1, artistKey: 1, createdAt: -1 });
 canonicalProductSchema.index(
+  { shopDomain: 1, shopifyProductId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      shopifyProductId: { $type: "string" },
+    },
+  },
+);
+canonicalProductSchema.index(
   { shopDomain: 1, "shopify.productGid": 1 },
   {
     unique: true,
@@ -79,6 +96,7 @@ canonicalProductSchema.index(
   },
 );
 canonicalProductSchema.index({ shopDomain: 1, "sync.needsPush": 1, "sync.dirtyAt": 1 });
+canonicalProductSchema.index({ shopDomain: 1, legacyProductId: 1 });
 
 type CanonicalProduct = InferSchemaType<typeof canonicalProductSchema>;
 export type CanonicalProductType = (typeof canonicalProductTypes)[number];

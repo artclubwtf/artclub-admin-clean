@@ -1,5 +1,6 @@
 import { buildProductMetafieldsForArtwork, upsertArtistMetaobject } from "@/lib/shopify";
 import { getArtistShopifySyncMode } from "@/lib/artistShopifySyncMode";
+import { assertShopifyWriteEnabled } from "@/lib/featureFlags";
 import { connectMongo } from "@/lib/mongodb";
 import { CanonicalArtistModel } from "@/models/CanonicalArtist";
 import { CanonicalProductModel, type CanonicalProduct } from "@/models/CanonicalProduct";
@@ -260,6 +261,7 @@ async function bulkUpdateShopifyVariants(
 }
 
 export async function pushArtists(input: PushInput): Promise<PushResult> {
+  assertShopifyWriteEnabled();
   await connectMongo();
   const syncMode = getArtistShopifySyncMode();
 
@@ -303,8 +305,14 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
         { shopDomain: input.shopDomain, artistKey: artist.artistKey },
         {
           $set: {
+            shopifyMetaobjectId: result.id,
+            publicSlug: artist.publicSlug || artist.handle,
+            migrationStatus: "linked",
+            linkStatus: "linked",
             "shopify.metaobjectGid": result.id,
             "shopify.lastPushedAt": new Date(),
+            "sync.lastPushAt": new Date(),
+            "sync.lastError": null,
             "sync.needsPush": false,
             "sync.dirtyAt": null,
             "sync.dirtyFields": [],
@@ -314,6 +322,14 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
 
       pushedCount += 1;
     } catch (error) {
+      await CanonicalArtistModel.updateOne(
+        { shopDomain: input.shopDomain, artistKey: artist.artistKey },
+        {
+          $set: {
+            "sync.lastError": error instanceof Error ? error.message : "push_failed",
+          },
+        },
+      );
       failedCount += 1;
       errors.push(`${artist.artistKey} [mode=${syncMode}]: ${error instanceof Error ? error.message : "push_failed"}`);
     }
@@ -323,6 +339,7 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
 }
 
 export async function pushProducts(input: PushInput): Promise<PushResult> {
+  assertShopifyWriteEnabled();
   await connectMongo();
 
   const limit = Math.min(Math.max(input.limit ?? 20, 1), 250);
@@ -346,6 +363,8 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
           {
             $set: {
               "shopify.lastPushedAt": new Date(),
+              "sync.lastPushAt": new Date(),
+              "sync.lastError": null,
               "sync.needsPush": false,
               "sync.dirtyAt": null,
               "sync.dirtyFields": [],
@@ -356,7 +375,7 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
         continue;
       }
 
-      let productGid = product.shopify?.productGid || "";
+      let productGid = product.shopifyProductId || product.shopify?.productGid || "";
       let defaultVariantId: string | null = null;
       let defaultInventoryItemId: string | null = null;
 
@@ -389,8 +408,8 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
       const matchedVariantKeys = new Set<string>();
       for (const [index, variant] of canonicalVariants.entries()) {
         const matchedBySku = variant.sku ? variantBySku.get(variant.sku) : undefined;
-        const fallbackDefault = !variant.shopify?.variantGid && !matchedBySku && index === 0 ? defaultVariantId : null;
-        const variantGid = variant.shopify?.variantGid || matchedBySku?.id || fallbackDefault || null;
+        const fallbackDefault = !variant.shopify?.variantGid && !variant.shopifyVariantId && !matchedBySku && index === 0 ? defaultVariantId : null;
+        const variantGid = variant.shopifyVariantId || variant.shopify?.variantGid || matchedBySku?.id || fallbackDefault || null;
         if (!variantGid) continue;
         matchedVariantKeys.add(variant.variantKey);
 
@@ -405,6 +424,9 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
           { shopDomain: input.shopDomain, productKey: product.productKey, variantKey: variant.variantKey },
           {
             $set: {
+              shopifyVariantId: variantGid,
+              published: product.status === "active",
+              syncState: product.status === "archived" ? "archived" : product.status === "active" ? "published" : "approved",
               "shopify.variantGid": variantGid,
               ...(inventoryItemGid ? { "shopify.inventoryItemGid": inventoryItemGid } : {}),
             },
@@ -425,8 +447,13 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
         { shopDomain: input.shopDomain, productKey: product.productKey },
         {
           $set: {
+            shopifyProductId: productGid,
+            migrationStatus: "linked",
+            approvalStatus: product.status === "archived" ? "archived" : product.status === "active" ? "published" : "approved",
             "shopify.productGid": productGid,
             "shopify.lastPushedAt": new Date(),
+            "sync.lastPushAt": new Date(),
+            "sync.lastError": null,
             "sync.needsPush": false,
             "sync.dirtyAt": null,
             "sync.dirtyFields": [],
@@ -436,6 +463,14 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
 
       pushedCount += 1;
     } catch (error) {
+      await CanonicalProductModel.updateOne(
+        { shopDomain: input.shopDomain, productKey: product.productKey },
+        {
+          $set: {
+            "sync.lastError": error instanceof Error ? error.message : "push_failed",
+          },
+        },
+      );
       failedCount += 1;
       errors.push(`${product.productKey}: ${error instanceof Error ? error.message : "push_failed"}`);
     }

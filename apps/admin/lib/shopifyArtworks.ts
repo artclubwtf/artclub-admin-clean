@@ -1,3 +1,4 @@
+import { assertShopifyWriteEnabled } from "@/lib/featureFlags";
 import { buildProductMetafieldsForArtwork } from "@/lib/shopify";
 
 type StagedUploadTarget = {
@@ -336,6 +337,8 @@ async function setInventoryTracking(inventoryItemId: string, tracked: boolean) {
 export async function createDraftArtworkProduct(
   input: CreateDraftArtworkProductInput,
 ): Promise<CreateDraftArtworkProductResult> {
+  assertShopifyWriteEnabled();
+
   const {
     artistShopifyMetaobjectGid,
     title,

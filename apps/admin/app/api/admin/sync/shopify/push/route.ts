@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { connectMongo } from "@/lib/mongodb";
+import { isShopifyWriteEnabled } from "@/lib/featureFlags";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { getArtistShopifySyncMode } from "@/lib/artistShopifySyncMode";
 import { resolveShopDomain } from "@/lib/shopDomain";
@@ -12,11 +13,6 @@ const payloadSchema = z.object({
   scope: z.enum(["artists", "products"]),
   limit: z.number().int().min(1).max(250).optional(),
 });
-
-function isShopifyWriteEnabled(): boolean {
-  const value = (process.env.SHOPIFY_WRITE_ENABLED || "").trim().toLowerCase();
-  return value === "1" || value === "true" || value === "yes" || value === "on";
-}
 
 export async function POST(req: Request) {
   const unauthorized = await requireAdmin(req);

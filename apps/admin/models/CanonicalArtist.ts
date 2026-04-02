@@ -1,4 +1,5 @@
 import { InferSchemaType, Model, Schema, model, models } from "mongoose";
+import { canonicalStatusValues } from "./canonicalStates";
 
 const canonicalArtistProfileImagesSchema = new Schema(
   {
@@ -110,6 +111,9 @@ const canonicalArtistSyncSchema = new Schema(
     dirtyFields: { type: [String], default: [] },
     dirtyAt: { type: Date },
     needsPush: { type: Boolean, default: false },
+    lastPushAt: { type: Date },
+    lastPullAt: { type: Date },
+    lastError: { type: String },
   },
   { _id: false },
 );
@@ -119,6 +123,7 @@ const canonicalArtistSchema = new Schema(
     shopDomain: { type: String, required: true, lowercase: true, trim: true },
     artistKey: { type: String, required: true, trim: true },
     handle: { type: String, required: true, trim: true },
+    publicSlug: { type: String, trim: true },
     displayName: { type: String, required: true, trim: true },
     email: { type: String, lowercase: true, trim: true },
     locationCity: { type: String, trim: true },
@@ -126,6 +131,11 @@ const canonicalArtistSchema = new Schema(
     bio: { type: String, trim: true },
     websiteUrl: { type: String, trim: true },
     instagram: { type: String, trim: true },
+    shopifyMetaobjectId: { type: String, trim: true },
+    legacyArtistId: { type: String, trim: true },
+    migrationStatus: { type: String, enum: canonicalStatusValues },
+    linkStatus: { type: String, enum: canonicalStatusValues },
+    linkedUserId: { type: Schema.Types.ObjectId, ref: "User" },
     profileImages: { type: canonicalArtistProfileImagesSchema, default: () => ({ galleryUrls: [] }) },
     consents: { type: canonicalArtistConsentsSchema, default: () => ({}) },
     experience: { type: [canonicalArtistExperienceSchema], default: [] },
@@ -141,6 +151,24 @@ const canonicalArtistSchema = new Schema(
 
 canonicalArtistSchema.index({ shopDomain: 1, artistKey: 1 }, { unique: true });
 canonicalArtistSchema.index(
+  { shopDomain: 1, publicSlug: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      publicSlug: { $type: "string" },
+    },
+  },
+);
+canonicalArtistSchema.index(
+  { shopDomain: 1, shopifyMetaobjectId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      shopifyMetaobjectId: { $type: "string" },
+    },
+  },
+);
+canonicalArtistSchema.index(
   { shopDomain: 1, "shopify.metaobjectGid": 1 },
   {
     unique: true,
@@ -150,6 +178,8 @@ canonicalArtistSchema.index(
   },
 );
 canonicalArtistSchema.index({ shopDomain: 1, "sync.needsPush": 1, "sync.dirtyAt": 1 });
+canonicalArtistSchema.index({ shopDomain: 1, legacyArtistId: 1 });
+canonicalArtistSchema.index({ shopDomain: 1, linkedUserId: 1 });
 
 type CanonicalArtist = InferSchemaType<typeof canonicalArtistSchema>;
 

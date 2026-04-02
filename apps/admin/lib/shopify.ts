@@ -323,6 +323,7 @@ export async function fetchKuenstlerById(id: string): Promise<ShopifyKuenstler |
 type KuenstlerUpdatePatch = Partial<ShopifyKuenstlerFields>;
 
 export async function updateKuenstler(id: string, patch: KuenstlerUpdatePatch): Promise<ShopifyKuenstler> {
+  assertShopifyWriteEnabled();
   const shop = mustEnv("SHOPIFY_SHOP_DOMAIN");
   const token = mustEnv("SHOPIFY_ADMIN_ACCESS_TOKEN");
   const version = process.env.SHOPIFY_API_VERSION || "2024-10";
@@ -395,6 +396,7 @@ type UpsertArtistMetaobjectInput = {
 };
 
 export async function upsertArtistMetaobject(input: UpsertArtistMetaobjectInput) {
+  assertShopifyWriteEnabled();
   const shop = mustEnv("SHOPIFY_SHOP_DOMAIN");
   const token = mustEnv("SHOPIFY_ADMIN_ACCESS_TOKEN");
   const version = process.env.SHOPIFY_API_VERSION || "2024-10";
@@ -505,6 +507,7 @@ type DraftArtworkInput = {
 };
 
 export async function createDraftArtworkProduct(input: DraftArtworkInput) {
+  assertShopifyWriteEnabled();
   const shop = mustEnv("SHOPIFY_SHOP_DOMAIN");
   const token = mustEnv("SHOPIFY_ADMIN_ACCESS_TOKEN");
   const version = process.env.SHOPIFY_API_VERSION || "2024-10";
@@ -666,3 +669,4 @@ export async function fetchProductsByCollectionId(
     };
   });
 }
+import { assertShopifyWriteEnabled } from "@/lib/featureFlags";

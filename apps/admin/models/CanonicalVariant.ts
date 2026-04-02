@@ -1,4 +1,5 @@
 import { InferSchemaType, Model, Schema, model, models } from "mongoose";
+import { canonicalStatusValues } from "./canonicalStates";
 
 const canonicalVariantInventorySchema = new Schema(
   {
@@ -24,6 +25,9 @@ const canonicalVariantSchema = new Schema(
     sizeCode: { type: String, required: true, trim: true },
     sku: { type: String, required: true, trim: true },
     priceCents: { type: Number, required: true },
+    shopifyVariantId: { type: String, trim: true },
+    published: { type: Boolean, default: false },
+    syncState: { type: String, enum: canonicalStatusValues },
     inventory: { type: canonicalVariantInventorySchema, default: () => ({ tracked: true }) },
     shopify: { type: canonicalVariantShopifySchema, default: () => ({}) },
   },
@@ -31,6 +35,15 @@ const canonicalVariantSchema = new Schema(
 );
 
 canonicalVariantSchema.index({ shopDomain: 1, productKey: 1, variantKey: 1 }, { unique: true });
+canonicalVariantSchema.index(
+  { shopDomain: 1, shopifyVariantId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      shopifyVariantId: { $type: "string" },
+    },
+  },
+);
 
 type CanonicalVariant = InferSchemaType<typeof canonicalVariantSchema>;
 

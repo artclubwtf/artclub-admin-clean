@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { isMigrationModeEnabled } from "@/lib/featureFlags";
 import { connectMongo } from "@/lib/mongodb";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { resolveShopDomain } from "@/lib/shopDomain";
@@ -20,6 +21,10 @@ function mapScope(scope: "artists" | "products"): "shopify_pull_artists" | "shop
 export async function POST(req: Request) {
   const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
+
+  if (!isMigrationModeEnabled()) {
+    return NextResponse.json({ ok: false, error: "migration_mode_disabled" }, { status: 403 });
+  }
 
   const body = (await req.json().catch(() => null)) as unknown;
   const parsed = payloadSchema.safeParse(body || {});
