@@ -270,7 +270,6 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [artistUser, setArtistUser] = useState<UserAccount | null>(null);
   const [accountEmail, setAccountEmail] = useState("");
-  const [accountTempPassword, setAccountTempPassword] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messagesError, setMessagesError] = useState<string | null>(null);
@@ -1605,10 +1604,6 @@ export default function ArtistDetailClient({ artistId }: Props) {
       setAccountError("Valid email required");
       return;
     }
-    if (!accountTempPassword || accountTempPassword.length < 8) {
-      setAccountError("Temp password must be at least 8 characters");
-      return;
-    }
 
     setAccountLoading(true);
     try {
@@ -1618,16 +1613,24 @@ export default function ArtistDetailClient({ artistId }: Props) {
         body: JSON.stringify({
           artistId,
           email: trimmedEmail,
-          tempPassword: accountTempPassword,
         }),
       });
-      const payload = (await res.json().catch(() => null)) as { user?: UserAccount; error?: string } | null;
+      const payload = (await res.json().catch(() => null)) as
+        | {
+            user?: UserAccount;
+            error?: string;
+            bootstrap?: { initialPassword?: string; warning?: string };
+          }
+        | null;
       if (!res.ok) {
         throw new Error(payload?.error || "Failed to create account");
       }
       setArtistUser(payload?.user ?? null);
-      setAccountMessage("Artist account created. Share temp password with the artist.");
-      setAccountTempPassword("");
+      setAccountMessage(
+        payload?.bootstrap?.initialPassword
+          ? `Preprovisioned artist account created. Initial password: ${payload.bootstrap.initialPassword}. Transitional insecure bootstrap only; artist must change it on first login.`
+          : "Preprovisioned artist account created. Artist must change the password on first login.",
+      );
     } catch (err: any) {
       setAccountError(err?.message ?? "Failed to create account");
     } finally {
@@ -2785,7 +2788,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
           </div>
         ) : (
           <form className="space-y-3" onSubmit={handleCreateArtistAccount}>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-1">
               <label className="space-y-1 text-sm font-medium text-slate-700">
                 Email
                 <input
@@ -2798,21 +2801,10 @@ export default function ArtistDetailClient({ artistId }: Props) {
                   required
                 />
               </label>
-              <label className="space-y-1 text-sm font-medium text-slate-700">
-                Temp password
-                <input
-                  type="text"
-                  value={accountTempPassword}
-                  onChange={(e) => setAccountTempPassword(e.target.value)}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  placeholder="min. 8 characters"
-                  disabled={accountLoading}
-                  required
-                />
-              </label>
             </div>
             <p className="text-xs text-slate-500">
-              Artists will be forced to change this password on first login. Share the temp password securely.
+              Preprovisioned accounts use the normalized artist slug as the one-time initial password. This is an insecure
+              transitional bootstrap only; artists will be forced to change it on first login.
             </p>
             <button type="submit" className="btnPrimary" disabled={accountLoading}>
               {accountLoading ? "Creating..." : "Create artist account"}
