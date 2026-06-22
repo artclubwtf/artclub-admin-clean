@@ -14,7 +14,7 @@ import { workspaceConversationCreateInputSchema, workspaceConversationMessageInp
 
 async function requireTeamSession() {
   const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== "team") {
+  if (!session?.user || (session.user.role !== "admin" && session.user.role !== "team")) {
     return null;
   }
   return session;

@@ -9,7 +9,7 @@ import { RequestModel } from "@/models/Request";
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== "team") {
+  if (!session?.user || (session.user.role !== "admin" && session.user.role !== "team")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

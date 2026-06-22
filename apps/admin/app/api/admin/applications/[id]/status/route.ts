@@ -46,7 +46,7 @@ function pickDisplayName(application: { personal?: { fullName?: string | null; e
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== "team") {
+  if (!session?.user || (session.user.role !== "admin" && session.user.role !== "team")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

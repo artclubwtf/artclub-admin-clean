@@ -22,7 +22,7 @@ function resolveDestination(session: Session | null, callbackUrl?: string | null
       ? "/artist/change-password"
       : "/artist";
 
-  if (session.user.role === "team") {
+  if (session.user.role === "admin" || session.user.role === "team") {
     if (safeCallback?.startsWith("/admin")) return safeCallback;
     return "/admin";
   }

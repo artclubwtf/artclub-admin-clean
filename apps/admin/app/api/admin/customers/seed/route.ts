@@ -11,7 +11,7 @@ import { UserModel } from "@/models/User";
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== "team") {
+    if (!session?.user || (session.user.role !== "admin" && session.user.role !== "team")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

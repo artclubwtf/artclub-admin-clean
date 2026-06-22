@@ -29,7 +29,7 @@ export default function AccountHomePage() {
     const load = async () => {
       try {
         const session = await getSession();
-        if (session?.user?.role === "team") {
+        if (session?.user?.role === "admin" || session?.user?.role === "team") {
           router.replace("/admin");
           return;
         }

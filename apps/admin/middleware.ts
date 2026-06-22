@@ -2,6 +2,8 @@ import { getToken } from "next-auth/jwt";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+import { getAuthSecret } from "@/lib/authSecret";
+
 function redirectToLogin(req: NextRequest) {
   const callbackUrl = req.nextUrl.pathname + req.nextUrl.search;
   const loginUrl = new URL("/login", req.url);
@@ -53,7 +55,7 @@ export async function middleware(req: NextRequest) {
     if (allowedApi) return NextResponse.next();
 
     try {
-      const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+      const token = await getToken({ req, secret: getAuthSecret() });
       if (!token) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
@@ -89,7 +91,7 @@ export async function middleware(req: NextRequest) {
         return NextResponse.next();
       }
 
-      if (token.role !== "team") {
+      if (token.role !== "admin" && token.role !== "team") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
       return NextResponse.next();
@@ -106,13 +108,13 @@ export async function middleware(req: NextRequest) {
   if (!isAdminPath) return NextResponse.next();
 
   try {
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    const token = await getToken({ req, secret: getAuthSecret() });
     if (!token) {
       return redirectToLogin(req);
     }
 
     if (isAdminPath) {
-      if (token.role !== "team") {
+      if (token.role !== "admin" && token.role !== "team") {
         const fallback = token.role === "artist" ? "/artists" : "/login";
         return NextResponse.redirect(new URL(fallback, req.url));
       }

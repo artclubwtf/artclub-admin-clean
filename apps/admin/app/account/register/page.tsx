@@ -24,7 +24,7 @@ export default function CustomerRegisterPage() {
     const checkExisting = async () => {
       try {
         const session = await getSession();
-        if (session?.user?.role === "team") {
+        if (session?.user?.role === "admin" || session?.user?.role === "team") {
           router.replace("/admin");
           return;
         }

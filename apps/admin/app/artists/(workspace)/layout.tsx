@@ -14,7 +14,7 @@ export default async function ArtistsWorkspaceLayout({ children }: { children: R
     redirect("/artists/login");
   }
 
-  if (session.user.role === "team") {
+  if (session.user.role === "admin" || session.user.role === "team") {
     redirect("/admin");
   }
   if (session.user.role === "customer") {

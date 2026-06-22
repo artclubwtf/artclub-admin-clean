@@ -9,7 +9,7 @@ import {
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string; threadId: string }> }) {
   const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== "team") {
+  if (!session?.user || (session.user.role !== "admin" && session.user.role !== "team")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

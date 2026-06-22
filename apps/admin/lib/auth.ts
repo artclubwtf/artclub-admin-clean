@@ -3,13 +3,14 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 
 import { authCredentialsSchema } from "@/lib/authSchemas";
+import { getAuthSecret } from "@/lib/authSecret";
 import { connectMongo } from "@/lib/mongodb";
 import { normalizeShopDomain } from "@/lib/shopDomain";
 import { UserModel, type UserRole } from "@/models/User";
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: getAuthSecret(),
   pages: { signIn: "/login" },
   providers: [
     CredentialsProvider({
@@ -27,11 +28,11 @@ export const authOptions: NextAuthOptions = {
         const shopDomain = parsed.data.shopDomain ? normalizeShopDomain(parsed.data.shopDomain) : undefined;
 
         await connectMongo();
-        const filter: Record<string, unknown> = { email, role: { $in: ["team", "artist"] } };
+        const filter: Record<string, unknown> = { email, role: { $in: ["admin", "team", "artist"] } };
         if (shopDomain) filter.shopDomain = shopDomain;
 
         const user = await UserModel.findOne(filter).lean();
-        if (!user || !user.isActive) return null;
+        if (!user || !user.isActive || (user as { disabled?: boolean }).disabled === true) return null;
 
         const isValid = await compare(password, user.passwordHash);
         if (!isValid) return null;

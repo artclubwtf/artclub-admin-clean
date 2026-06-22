@@ -71,7 +71,7 @@ function ArtistV2RegisterInner() {
           router.replace("/artists");
           return;
         }
-        if (session.user.role === "team") {
+        if (session.user.role === "admin" || session.user.role === "team") {
           router.replace("/admin");
           return;
         }

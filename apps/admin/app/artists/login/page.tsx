@@ -12,7 +12,7 @@ import styles from "@/app/artists/auth.module.css";
 
 function resolveDestination(session: Session | null) {
   if (!session?.user) return "/artists/login";
-  if (session.user.role === "team") return "/admin";
+  if (session.user.role === "admin" || session.user.role === "team") return "/admin";
   if (session.user.role !== "artist") return "/account";
 
   const onboardingComplete = (session.user as { onboardingComplete?: boolean }).onboardingComplete === true;

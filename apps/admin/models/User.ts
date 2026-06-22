@@ -1,6 +1,6 @@
 import { InferSchemaType, Model, Schema, model, models } from "mongoose";
 
-export const userRoles = ["team", "artist", "customer"] as const;
+export const userRoles = ["admin", "team", "artist", "customer"] as const;
 export const userAccountSources = ["self_registered", "app_native", "admin_provisioned", "legacy_import"] as const;
 
 const userSchema = new Schema(

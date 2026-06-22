@@ -17,7 +17,7 @@ type ApplicationPatchPayload = {
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== "team") {
+  if (!session?.user || (session.user.role !== "admin" && session.user.role !== "team")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -105,7 +105,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== "team") {
+  if (!session?.user || (session.user.role !== "admin" && session.user.role !== "team")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
