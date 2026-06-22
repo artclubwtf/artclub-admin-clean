@@ -87,7 +87,10 @@ export function buildPublicArtistProfileShape(input: {
   return {
     handle: input.artist?.handle || "",
     displayName: input.artist?.displayName || "",
-    bio: input.artist?.bio || "",
+    bio: input.artist?.bio || input.artist?.introduction || input.artist?.longText || "",
+    quote: input.artist?.quote || "",
+    introduction: input.artist?.introduction || "",
+    longText: input.artist?.longText || "",
     profileImages: {
       avatarUrl: rewriteMediaUrl(input.artist?.profileImages?.avatarUrl || ""),
       heroUrl: rewriteMediaUrl(input.artist?.profileImages?.heroUrl || ""),

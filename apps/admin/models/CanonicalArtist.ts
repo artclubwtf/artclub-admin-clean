@@ -8,6 +8,23 @@ const canonicalArtistProfileImagesSchema = new Schema(
     avatarUrl: { type: String },
     heroUrl: { type: String },
     galleryUrls: { type: [String], default: [] },
+    media: {
+      type: [
+        new Schema(
+          {
+            fieldKey: { type: String, trim: true },
+            url: { type: String, trim: true },
+            altText: { type: String, trim: true },
+            shopifyFileGid: { type: String, trim: true },
+            mediaGid: { type: String, trim: true },
+            width: { type: Number },
+            height: { type: Number },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
   },
   { _id: false },
 );
@@ -110,6 +127,7 @@ const canonicalArtistShopifySchema = new Schema(
 
 const canonicalArtistSyncSchema = new Schema(
   {
+    status: { type: String, trim: true },
     dirtyFields: { type: [String], default: [] },
     dirtyAt: { type: Date },
     needsPush: { type: Boolean, default: false },
@@ -132,6 +150,10 @@ const canonicalArtistSchema = new Schema(
     locationCity: { type: String, trim: true },
     locationCountry: { type: String, trim: true },
     bio: { type: String, trim: true },
+    quote: { type: String, trim: true },
+    introduction: { type: String, trim: true },
+    longText: { type: String },
+    categoryRef: { type: String, trim: true },
     websiteUrl: { type: String, trim: true },
     instagram: { type: String, trim: true },
     shopifyMetaobjectId: { type: String, trim: true },

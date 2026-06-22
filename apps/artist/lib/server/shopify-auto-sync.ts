@@ -38,8 +38,9 @@ export async function autoPushProductToShopify(input: {
         { shopDomain: input.shopDomain, productKey: input.productKey },
         {
           $set: {
-            "sync.needsPush": true,
-            "sync.lastError": sync.error,
+          "sync.needsPush": true,
+          "sync.lastError": sync.error,
+          "sync.status": "error",
           },
         },
       ).catch(() => null);
@@ -53,6 +54,7 @@ export async function autoPushProductToShopify(input: {
         $set: {
           "sync.needsPush": true,
           "sync.lastError": message,
+          "sync.status": "error",
         },
       },
     ).catch(() => null);
@@ -77,6 +79,7 @@ export async function autoPushArtistToShopify(input: {
           $set: {
             "sync.needsPush": true,
             "sync.lastError": sync.error,
+            "sync.status": "error",
           },
         },
       ).catch(() => null);
@@ -90,6 +93,7 @@ export async function autoPushArtistToShopify(input: {
         $set: {
           "sync.needsPush": true,
           "sync.lastError": message,
+          "sync.status": "error",
         },
       },
     ).catch(() => null);

@@ -263,6 +263,7 @@ export async function POST(req: Request) {
         heightCm: originalHeightCm ?? undefined,
       },
       sync: {
+        status: saleable ? "pending" : "draft",
         needsPush: saleable,
         dirtyAt: saleable ? new Date() : null,
         dirtyFields: saleable

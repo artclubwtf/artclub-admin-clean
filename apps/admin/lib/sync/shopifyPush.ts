@@ -31,6 +31,10 @@ type ShopifyVariantNode = {
   inventoryItem?: { id?: string | null } | null;
 };
 
+type PushableProduct = CanonicalProduct & {
+  artistSlugForShopify?: string;
+};
+
 function mustEnv(name: string): string {
   const value = process.env[name] || (name === "SHOPIFY_SHOP_DOMAIN" ? process.env.SHOPIFY_STORE_DOMAIN : undefined);
   if (!value) throw new Error(`Missing env var: ${name}`);
@@ -45,6 +49,33 @@ function normalizeShopStatus(status: CanonicalProduct["status"]): "DRAFT" | "ACT
 
 function normalizePrice(priceCents: number): string {
   return (Math.max(0, Number.isFinite(priceCents) ? priceCents : 0) / 100).toFixed(2);
+}
+
+function productImageUrls(product: Pick<CanonicalProduct, "images">) {
+  return Array.from(
+    new Set(
+      [
+        product.images?.originalUrl,
+        product.images?.mediumUrl,
+        product.images?.thumbUrl,
+        ...(Array.isArray(product.images?.galleryUrls) ? product.images.galleryUrls : []),
+      ]
+        .map((value) => (value || "").trim())
+        .filter((value) => /^https?:\/\//i.test(value)),
+    ),
+  );
+}
+
+async function resolveArtistSlugForProduct(product: CanonicalProduct) {
+  if (product.artistSlug?.trim()) return product.artistSlug.trim();
+  if (product.canonicalArtistId) {
+    const artist = await CanonicalArtistModel.findById(product.canonicalArtistId)
+      .select({ publicSlug: 1, handle: 1, artistKey: 1 })
+      .lean();
+    const slug = artist?.publicSlug || artist?.handle || artist?.artistKey;
+    if (slug?.trim()) return slug.trim();
+  }
+  return product.artistKey?.trim() || undefined;
 }
 
 function resolveArtistAppUrl(artist: { appUrl?: string | null; publicSlug?: string | null; handle?: string | null }) {
@@ -99,10 +130,10 @@ async function callShopifyAdmin<TData>(query: string, variables: Record<string, 
   return json.data;
 }
 
-async function createShopifyProduct(product: CanonicalProduct) {
+async function createShopifyProduct(product: PushableProduct) {
   const mutation = `
-    mutation PushProductCreate($input: ProductInput!) {
-      productCreate(input: $input) {
+    mutation PushProductCreate($input: ProductInput!, $media: [CreateMediaInput!]) {
+      productCreate(input: $input, media: $media) {
         product {
           id
           variants(first: 1) {
@@ -119,11 +150,16 @@ async function createShopifyProduct(product: CanonicalProduct) {
   `;
 
   const metafields = buildProductMetafieldsForArtwork({
-    artistMetaobjectId: product.artistRef || undefined,
+    artistSlug: product.artistSlugForShopify,
     widthCm: product.dimensions?.widthCm,
     heightCm: product.dimensions?.heightCm,
-    kurzbeschreibung: product.shortText || undefined,
+    kurzbeschreibung: product.shortDescription || product.shortText || undefined,
   });
+  const media = productImageUrls(product).map((url) => ({
+    originalSource: url,
+    mediaContentType: "IMAGE",
+    alt: product.title,
+  }));
 
   const data = await callShopifyAdmin<{
     productCreate?: {
@@ -136,11 +172,13 @@ async function createShopifyProduct(product: CanonicalProduct) {
   }>(mutation, {
     input: {
       title: product.title,
-      descriptionHtml: product.description || undefined,
+      descriptionHtml: product.bodyHtml || product.descriptionHtml || product.description || undefined,
+      vendor: product.vendor || "artclub",
       tags: product.tags || [],
       status: normalizeShopStatus(product.status),
       metafields,
     },
+    media,
   });
 
   const payload = data?.productCreate;
@@ -160,7 +198,7 @@ async function createShopifyProduct(product: CanonicalProduct) {
   };
 }
 
-async function updateShopifyProduct(productGid: string, product: CanonicalProduct) {
+async function updateShopifyProduct(productGid: string, product: PushableProduct) {
   const mutation = `
     mutation PushProductUpdate($input: ProductInput!) {
       productUpdate(input: $input) {
@@ -179,7 +217,8 @@ async function updateShopifyProduct(productGid: string, product: CanonicalProduc
     input: {
       id: productGid,
       title: product.title,
-      descriptionHtml: product.description || undefined,
+      descriptionHtml: product.bodyHtml || product.descriptionHtml || product.description || undefined,
+      vendor: product.vendor || "artclub",
       tags: product.tags || [],
       status: normalizeShopStatus(product.status),
     },
@@ -193,7 +232,68 @@ async function updateShopifyProduct(productGid: string, product: CanonicalProduc
   }
 }
 
-async function setProductMetafields(productGid: string, product: CanonicalProduct) {
+async function createProductMedia(productGid: string, product: PushableProduct) {
+  const imageUrls = productImageUrls(product);
+  if (!imageUrls.length) return;
+
+  const existing = await callShopifyAdmin<{
+    product?: {
+      media?: {
+        nodes?: Array<{
+          image?: { url?: string | null } | null;
+        }>;
+      };
+    } | null;
+  }>(
+    `
+      query PushProductMediaExisting($id: ID!) {
+        product(id: $id) {
+          media(first: 100) {
+            nodes {
+              ... on MediaImage {
+                image { url }
+              }
+            }
+          }
+        }
+      }
+    `,
+    { id: productGid },
+  );
+
+  const existingUrls = new Set(
+    (existing?.product?.media?.nodes || []).map((node) => (node.image?.url || "").trim()).filter(Boolean),
+  );
+  const media = imageUrls.filter((url) => !existingUrls.has(url)).map((url) => ({
+    originalSource: url,
+    mediaContentType: "IMAGE",
+    alt: product.title,
+  }));
+  if (!media.length) return;
+
+  const mutation = `
+    mutation PushProductMedia($productId: ID!, $media: [CreateMediaInput!]!) {
+      productCreateMedia(productId: $productId, media: $media) {
+        media { id }
+        mediaUserErrors { field message }
+      }
+    }
+  `;
+
+  const data = await callShopifyAdmin<{
+    productCreateMedia?: {
+      mediaUserErrors?: Array<{ message?: string }>;
+    };
+  }>(mutation, { productId: productGid, media });
+
+  const errors = data?.productCreateMedia?.mediaUserErrors || [];
+  if (errors.length) {
+    const message = errors.map((error) => error.message).filter(Boolean).join("; ");
+    throw new Error(message || "Shopify product media upload failed");
+  }
+}
+
+async function setProductMetafields(productGid: string, product: PushableProduct) {
   const mutation = `
     mutation PushProductMetafields($metafields: [MetafieldsSetInput!]!) {
       metafieldsSet(metafields: $metafields) {
@@ -204,10 +304,10 @@ async function setProductMetafields(productGid: string, product: CanonicalProduc
   `;
 
   const metafields = buildProductMetafieldsForArtwork({
-    artistMetaobjectId: product.artistRef || undefined,
+    artistSlug: product.artistSlugForShopify,
     widthCm: product.dimensions?.widthCm,
     heightCm: product.dimensions?.heightCm,
-    kurzbeschreibung: product.shortText || undefined,
+    kurzbeschreibung: product.shortDescription || product.shortText || undefined,
   }).map((metafield) => ({
     ownerId: productGid,
     namespace: metafield.namespace,
@@ -296,7 +396,7 @@ async function bulkUpdateShopifyVariants(
 
 async function bulkCreateShopifyVariants(
   productGid: string,
-  variants: Array<{ variantKey: string; sizeCode: string; sku: string; priceCents: number }>,
+  variants: Array<{ variantKey: string; finish: string; sizeCode: string; sku: string; priceCents: number }>,
 ): Promise<ShopifyVariantNode[]> {
   if (!variants.length) return [];
 
@@ -325,8 +425,12 @@ async function bulkCreateShopifyVariants(
       price: normalizePrice(variant.priceCents),
       optionValues: [
         {
-          optionName: "Title",
-          name: variant.sizeCode || variant.variantKey,
+          optionName: "Finish",
+          name: variant.finish || "Edition Art Print",
+        },
+        {
+          optionName: "Size",
+          name: variant.sizeCode || "Default",
         },
       ],
     })),
@@ -422,6 +526,7 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
             "shopify.lastPushedAt": new Date(),
             "sync.lastPushAt": new Date(),
             "sync.lastError": null,
+            "sync.status": "synced",
             "sync.needsPush": false,
             "sync.dirtyAt": null,
             "sync.dirtyFields": [],
@@ -441,6 +546,7 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
         {
           $set: {
             "sync.lastError": error instanceof Error ? error.message : "push_failed",
+            "sync.status": "error",
           },
         },
       );
@@ -484,6 +590,10 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
       }
 
       let productGid = product.shopifyProductId || product.shopify?.productGid || "";
+      const productForPush: PushableProduct = {
+        ...product,
+        artistSlugForShopify: await resolveArtistSlugForProduct(product),
+      };
       let defaultVariantId: string | null = null;
       let defaultInventoryItemId: string | null = null;
       const willUpdate = Boolean(productGid);
@@ -499,15 +609,16 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
       }
 
       if (productGid) {
-        await updateShopifyProduct(productGid, product);
+        await updateShopifyProduct(productGid, productForPush);
       } else {
-        const created = await createShopifyProduct(product);
+        const created = await createShopifyProduct(productForPush);
         productGid = created.productId;
         defaultVariantId = created.defaultVariantId;
         defaultInventoryItemId = created.defaultInventoryItemId;
       }
 
-      await setProductMetafields(productGid, product);
+      await setProductMetafields(productGid, productForPush);
+      if (willUpdate) await createProductMedia(productGid, productForPush);
 
       const canonicalVariants = await CanonicalVariantModel.find({
         shopDomain: input.shopDomain,
@@ -525,7 +636,7 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
 
       const updates: Array<{ variantGid: string; sku: string; priceCents: number }> = [];
       const matchedVariantKeys = new Set<string>();
-      const missingVariants: Array<{ variantKey: string; sizeCode: string; sku: string; priceCents: number }> = [];
+      const missingVariants: Array<{ variantKey: string; finish: string; sizeCode: string; sku: string; priceCents: number }> = [];
       for (const [index, variant] of canonicalVariants.entries()) {
         const matchedBySku = variant.sku ? variantBySku.get(variant.sku) : undefined;
         const fallbackDefault = !variant.shopify?.variantGid && !variant.shopifyVariantId && !matchedBySku && index === 0 ? defaultVariantId : null;
@@ -533,6 +644,7 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
         if (!variantGid) {
           missingVariants.push({
             variantKey: variant.variantKey,
+            finish: variant.finish,
             sizeCode: variant.sizeCode,
             sku: variant.sku,
             priceCents: variant.priceCents,
@@ -602,6 +714,7 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
             "shopify.lastPushedAt": new Date(),
             "sync.lastPushAt": new Date(),
             "sync.lastError": null,
+            "sync.status": "synced",
             "sync.needsPush": false,
             "sync.dirtyAt": null,
             "sync.dirtyFields": [],
@@ -621,6 +734,7 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
         {
           $set: {
             "sync.lastError": error instanceof Error ? error.message : "push_failed",
+            "sync.status": "error",
           },
         },
       );

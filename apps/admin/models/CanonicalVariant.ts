@@ -21,9 +21,12 @@ const canonicalVariantSchema = new Schema(
   {
     shopDomain: { type: String, required: true, lowercase: true, trim: true },
     productKey: { type: String, required: true, trim: true },
+    canonicalProductId: { type: Schema.Types.ObjectId, ref: "CanonicalProduct" },
+    canonicalArtistId: { type: Schema.Types.ObjectId, ref: "CanonicalArtist" },
     variantKey: { type: String, required: true, trim: true },
     finish: { type: String, required: true, trim: true },
     sizeCode: { type: String, required: true, trim: true },
+    size: { type: String, trim: true },
     sku: { type: String, required: true, trim: true },
     priceCents: { type: Number, required: true },
     shopifyVariantId: { type: String, trim: true },

@@ -31,7 +31,35 @@ type ShopifyGraphQLResponse<TData> = {
 type MetaobjectNode = {
   id?: string | null;
   handle?: string | null;
-  fields?: Array<{ key?: string | null; value?: string | null }> | null;
+  fields?: Array<{
+    key?: string | null;
+    value?: string | null;
+    reference?: ShopifyFieldReference | null;
+  }> | null;
+};
+
+type ShopifyFieldReference = {
+  __typename?: string | null;
+  id?: string | null;
+  alt?: string | null;
+  url?: string | null;
+  handle?: string | null;
+  image?: {
+    url?: string | null;
+    altText?: string | null;
+    width?: number | null;
+    height?: number | null;
+  } | null;
+};
+
+type ResolvedMediaField = {
+  fieldKey: string;
+  url: string;
+  altText?: string;
+  shopifyFileGid?: string;
+  mediaGid?: string;
+  width?: number;
+  height?: number;
 };
 
 type ArtistPageResponse = {
@@ -61,10 +89,11 @@ type ProductNode = {
   status?: string | null;
   featuredImage?: { url?: string | null } | null;
   images?: { nodes?: Array<{ url?: string | null }> | null } | null;
-  artistMetaobject?: {
+  artistKunstler?: {
     value?: string | null;
     reference?: { id?: string | null } | null;
   } | null;
+  artistLegacyKuenstler?: { value?: string | null } | null;
   metafieldWidth?: { value?: string | null } | null;
   metafieldHeight?: { value?: string | null } | null;
   metafieldKurzbeschreibung?: { value?: string | null } | null;
@@ -122,6 +151,35 @@ function toFieldMap(fields?: Array<{ key?: string | null; value?: string | null 
     const value = field?.value?.trim();
     if (!key || !value) continue;
     map[key] = value;
+  }
+  return map;
+}
+
+function resolveMediaField(field: { key?: string | null; value?: string | null; reference?: ShopifyFieldReference | null }): ResolvedMediaField | null {
+  const fieldKey = field.key?.trim();
+  if (!fieldKey) return null;
+
+  const reference = field.reference;
+  const image = reference?.image;
+  const url = firstTruthy([image?.url || undefined, reference?.url || undefined]);
+  if (!url) return null;
+
+  return {
+    fieldKey,
+    url,
+    altText: image?.altText || reference?.alt || undefined,
+    shopifyFileGid: reference?.id || field.value || undefined,
+    mediaGid: reference?.id || undefined,
+    width: typeof image?.width === "number" ? image.width : undefined,
+    height: typeof image?.height === "number" ? image.height : undefined,
+  };
+}
+
+function mediaByField(fields?: MetaobjectNode["fields"]): Record<string, ResolvedMediaField> {
+  const map: Record<string, ResolvedMediaField> = {};
+  for (const field of fields || []) {
+    const media = resolveMediaField(field || {});
+    if (media) map[media.fieldKey] = media;
   }
   return map;
 }
@@ -192,6 +250,30 @@ function slugify(input: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function resolveCanonicalArtistForShopifyProduct(shopDomain: string, rawArtistValue?: string | null) {
+  const value = rawArtistValue?.trim();
+  if (!value) return null;
+  const exact = new RegExp(`^${escapeRegex(value)}$`, "i");
+  const matches = await CanonicalArtistModel.find({
+    shopDomain,
+    $or: [
+      { publicSlug: exact },
+      { handle: exact },
+      { artistKey: exact },
+      { shopifyMetaobjectId: value },
+      { "shopify.metaobjectGid": value },
+    ],
+  })
+    .select({ _id: 1, artistKey: 1, publicSlug: 1, handle: 1, shopifyMetaobjectId: 1, shopify: 1 })
+    .limit(2)
+    .lean();
+  return matches.length === 1 ? matches[0] : null;
+}
+
 function productFallbackHandle(id: string, title?: string | null): string {
   const slugTitle = title ? slugify(title) : "";
   if (slugTitle) return slugTitle;
@@ -230,6 +312,27 @@ async function pullArtistsInternal(input: PullInput, mode: PullMode): Promise<Pu
             fields {
               key
               value
+              reference {
+                __typename
+                ... on MediaImage {
+                  id
+                  alt
+                  image {
+                    url
+                    altText
+                    width
+                    height
+                  }
+                }
+                ... on GenericFile {
+                  id
+                  url
+                }
+                ... on Collection {
+                  id
+                  handle
+                }
+              }
             }
           }
         }
@@ -258,29 +361,35 @@ async function pullArtistsInternal(input: PullInput, mode: PullMode): Promise<Pu
 
     const handle = firstTruthy([node?.handle || undefined]) || `artist-${metaobjectGid.split("/").pop() || "unknown"}`;
     const fieldMap = toFieldMap(node?.fields);
+    const mediaMap = mediaByField(node?.fields);
     const displayName = firstTruthy([fieldMap[KUENSTLER_FIELD_KEYS.name], handle]) || handle;
     const galleryUrls = uniq([
-      fieldMap[KUENSTLER_FIELD_KEYS.bilder] || "",
-      fieldMap[KUENSTLER_FIELD_KEYS.bild_1] || "",
-      fieldMap[KUENSTLER_FIELD_KEYS.bild_2] || "",
-      fieldMap[KUENSTLER_FIELD_KEYS.bild_3] || "",
+      mediaMap[KUENSTLER_FIELD_KEYS.bild_1]?.url || fieldMap[KUENSTLER_FIELD_KEYS.bild_1] || "",
+      mediaMap[KUENSTLER_FIELD_KEYS.bild_2]?.url || fieldMap[KUENSTLER_FIELD_KEYS.bild_2] || "",
+      mediaMap[KUENSTLER_FIELD_KEYS.bild_3]?.url || fieldMap[KUENSTLER_FIELD_KEYS.bild_3] || "",
     ]);
 
-    const avatarUrl = firstTruthy([fieldMap[KUENSTLER_FIELD_KEYS.bild_1], galleryUrls[0]]);
-    const heroUrl = firstTruthy([fieldMap[KUENSTLER_FIELD_KEYS.bilder], galleryUrls[0]]);
+    const avatarUrl = firstTruthy([mediaMap[KUENSTLER_FIELD_KEYS.bild_1]?.url, fieldMap[KUENSTLER_FIELD_KEYS.bild_1], galleryUrls[0]]);
+    const heroUrl = firstTruthy([mediaMap[KUENSTLER_FIELD_KEYS.bilder]?.url, fieldMap[KUENSTLER_FIELD_KEYS.bilder], galleryUrls[0]]);
+    const introduction = firstTruthy([fieldMap[KUENSTLER_FIELD_KEYS.einleitung_1], fieldMap[KUENSTLER_FIELD_KEYS.text_1]]);
 
     ops.push({
       updateOne: {
-        filter: { shopDomain, artistKey: metaobjectGid },
+        filter: { shopDomain, shopifyMetaobjectId: metaobjectGid },
         update: {
           $set: {
             shopDomain,
-            artistKey: metaobjectGid,
+            artistKey: handle,
             handle,
             publicSlug: handle,
             displayName,
             appUrl: fieldMap.app_url || fieldMap.appUrl || undefined,
             instagram: fieldMap[KUENSTLER_FIELD_KEYS.instagram] || undefined,
+            quote: fieldMap[KUENSTLER_FIELD_KEYS.quote] || undefined,
+            introduction: fieldMap[KUENSTLER_FIELD_KEYS.einleitung_1] || undefined,
+            bio: introduction || undefined,
+            longText: fieldMap[KUENSTLER_FIELD_KEYS.text_1] || undefined,
+            categoryRef: fieldMap[KUENSTLER_FIELD_KEYS.kategorie] || undefined,
             shopifyMetaobjectId: metaobjectGid,
             migrationStatus: mode === "import" ? "imported_unlinked" : "linked",
             linkStatus: mode === "import" ? "imported_unlinked" : "linked",
@@ -288,6 +397,12 @@ async function pullArtistsInternal(input: PullInput, mode: PullMode): Promise<Pu
               avatarUrl,
               heroUrl,
               galleryUrls,
+              media: [
+                mediaMap[KUENSTLER_FIELD_KEYS.bilder],
+                mediaMap[KUENSTLER_FIELD_KEYS.bild_1],
+                mediaMap[KUENSTLER_FIELD_KEYS.bild_2],
+                mediaMap[KUENSTLER_FIELD_KEYS.bild_3],
+              ].filter(Boolean),
             },
             consents: {
               allowOriginalSales: toBoolean(fieldMap.allowOriginalSales || fieldMap.allow_original_sales),
@@ -304,6 +419,7 @@ async function pullArtistsInternal(input: PullInput, mode: PullMode): Promise<Pu
               dirtyFields: [],
               dirtyAt: null,
               needsPush: false,
+              status: "synced",
               lastPullAt: now,
               lastError: null,
             },
@@ -357,13 +473,16 @@ async function pullProductsInternal(input: PullInput, mode: PullMode): Promise<P
             status
             featuredImage { url }
             images(first: 20) { nodes { url } }
-            artistMetaobject: metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.artistMetaobject}") {
+            artistKunstler: metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.artistMetaobject}") {
               value
               reference {
                 ... on Metaobject {
                   id
                 }
               }
+            }
+            artistLegacyKuenstler: metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.artistLegacyUrl}") {
+              value
             }
             metafieldWidth: metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.width}") {
               value
@@ -417,22 +536,26 @@ async function pullProductsInternal(input: PullInput, mode: PullMode): Promise<P
     const productGid = node?.id?.trim();
     if (!productGid) continue;
 
-    const productKey = productGid;
     const title = firstTruthy([node?.title || undefined]) || "Untitled";
     const handle = firstTruthy([node?.handle || undefined]) || productFallbackHandle(productGid, title);
+    const productKey = handle;
     const tags = normalizeTags(node?.tags);
     const imageCandidates = uniq([
       node?.featuredImage?.url || "",
       ...(node?.images?.nodes || []).map((image) => image?.url || ""),
     ]);
-    const artistMetaobjectGid = firstTruthy([
-      node?.artistMetaobject?.reference?.id || undefined,
-      node?.artistMetaobject?.value || undefined,
+    const rawArtistKunstler = firstTruthy([
+      node?.artistKunstler?.value || undefined,
+      node?.artistKunstler?.reference?.id || undefined,
+      node?.artistLegacyKuenstler?.value || undefined,
     ]);
+    const matchedArtist = await resolveCanonicalArtistForShopifyProduct(shopDomain, rawArtistKunstler);
+    const artistMetaobjectGid = matchedArtist?.shopifyMetaobjectId || matchedArtist?.shopify?.metaobjectGid || undefined;
+    const assignmentStatus = matchedArtist ? "confirmed" : rawArtistKunstler ? "needs_review" : "unassigned";
 
     productOps.push({
       updateOne: {
-        filter: { shopDomain, productKey },
+        filter: { shopDomain, shopifyProductId: productGid },
         update: {
           $set: {
             shopDomain,
@@ -443,13 +566,19 @@ async function pullProductsInternal(input: PullInput, mode: PullMode): Promise<P
             vendor: node?.vendor || undefined,
             description: node?.description || undefined,
             bodyHtml: node?.descriptionHtml || undefined,
+            descriptionHtml: node?.descriptionHtml || undefined,
             tags,
+            ...(matchedArtist ? { canonicalArtistId: matchedArtist._id, artistKey: matchedArtist.artistKey } : {}),
             artistRef: artistMetaobjectGid,
+            artistSlug: rawArtistKunstler || undefined,
             shopifyProductId: productGid,
-            migrationStatus: mode === "import" ? "imported_unmapped" : "linked",
+            assignmentStatus,
+            migrationStatus: matchedArtist ? "linked" : mode === "import" ? "imported_unmapped" : "needs_review",
             approvalStatus:
               mode === "import"
-                ? "needs_review"
+                ? matchedArtist
+                  ? "approved"
+                  : "needs_review"
                 : node?.status === "ARCHIVED"
                   ? "archived"
                   : node?.status === "ACTIVE"
@@ -468,6 +597,7 @@ async function pullProductsInternal(input: PullInput, mode: PullMode): Promise<P
               heightCm: parseNumber(node?.metafieldHeight?.value),
             },
             shortText: node?.metafieldKurzbeschreibung?.value || undefined,
+            shortDescription: node?.metafieldKurzbeschreibung?.value || undefined,
             shopify: {
               productGid,
               lastPulledAt: now,
@@ -476,6 +606,7 @@ async function pullProductsInternal(input: PullInput, mode: PullMode): Promise<P
               dirtyFields: [],
               dirtyAt: null,
               needsPush: false,
+              status: "synced",
               lastPullAt: now,
               lastError: null,
             },
@@ -516,8 +647,10 @@ async function pullProductsInternal(input: PullInput, mode: PullMode): Promise<P
               shopDomain,
               productKey,
               variantKey,
+              ...(matchedArtist ? { canonicalArtistId: matchedArtist._id } : {}),
               finish,
               sizeCode,
+              size: sizeCode,
               sku,
               priceCents: parsePriceCents(variant.price),
               shopifyVariantId: variantGid,
@@ -554,6 +687,26 @@ async function pullProductsInternal(input: PullInput, mode: PullMode): Promise<P
   }
   if (variantOps.length) {
     await CanonicalVariantModel.bulkWrite(variantOps as any, { ordered: false });
+  }
+
+  const importedProductKeys = variantScopes.map((scope) => scope.productKey);
+  if (importedProductKeys.length) {
+    const products = await CanonicalProductModel.find({ shopDomain, productKey: { $in: importedProductKeys } })
+      .select({ _id: 1, productKey: 1, canonicalArtistId: 1 })
+      .lean();
+    await Promise.all(
+      products.map((product) =>
+        CanonicalVariantModel.updateMany(
+          { shopDomain, productKey: product.productKey },
+          {
+            $set: {
+              canonicalProductId: product._id,
+              ...(product.canonicalArtistId ? { canonicalArtistId: product.canonicalArtistId } : {}),
+            },
+          },
+        ),
+      ),
+    );
   }
 
   for (const scope of variantScopes) {

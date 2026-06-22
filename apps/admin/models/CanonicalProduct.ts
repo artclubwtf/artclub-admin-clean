@@ -44,6 +44,7 @@ const canonicalProductShopifySchema = new Schema(
 
 const canonicalProductSyncSchema = new Schema(
   {
+    status: { type: String, trim: true },
     dirtyFields: { type: [String], default: [] },
     dirtyAt: { type: Date },
     needsPush: { type: Boolean, default: false },
@@ -64,10 +65,12 @@ const canonicalProductSchema = new Schema(
     vendor: { type: String, trim: true },
     description: { type: String },
     bodyHtml: { type: String },
+    descriptionHtml: { type: String },
     tags: { type: [String], default: [] },
     canonicalArtistId: { type: Schema.Types.ObjectId, ref: "CanonicalArtist" },
     artistKey: { type: String, trim: true },
     artistRef: { type: String, trim: true },
+    artistSlug: { type: String, trim: true },
     shopifyProductId: { type: String, trim: true },
     legacyProductId: { type: String, trim: true },
     assignmentStatus: { type: String, enum: canonicalProductAssignmentStatuses },
@@ -84,6 +87,7 @@ const canonicalProductSchema = new Schema(
     year: { type: Number },
     dimensions: { type: canonicalProductDimensionsSchema, default: () => ({}) },
     shortText: { type: String },
+    shortDescription: { type: String },
     shopify: { type: canonicalProductShopifySchema, default: () => ({}) },
     sync: { type: canonicalProductSyncSchema, default: () => ({ dirtyFields: [] }) },
   },

@@ -168,6 +168,9 @@ export type PublicArtistProfilePageData = {
   slug: string;
   displayName: string;
   bio: string;
+  quote?: string;
+  introduction?: string;
+  longText?: string;
   avatarUrl: string;
   heroUrl: string;
   socialLinks: ArtistProfileLinkItem[];

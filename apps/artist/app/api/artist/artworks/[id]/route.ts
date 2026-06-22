@@ -274,6 +274,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             widthCm: originalWidthCm ?? undefined,
             heightCm: originalHeightCm ?? undefined,
           },
+          "sync.status": saleable ? "pending" : "draft",
           ...syncPatch,
         },
       },

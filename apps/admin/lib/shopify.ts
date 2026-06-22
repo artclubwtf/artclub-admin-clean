@@ -115,6 +115,7 @@ export function buildArtistMetaobjectFieldsFromForm(input: Partial<ShopifyKuenst
 
 type ProductMetafieldBuilderInput = {
   artistMetaobjectId?: string;
+  artistSlug?: string;
   legacyArtistUrl?: string;
   widthCm?: number | string | null;
   heightCm?: number | string | null;
@@ -126,16 +127,26 @@ type ProductMetafieldBuilderInput = {
 export function buildProductMetafieldsForArtwork(input: ProductMetafieldBuilderInput): ShopifyProductMetafieldInput[] {
   const metafields: ShopifyProductMetafieldInput[] = [];
 
-  if (input.artistMetaobjectId) {
+  const artistSlug = input.artistSlug?.trim();
+  if (artistSlug) {
     metafields.push({
       namespace: SHOPIFY_PRODUCT_NAMESPACE_CUSTOM,
       key: PRODUCT_METAFIELD_KEYS.artistMetaobject,
-      type: "metaobject_reference",
+      type: "single_line_text_field",
+      value: artistSlug,
+    });
+  }
+
+  if (!artistSlug && input.artistMetaobjectId) {
+    metafields.push({
+      namespace: SHOPIFY_PRODUCT_NAMESPACE_CUSTOM,
+      key: PRODUCT_METAFIELD_KEYS.artistMetaobject,
+      type: "single_line_text_field",
       value: input.artistMetaobjectId,
     });
   }
 
-  if (!input.artistMetaobjectId && input.legacyArtistUrl) {
+  if (!artistSlug && !input.artistMetaobjectId && input.legacyArtistUrl) {
     metafields.push({
       namespace: SHOPIFY_PRODUCT_NAMESPACE_CUSTOM,
       key: PRODUCT_METAFIELD_KEYS.artistLegacyUrl,
