@@ -416,10 +416,8 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
               </div>
             </div>
             <div className="grid gap-2 text-sm text-slate-600 md:grid-cols-2">
-              <div>Linked user: {detail.artist.linkedUser ? `${detail.artist.linkedUser.name || detail.artist.linkedUser.email} (${detail.artist.linkedUser.email})` : "Not linked"}</div>
+              <div className="md:col-span-2 mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">Identity</div>
               <div>Public profile: {detail.artist.publicVisible ? "Visible" : "Hidden"}</div>
-<<<<<<< HEAD
-=======
               <div>Location: {[detail.artist.locationCity, detail.artist.locationCountry].filter(Boolean).join(", ") || "—"}</div>
               <div>Instagram: {detail.artist.instagram || "—"}</div>
               <div>Website: {detail.artist.websiteUrl || "—"}</div>
@@ -438,12 +436,10 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
                 </div>
               ) : null}
               <div className="md:col-span-2 mt-2 text-xs font-medium uppercase tracking-wide text-slate-400">Shopify references</div>
->>>>>>> 3b92d85 (Finalize artist dashboard ownership and v2 account provisioning)
               <div>Shopify metaobject: {detail.artist.shopifyMetaobjectId || "—"}</div>
               <div>app_url: {detail.artist.appUrl || "—"}</div>
+              <div className="md:col-span-2 mt-2 text-xs font-medium uppercase tracking-wide text-slate-400">Legacy references</div>
               <div>Legacy artist ref: {detail.artist.legacyArtistId || "—"}</div>
-              <div>Location: {[detail.artist.locationCity, detail.artist.locationCountry].filter(Boolean).join(", ") || "—"}</div>
-              <div>Instagram: {detail.artist.instagram || "—"}</div>
             </div>
           </div>
 
