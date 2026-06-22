@@ -42,6 +42,8 @@ type Detail = {
     productKey: string;
     title: string;
     handle: string;
+    canonicalArtistId: string;
+    assignmentStatus: string;
     status: string;
     approvalStatus: string;
     derivedStatus: "draft" | "pending_review" | "approved" | "published" | "archived";
@@ -166,6 +168,7 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
   const [detail, setDetail] = useState(initialDetail);
   const [savingProductKey, setSavingProductKey] = useState<string | null>(null);
   const [pushingArtist, setPushingArtist] = useState(false);
+  const [provisioningAccount, setProvisioningAccount] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
@@ -226,6 +229,44 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
     }
   }
 
+  async function assignProductToArtist(productKey: string) {
+    if (!window.confirm("Dieses Werk diesem Canonical Artist zuweisen? Danach wird es im Artist Dashboard sichtbar.")) return;
+
+    setSavingProductKey(productKey);
+    setActionError(null);
+    setActionMessage(null);
+    try {
+      const res = await fetch(`/api/admin/migration/matches/products/${encodeURIComponent(productKey)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ artistKey: detail.artist.artistKey, migrationStatus: "assigned" }),
+      });
+      const payload = (await res.json().catch(() => null)) as
+        | { error?: string; canonicalArtistId?: string; assignmentStatus?: string; migrationStatus?: string }
+        | null;
+      if (!res.ok) throw new Error(payload?.error || "Failed to assign product");
+      setDetail((current) => ({
+        ...current,
+        products: current.products.map((product) =>
+          product.productKey === productKey
+            ? {
+                ...product,
+                canonicalArtistId: payload?.canonicalArtistId || product.canonicalArtistId,
+                assignmentStatus: payload?.assignmentStatus || "confirmed",
+                migrationStatus: payload?.migrationStatus || "assigned",
+              }
+            : product,
+        ),
+      }));
+      setActionMessage("Artwork assigned to this artist.");
+      router.refresh();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to assign product");
+    } finally {
+      setSavingProductKey(null);
+    }
+  }
+
   async function pushArtist(dryRun = false) {
     setPushingArtist(true);
     setActionError(null);
@@ -252,6 +293,76 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
       setActionError(error instanceof Error ? error.message : "Failed to push artist");
     } finally {
       setPushingArtist(false);
+    }
+  }
+
+  async function provisionArtistAccount() {
+    const summary =
+      "This creates one V2 artist login, links it to this canonical artist, and assigns only unambiguous canonical products. No Shopify write happens.";
+    if (!window.confirm(`${summary}\n\nContinue?`)) return;
+
+    setProvisioningAccount(true);
+    setActionError(null);
+    setActionMessage(null);
+    try {
+      const res = await fetch(`/api/admin/migration/accounts/${encodeURIComponent(detail.artist.artistKey)}/provision`, {
+        method: "POST",
+      });
+      const payload = (await res.json().catch(() => null)) as
+        | {
+            error?: string;
+            user?: {
+              id: string;
+              email: string;
+              artistKey: string;
+              mustChangePassword: boolean;
+            };
+            productAssignment?: {
+              autoAssignedCount: number;
+              reviewCount: number;
+            };
+            bootstrap?: {
+              initialPassword?: string;
+              mode?: string;
+              warning?: string;
+            };
+          }
+        | null;
+      if (!res.ok) throw new Error(payload?.error || "Failed to create V2 artist account");
+
+      if (payload?.user) {
+        setDetail((current) => ({
+          ...current,
+          artist: {
+            ...current.artist,
+            linkStatus: "linked",
+            linkedUser: {
+              id: payload.user!.id,
+              email: payload.user!.email,
+              name: current.artist.displayName,
+              artistKey: payload.user!.artistKey,
+            },
+          },
+        }));
+      }
+
+      setActionMessage(
+        [
+          "V2 artist account created.",
+          payload?.user?.email ? `Login email: ${payload.user.email}` : "",
+          payload?.bootstrap?.initialPassword ? `Temporary password: ${payload.bootstrap.initialPassword}` : "",
+          `Auto-assigned works: ${payload?.productAssignment?.autoAssignedCount ?? 0}`,
+          `Works in review: ${payload?.productAssignment?.reviewCount ?? 0}`,
+          payload?.bootstrap?.warning || "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      );
+      router.refresh();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to create V2 artist account");
+    } finally {
+      setProvisioningAccount(false);
     }
   }
 
@@ -307,6 +418,27 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
             <div className="grid gap-2 text-sm text-slate-600 md:grid-cols-2">
               <div>Linked user: {detail.artist.linkedUser ? `${detail.artist.linkedUser.name || detail.artist.linkedUser.email} (${detail.artist.linkedUser.email})` : "Not linked"}</div>
               <div>Public profile: {detail.artist.publicVisible ? "Visible" : "Hidden"}</div>
+<<<<<<< HEAD
+=======
+              <div>Location: {[detail.artist.locationCity, detail.artist.locationCountry].filter(Boolean).join(", ") || "—"}</div>
+              <div>Instagram: {detail.artist.instagram || "—"}</div>
+              <div>Website: {detail.artist.websiteUrl || "—"}</div>
+              <div className="md:col-span-2 mt-2 text-xs font-medium uppercase tracking-wide text-slate-400">Linked account</div>
+              <div className="md:col-span-2">Linked user: {detail.artist.linkedUser ? `${detail.artist.linkedUser.name || detail.artist.linkedUser.email} (${detail.artist.linkedUser.email})` : "Not linked"}</div>
+              {!detail.artist.linkedUser ? (
+                <div className="md:col-span-2">
+                  <button
+                    type="button"
+                    className="rounded-lg bg-black px-3 py-2 text-xs font-medium text-white disabled:opacity-60"
+                    disabled={provisioningAccount}
+                    onClick={provisionArtistAccount}
+                  >
+                    {provisioningAccount ? "Creating account..." : "Create V2 Artist Account"}
+                  </button>
+                </div>
+              ) : null}
+              <div className="md:col-span-2 mt-2 text-xs font-medium uppercase tracking-wide text-slate-400">Shopify references</div>
+>>>>>>> 3b92d85 (Finalize artist dashboard ownership and v2 account provisioning)
               <div>Shopify metaobject: {detail.artist.shopifyMetaobjectId || "—"}</div>
               <div>app_url: {detail.artist.appUrl || "—"}</div>
               <div>Legacy artist ref: {detail.artist.legacyArtistId || "—"}</div>
@@ -356,7 +488,7 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
       </div>
 
       {actionError ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div> : null}
-      {actionMessage ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{actionMessage}</div> : null}
+      {actionMessage ? <div className="whitespace-pre-line rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{actionMessage}</div> : null}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.9fr)]">
         <section className="space-y-6">
@@ -381,6 +513,7 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
                       </div>
                       <div className="grid gap-1 text-xs text-slate-500 sm:grid-cols-2">
                         <div>Migration: {product.migrationStatus || "—"}</div>
+                        <div>Assignment: {product.assignmentStatus || (product.canonicalArtistId ? "confirmed" : "unassigned")}</div>
                         <div>Legacy ref: {product.legacyProductId || "—"}</div>
                         <div>Variants: {product.variantCount} total / {product.publishedVariantCount} published</div>
                         <div>Updated: {formatDate(product.updatedAt)}</div>
@@ -421,6 +554,16 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
+                    {!product.canonicalArtistId ? (
+                      <button
+                        type="button"
+                        className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-medium text-white disabled:opacity-60"
+                        disabled={savingProductKey === product.productKey}
+                        onClick={() => assignProductToArtist(product.productKey)}
+                      >
+                        Diesem Artist zuweisen
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="rounded-lg bg-black px-3 py-2 text-xs font-medium text-white disabled:opacity-60"
@@ -449,7 +592,7 @@ export default function ArtistV2DetailClient({ initialDetail }: Props) {
                       type="button"
                       className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 disabled:opacity-60"
                       disabled={savingProductKey === product.productKey}
-                      onClick={() => patchProduct(product.productKey, { approvalStatus: "approved" })}
+                      onClick={() => patchProduct(product.productKey, { approvalStatus: "approved", status: "approved" })}
                     >
                       Approve
                     </button>

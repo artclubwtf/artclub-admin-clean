@@ -53,127 +53,92 @@ export type ArtistContext = {
       dirtyFields?: string[];
     };
   };
+  ownershipMode: "linked_user";
   sessionUserId: string;
 };
 
-function isDuplicateKeyError(err: unknown) {
-  return Boolean(err && typeof err === "object" && "code" in err && (err as { code?: number }).code === 11000);
-}
+type ArtistContextLoadResult =
+  | { status: "ok"; context: ArtistContext }
+  | { status: "unauthenticated" }
+  | { status: "not_linked" };
 
-async function ensureCanonicalArtistForUser(user: {
-  _id: Types.ObjectId;
-  artistKey: string;
-  shopDomain: string;
-  email: string;
-  name?: string | null;
-}) {
-  let canonicalArtist = await CanonicalArtistModel.findOne({
-    shopDomain: user.shopDomain,
-    artistKey: user.artistKey,
-  }).lean();
-
-  if (canonicalArtist) return canonicalArtist;
-
-  const fallbackDisplayName = user.name?.trim() || user.email.split("@")[0] || "Artist";
-  try {
-    await CanonicalArtistModel.updateOne(
-      { shopDomain: user.shopDomain, artistKey: user.artistKey },
-      {
-        $setOnInsert: {
-          shopDomain: user.shopDomain,
-          artistKey: user.artistKey,
-          handle: user.artistKey,
-          displayName: fallbackDisplayName,
-          email: user.email,
-        },
-      },
-      { upsert: true },
-    );
-  } catch (err) {
-    if (!isDuplicateKeyError(err)) throw err;
-  }
-
-  canonicalArtist = await CanonicalArtistModel.findOne({
-    shopDomain: user.shopDomain,
-    artistKey: user.artistKey,
-  }).lean();
-
-  if (!canonicalArtist) {
-    throw new Error(`Failed to provision canonical artist for user ${user._id.toString()}`);
-  }
-
-  return canonicalArtist;
-}
-
-async function loadArtistContext(): Promise<ArtistContext | null> {
+async function loadArtistContextResult(): Promise<ArtistContextLoadResult> {
   await connectMongo();
   await ensureCanonicalArtistIndexes();
 
   const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== "artist" || !session.user.id || !Types.ObjectId.isValid(session.user.id)) {
-    return null;
+    return { status: "unauthenticated" };
   }
 
   const user = await UserModel.findById(session.user.id).lean();
-  if (!user || user.role !== "artist" || !user.isActive || !user.artistKey || !user.shopDomain) {
-    return null;
+  if (!user || user.role !== "artist" || !user.isActive || !user.shopDomain) {
+    return { status: "unauthenticated" };
   }
 
-  const canonicalArtist = await ensureCanonicalArtistForUser({
-    _id: user._id,
-    artistKey: user.artistKey,
+  const canonicalArtist = await CanonicalArtistModel.findOne({
     shopDomain: user.shopDomain,
-    email: user.email,
-    name: user.name,
-  });
+    linkedUserId: user._id,
+  }).lean();
+
+  if (!canonicalArtist) return { status: "not_linked" };
 
   return {
-    user: {
-      _id: user._id,
-      role: user.role,
-      isActive: user.isActive,
-      artistKey: user.artistKey,
-      shopDomain: user.shopDomain,
-      email: user.email,
-      name: user.name || undefined,
-      onboardingComplete: user.onboardingComplete === true,
-      mustChangePassword: user.mustChangePassword === true,
+    status: "ok",
+    context: {
+      user: {
+        _id: user._id,
+        role: user.role,
+        isActive: user.isActive,
+        artistKey: canonicalArtist.artistKey,
+        shopDomain: user.shopDomain,
+        email: user.email,
+        name: user.name || undefined,
+        onboardingComplete: user.onboardingComplete === true,
+        mustChangePassword: user.mustChangePassword === true,
+      },
+      canonicalArtist: {
+        _id: canonicalArtist._id,
+        artistKey: canonicalArtist.artistKey,
+        handle: canonicalArtist.handle || undefined,
+        displayName: canonicalArtist.displayName || undefined,
+        instagram: canonicalArtist.instagram || undefined,
+        websiteUrl: canonicalArtist.websiteUrl || undefined,
+        locationCity: canonicalArtist.locationCity || undefined,
+        locationCountry: canonicalArtist.locationCountry || undefined,
+        bio: canonicalArtist.bio || undefined,
+        email: canonicalArtist.email || undefined,
+        profileImages: canonicalArtist.profileImages
+          ? {
+              avatarUrl: canonicalArtist.profileImages.avatarUrl || undefined,
+              heroUrl: canonicalArtist.profileImages.heroUrl || undefined,
+              galleryUrls: Array.isArray(canonicalArtist.profileImages.galleryUrls)
+                ? canonicalArtist.profileImages.galleryUrls
+                : [],
+            }
+          : undefined,
+        consents: canonicalArtist.consents,
+        publicProfile: canonicalArtist.publicProfile
+          ? {
+              isVisible: canonicalArtist.publicProfile.isVisible !== false,
+            }
+          : undefined,
+        shopify: canonicalArtist.shopify
+          ? {
+              metaobjectGid: canonicalArtist.shopify.metaobjectGid || undefined,
+            }
+          : undefined,
+        sync: canonicalArtist.sync,
+      },
+      ownershipMode: "linked_user",
+      sessionUserId: session.user.id,
     },
-    canonicalArtist: {
-      _id: canonicalArtist._id,
-      artistKey: canonicalArtist.artistKey,
-      handle: canonicalArtist.handle || undefined,
-      displayName: canonicalArtist.displayName || undefined,
-      instagram: canonicalArtist.instagram || undefined,
-      websiteUrl: canonicalArtist.websiteUrl || undefined,
-      locationCity: canonicalArtist.locationCity || undefined,
-      locationCountry: canonicalArtist.locationCountry || undefined,
-      bio: canonicalArtist.bio || undefined,
-      email: canonicalArtist.email || undefined,
-      profileImages: canonicalArtist.profileImages
-        ? {
-            avatarUrl: canonicalArtist.profileImages.avatarUrl || undefined,
-            heroUrl: canonicalArtist.profileImages.heroUrl || undefined,
-            galleryUrls: Array.isArray(canonicalArtist.profileImages.galleryUrls)
-              ? canonicalArtist.profileImages.galleryUrls
-              : [],
-          }
-        : undefined,
-      consents: canonicalArtist.consents,
-      publicProfile: canonicalArtist.publicProfile
-        ? {
-            isVisible: canonicalArtist.publicProfile.isVisible !== false,
-          }
-        : undefined,
-      shopify: canonicalArtist.shopify
-        ? {
-            metaobjectGid: canonicalArtist.shopify.metaobjectGid || undefined,
-          }
-        : undefined,
-      sync: canonicalArtist.sync,
-    },
-    sessionUserId: session.user.id,
   };
+}
+
+async function loadArtistContext(): Promise<ArtistContext | null> {
+  const result = await loadArtistContextResult();
+  return result.status === "ok" ? result.context : null;
 }
 
 export async function getArtistContext() {
@@ -181,8 +146,10 @@ export async function getArtistContext() {
 }
 
 export async function requireArtistContext(options?: { allowIncompleteOnboarding?: boolean }) {
-  const context = await loadArtistContext();
-  if (!context) redirect("/login");
+  const result = await loadArtistContextResult();
+  if (result.status === "unauthenticated") redirect("/login");
+  if (result.status === "not_linked") redirect("/account-pending");
+  const { context } = result;
   if (!options?.allowIncompleteOnboarding && context.user.onboardingComplete !== true) {
     redirect("/onboarding");
   }
@@ -190,15 +157,19 @@ export async function requireArtistContext(options?: { allowIncompleteOnboarding
 }
 
 export async function requireOnboardingContext() {
-  const context = await loadArtistContext();
-  if (!context) redirect("/login");
-  return context;
+  const result = await loadArtistContextResult();
+  if (result.status === "unauthenticated") redirect("/login");
+  if (result.status === "not_linked") redirect("/account-pending");
+  return result.context;
 }
 
 export async function requireArtistApiContext(options?: { allowIncompleteOnboarding?: boolean }) {
   let context: ArtistContext | null = null;
+  let status: ArtistContextLoadResult["status"] = "unauthenticated";
   try {
-    context = await loadArtistContext();
+    const result = await loadArtistContextResult();
+    status = result.status;
+    context = result.status === "ok" ? result.context : null;
   } catch (err) {
     console.error("Failed to load artist API context", err);
     return {
@@ -207,7 +178,13 @@ export async function requireArtistApiContext(options?: { allowIncompleteOnboard
     };
   }
   if (!context) {
-    return { ok: false as const, response: NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 }) };
+    if (status === "unauthenticated") {
+      return { ok: false as const, response: NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 }) };
+    }
+    return {
+      ok: false as const,
+      response: NextResponse.json({ ok: false, error: "artist_account_not_linked" }, { status: 403 }),
+    };
   }
   if (!options?.allowIncompleteOnboarding && context.user.onboardingComplete !== true) {
     return {

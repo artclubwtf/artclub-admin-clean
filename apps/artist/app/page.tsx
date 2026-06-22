@@ -4,6 +4,7 @@ import { OverviewPanels } from "@/components/overview/OverviewPanels";
 import { requireArtistContext } from "@/lib/server/artist-context";
 import { resolveArtistMediaUrls } from "@/lib/server/artist-media";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel } from "@/lib/server/models";
+import { artistProductOwnershipFilter } from "@/lib/server/product-ownership";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -33,8 +34,7 @@ export default async function HomePage() {
 
   const [artworkCount, seriesCount, recentMedia] = await Promise.all([
     CanonicalProductModel.countDocuments({
-      shopDomain: context.user.shopDomain,
-      artistKey: context.user.artistKey,
+      ...artistProductOwnershipFilter(context),
       type: "artwork",
     }),
     ArtistSeriesModel.countDocuments({

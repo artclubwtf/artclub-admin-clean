@@ -49,6 +49,8 @@ export type ArtistV2ProductRow = {
   productKey: string;
   title: string;
   handle: string;
+  canonicalArtistId: string;
+  assignmentStatus: string;
   status: string;
   approvalStatus: string;
   derivedStatus: "draft" | "pending_review" | "approved" | "published" | "archived";
@@ -178,9 +180,9 @@ function deriveCanonicalArtistStatus(input: { migrationStatus?: string | null; l
 
 function deriveProductReviewStatus(input: { status?: string | null; approvalStatus?: string | null; migrationStatus?: string | null }) {
   if (input.status === "archived" || input.approvalStatus === "archived") return "archived";
-  if (input.approvalStatus === "published" || input.status === "active") return "published";
-  if (input.approvalStatus === "approved") return "approved";
-  if (input.approvalStatus === "needs_review" || input.migrationStatus === "imported_unmapped") return "pending_review";
+  if (input.approvalStatus === "published" || input.status === "active" || input.status === "shopify_synced") return "published";
+  if (input.approvalStatus === "approved" || input.status === "approved" || input.status === "shopify_pending") return "approved";
+  if (input.approvalStatus === "needs_review" || input.status === "pending_review" || input.migrationStatus === "imported_unmapped") return "pending_review";
   return "draft";
 }
 
@@ -308,7 +310,12 @@ export async function loadAdminArtistV2Detail(artistKey: string) {
   ];
 
   const [products, legacyArtist, requests, contracts, payoutDetails, payoutTransactions, applications] = await Promise.all([
-    CanonicalProductModel.find({ shopDomain, artistKey }).sort({ updatedAt: -1, createdAt: -1 }).lean(),
+    CanonicalProductModel.find({
+      shopDomain,
+      $or: [{ canonicalArtistId: artist._id }, { artistKey }],
+    })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .lean(),
     legacyArtistObjectId ? ArtistModel.findById(legacyArtistObjectId).lean() : null,
     legacyArtistObjectId
       ? RequestModel.find({ artistId: legacyArtistObjectId }).sort({ createdAt: -1 }).limit(10).lean()
@@ -373,6 +380,8 @@ export async function loadAdminArtistV2Detail(artistKey: string) {
         productKey: product.productKey,
         title: optionalString(product.title),
         handle: optionalString(product.handle),
+        canonicalArtistId: optionalString(product.canonicalArtistId?.toString()),
+        assignmentStatus: optionalString(product.assignmentStatus),
         status: optionalString(product.status) || "draft",
         approvalStatus: optionalString(product.approvalStatus) || "draft",
         derivedStatus: deriveProductReviewStatus(product),

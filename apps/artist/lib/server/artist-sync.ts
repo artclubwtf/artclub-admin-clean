@@ -34,15 +34,6 @@ export function buildArtistSyncPatch(input: DirtySyncInput) {
 }
 
 export function buildProductSyncPatch(input: DirtySyncInput & { status?: string; hasShopifyProduct?: boolean }) {
-  const shouldMarkDirty = input.hasShopifyProduct || input.status !== "db_only";
-  if (!shouldMarkDirty) {
-    return {
-      "sync.needsPush": false,
-      "sync.dirtyAt": null,
-      "sync.dirtyFields": [],
-    };
-  }
-
   return {
     "sync.needsPush": true,
     "sync.dirtyAt": input.now || new Date(),

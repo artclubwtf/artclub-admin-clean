@@ -31,6 +31,17 @@ function isDuplicateKeyError(err: unknown): boolean {
 }
 
 export async function POST(req: Request) {
+  if (process.env.ENABLE_LEGACY_ARTIST_V2_REGISTER !== "true") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "legacy_artist_v2_register_disabled",
+        message: "Use apps/artist registration or Admin Artists V2 provisioning.",
+      },
+      { status: 410 },
+    );
+  }
+
   try {
     const body = (await req.json().catch(() => null)) as unknown;
     const parsed = payloadSchema.safeParse(body || {});

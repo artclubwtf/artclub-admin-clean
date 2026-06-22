@@ -69,25 +69,17 @@ export async function requireArtistV2Context(): Promise<ArtistV2Context> {
   if (!user || user.role !== "artist" || !user.isActive) {
     return { ok: false, response: NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 }) };
   }
-  if (!user.artistKey || !user.shopDomain) {
+  if (!user.shopDomain) {
     return { ok: false, response: NextResponse.json({ ok: false, error: "artist_not_initialized" }, { status: 400 }) };
   }
 
-  let canonicalArtist = (await CanonicalArtistModel.findOne({
+  const canonicalArtist = (await CanonicalArtistModel.findOne({
     shopDomain: user.shopDomain,
-    artistKey: user.artistKey,
+    linkedUserId: user._id,
   }).lean()) as ArtistV2CanonicalArtist | null;
   if (!canonicalArtist) {
-    const fallbackDisplayName = user.name?.trim() || user.email.split("@")[0] || "Artist";
-    const created = await CanonicalArtistModel.create({
-      shopDomain: user.shopDomain,
-      artistKey: user.artistKey,
-      handle: user.artistKey,
-      displayName: fallbackDisplayName,
-      email: user.email,
-    });
-    canonicalArtist = created.toObject() as ArtistV2CanonicalArtist;
+    return { ok: false, response: NextResponse.json({ ok: false, error: "artist_account_not_linked" }, { status: 403 }) };
   }
 
-  return { ok: true, user, canonicalArtist };
+  return { ok: true, user: { ...user, artistKey: canonicalArtist.artistKey }, canonicalArtist };
 }

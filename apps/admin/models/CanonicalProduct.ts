@@ -3,7 +3,17 @@ import { canonicalStatusValues } from "./canonicalStates";
 
 export const canonicalProductTypes = ["artwork", "merch", "service"] as const;
 export const canonicalProductOfferings = ["original_only", "prints_only", "original_plus_prints"] as const;
-export const canonicalProductStatuses = ["draft", "active", "archived", "db_only"] as const;
+export const canonicalProductStatuses = [
+  "draft",
+  "pending_review",
+  "approved",
+  "shopify_pending",
+  "shopify_synced",
+  "active",
+  "archived",
+  "db_only",
+] as const;
+export const canonicalProductAssignmentStatuses = ["unassigned", "assigned", "confirmed", "needs_review"] as const;
 
 const canonicalProductImagesSchema = new Schema(
   {
@@ -55,10 +65,12 @@ const canonicalProductSchema = new Schema(
     description: { type: String },
     bodyHtml: { type: String },
     tags: { type: [String], default: [] },
+    canonicalArtistId: { type: Schema.Types.ObjectId, ref: "CanonicalArtist" },
     artistKey: { type: String, trim: true },
     artistRef: { type: String, trim: true },
     shopifyProductId: { type: String, trim: true },
     legacyProductId: { type: String, trim: true },
+    assignmentStatus: { type: String, enum: canonicalProductAssignmentStatuses },
     migrationStatus: { type: String, enum: canonicalStatusValues },
     approvalStatus: { type: String, enum: canonicalStatusValues },
     seriesId: { type: String, trim: true },
@@ -79,6 +91,7 @@ const canonicalProductSchema = new Schema(
 );
 
 canonicalProductSchema.index({ shopDomain: 1, productKey: 1 }, { unique: true });
+canonicalProductSchema.index({ shopDomain: 1, canonicalArtistId: 1, createdAt: -1 });
 canonicalProductSchema.index({ shopDomain: 1, artistKey: 1, createdAt: -1 });
 canonicalProductSchema.index(
   { shopDomain: 1, shopifyProductId: 1 },

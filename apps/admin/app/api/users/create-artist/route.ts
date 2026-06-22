@@ -10,6 +10,16 @@ import { UserModel } from "@/models/User";
 const MIN_PASSWORD_LENGTH = 8;
 
 export async function POST(req: Request) {
+  if (process.env.ENABLE_LEGACY_ARTIST_ACCOUNT_CREATE !== "true") {
+    return NextResponse.json(
+      {
+        error: "legacy_artist_account_create_disabled",
+        message: "Use Admin Artists V2 -> Create V2 Artist Account instead.",
+      },
+      { status: 410 },
+    );
+  }
+
   try {
     const body = (await req.json().catch(() => null)) as { artistId?: string; email?: string; tempPassword?: string } | null;
     const artistId = body?.artistId?.toString().trim() ?? "";

@@ -9,6 +9,7 @@ import {
 } from "@/lib/server/artist-profile-content";
 import { requireArtistContext } from "@/lib/server/artist-context";
 import { ArtistAnnouncementModel, CanonicalArtistModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
+import { artistProductOwnershipFilter } from "@/lib/server/product-ownership";
 
 function formatCurrency(cents: number) {
   return new Intl.NumberFormat("en-DE", {
@@ -59,8 +60,7 @@ export default async function ProfilePage({
       .sort({ sortOrder: 1, createdAt: -1 })
       .lean(),
     CanonicalProductModel.find({
-      shopDomain: context.user.shopDomain,
-      artistKey: context.user.artistKey,
+      ...artistProductOwnershipFilter(context),
       type: "artwork",
       status: { $ne: "archived" },
     })

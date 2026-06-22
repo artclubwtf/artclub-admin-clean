@@ -31,7 +31,7 @@ export async function GET() {
 
   const products = await CanonicalProductModel.find({
     shopDomain: user.shopDomain,
-    artistKey: user.artistKey,
+    canonicalArtistId: canonicalArtist._id,
     type: "artwork",
   })
     .sort({ createdAt: -1 })

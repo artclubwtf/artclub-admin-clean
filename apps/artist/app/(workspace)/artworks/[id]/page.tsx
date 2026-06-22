@@ -4,6 +4,7 @@ import { ArtworkForm } from "@/components/artworks/ArtworkForm";
 import { requireArtistContext } from "@/lib/server/artist-context";
 import { parseArtistMediaIdFromUrl, resolveArtistMediaUrls } from "@/lib/server/artist-media";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
+import { artistProductOwnershipFilter } from "@/lib/server/product-ownership";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -14,8 +15,7 @@ export default async function EditArtworkPage({ params }: { params: Promise<{ id
 
   const [artwork, variants, series] = await Promise.all([
     CanonicalProductModel.findOne({
-      shopDomain: context.user.shopDomain,
-      artistKey: context.user.artistKey,
+      ...artistProductOwnershipFilter(context),
       type: "artwork",
       productKey: id,
     }).lean(),

@@ -5,6 +5,7 @@ import { PageTitle } from "@/components/primitives/PageTitle";
 import { Section } from "@/components/primitives/Section";
 import { requireArtistContext } from "@/lib/server/artist-context";
 import { CanonicalProductModel } from "@/lib/server/models";
+import { artistProductOwnershipFilter } from "@/lib/server/product-ownership";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -12,8 +13,7 @@ export const fetchCache = "force-no-store";
 export default async function ArtworksPage() {
   const context = await requireArtistContext();
   const artworks = await CanonicalProductModel.find({
-    shopDomain: context.user.shopDomain,
-    artistKey: context.user.artistKey,
+    ...artistProductOwnershipFilter(context),
     type: "artwork",
   })
     .sort({ updatedAt: -1, createdAt: -1 })

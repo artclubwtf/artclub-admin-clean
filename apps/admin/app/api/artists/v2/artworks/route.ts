@@ -66,7 +66,7 @@ export async function GET() {
 
   const products = await CanonicalProductModel.find({
     shopDomain: context.user.shopDomain,
-    artistKey: context.user.artistKey,
+    canonicalArtistId: context.canonicalArtist._id,
     type: "artwork",
   })
     .sort({ createdAt: -1 })
@@ -256,6 +256,7 @@ export async function POST(req: Request) {
     productKey,
     type: "artwork",
     title: data.title,
+    canonicalArtistId: context.canonicalArtist._id,
     artistKey: context.user.artistKey,
     artistRef: context.canonicalArtist.shopify?.metaobjectGid || undefined,
     seriesId,
@@ -264,7 +265,8 @@ export async function POST(req: Request) {
     forSale: data.forSale ?? true,
     allowPrints: data.allowPrints ?? includePrints,
     originalAvailable: data.originalAvailable ?? includeOriginal,
-    status: "db_only",
+    status: data.forSale === false && !includePrints ? "draft" : "pending_review",
+    approvalStatus: data.forSale === false && !includePrints ? "unassigned" : "needs_review",
     year: data.year,
     shortText: data.shortText || undefined,
     tags,
@@ -300,7 +302,7 @@ export async function POST(req: Request) {
         title: data.title,
         year: data.year ?? null,
         offerings: data.offerings,
-        status: "db_only",
+        status: data.forSale === false && !includePrints ? "draft" : "pending_review",
         shortText: data.shortText || "",
         images: {
           thumbUrl: primaryImage.previewUrl || primaryImage.url,

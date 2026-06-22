@@ -224,6 +224,7 @@ export async function POST(req: Request) {
               shopDomain,
               passwordHash,
               artistKey,
+              accountSource: "app_native",
               onboardingComplete: false,
               isActive: true,
               mustChangePassword: false,
@@ -243,25 +244,38 @@ export async function POST(req: Request) {
           shopDomain,
           passwordHash,
           artistKey,
+          accountSource: "app_native",
           onboardingComplete: false,
           isActive: true,
           mustChangePassword: false,
         });
       }
 
-      await CanonicalArtistModel.updateOne(
-        { shopDomain, artistKey },
+      const linkedArtist = await CanonicalArtistModel.findOneAndUpdate(
         {
+          shopDomain,
+          artistKey,
+          $or: [{ linkedUserId: { $exists: false } }, { linkedUserId: null }, { linkedUserId: userId }],
+        },
+        {
+          $set: {
+            linkedUserId: userId,
+            accountStatus: "onboarding_pending",
+            linkStatus: "linked",
+            email,
+          },
           $setOnInsert: {
             shopDomain,
             artistKey,
             handle: artistKey,
             displayName,
-            email,
           },
         },
-        { upsert: true },
+        { upsert: true, new: true },
       );
+      if (!linkedArtist || linkedArtist.linkedUserId?.toString() !== userId.toString()) {
+        throw new Error("artist_link_failed");
+      }
     } catch (err) {
       if (!canInitializeExisting) {
         await CanonicalArtistModel.deleteOne({ shopDomain, artistKey }).catch(() => null);

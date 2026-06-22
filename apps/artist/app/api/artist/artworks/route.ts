@@ -11,6 +11,7 @@ import { resolvePublicArtistMediaUrls } from "@/lib/server/artist-media";
 import { buildPrintVariants, buildArtworkSku, dedupeTrimmed, normalizeSelectedPrintSizeCodes } from "@/lib/server/artwork-variants";
 import { ensureCanonicalProductIndexes } from "@/lib/server/canonical-product-indexes";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
+import { artistProductOwnershipFilter } from "@/lib/server/product-ownership";
 
 const createArtworkSchema = z
   .object({
@@ -40,8 +41,7 @@ export async function GET() {
     const { context } = auth;
 
     const products = await CanonicalProductModel.find({
-      shopDomain: context.user.shopDomain,
-      artistKey: context.user.artistKey,
+      ...artistProductOwnershipFilter(context),
       type: "artwork",
     })
       .sort({ updatedAt: -1, createdAt: -1 })
@@ -231,6 +231,7 @@ export async function POST(req: Request) {
         : data.printsEnabled
           ? "prints_only"
           : "original_only";
+    const saleable = data.forSale === true || data.printsEnabled === true;
 
     await CanonicalProductModel.create({
       shopDomain: context.user.shopDomain,
@@ -238,6 +239,7 @@ export async function POST(req: Request) {
       type: "artwork",
       title: data.title,
       description: data.description || undefined,
+      canonicalArtistId: context.canonicalArtist._id,
       artistKey: context.user.artistKey,
       artistRef: context.canonicalArtist.shopify?.metaobjectGid || undefined,
       seriesId,
@@ -246,7 +248,8 @@ export async function POST(req: Request) {
       forSale: data.forSale,
       allowPrints: data.printsEnabled,
       originalAvailable: data.originalAvailable,
-      status: "db_only",
+      status: saleable ? "pending_review" : "draft",
+      approvalStatus: saleable ? "needs_review" : "unassigned",
       year: data.year ?? undefined,
       images: {
         thumbUrl: primaryUrls.previewUrl,

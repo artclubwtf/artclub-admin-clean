@@ -43,7 +43,10 @@ export async function loadPublicArtistPageBySlug(rawSlug: string): Promise<Publi
   await connectMongo();
 
   const artist = await CanonicalArtistModel.findOne({
-    handle: { $regex: `^${escapeRegex(slug)}$`, $options: "i" },
+    $or: [
+      { publicSlug: { $regex: `^${escapeRegex(slug)}$`, $options: "i" } },
+      { handle: { $regex: `^${escapeRegex(slug)}$`, $options: "i" } },
+    ],
     "publicProfile.isVisible": { $ne: false },
   }).lean();
 
@@ -59,9 +62,10 @@ export async function loadPublicArtistPageBySlug(rawSlug: string): Promise<Publi
       .lean(),
     CanonicalProductModel.find({
       shopDomain: artist.shopDomain,
-      artistKey: artist.artistKey,
+      canonicalArtistId: artist._id,
       type: "artwork",
-      status: { $ne: "archived" },
+      status: { $in: ["active", "shopify_synced"] },
+      approvalStatus: { $in: ["published", "approved"] },
     })
       .sort({ updatedAt: -1, createdAt: -1 })
       .select({

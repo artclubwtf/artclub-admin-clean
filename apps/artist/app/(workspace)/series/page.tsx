@@ -2,6 +2,7 @@ import { SeriesManager } from "@/components/series/SeriesManager";
 import { resolveArtistMediaUrls } from "@/lib/server/artist-media";
 import { requireArtistContext } from "@/lib/server/artist-context";
 import { ArtistSeriesModel, CanonicalProductModel } from "@/lib/server/models";
+import { artistProductOwnershipFilter } from "@/lib/server/product-ownership";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -25,8 +26,7 @@ export default async function SeriesPage({
       .sort({ updatedAt: -1 })
       .lean(),
     CanonicalProductModel.find({
-      shopDomain: context.user.shopDomain,
-      artistKey: context.user.artistKey,
+      ...artistProductOwnershipFilter(context),
       type: "artwork",
     })
       .select({ productKey: 1, title: 1, seriesId: 1, images: 1 })

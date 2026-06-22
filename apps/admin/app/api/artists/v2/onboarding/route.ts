@@ -79,24 +79,16 @@ async function getCurrentArtistContext() {
   if (!user || user.role !== "artist" || !user.isActive) {
     return { error: NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 }) } as const;
   }
-  if (!user.artistKey || !user.shopDomain) {
+  if (!user.shopDomain) {
     return { error: NextResponse.json({ ok: false, error: "artist_not_initialized" }, { status: 400 }) } as const;
   }
 
-  let canonicalArtist = await CanonicalArtistModel.findOne({ shopDomain: user.shopDomain, artistKey: user.artistKey }).lean();
+  const canonicalArtist = await CanonicalArtistModel.findOne({ shopDomain: user.shopDomain, linkedUserId: user._id }).lean();
   if (!canonicalArtist) {
-    const fallbackDisplayName = user.name?.trim() || user.email.split("@")[0] || "Artist";
-    const created = await CanonicalArtistModel.create({
-      shopDomain: user.shopDomain,
-      artistKey: user.artistKey,
-      handle: user.artistKey,
-      displayName: fallbackDisplayName,
-      email: user.email,
-    });
-    canonicalArtist = created.toObject();
+    return { error: NextResponse.json({ ok: false, error: "artist_account_not_linked" }, { status: 403 }) } as const;
   }
 
-  return { session, user, canonicalArtist } as const;
+  return { session, user: { ...user, artistKey: canonicalArtist.artistKey }, canonicalArtist } as const;
 }
 
 export async function GET() {

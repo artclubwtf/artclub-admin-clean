@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { requireArtistApiContext } from "@/lib/server/artist-context";
 import { ArtistSeriesModel, CanonicalProductModel } from "@/lib/server/models";
+import { artistProductWriteOwnershipFilter } from "@/lib/server/product-ownership";
 
 const bodySchema = z
   .object({
@@ -43,8 +44,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const productKeys = Array.from(new Set(parsed.data.productKeys.map((key) => key.trim()).filter(Boolean)));
   const existingProducts = productKeys.length
     ? await CanonicalProductModel.find({
-        shopDomain: context.user.shopDomain,
-        artistKey: context.user.artistKey,
+        ...artistProductWriteOwnershipFilter(context),
         type: "artwork",
         productKey: { $in: productKeys },
       })
@@ -58,8 +58,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   await CanonicalProductModel.updateMany(
     {
-      shopDomain: context.user.shopDomain,
-      artistKey: context.user.artistKey,
+      ...artistProductWriteOwnershipFilter(context),
       type: "artwork",
       seriesId: id,
       productKey: { $nin: productKeys },
@@ -70,8 +69,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if (productKeys.length) {
     await CanonicalProductModel.updateMany(
       {
-        shopDomain: context.user.shopDomain,
-        artistKey: context.user.artistKey,
+        ...artistProductWriteOwnershipFilter(context),
         type: "artwork",
         productKey: { $in: productKeys },
       },
@@ -79,14 +77,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         $set: {
           seriesId: id,
           seriesName: series.name,
+          canonicalArtistId: context.canonicalArtist._id,
+          artistKey: context.canonicalArtist.artistKey,
         },
       },
     );
   }
 
   const assigned = await CanonicalProductModel.find({
-    shopDomain: context.user.shopDomain,
-    artistKey: context.user.artistKey,
+    ...artistProductWriteOwnershipFilter(context),
     type: "artwork",
     seriesId: id,
   })

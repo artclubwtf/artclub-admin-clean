@@ -1,6 +1,8 @@
 import { InferSchemaType, Model, Schema, model, models } from "mongoose";
 import { canonicalStatusValues } from "./canonicalStates";
 
+const canonicalArtistAccountStatusValues = ["unlinked", "onboarding_pending", "provisioned", "linked", "disabled"] as const;
+
 const canonicalArtistProfileImagesSchema = new Schema(
   {
     avatarUrl: { type: String },
@@ -136,6 +138,7 @@ const canonicalArtistSchema = new Schema(
     legacyArtistId: { type: String, trim: true },
     migrationStatus: { type: String, enum: canonicalStatusValues },
     linkStatus: { type: String, enum: canonicalStatusValues },
+    accountStatus: { type: String, enum: canonicalArtistAccountStatusValues },
     linkedUserId: { type: Schema.Types.ObjectId, ref: "User" },
     profileImages: { type: canonicalArtistProfileImagesSchema, default: () => ({ galleryUrls: [] }) },
     consents: { type: canonicalArtistConsentsSchema, default: () => ({}) },

@@ -11,5 +11,5 @@ export const bottomNavItems: BottomNavItem[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
-export const publicRoutes = ["/login", "/register"] as const;
+export const publicRoutes = ["/login", "/register", "/account-pending"] as const;
 export const protectedRoutes = ["/", "/onboarding", "/artworks", "/media", "/profile", "/settings", "/series", "/messages", "/announcements"] as const;

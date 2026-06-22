@@ -28,7 +28,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   const { id } = await params;
   const artwork = await CanonicalProductModel.findOne({
     shopDomain: context.user.shopDomain,
-    artistKey: context.user.artistKey,
+    canonicalArtistId: context.canonicalArtist._id,
     productKey: id,
     type: "artwork",
   }).lean();
@@ -113,12 +113,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const updated = await CanonicalProductModel.findOneAndUpdate(
     {
       shopDomain: context.user.shopDomain,
-      artistKey: context.user.artistKey,
+      canonicalArtistId: context.canonicalArtist._id,
       productKey: id,
       type: "artwork",
     },
     {
-      $set: updates,
+      $set: {
+        ...updates,
+        "sync.needsPush": true,
+        "sync.dirtyAt": new Date(),
+      },
     },
     { new: true },
   ).lean();

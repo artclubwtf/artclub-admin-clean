@@ -1,6 +1,7 @@
 import { InferSchemaType, Model, Schema, model, models } from "mongoose";
 
 export const userRoles = ["team", "artist", "customer"] as const;
+export const userAccountSources = ["self_registered", "app_native", "admin_provisioned", "legacy_import"] as const;
 
 const userSchema = new Schema(
   {
@@ -14,6 +15,7 @@ const userSchema = new Schema(
     onboardingComplete: { type: Boolean, default: false },
     pendingRegistrationId: { type: Schema.Types.ObjectId, ref: "ArtistApplication" },
     onboardingStatus: { type: String, enum: ["pending", "accepted", "rejected"] },
+    accountSource: { type: String, enum: userAccountSources },
     passwordHash: { type: String, required: true },
     mustChangePassword: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },

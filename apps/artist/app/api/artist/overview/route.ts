@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireArtistApiContext } from "@/lib/server/artist-context";
 import { resolveArtistMediaUrls } from "@/lib/server/artist-media";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel } from "@/lib/server/models";
+import { artistProductOwnershipFilter } from "@/lib/server/product-ownership";
 
 function computeProfileCompleteness(input: {
   displayName?: string;
@@ -31,8 +32,7 @@ export async function GET() {
 
   const [artworkCount, seriesCount, recentMedia] = await Promise.all([
     CanonicalProductModel.countDocuments({
-      shopDomain: context.user.shopDomain,
-      artistKey: context.user.artistKey,
+      ...artistProductOwnershipFilter(context),
       type: "artwork",
     }),
     ArtistSeriesModel.countDocuments({

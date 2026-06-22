@@ -16,6 +16,16 @@ function normalizeUrl(value?: string | null): string | null {
 }
 
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (process.env.ENABLE_LEGACY_ARTIST_SHOPIFY_SYNC !== "true") {
+    return NextResponse.json(
+      {
+        error: "legacy_artist_shopify_sync_disabled",
+        message: "Use the canonical Artist V2 Shopify push flow instead.",
+      },
+      { status: 410 },
+    );
+  }
+
   try {
     const { id } = await params;
     if (!Types.ObjectId.isValid(id)) {

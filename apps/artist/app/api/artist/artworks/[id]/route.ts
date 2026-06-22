@@ -11,6 +11,7 @@ import { requireArtistApiContext } from "@/lib/server/artist-context";
 import { parseArtistMediaIdFromUrl, resolvePublicArtistMediaUrls } from "@/lib/server/artist-media";
 import { buildPrintVariants, buildArtworkSku, dedupeTrimmed, normalizeSelectedPrintSizeCodes } from "@/lib/server/artwork-variants";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
+import { artistProductWriteOwnershipFilter } from "@/lib/server/product-ownership";
 
 const patchSchema = z
   .object({
@@ -37,8 +38,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const { id } = await params;
 
     const artwork = await CanonicalProductModel.findOne({
-      shopDomain: context.user.shopDomain,
-      artistKey: context.user.artistKey,
+      ...artistProductWriteOwnershipFilter(context),
       productKey: id,
       type: "artwork",
     }).lean();
@@ -114,8 +114,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { id } = await params;
 
     const artwork = await CanonicalProductModel.findOne({
-      shopDomain: context.user.shopDomain,
-      artistKey: context.user.artistKey,
+      ...artistProductWriteOwnershipFilter(context),
       productKey: id,
       type: "artwork",
     }).lean();
@@ -225,11 +224,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       status: artwork.status,
       hasShopifyProduct: Boolean(artwork.shopify?.productGid),
     });
+    const nextStatus =
+      artwork.status === "archived"
+        ? "archived"
+        : artwork.status === "shopify_synced" || artwork.status === "active"
+          ? "shopify_pending"
+          : artwork.status;
 
     await CanonicalProductModel.updateOne(
       {
-        shopDomain: context.user.shopDomain,
-        artistKey: context.user.artistKey,
+        ...artistProductWriteOwnershipFilter(context),
         productKey: id,
         type: "artwork",
       },
@@ -237,6 +241,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         $set: {
           title: data.title,
           description: data.description || undefined,
+          canonicalArtistId: context.canonicalArtist._id,
+          artistKey: context.canonicalArtist.artistKey,
+          status: nextStatus,
           offerings,
           forSale: data.forSale,
           allowPrints: data.printsEnabled,

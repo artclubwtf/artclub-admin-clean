@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { requireArtistApiContext } from "@/lib/server/artist-context";
 import { ArtistSeriesModel, CanonicalProductModel } from "@/lib/server/models";
+import { artistProductWriteOwnershipFilter } from "@/lib/server/product-ownership";
 
 const patchSchema = z
   .object({
@@ -48,8 +49,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (parsed.data.name !== undefined) {
     await CanonicalProductModel.updateMany(
       {
-        shopDomain: context.user.shopDomain,
-        artistKey: context.user.artistKey,
+        ...artistProductWriteOwnershipFilter(context),
         seriesId: updated._id.toString(),
       },
       { $set: { seriesName: updated.name } },
@@ -94,8 +94,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
 
   await CanonicalProductModel.updateMany(
     {
-      shopDomain: context.user.shopDomain,
-      artistKey: context.user.artistKey,
+      ...artistProductWriteOwnershipFilter(context),
       seriesId: id,
     },
     { $unset: { seriesId: 1, seriesName: 1 } },

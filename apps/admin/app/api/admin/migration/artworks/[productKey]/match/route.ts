@@ -6,11 +6,13 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { resolveShopDomain } from "@/lib/shopDomain";
 import { CanonicalArtistModel } from "@/models/CanonicalArtist";
 import { CanonicalProductModel } from "@/models/CanonicalProduct";
+import { canonicalStatusValues } from "@/models/canonicalStates";
 
 const payloadSchema = z
   .object({
     artistKey: z.string().trim().optional().or(z.literal("")),
     migrationStatus: z.enum(["unassigned", "suggested", "assigned", "needs_review"]).optional(),
+    approvalStatus: z.enum(canonicalStatusValues).optional().or(z.literal("")),
   })
   .strict();
 
@@ -59,17 +61,32 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ produc
   }
 
   const migrationStatus = parsed.data.migrationStatus || (selectedArtistKey ? "assigned" : "needs_review");
-  const assignmentStatus = selectedArtistKey ? "confirmed" : "needs_review";
+  const approvalStatus = parsed.data.approvalStatus?.trim() || product.approvalStatus || "needs_review";
+
+  const dirtyFields = Array.from(
+    new Set([
+      ...(Array.isArray(product.sync?.dirtyFields) ? product.sync.dirtyFields : []),
+      "artistKey",
+      "artistRef",
+      "migrationStatus",
+      "approvalStatus",
+      "type",
+    ]),
+  );
 
   await CanonicalProductModel.updateOne(
     { shopDomain, productKey },
     {
       $set: {
+        type: "artwork",
         artistKey: selectedArtistKey || null,
         canonicalArtistId,
         artistRef,
         migrationStatus,
-        assignmentStatus,
+        approvalStatus,
+        "sync.needsPush": true,
+        "sync.dirtyAt": new Date(),
+        "sync.dirtyFields": dirtyFields,
       },
     },
   );
@@ -80,8 +97,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ produc
       productKey,
       artistKey: selectedArtistKey,
       canonicalArtistId: canonicalArtistId || "",
+      artistRef,
       migrationStatus,
-      assignmentStatus,
+      approvalStatus,
+      type: "artwork",
+      dirtyFields,
     },
     { status: 200 },
   );

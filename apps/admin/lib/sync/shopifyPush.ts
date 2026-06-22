@@ -38,7 +38,7 @@ function mustEnv(name: string): string {
 }
 
 function normalizeShopStatus(status: CanonicalProduct["status"]): "DRAFT" | "ACTIVE" | "ARCHIVED" {
-  if (status === "active") return "ACTIVE";
+  if (status === "active" || status === "approved" || status === "shopify_pending" || status === "shopify_synced") return "ACTIVE";
   if (status === "archived") return "ARCHIVED";
   return "DRAFT";
 }
@@ -294,6 +294,53 @@ async function bulkUpdateShopifyVariants(
   }
 }
 
+async function bulkCreateShopifyVariants(
+  productGid: string,
+  variants: Array<{ variantKey: string; sizeCode: string; sku: string; priceCents: number }>,
+): Promise<ShopifyVariantNode[]> {
+  if (!variants.length) return [];
+
+  const mutation = `
+    mutation PushVariantsBulkCreate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+      productVariantsBulkCreate(productId: $productId, variants: $variants) {
+        productVariants {
+          id
+          sku
+          inventoryItem { id }
+        }
+        userErrors { field message }
+      }
+    }
+  `;
+
+  const data = await callShopifyAdmin<{
+    productVariantsBulkCreate?: {
+      productVariants?: ShopifyVariantNode[];
+      userErrors?: Array<{ message?: string }>;
+    };
+  }>(mutation, {
+    productId: productGid,
+    variants: variants.map((variant) => ({
+      sku: variant.sku,
+      price: normalizePrice(variant.priceCents),
+      optionValues: [
+        {
+          optionName: "Title",
+          name: variant.sizeCode || variant.variantKey,
+        },
+      ],
+    })),
+  });
+
+  const payload = data?.productVariantsBulkCreate;
+  if (!payload) throw new Error("Shopify productVariantsBulkCreate returned no payload");
+  if (payload.userErrors?.length) {
+    const message = payload.userErrors.map((error) => error.message).filter(Boolean).join("; ");
+    throw new Error(message || "Shopify productVariantsBulkCreate failed");
+  }
+  return payload.productVariants || [];
+}
+
 export async function pushArtists(input: PushInput): Promise<PushResult> {
   assertShopifyWriteEnabled();
   await connectMongo();
@@ -436,30 +483,6 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
         continue;
       }
 
-      if (product.status === "db_only") {
-        if (input.dryRun) {
-          skippedCount += 1;
-          items.push({ key: product.productKey, status: "dry_run", message: "Would mark db_only product as synced without Shopify write" });
-          continue;
-        }
-        await CanonicalProductModel.updateOne(
-          { shopDomain: input.shopDomain, productKey: product.productKey },
-          {
-            $set: {
-              "shopify.lastPushedAt": new Date(),
-              "sync.lastPushAt": new Date(),
-              "sync.lastError": null,
-              "sync.needsPush": false,
-              "sync.dirtyAt": null,
-              "sync.dirtyFields": [],
-            },
-          },
-        );
-        pushedCount += 1;
-        items.push({ key: product.productKey, status: "updated", message: "Marked db_only product as synced" });
-        continue;
-      }
-
       let productGid = product.shopifyProductId || product.shopify?.productGid || "";
       let defaultVariantId: string | null = null;
       let defaultInventoryItemId: string | null = null;
@@ -502,11 +525,20 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
 
       const updates: Array<{ variantGid: string; sku: string; priceCents: number }> = [];
       const matchedVariantKeys = new Set<string>();
+      const missingVariants: Array<{ variantKey: string; sizeCode: string; sku: string; priceCents: number }> = [];
       for (const [index, variant] of canonicalVariants.entries()) {
         const matchedBySku = variant.sku ? variantBySku.get(variant.sku) : undefined;
         const fallbackDefault = !variant.shopify?.variantGid && !variant.shopifyVariantId && !matchedBySku && index === 0 ? defaultVariantId : null;
         const variantGid = variant.shopifyVariantId || variant.shopify?.variantGid || matchedBySku?.id || fallbackDefault || null;
-        if (!variantGid) continue;
+        if (!variantGid) {
+          missingVariants.push({
+            variantKey: variant.variantKey,
+            sizeCode: variant.sizeCode,
+            sku: variant.sku,
+            priceCents: variant.priceCents,
+          });
+          continue;
+        }
         matchedVariantKeys.add(variant.variantKey);
 
         updates.push({
@@ -521,8 +553,8 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
           {
             $set: {
               shopifyVariantId: variantGid,
-              published: product.status === "active",
-              syncState: product.status === "archived" ? "archived" : product.status === "active" ? "published" : "approved",
+              published: product.status !== "archived",
+              syncState: product.status === "archived" ? "archived" : "published",
               "shopify.variantGid": variantGid,
               ...(inventoryItemGid ? { "shopify.inventoryItemGid": inventoryItemGid } : {}),
             },
@@ -530,22 +562,42 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
         );
       }
 
-      if (canonicalVariants.length > matchedVariantKeys.size) {
-        const missing = canonicalVariants
-          .filter((variant) => !matchedVariantKeys.has(variant.variantKey))
-          .map((variant) => variant.variantKey);
-        throw new Error(`Unmapped canonical variants: ${missing.join(", ")}`);
-      }
-
       await bulkUpdateShopifyVariants(productGid, updates);
+
+      if (missingVariants.length) {
+        const createdVariants = await bulkCreateShopifyVariants(productGid, missingVariants);
+        const createdBySku = new Map(
+          createdVariants
+            .filter((variant) => typeof variant.sku === "string" && variant.sku.trim())
+            .map((variant) => [variant.sku!.trim(), variant]),
+        );
+
+        for (const variant of missingVariants) {
+          const created = createdBySku.get(variant.sku);
+          if (!created?.id) throw new Error(`Shopify did not return created variant for ${variant.variantKey}`);
+          await CanonicalVariantModel.updateOne(
+            { shopDomain: input.shopDomain, productKey: product.productKey, variantKey: variant.variantKey },
+            {
+              $set: {
+                shopifyVariantId: created.id,
+                published: true,
+                syncState: "published",
+                "shopify.variantGid": created.id,
+                ...(created.inventoryItem?.id ? { "shopify.inventoryItemGid": created.inventoryItem.id } : {}),
+              },
+            },
+          );
+        }
+      }
 
       await CanonicalProductModel.updateOne(
         { shopDomain: input.shopDomain, productKey: product.productKey },
         {
           $set: {
             shopifyProductId: productGid,
+            status: product.status === "archived" ? "archived" : "shopify_synced",
             migrationStatus: "linked",
-            approvalStatus: product.status === "archived" ? "archived" : product.status === "active" ? "published" : "approved",
+            approvalStatus: product.status === "archived" ? "archived" : "published",
             "shopify.productGid": productGid,
             "shopify.lastPushedAt": new Date(),
             "sync.lastPushAt": new Date(),
