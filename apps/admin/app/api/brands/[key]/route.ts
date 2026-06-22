@@ -5,7 +5,7 @@ import { BrandSettingsModel } from "@/models/BrandSettings";
 import { BrandPayload, extractBrandUpdate, normalizeBrandKey } from "../utils";
 
 type RouteContext = {
-  params: Promise<{ key: string }> | { key: string };
+  params: Promise<{ key: string }>;
 };
 
 export async function GET(_req: NextRequest, context: RouteContext) {

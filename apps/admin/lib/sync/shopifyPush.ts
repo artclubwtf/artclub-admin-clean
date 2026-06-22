@@ -1,10 +1,10 @@
-import { buildProductMetafieldsForArtwork, upsertArtistMetaobject } from "@/lib/shopify";
-import { getArtistShopifySyncMode } from "@/lib/artistShopifySyncMode";
-import { assertShopifyWriteEnabled } from "@/lib/featureFlags";
-import { connectMongo } from "@/lib/mongodb";
-import { CanonicalArtistModel } from "@/models/CanonicalArtist";
-import { CanonicalProductModel, type CanonicalProduct } from "@/models/CanonicalProduct";
-import { CanonicalVariantModel } from "@/models/CanonicalVariant";
+import { buildProductMetafieldsForArtwork, upsertArtistMetaobject } from "../shopify";
+import { getArtistShopifySyncMode } from "../artistShopifySyncMode";
+import { assertShopifyWriteEnabled } from "../featureFlags";
+import { connectMongo } from "../mongodb";
+import { CanonicalArtistModel } from "../../models/CanonicalArtist";
+import { CanonicalProductModel, type CanonicalProduct } from "../../models/CanonicalProduct";
+import { CanonicalVariantModel } from "../../models/CanonicalVariant";
 
 type PushInput = {
   shopDomain: string;
@@ -632,4 +632,23 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
   }
 
   return { pushedCount, failedCount, skippedCount, errors, items };
+}
+
+export async function pushOneArtist(input: { shopDomain: string; artistKey: string; dryRun?: boolean }): Promise<PushResult> {
+  return pushArtists({
+    shopDomain: input.shopDomain,
+    artistKeys: [input.artistKey],
+    limit: 1,
+    dryRun: input.dryRun,
+  });
+}
+
+export async function pushOneProduct(input: { shopDomain: string; productKey: string; dryRun?: boolean }): Promise<PushResult> {
+  return pushProducts({
+    shopDomain: input.shopDomain,
+    productKeys: [input.productKey],
+    limit: 1,
+    approvedOnly: false,
+    dryRun: input.dryRun,
+  });
 }

@@ -672,4 +672,4 @@ export async function fetchProductsByCollectionId(
     };
   });
 }
-import { assertShopifyWriteEnabled } from "@/lib/featureFlags";
+import { assertShopifyWriteEnabled } from "./featureFlags";

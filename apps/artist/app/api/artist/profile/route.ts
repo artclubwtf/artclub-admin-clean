@@ -6,6 +6,7 @@ import { buildArtistSyncPatch } from "@/lib/server/artist-sync";
 import { requireArtistApiContext } from "@/lib/server/artist-context";
 import { normalizePublicArtistMediaUrl, normalizePublicArtistMediaUrls } from "@/lib/server/artist-media";
 import { CanonicalArtistModel, UserModel } from "@/lib/server/models";
+import { autoPushArtistToShopify } from "@/lib/server/shopify-auto-sync";
 
 const patchSchema = z
   .object({
@@ -86,10 +87,16 @@ export async function PATCH(req: Request) {
     ).lean();
 
     await UserModel.updateOne({ _id: context.user._id }, { $set: { name: parsed.data.displayName } });
+    const sync = await autoPushArtistToShopify({
+      shopDomain: context.user.shopDomain,
+      artistKey: context.canonicalArtist.artistKey,
+      shouldPush: changedFields.length > 0,
+    });
 
     return NextResponse.json(
       {
         ok: true,
+        sync,
         profile: {
           artistKey: context.user.artistKey,
           email: context.user.email,

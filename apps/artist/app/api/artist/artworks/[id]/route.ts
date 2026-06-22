@@ -12,6 +12,7 @@ import { parseArtistMediaIdFromUrl, resolvePublicArtistMediaUrls } from "@/lib/s
 import { buildPrintVariants, buildArtworkSku, dedupeTrimmed, normalizeSelectedPrintSizeCodes } from "@/lib/server/artwork-variants";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 import { artistProductWriteOwnershipFilter } from "@/lib/server/product-ownership";
+import { autoPushProductToShopify } from "@/lib/server/shopify-auto-sync";
 
 const patchSchema = z
   .object({
@@ -204,6 +205,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         : data.printsEnabled
           ? "prints_only"
           : "original_only";
+    const saleable = data.forSale === true || data.printsEnabled === true;
 
     const changedFields: string[] = [
       "title",
@@ -227,9 +229,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const nextStatus =
       artwork.status === "archived"
         ? "archived"
-        : artwork.status === "shopify_synced" || artwork.status === "active"
+        : saleable
           ? "shopify_pending"
-          : artwork.status;
+          : "draft";
+    const nextApprovalStatus =
+      artwork.status === "archived"
+        ? "archived"
+        : saleable
+          ? artwork.approvalStatus === "published"
+            ? "published"
+            : "approved"
+          : "unassigned";
 
     await CanonicalProductModel.updateOne(
       {
@@ -244,6 +254,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           canonicalArtistId: context.canonicalArtist._id,
           artistKey: context.canonicalArtist.artistKey,
           status: nextStatus,
+          approvalStatus: nextApprovalStatus,
           offerings,
           forSale: data.forSale,
           allowPrints: data.printsEnabled,
@@ -314,7 +325,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       await CanonicalVariantModel.insertMany(variantsToInsert, { ordered: true });
     }
 
-    return NextResponse.json({ ok: true }, { status: 200 });
+    const sync = await autoPushProductToShopify({
+      shopDomain: context.user.shopDomain,
+      productKey: id,
+      shouldPush: saleable && nextStatus !== "archived",
+    });
+
+    return NextResponse.json({ ok: true, sync }, { status: 200 });
   } catch (error) {
     return artistApiErrorResponse(error, "artwork_update_failed");
   }

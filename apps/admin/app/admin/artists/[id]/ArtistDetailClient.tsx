@@ -40,6 +40,19 @@ type Artist = {
     lastSyncStatus?: string;
     lastSyncError?: string;
   };
+  canonicalArtist?: {
+    id: string;
+    artistKey: string;
+    displayName?: string;
+    publicSlug?: string;
+    appUrl?: string;
+    legacyArtistId?: string;
+    shopifyMetaobjectId?: string;
+    linkedUserId?: string;
+    accountStatus?: string;
+    linkStatus?: string;
+    linkedUser?: UserAccount | null;
+  } | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -129,10 +142,12 @@ type UserAccount = {
   _id?: string;
   email: string;
   role: string;
+  artistKey?: string;
   artistId?: string;
   isActive: boolean;
   createdAt?: string;
   mustChangePassword?: boolean;
+  accountSource?: string;
 };
 
 type ShopifyProduct = {
@@ -269,8 +284,6 @@ export default function ArtistDetailClient({ artistId }: Props) {
   const [stage, setStage] = useState<Stage>("Idea");
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [artistUser, setArtistUser] = useState<UserAccount | null>(null);
-  const [accountEmail, setAccountEmail] = useState("");
-  const [accountTempPassword, setAccountTempPassword] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messagesError, setMessagesError] = useState<string | null>(null);
@@ -590,6 +603,9 @@ export default function ArtistDetailClient({ artistId }: Props) {
         if (!active) return;
         const data = json.artist as Artist;
         setArtist(data);
+        if (data.canonicalArtist?.linkedUser) {
+          setArtistUser(data.canonicalArtist.linkedUser);
+        }
         setName(data.name ?? "");
         setEmail(data.email ?? "");
         setPhone(data.phone ?? "");
@@ -675,12 +691,6 @@ export default function ArtistDetailClient({ artistId }: Props) {
       active = false;
     };
   }, [artistId]);
-
-  useEffect(() => {
-    if (artist?.email && !accountEmail) {
-      setAccountEmail(artist.email);
-    }
-  }, [artist, accountEmail]);
 
   useEffect(() => {
     let active = true;
@@ -1596,40 +1606,61 @@ export default function ArtistDetailClient({ artistId }: Props) {
     }
   };
 
-  const handleCreateArtistAccount = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleCreateArtistAccount = async () => {
     setAccountError(null);
     setAccountMessage(null);
-    const trimmedEmail = accountEmail.trim().toLowerCase();
-    if (!trimmedEmail || !trimmedEmail.includes("@")) {
-      setAccountError("Valid email required");
+    const artistKey = artist?.canonicalArtist?.artistKey;
+    if (!artistKey) {
+      setAccountError("No CanonicalArtist found for this artist. Create or link the canonical artist first.");
       return;
     }
-    if (!accountTempPassword || accountTempPassword.length < 8) {
-      setAccountError("Temp password must be at least 8 characters");
+    if (artist?.canonicalArtist?.linkedUserId || artist?.canonicalArtist?.linkedUser || artistUser) {
+      setAccountError("This artist already has a linked account.");
       return;
     }
 
     setAccountLoading(true);
     try {
-      const res = await fetch("/api/users/create-artist", {
+      const res = await fetch(`/api/admin/migration/accounts/${encodeURIComponent(artistKey)}/provision`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          artistId,
-          email: trimmedEmail,
-          tempPassword: accountTempPassword,
-        }),
       });
-      const payload = (await res.json().catch(() => null)) as { user?: UserAccount; error?: string } | null;
+      const payload = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        user?: UserAccount & { accountSource?: string };
+        artist?: { linkedUserId?: string; accountStatus?: string };
+        productAssignment?: { autoAssignedCount?: number; reviewCount?: number };
+        bootstrap?: { initialPassword?: string; mode?: string };
+        error?: string;
+        email?: string;
+      } | null;
       if (!res.ok) {
-        throw new Error(payload?.error || "Failed to create account");
+        const conflictEmail = payload?.email ? ` (${payload.email})` : "";
+        throw new Error(`${payload?.error || "Failed to create V2 artist account"}${conflictEmail}`);
       }
-      setArtistUser(payload?.user ?? null);
-      setAccountMessage("Artist account created. Share temp password with the artist.");
-      setAccountTempPassword("");
+      const nextUser = payload?.user ?? null;
+      setArtistUser(nextUser);
+      setArtist((prev) =>
+        prev
+          ? {
+              ...prev,
+              canonicalArtist: prev.canonicalArtist
+                ? {
+                    ...prev.canonicalArtist,
+                    linkedUserId: payload?.artist?.linkedUserId ?? nextUser?.id ?? prev.canonicalArtist.linkedUserId,
+                    accountStatus: payload?.artist?.accountStatus ?? "provisioned",
+                    linkedUser: nextUser,
+                  }
+                : prev.canonicalArtist,
+            }
+          : prev,
+      );
+      const assigned = payload?.productAssignment?.autoAssignedCount ?? 0;
+      const review = payload?.productAssignment?.reviewCount ?? 0;
+      const passwordText = payload?.bootstrap?.initialPassword ? ` Initial password: ${payload.bootstrap.initialPassword}` : "";
+      setAccountMessage(`V2 artist account created. Auto-assigned artworks: ${assigned}. Review artworks: ${review}.${passwordText}`);
     } catch (err: any) {
-      setAccountError(err?.message ?? "Failed to create account");
+      setAccountError(err?.message ?? "Failed to create V2 artist account");
     } finally {
       setAccountLoading(false);
     }
@@ -2764,7 +2795,7 @@ export default function ArtistDetailClient({ artistId }: Props) {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-slate-800">Account</h3>
-            <p className="text-xs text-slate-500">Create a login for this artist manually.</p>
+            <p className="text-xs text-slate-500">Provision the V2 artist account from the linked CanonicalArtist.</p>
           </div>
           {accountChecking && <span className="text-xs text-slate-500">Checking...</span>}
         </div>
@@ -2774,50 +2805,46 @@ export default function ArtistDetailClient({ artistId }: Props) {
           <div className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{accountMessage}</div>
         )}
 
-        {artistUser ? (
+        {artist?.canonicalArtist && (
+          <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            <div>Canonical artist: {artist.canonicalArtist.artistKey}</div>
+            <div>Account status: {artist.canonicalArtist.accountStatus || "unlinked"}</div>
+            {artist.canonicalArtist.shopifyMetaobjectId && <div>Shopify metaobject: {artist.canonicalArtist.shopifyMetaobjectId}</div>}
+          </div>
+        )}
+
+        {artistUser || artist?.canonicalArtist?.linkedUser ? (
           <div className="space-y-1 text-sm text-slate-700">
+            {(() => {
+              const linkedUser = artistUser || artist?.canonicalArtist?.linkedUser;
+              return (
+                <>
             <div className="font-semibold text-slate-900">Account exists</div>
-            <div>Email: {artistUser.email}</div>
-            {artistUser.createdAt && (
-              <div className="text-xs text-slate-500">Created {new Date(artistUser.createdAt).toLocaleString()}</div>
+            <div>Email: {linkedUser?.email}</div>
+            {linkedUser?.artistKey && <div className="text-xs text-slate-500">Artist key mirror: {linkedUser.artistKey}</div>}
+            {linkedUser?.accountSource && <div className="text-xs text-slate-500">Source: {linkedUser.accountSource}</div>}
+            {linkedUser?.mustChangePassword && <div className="text-xs text-amber-700">Password change required on first login.</div>}
+            {linkedUser?.createdAt && (
+              <div className="text-xs text-slate-500">Created {new Date(linkedUser.createdAt).toLocaleString()}</div>
             )}
             <div className="text-xs text-slate-500">Artists cannot change their email; update via team only.</div>
+                </>
+              );
+            })()}
+          </div>
+        ) : !artist?.canonicalArtist ? (
+          <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            No CanonicalArtist is linked to this legacy artist yet. Create V2 Artist Account is available after canonical mapping exists.
           </div>
         ) : (
-          <form className="space-y-3" onSubmit={handleCreateArtistAccount}>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="space-y-1 text-sm font-medium text-slate-700">
-                Email
-                <input
-                  type="email"
-                  value={accountEmail}
-                  onChange={(e) => setAccountEmail(e.target.value)}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  placeholder="artist@example.com"
-                  disabled={accountLoading}
-                  required
-                />
-              </label>
-              <label className="space-y-1 text-sm font-medium text-slate-700">
-                Temp password
-                <input
-                  type="text"
-                  value={accountTempPassword}
-                  onChange={(e) => setAccountTempPassword(e.target.value)}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                  placeholder="min. 8 characters"
-                  disabled={accountLoading}
-                  required
-                />
-              </label>
-            </div>
+          <div className="space-y-3">
             <p className="text-xs text-slate-500">
-              Artists will be forced to change this password on first login. Share the temp password securely.
+              Creates a provisioned artist login, links CanonicalArtist.linkedUserId, and assigns only unambiguous artworks.
             </p>
-            <button type="submit" className="btnPrimary" disabled={accountLoading}>
-              {accountLoading ? "Creating..." : "Create artist account"}
+            <button type="button" className="btnPrimary" disabled={accountLoading} onClick={handleCreateArtistAccount}>
+              {accountLoading ? "Creating..." : "Create V2 Artist Account"}
             </button>
-          </form>
+          </div>
         )}
       </div>
 

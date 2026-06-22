@@ -1,7 +1,7 @@
 import BrandDetailClient from "./BrandDetailClient";
 
 type PageProps = {
-  params: Promise<{ key: string }> | { key: string };
+  params: Promise<{ key: string }>;
 };
 
 export default async function BrandDetailPage({ params }: PageProps) {

@@ -12,6 +12,7 @@ import { buildPrintVariants, buildArtworkSku, dedupeTrimmed, normalizeSelectedPr
 import { ensureCanonicalProductIndexes } from "@/lib/server/canonical-product-indexes";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 import { artistProductOwnershipFilter } from "@/lib/server/product-ownership";
+import { autoPushProductToShopify } from "@/lib/server/shopify-auto-sync";
 
 const createArtworkSchema = z
   .object({
@@ -248,8 +249,8 @@ export async function POST(req: Request) {
       forSale: data.forSale,
       allowPrints: data.printsEnabled,
       originalAvailable: data.originalAvailable,
-      status: saleable ? "pending_review" : "draft",
-      approvalStatus: saleable ? "needs_review" : "unassigned",
+      status: saleable ? "shopify_pending" : "draft",
+      approvalStatus: saleable ? "approved" : "unassigned",
       year: data.year ?? undefined,
       images: {
         thumbUrl: primaryUrls.previewUrl,
@@ -262,9 +263,11 @@ export async function POST(req: Request) {
         heightCm: originalHeightCm ?? undefined,
       },
       sync: {
-        needsPush: false,
-        dirtyAt: null,
-        dirtyFields: [],
+        needsPush: saleable,
+        dirtyAt: saleable ? new Date() : null,
+        dirtyFields: saleable
+          ? ["title", "description", "offerings", "forSale", "allowPrints", "originalAvailable", "images", "dimensions"]
+          : [],
       },
     });
 
@@ -278,7 +281,13 @@ export async function POST(req: Request) {
       throw error;
     }
 
-    return NextResponse.json({ ok: true, productKey }, { status: 201 });
+    const sync = await autoPushProductToShopify({
+      shopDomain: context.user.shopDomain,
+      productKey,
+      shouldPush: saleable,
+    });
+
+    return NextResponse.json({ ok: true, productKey, sync }, { status: 201 });
   } catch (error) {
     return artistApiErrorResponse(error, "artwork_create_failed");
   }

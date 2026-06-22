@@ -33,7 +33,7 @@ export const authOptions: NextAuthOptions = {
         if (shopDomain) filter.shopDomain = shopDomain;
 
         const user = await UserModel.findOne(filter).lean();
-        if (!user || !user.isActive) return null;
+        if (!user || !user.isActive || user.role !== "artist") return null;
 
         const isValid = await compare(password, user.passwordHash);
         if (!isValid) return null;
@@ -41,7 +41,7 @@ export const authOptions: NextAuthOptions = {
         return {
           id: user._id.toString(),
           email: user.email,
-          role: user.role,
+          role: "artist",
           artistId: user.artistId?.toString(),
           artistKey: user.artistKey ?? undefined,
           onboardingComplete: user.onboardingComplete === true,
@@ -80,8 +80,8 @@ export const authOptions: NextAuthOptions = {
         if ("onboardingComplete" in session && session.onboardingComplete !== undefined) {
           token.onboardingComplete = session.onboardingComplete as boolean;
         }
-        if ("role" in session && session.role) {
-          token.role = session.role as UserRole;
+        if ("role" in session && session.role === "artist") {
+          token.role = "artist";
         }
         if ("pendingRegistrationId" in session && session.pendingRegistrationId) {
           token.pendingRegistrationId = session.pendingRegistrationId as string;
@@ -96,7 +96,7 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         session.user.id = (token.id as string) ?? token.sub ?? "";
-        session.user.role = (token.role as UserRole) ?? "artist";
+        session.user.role = "artist";
         session.user.email = (token.email as string) ?? session.user.email;
         if (token.artistId) session.user.artistId = token.artistId as string;
         if (token.artistKey) (session.user as { artistKey?: string }).artistKey = token.artistKey as string;

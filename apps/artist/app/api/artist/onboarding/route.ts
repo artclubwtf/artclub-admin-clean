@@ -7,6 +7,7 @@ import { requireArtistApiContext } from "@/lib/server/artist-context";
 import { normalizePublicArtistMediaUrl, normalizePublicArtistMediaUrls } from "@/lib/server/artist-media";
 import { buildTermsSnapshotHash, ensureTermsDocument, loadActiveTermsModules } from "@/lib/server/terms";
 import { CanonicalArtistModel, TermsAcceptanceModel, UserModel } from "@/lib/server/models";
+import { autoPushArtistToShopify } from "@/lib/server/shopify-auto-sync";
 
 const onboardingSubmitSchema = z
   .object({
@@ -239,7 +240,13 @@ export async function POST(req: Request) {
       },
     );
 
-    return NextResponse.json({ ok: true, onboardingComplete: true }, { status: 200 });
+    const sync = await autoPushArtistToShopify({
+      shopDomain: context.user.shopDomain,
+      artistKey: context.canonicalArtist.artistKey,
+      shouldPush: artistChangedFields.length > 0,
+    });
+
+    return NextResponse.json({ ok: true, onboardingComplete: true, sync }, { status: 200 });
   } catch (error) {
     return artistApiErrorResponse(error, "onboarding_save_failed");
   }

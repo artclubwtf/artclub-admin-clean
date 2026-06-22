@@ -5,7 +5,7 @@ import { connectMongo } from "@/lib/mongodb";
 import { ConceptModel } from "@/models/Concept";
 
 type RouteContext = {
-  params: { id: string } | Promise<{ id: string }>;
+  params: Promise<{ id: string }>;
 };
 
 export async function GET(req: NextRequest, context: RouteContext) {

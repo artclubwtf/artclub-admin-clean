@@ -6,7 +6,7 @@ import { BrandSettingsModel } from "@/models/BrandSettings";
 import { normalizeBrandKey } from "../../utils";
 
 type RouteContext = {
-  params: Promise<{ key: string }> | { key: string };
+  params: Promise<{ key: string }>;
 };
 
 const MAX_LOGO_SIZE_BYTES = 10 * 1024 * 1024;

@@ -7,10 +7,8 @@ import { ConceptModel } from "@/models/Concept";
 import { BrandSettingsModel } from "@/models/BrandSettings";
 
 type PageProps = {
-  params: { id: string } | Promise<{ id: string }>;
-  searchParams?:
-    | { theme?: string; autoprint?: string; template?: "minimal" | "editorial" | "night" }
-    | Promise<{ theme?: string; autoprint?: string; template?: "minimal" | "editorial" | "night" }>;
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ theme?: string; autoprint?: string; template?: "minimal" | "editorial" | "night" }>;
 };
 
 type Brand = {

@@ -6,7 +6,7 @@ import { ConceptSnapshotModel } from "@/models/ConceptSnapshot";
 import { buildSnapshotPayload, isValidObjectId, notFound } from "../../utils";
 
 type RouteContext = {
-  params: Promise<{ id: string }> | { id: string };
+  params: Promise<{ id: string }>;
 };
 
 async function resolveId(context: RouteContext) {

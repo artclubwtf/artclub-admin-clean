@@ -1,7 +1,7 @@
 import ConceptDetailClient from "./ConceptDetailClient";
 
 type PageProps = {
-  params: Promise<{ id: string }> | { id: string };
+  params: Promise<{ id: string }>;
 };
 
 export default async function ConceptDetailPage({ params }: PageProps) {
