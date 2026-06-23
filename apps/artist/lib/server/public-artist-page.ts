@@ -3,6 +3,7 @@ import { normalizePublicArtistMediaUrls } from "@/lib/server/artist-media";
 import { createArtistMediaUrlRewriter } from "@/lib/server/artist-media-rewrite";
 import { buildPublicArtistProfileShape } from "@/lib/server/public-artist-profile";
 import { ArtistAnnouncementModel, CanonicalArtistModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
+import { logArtistProfileRender } from "../../../admin/lib/sync/syncLogger";
 import type { PublicArtistArtworkItem, PublicArtistProfilePageData } from "@/lib/types";
 
 function escapeRegex(value: string) {
@@ -162,7 +163,7 @@ export async function loadPublicArtistPageBySlug(rawSlug: string): Promise<Publi
       };
     });
 
-  return {
+  const result = {
     slug: profile.handle || slug,
     displayName: profile.displayName,
     bio: profile.bio,
@@ -177,4 +178,20 @@ export async function loadPublicArtistPageBySlug(rawSlug: string): Promise<Publi
     experience: profile.experience || [],
     announcements: profile.announcements || [],
   };
+
+  logArtistProfileRender("artist_profile_render_data", {
+    service: "artist",
+    canonicalArtistId: String(artist._id),
+    publicSlug: artist.publicSlug || artist.handle || slug,
+    displayName: profile.displayName,
+    coverImageUrl: result.heroUrl || "",
+    galleryImageCount: profile.profileImages.galleryUrls.length,
+    galleryImageUrls: profile.profileImages.galleryUrls,
+    hasIntro: Boolean(profile.introduction),
+    hasLongText: Boolean(profile.longText),
+    hasInstagram: profile.socialLinks.some((item) => item.type === "instagram"),
+    artworkCount: publicArtworks.length,
+  });
+
+  return result;
 }

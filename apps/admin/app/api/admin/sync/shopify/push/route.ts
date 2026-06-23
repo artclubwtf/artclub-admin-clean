@@ -22,11 +22,26 @@ const payloadSchema = z.object({
 });
 
 export async function POST(req: Request) {
+  const session = await getServerSession(authOptions);
   const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
-  const session = await getServerSession(authOptions);
 
   if (!isShopifyWriteEnabled()) {
+    const runId = createSyncRunId("shopify-push");
+    logShopifyPush(
+      "shopify_write_disabled_diagnostics",
+      {
+        service: "admin",
+        SHOPIFY_WRITE_ENABLED: (process.env.SHOPIFY_WRITE_ENABLED || "").trim() || null,
+        hasShopifyToken: Boolean(process.env.SHOPIFY_ADMIN_ACCESS_TOKEN),
+        hasShopifyShopDomain: Boolean(process.env.SHOPIFY_SHOP_DOMAIN || process.env.SHOPIFY_STORE_DOMAIN),
+        attemptedOperation: "admin_push_route",
+        canonicalProductId: null,
+        productKey: null,
+        requiredFix: "Set SHOPIFY_WRITE_ENABLED=true on this service",
+      },
+      { runId, force: true },
+    );
     return NextResponse.json({ ok: false, error: "shopify_write_disabled" }, { status: 403 });
   }
 

@@ -2,8 +2,10 @@ import { pushOneArtist, pushOneProduct } from "../../../admin/lib/sync/shopifyPu
 import {
   createSyncRunId,
   logAutoSync,
+  logShopifyPush,
   logSyncError,
 } from "../../../admin/lib/sync/syncLogger";
+import { isShopifyWriteEnabled } from "../../../admin/lib/featureFlags";
 import { CanonicalArtistModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 
 export type AutoShopifySyncResult =
@@ -48,6 +50,32 @@ export async function autoPushProductToShopify(input: {
   const runId = input.runId || createSyncRunId("artist-auto-sync");
   if (!input.shouldPush) return { ok: true, skipped: true, message: "not_saleable", runId };
 
+  const product = await CanonicalProductModel.findOne({
+    shopDomain: input.shopDomain,
+    productKey: input.productKey,
+  })
+    .select({ _id: 1, productKey: 1, shopifyProductId: 1, shopify: 1, sync: 1 })
+    .lean()
+    .catch(() => null);
+
+  if (!isShopifyWriteEnabled()) {
+    logShopifyPush(
+      "shopify_write_disabled_diagnostics",
+      {
+        service: "artist",
+        SHOPIFY_WRITE_ENABLED: (process.env.SHOPIFY_WRITE_ENABLED || "").trim() || null,
+        hasShopifyToken: Boolean(process.env.SHOPIFY_ADMIN_ACCESS_TOKEN),
+        hasShopifyShopDomain: Boolean(process.env.SHOPIFY_SHOP_DOMAIN || process.env.SHOPIFY_STORE_DOMAIN),
+        attemptedOperation: "push_product",
+        canonicalProductId: product?._id ? String(product._id) : null,
+        productKey: input.productKey,
+        requiredFix: "Set SHOPIFY_WRITE_ENABLED=true on this service",
+      },
+      { runId, force: true },
+    );
+    return { ok: false, error: "shopify_write_disabled", runId };
+  }
+
   try {
     logAutoSync(
       "artist_app_auto_shopify_push_started",
@@ -84,7 +112,7 @@ export async function autoPushProductToShopify(input: {
       return { ...sync, runId };
     }
 
-    const product = await CanonicalProductModel.findOne({
+    const productAfterPush = await CanonicalProductModel.findOne({
       shopDomain: input.shopDomain,
       productKey: input.productKey,
     })
@@ -98,12 +126,12 @@ export async function autoPushProductToShopify(input: {
     logAutoSync(
       "artist_app_auto_shopify_push_succeeded",
       {
-        canonicalProductId: product?._id ? String(product._id) : null,
-        shopifyProductId: product?.shopifyProductId || null,
-        productGid: product?.shopify?.productGid || product?.shopifyProductId || null,
+        canonicalProductId: productAfterPush?._id ? String(productAfterPush._id) : null,
+        shopifyProductId: productAfterPush?.shopifyProductId || null,
+        productGid: productAfterPush?.shopify?.productGid || productAfterPush?.shopifyProductId || null,
         variantCount,
-        syncStatus: product?.sync?.status || null,
-        lastPushAt: product?.sync?.lastPushAt ? new Date(product.sync.lastPushAt).toISOString() : null,
+        syncStatus: productAfterPush?.sync?.status || null,
+        lastPushAt: productAfterPush?.sync?.lastPushAt ? new Date(productAfterPush.sync.lastPushAt).toISOString() : null,
       },
       { runId },
     );
@@ -111,11 +139,11 @@ export async function autoPushProductToShopify(input: {
     return {
       ...sync,
       runId,
-      shopifyProductId: product?.shopifyProductId || null,
-      productGid: product?.shopify?.productGid || product?.shopifyProductId || null,
+      shopifyProductId: productAfterPush?.shopifyProductId || null,
+      productGid: productAfterPush?.shopify?.productGid || productAfterPush?.shopifyProductId || null,
       variantCount,
-      syncStatus: product?.sync?.status || null,
-      lastPushAt: product?.sync?.lastPushAt ? new Date(product.sync.lastPushAt).toISOString() : null,
+      syncStatus: productAfterPush?.sync?.status || null,
+      lastPushAt: productAfterPush?.sync?.lastPushAt ? new Date(productAfterPush.sync.lastPushAt).toISOString() : null,
     };
   } catch (error) {
     const message = errorMessage(error);
@@ -150,6 +178,32 @@ export async function autoPushArtistToShopify(input: {
 }): Promise<AutoShopifySyncResult> {
   const runId = input.runId || createSyncRunId("artist-auto-sync");
   if (!input.shouldPush) return { ok: true, skipped: true, message: "no_public_profile_changes", runId };
+
+  const artist = await CanonicalArtistModel.findOne({
+    shopDomain: input.shopDomain,
+    artistKey: input.artistKey,
+  })
+    .select({ _id: 1, artistKey: 1 })
+    .lean()
+    .catch(() => null);
+
+  if (!isShopifyWriteEnabled()) {
+    logShopifyPush(
+      "shopify_write_disabled_diagnostics",
+      {
+        service: "artist",
+        SHOPIFY_WRITE_ENABLED: (process.env.SHOPIFY_WRITE_ENABLED || "").trim() || null,
+        hasShopifyToken: Boolean(process.env.SHOPIFY_ADMIN_ACCESS_TOKEN),
+        hasShopifyShopDomain: Boolean(process.env.SHOPIFY_SHOP_DOMAIN || process.env.SHOPIFY_STORE_DOMAIN),
+        attemptedOperation: "push_artist",
+        canonicalArtistId: artist?._id ? String(artist._id) : null,
+        artistKey: input.artistKey,
+        requiredFix: "Set SHOPIFY_WRITE_ENABLED=true on this service",
+      },
+      { runId, force: true },
+    );
+    return { ok: false, error: "shopify_write_disabled", runId };
+  }
 
   try {
     const result = await pushOneArtist({ shopDomain: input.shopDomain, artistKey: input.artistKey, runId });

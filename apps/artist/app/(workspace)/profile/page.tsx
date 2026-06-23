@@ -10,6 +10,7 @@ import {
 import { requireArtistContext } from "@/lib/server/artist-context";
 import { ArtistAnnouncementModel, CanonicalArtistModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 import { artistProductOwnershipFilter } from "@/lib/server/product-ownership";
+import { logArtistProfileRender } from "../../../../admin/lib/sync/syncLogger";
 
 function formatCurrency(cents: number) {
   return new Intl.NumberFormat("en-DE", {
@@ -51,7 +52,8 @@ export default async function ProfilePage({
   const createIntent = Array.isArray(resolvedSearchParams.create)
     ? resolvedSearchParams.create[0]
     : resolvedSearchParams.create;
-  const [artist, announcements, artworks] = await Promise.all([
+  const ownershipFilter = artistProductOwnershipFilter(context);
+  const [artist, announcements, artworks, artworkCount] = await Promise.all([
     CanonicalArtistModel.findById(context.canonicalArtist._id).lean(),
     ArtistAnnouncementModel.find({
       shopDomain: context.user.shopDomain,
@@ -60,7 +62,7 @@ export default async function ProfilePage({
       .sort({ sortOrder: 1, createdAt: -1 })
       .lean(),
     CanonicalProductModel.find({
-      ...artistProductOwnershipFilter(context),
+      ...ownershipFilter,
       type: "artwork",
       status: { $ne: "archived" },
     })
@@ -79,6 +81,11 @@ export default async function ProfilePage({
       })
       .limit(12)
       .lean(),
+    CanonicalProductModel.countDocuments({
+      ...ownershipFilter,
+      type: "artwork",
+      status: { $ne: "archived" },
+    }),
   ]);
 
   const variants = artworks.length
@@ -155,6 +162,24 @@ export default async function ProfilePage({
         detailLabel: "more about the artwork",
       };
     });
+
+  logArtistProfileRender("artist_profile_render_data", {
+    service: "artist",
+    canonicalArtistId: String(context.canonicalArtist._id),
+    publicSlug: artist?.publicSlug || context.canonicalArtist.handle || context.user.artistKey,
+    displayName: artist?.displayName || context.canonicalArtist.displayName || context.user.name || "",
+    coverImageUrl: rewriteMediaUrl(artist?.profileImages?.heroUrl || context.canonicalArtist.profileImages?.heroUrl || ""),
+    galleryImageCount: Array.isArray(artist?.profileImages?.galleryUrls)
+      ? artist.profileImages.galleryUrls.length
+      : 0,
+    galleryImageUrls: Array.isArray(artist?.profileImages?.galleryUrls)
+      ? artist.profileImages.galleryUrls.map((value) => rewriteMediaUrl(value))
+      : [],
+    hasIntro: Boolean(artist?.introduction),
+    hasLongText: Boolean(artist?.longText),
+    hasInstagram: Boolean(artist?.instagram),
+    artworkCount,
+  });
 
   return (
     <ProfileForm

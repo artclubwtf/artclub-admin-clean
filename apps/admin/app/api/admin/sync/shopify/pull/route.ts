@@ -22,9 +22,25 @@ function mapScope(scope: "artists" | "products"): "shopify_pull_artists" | "shop
 }
 
 export async function POST(req: Request) {
+  const session = await getServerSession(authOptions);
+  const entryRunId = createSyncRunId("shopify-pull-route");
+  logShopifyPull(
+    "admin_shopify_pull_route_hit",
+    {
+      runId: entryRunId,
+      service: "admin",
+      method: req.method,
+      timestamp: new Date().toISOString(),
+      hasAdminSession: Boolean(session?.user && (session.user.role === "admin" || session.user.role === "team")),
+      DEBUG_SHOPIFY_SYNC: (process.env.DEBUG_SHOPIFY_SYNC || "").trim() || null,
+      DEBUG_SHOPIFY_SYNC_VERBOSE: (process.env.DEBUG_SHOPIFY_SYNC_VERBOSE || "").trim() || null,
+    },
+    { runId: entryRunId, force: true },
+  );
+
   const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
-  const session = await getServerSession(authOptions);
+  const sessionUser = session;
 
   if (!isMigrationModeEnabled()) {
     return NextResponse.json({ ok: false, error: "migration_mode_disabled" }, { status: 403 });
@@ -69,7 +85,7 @@ export async function POST(req: Request) {
       "admin_shopify_pull_started",
       {
         triggeredBy: session?.user?.email || session?.user?.id || "unknown",
-        role: session?.user?.role || null,
+        role: sessionUser?.user?.role || null,
         runId,
         scope,
         shopDomain,
@@ -114,6 +130,7 @@ export async function POST(req: Request) {
       "admin_shopify_pull_finished",
       {
         triggeredBy: session?.user?.email || session?.user?.id || "unknown",
+        role: sessionUser?.user?.role || null,
         scope,
         runId,
         artistsCount: scope === "artists" ? importedCount : 0,
@@ -144,6 +161,7 @@ export async function POST(req: Request) {
       error,
       {
         triggeredBy: session?.user?.email || session?.user?.id || "unknown",
+        role: sessionUser?.user?.role || null,
         scope,
         shopDomain,
         message,

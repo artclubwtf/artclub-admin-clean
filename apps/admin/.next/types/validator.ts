@@ -101,6 +101,24 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../app/admin/artists-v2/[artistKey]/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/admin/artists-v2/[artistKey]">> = Specific
+  const handler = {} as typeof import("../../app/admin/artists-v2/[artistKey]/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/admin/artists-v2/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/admin/artists-v2">> = Specific
+  const handler = {} as typeof import("../../app/admin/artists-v2/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../app/admin/artists/[id]/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/admin/artists/[id]">> = Specific
@@ -677,6 +695,24 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../app/api/admin/migration/accounts/[artistKey]/provision/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/migration/accounts/[artistKey]/provision">> = Specific
+  const handler = {} as typeof import("../../app/api/admin/migration/accounts/[artistKey]/provision/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/api/admin/migration/artworks/[productKey]/match/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/migration/artworks/[productKey]/match">> = Specific
+  const handler = {} as typeof import("../../app/api/admin/migration/artworks/[productKey]/match/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../app/api/admin/migration/matches/artists/[artistKey]/route.ts
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/migration/matches/artists/[artistKey]">> = Specific
@@ -888,6 +924,33 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/sync/artworks">> = Specific
   const handler = {} as typeof import("../../app/api/admin/sync/artworks/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/api/admin/sync/legacy/import/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/sync/legacy/import">> = Specific
+  const handler = {} as typeof import("../../app/api/admin/sync/legacy/import/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/api/admin/sync/shopify/diagnostics/artist/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/sync/shopify/diagnostics/artist">> = Specific
+  const handler = {} as typeof import("../../app/api/admin/sync/shopify/diagnostics/artist/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/api/admin/sync/shopify/diagnostics/products/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/sync/shopify/diagnostics/products">> = Specific
+  const handler = {} as typeof import("../../app/api/admin/sync/shopify/diagnostics/products/route.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check

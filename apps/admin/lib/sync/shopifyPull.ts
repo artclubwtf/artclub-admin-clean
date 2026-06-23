@@ -1,11 +1,16 @@
 import { connectMongo } from "@/lib/mongodb";
 import {
-  KUENSTLER_FIELD_KEYS,
   PRODUCT_METAFIELD_KEYS,
   SHOPIFY_METAOBJECT_TYPE_KUENSTLER,
   SHOPIFY_PRODUCT_NAMESPACE_CUSTOM,
 } from "@/lib/shopify";
 import { resolveShopDomain } from "@/lib/shopDomain";
+import {
+  extractShopifyArtistMetaobjectMapping,
+  mapShopifyProductToCanonicalArtist,
+  resolveShopifyFileField,
+  type ShopifyArtistMetaobjectNode as MetaobjectNode,
+} from "@/lib/sync/shopifyMapping";
 import {
   createSyncRunId,
   logArtistImport,
@@ -34,43 +39,6 @@ type PullResult = {
 type ShopifyGraphQLResponse<TData> = {
   data?: TData;
   errors?: unknown;
-};
-
-type MetaobjectNode = {
-  id?: string | null;
-  handle?: string | null;
-  type?: string | null;
-  displayName?: string | null;
-  fields?: Array<{
-    key?: string | null;
-    value?: string | null;
-    type?: string | null;
-    reference?: ShopifyFieldReference | null;
-  }> | null;
-};
-
-type ShopifyFieldReference = {
-  __typename?: string | null;
-  id?: string | null;
-  alt?: string | null;
-  url?: string | null;
-  handle?: string | null;
-  image?: {
-    url?: string | null;
-    altText?: string | null;
-    width?: number | null;
-    height?: number | null;
-  } | null;
-};
-
-type ResolvedMediaField = {
-  fieldKey: string;
-  url: string;
-  altText?: string;
-  shopifyFileGid?: string;
-  mediaGid?: string;
-  width?: number;
-  height?: number;
 };
 
 type ArtistPageResponse = {
@@ -110,30 +78,6 @@ type ProductNode = {
   metafieldHeight?: { value?: string | null } | null;
   metafieldKurzbeschreibung?: { value?: string | null } | null;
   variants?: { nodes?: ProductVariantNode[] | null } | null;
-};
-
-type CanonicalArtistLookup = {
-  selectedArtist:
-    | {
-        _id: unknown;
-        artistKey: string;
-        publicSlug?: string | null;
-        handle?: string | null;
-        displayName?: string | null;
-        shopifyMetaobjectId?: string | null;
-        shopify?: { metaobjectGid?: string | null } | null;
-      }
-    | null;
-  selectedArtistId?: string;
-  selectedArtistName?: string;
-  reason: string;
-  lookupCandidates: {
-    publicSlug: string[];
-    handle: string[];
-    artistKey: string[];
-    shopifyMetaobject: string[];
-  };
-  selectedInputValue?: string;
 };
 
 type ProductPageResponse = {
@@ -207,67 +151,6 @@ async function callShopifyAdmin<TData>(query: string, variables: Record<string, 
   return json.data;
 }
 
-function toFieldMap(fields?: Array<{ key?: string | null; value?: string | null }> | null): Record<string, string> {
-  const map: Record<string, string> = {};
-  for (const field of fields || []) {
-    const key = field?.key?.trim();
-    const value = field?.value?.trim();
-    if (!key || !value) continue;
-    map[key] = value;
-  }
-  return map;
-}
-
-function resolveMediaField(
-  field: { key?: string | null; value?: string | null; reference?: ShopifyFieldReference | null },
-  options?: { runId?: string },
-): ResolvedMediaField | null {
-  const fieldKey = field.key?.trim();
-  if (!fieldKey) return null;
-
-  const reference = field.reference;
-  const image = reference?.image;
-  const url = firstTruthy([image?.url || undefined, reference?.url || undefined]);
-  const hasReference = Boolean(reference);
-
-  logShopifyPull(
-    "shopify_file_reference_resolve",
-    {
-      fieldKey,
-      rawValue: previewValue(field.value, 120),
-      hasReference,
-      referenceTypename: reference?.__typename || null,
-      mediaGid: reference?.id || field.value || null,
-      imageUrlFound: Boolean(image?.url),
-      imageUrl: image?.url || null,
-      genericFileUrlFound: Boolean(reference?.url),
-      reason: url ? null : hasReference ? "reference_without_url" : field.value ? "field_value_gid_without_reference" : "empty_field",
-    },
-    { runId: options?.runId },
-  );
-
-  if (!url) return null;
-
-  return {
-    fieldKey,
-    url,
-    altText: image?.altText || reference?.alt || undefined,
-    shopifyFileGid: reference?.id || field.value || undefined,
-    mediaGid: reference?.id || undefined,
-    width: typeof image?.width === "number" ? image.width : undefined,
-    height: typeof image?.height === "number" ? image.height : undefined,
-  };
-}
-
-function mediaByField(fields?: MetaobjectNode["fields"], options?: { runId?: string }): Record<string, ResolvedMediaField> {
-  const map: Record<string, ResolvedMediaField> = {};
-  for (const field of fields || []) {
-    const media = resolveMediaField(field || {}, options);
-    if (media) map[media.fieldKey] = media;
-  }
-  return map;
-}
-
 function toBoolean(raw?: string): boolean {
   if (!raw) return false;
   const value = raw.trim().toLowerCase();
@@ -332,120 +215,6 @@ function slugify(input: string): string {
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-}
-
-function escapeRegex(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-const RELEVANT_ARTIST_FIELD_KEYS = new Set<string>([
-  KUENSTLER_FIELD_KEYS.app_url,
-  KUENSTLER_FIELD_KEYS.bilder,
-  KUENSTLER_FIELD_KEYS.bild_1,
-  KUENSTLER_FIELD_KEYS.bild_2,
-  KUENSTLER_FIELD_KEYS.bild_3,
-  KUENSTLER_FIELD_KEYS.instagram,
-  KUENSTLER_FIELD_KEYS.name,
-  KUENSTLER_FIELD_KEYS.quote,
-  KUENSTLER_FIELD_KEYS.einleitung_1,
-  KUENSTLER_FIELD_KEYS.text_1,
-  KUENSTLER_FIELD_KEYS.kategorie,
-]);
-
-async function resolveCanonicalArtistForShopifyProduct(input: {
-  shopDomain: string;
-  customKunstlerValue?: string | null;
-  customKuenstlerValue?: string | null;
-}): Promise<CanonicalArtistLookup> {
-  const customKunstlerValue = input.customKunstlerValue?.trim();
-  const customKuenstlerValue = input.customKuenstlerValue?.trim();
-  const value = customKunstlerValue || customKuenstlerValue;
-  if (!value) {
-    return {
-      selectedArtist: null,
-      reason: customKuenstlerValue === "" ? "custom_kuenstler_empty" : "no_custom_kunstler",
-      lookupCandidates: { publicSlug: [], handle: [], artistKey: [], shopifyMetaobject: [] },
-    };
-  }
-
-  const exact = new RegExp(`^${escapeRegex(value)}$`, "i");
-  const matches = await CanonicalArtistModel.find({
-    shopDomain: input.shopDomain,
-    $or: [
-      { publicSlug: exact },
-      { handle: exact },
-      { artistKey: exact },
-      { shopifyMetaobjectId: value },
-      { "shopify.metaobjectGid": value },
-    ],
-  })
-    .select({ _id: 1, artistKey: 1, publicSlug: 1, handle: 1, displayName: 1, shopifyMetaobjectId: 1, shopify: 1 })
-    .limit(20)
-    .lean();
-
-  const publicSlugMatches = matches
-    .filter((artist) => artist.publicSlug && exact.test(artist.publicSlug))
-    .map((artist) => artist.publicSlug!.trim());
-  const handleMatches = matches.filter((artist) => artist.handle && exact.test(artist.handle)).map((artist) => artist.handle!.trim());
-  const artistKeyMatches = matches
-    .filter((artist) => artist.artistKey && exact.test(artist.artistKey))
-    .map((artist) => artist.artistKey.trim());
-  const metaobjectMatches = matches
-    .filter((artist) => artist.shopifyMetaobjectId === value || artist.shopify?.metaobjectGid === value)
-    .map((artist) => artist.shopifyMetaobjectId || artist.shopify?.metaobjectGid || "")
-    .filter(Boolean);
-
-  if (matches.length === 0) {
-    return {
-      selectedArtist: null,
-      reason: "no_matching_artist",
-      lookupCandidates: {
-        publicSlug: publicSlugMatches,
-        handle: handleMatches,
-        artistKey: artistKeyMatches,
-        shopifyMetaobject: metaobjectMatches,
-      },
-      selectedInputValue: value,
-    };
-  }
-
-  if (matches.length > 1) {
-    return {
-      selectedArtist: null,
-      reason: "ambiguous_match",
-      lookupCandidates: {
-        publicSlug: publicSlugMatches,
-        handle: handleMatches,
-        artistKey: artistKeyMatches,
-        shopifyMetaobject: metaobjectMatches,
-      },
-      selectedInputValue: value,
-    };
-  }
-
-  const selectedArtist = matches[0];
-  let reason = "matched_custom_kunstler_handle";
-  if (selectedArtist.publicSlug && exact.test(selectedArtist.publicSlug)) {
-    reason = "matched_custom_kunstler_publicSlug";
-  } else if (selectedArtist.artistKey && exact.test(selectedArtist.artistKey)) {
-    reason = "matched_custom_kunstler_artistKey";
-  } else if (selectedArtist.shopifyMetaobjectId === value || selectedArtist.shopify?.metaobjectGid === value) {
-    reason = "matched_custom_kunstler_shopify_metaobject";
-  }
-
-  return {
-    selectedArtist,
-    selectedArtistId: String(selectedArtist._id),
-    selectedArtistName: selectedArtist.displayName || selectedArtist.artistKey,
-    reason,
-    lookupCandidates: {
-      publicSlug: publicSlugMatches,
-      handle: handleMatches,
-      artistKey: artistKeyMatches,
-      shopifyMetaobject: metaobjectMatches,
-    },
-    selectedInputValue: value,
-  };
 }
 
 function productFallbackHandle(id: string, title?: string | null): string {
@@ -523,6 +292,24 @@ async function pullArtistsInternal(input: PullInput, mode: PullMode): Promise<Pu
                   handle
                 }
               }
+              references(first: 10) {
+                nodes {
+                  __typename
+                  ... on MediaImage {
+                    id
+                    image {
+                      url
+                      altText
+                      width
+                      height
+                    }
+                  }
+                  ... on GenericFile {
+                    id
+                    url
+                  }
+                }
+              }
             }
           }
         }
@@ -547,23 +334,12 @@ async function pullArtistsInternal(input: PullInput, mode: PullMode): Promise<Pu
 
   for (const edge of edges) {
     const node = edge?.node;
+    if (!node) continue;
     const metaobjectGid = node?.id?.trim();
     if (!metaobjectGid) continue;
     importedMetaobjectIds.push(metaobjectGid);
 
-    const handle = firstTruthy([node?.handle || undefined]) || `artist-${metaobjectGid.split("/").pop() || "unknown"}`;
-    const fieldMap = toFieldMap(node?.fields);
-    const mediaMap = mediaByField(node?.fields, { runId });
-    const displayName = firstTruthy([fieldMap[KUENSTLER_FIELD_KEYS.name], node?.displayName || undefined, handle]) || handle;
-    const galleryUrls = uniq([
-      mediaMap[KUENSTLER_FIELD_KEYS.bild_1]?.url || fieldMap[KUENSTLER_FIELD_KEYS.bild_1] || "",
-      mediaMap[KUENSTLER_FIELD_KEYS.bild_2]?.url || fieldMap[KUENSTLER_FIELD_KEYS.bild_2] || "",
-      mediaMap[KUENSTLER_FIELD_KEYS.bild_3]?.url || fieldMap[KUENSTLER_FIELD_KEYS.bild_3] || "",
-    ]);
-
-    const avatarUrl = firstTruthy([mediaMap[KUENSTLER_FIELD_KEYS.bild_1]?.url, fieldMap[KUENSTLER_FIELD_KEYS.bild_1], galleryUrls[0]]);
-    const heroUrl = firstTruthy([mediaMap[KUENSTLER_FIELD_KEYS.bilder]?.url, fieldMap[KUENSTLER_FIELD_KEYS.bilder], galleryUrls[0]]);
-    const introduction = firstTruthy([fieldMap[KUENSTLER_FIELD_KEYS.einleitung_1], fieldMap[KUENSTLER_FIELD_KEYS.text_1]]);
+    const mapping = extractShopifyArtistMetaobjectMapping(node);
     const fieldKeys = (node?.fields || []).map((field) => field?.key?.trim()).filter(Boolean) as string[];
     const fieldTypes = Object.fromEntries(
       (node?.fields || [])
@@ -572,7 +348,7 @@ async function pullArtistsInternal(input: PullInput, mode: PullMode): Promise<Pu
     );
     const hasReferenceByKey = Object.fromEntries(
       (node?.fields || [])
-        .map((field) => [field?.key?.trim(), Boolean(field?.reference)] as const)
+        .map((field) => [field?.key?.trim(), Boolean(field?.reference) || Boolean(field?.references?.nodes?.length)] as const)
         .filter((entry): entry is [string, boolean] => Boolean(entry[0])),
     );
 
@@ -580,9 +356,9 @@ async function pullArtistsInternal(input: PullInput, mode: PullMode): Promise<Pu
       "artist_metaobject_received",
       {
         metaobjectId: metaobjectGid,
-        handle,
-        type: node?.type || SHOPIFY_METAOBJECT_TYPE_KUENSTLER,
-        displayName,
+        handle: mapping.handle,
+        type: mapping.type || SHOPIFY_METAOBJECT_TYPE_KUENSTLER,
+        displayName: mapping.displayName,
         fieldKeys,
         fieldTypes,
         hasReferenceByKey,
@@ -592,67 +368,40 @@ async function pullArtistsInternal(input: PullInput, mode: PullMode): Promise<Pu
 
     for (const field of node?.fields || []) {
       const fieldKey = field?.key?.trim();
-      if (!fieldKey || !RELEVANT_ARTIST_FIELD_KEYS.has(fieldKey)) continue;
+      if (!fieldKey || !["bilder", "bild_1", "bild_2", "bild_3"].includes(fieldKey)) continue;
+      const resolved = resolveShopifyFileField(field);
+      logShopifyPull(
+        "shopify_file_reference_resolve",
+        {
+          fieldKey: resolved.fieldKey,
+          rawValue: resolved.rawValuePreview,
+          hasReference: resolved.hasReference,
+          referenceTypename: resolved.referenceTypename,
+          mediaGid: resolved.mediaGid || resolved.shopifyFileGid || null,
+          imageUrlFound: Boolean(resolved.referenceImageUrl),
+          imageUrl: resolved.referenceImageUrl,
+          genericFileUrlFound: Boolean(resolved.referenceGenericFileUrl),
+          reason: resolved.resolvedUrl ? null : resolved.reason,
+        },
+        { runId },
+      );
+    }
 
-      const mappedTo =
-        fieldKey === KUENSTLER_FIELD_KEYS.app_url
-          ? "appUrl"
-          : fieldKey === KUENSTLER_FIELD_KEYS.bilder
-            ? "profileImages.heroUrl"
-            : fieldKey === KUENSTLER_FIELD_KEYS.bild_1
-              ? "profileImages.avatarUrl"
-              : fieldKey === KUENSTLER_FIELD_KEYS.bild_2
-                ? "profileImages.galleryUrls[1]"
-                : fieldKey === KUENSTLER_FIELD_KEYS.bild_3
-                  ? "profileImages.galleryUrls[2]"
-                  : fieldKey === KUENSTLER_FIELD_KEYS.instagram
-                    ? "instagram"
-                    : fieldKey === KUENSTLER_FIELD_KEYS.name
-                      ? "displayName"
-                      : fieldKey === KUENSTLER_FIELD_KEYS.quote
-                        ? "quote"
-                        : fieldKey === KUENSTLER_FIELD_KEYS.einleitung_1
-                          ? "introduction"
-                          : fieldKey === KUENSTLER_FIELD_KEYS.text_1
-                            ? "longText"
-                            : "categoryRef";
-      const mappedValue =
-        fieldKey === KUENSTLER_FIELD_KEYS.app_url
-          ? fieldMap.app_url || fieldMap.appUrl
-          : fieldKey === KUENSTLER_FIELD_KEYS.bilder
-            ? heroUrl
-            : fieldKey === KUENSTLER_FIELD_KEYS.bild_1
-              ? avatarUrl
-              : fieldKey === KUENSTLER_FIELD_KEYS.bild_2
-                ? galleryUrls[1]
-                : fieldKey === KUENSTLER_FIELD_KEYS.bild_3
-                  ? galleryUrls[2]
-                  : fieldKey === KUENSTLER_FIELD_KEYS.instagram
-                    ? fieldMap[KUENSTLER_FIELD_KEYS.instagram]
-                    : fieldKey === KUENSTLER_FIELD_KEYS.name
-                      ? displayName
-                      : fieldKey === KUENSTLER_FIELD_KEYS.quote
-                        ? fieldMap[KUENSTLER_FIELD_KEYS.quote]
-                        : fieldKey === KUENSTLER_FIELD_KEYS.einleitung_1
-                          ? fieldMap[KUENSTLER_FIELD_KEYS.einleitung_1]
-                          : fieldKey === KUENSTLER_FIELD_KEYS.text_1
-                            ? fieldMap[KUENSTLER_FIELD_KEYS.text_1]
-                            : fieldMap[KUENSTLER_FIELD_KEYS.kategorie];
-
+    for (const fieldCheck of mapping.fieldMappings) {
       logArtistImport(
         "artist_metaobject_field_mapped",
         {
           metaobjectId: metaobjectGid,
-          handle,
-          fieldKey,
-          fieldType: field?.type || null,
-          rawValuePreview: previewValue(field?.value, 120),
-          hasReference: Boolean(field?.reference),
-          referenceTypename: field?.reference?.__typename || null,
-          resolvedUrl: mediaMap[fieldKey]?.url || null,
-          mappedTo,
-          success: Boolean(mappedValue),
-          reason: mappedValue ? null : field?.value ? "mapped_value_empty" : "empty_source_value",
+          handle: mapping.handle,
+          fieldKey: fieldCheck.fieldKey,
+          fieldType: fieldCheck.rawType,
+          rawValuePreview: fieldCheck.rawValuePreview,
+          hasReference: fieldCheck.hasReference,
+          referenceTypename: fieldCheck.referenceTypename,
+          resolvedUrl: fieldCheck.resolvedUrl,
+          mappedTo: fieldCheck.mappedTo,
+          success: fieldCheck.success,
+          reason: fieldCheck.reason,
         },
         { runId },
       );
@@ -664,37 +413,27 @@ async function pullArtistsInternal(input: PullInput, mode: PullMode): Promise<Pu
         update: {
           $set: {
             shopDomain,
-            artistKey: handle,
-            handle,
-            publicSlug: handle,
-            displayName,
-            appUrl: fieldMap.app_url || fieldMap.appUrl || undefined,
-            instagram: fieldMap[KUENSTLER_FIELD_KEYS.instagram] || undefined,
-            quote: fieldMap[KUENSTLER_FIELD_KEYS.quote] || undefined,
-            introduction: fieldMap[KUENSTLER_FIELD_KEYS.einleitung_1] || undefined,
-            bio: introduction || undefined,
-            longText: fieldMap[KUENSTLER_FIELD_KEYS.text_1] || undefined,
-            categoryRef: fieldMap[KUENSTLER_FIELD_KEYS.kategorie] || undefined,
+            artistKey: mapping.handle,
+            handle: mapping.handle,
+            publicSlug: mapping.handle,
+            displayName: mapping.displayName,
+            appUrl: mapping.appUrl || undefined,
+            instagram: mapping.instagram || undefined,
+            quote: mapping.quote || undefined,
+            introduction: mapping.introduction || undefined,
+            bio: mapping.bio || undefined,
+            longText: mapping.longText || undefined,
+            categoryRef: mapping.categoryRef || undefined,
             shopifyMetaobjectId: metaobjectGid,
             migrationStatus: mode === "import" ? "imported_unlinked" : "linked",
             linkStatus: mode === "import" ? "imported_unlinked" : "linked",
-            profileImages: {
-              avatarUrl,
-              heroUrl,
-              galleryUrls,
-              media: [
-                mediaMap[KUENSTLER_FIELD_KEYS.bilder],
-                mediaMap[KUENSTLER_FIELD_KEYS.bild_1],
-                mediaMap[KUENSTLER_FIELD_KEYS.bild_2],
-                mediaMap[KUENSTLER_FIELD_KEYS.bild_3],
-              ].filter(Boolean),
-            },
+            profileImages: mapping.profileImages,
             consents: {
-              allowOriginalSales: toBoolean(fieldMap.allowOriginalSales || fieldMap.allow_original_sales),
-              allowPrintSales: toBoolean(fieldMap.allowPrintSales || fieldMap.allow_print_sales),
-              allowRental: toBoolean(fieldMap.allowRental || fieldMap.allow_rental),
-              allowExhibitions: toBoolean(fieldMap.allowExhibitions || fieldMap.allow_exhibitions),
-              presentationOnly: toBoolean(fieldMap.presentationOnly || fieldMap.presentation_only),
+              allowOriginalSales: toBoolean((node?.fields || []).find((field) => field?.key === "allowOriginalSales")?.value || (node?.fields || []).find((field) => field?.key === "allow_original_sales")?.value || undefined),
+              allowPrintSales: toBoolean((node?.fields || []).find((field) => field?.key === "allowPrintSales")?.value || (node?.fields || []).find((field) => field?.key === "allow_print_sales")?.value || undefined),
+              allowRental: toBoolean((node?.fields || []).find((field) => field?.key === "allowRental")?.value || (node?.fields || []).find((field) => field?.key === "allow_rental")?.value || undefined),
+              allowExhibitions: toBoolean((node?.fields || []).find((field) => field?.key === "allowExhibitions")?.value || (node?.fields || []).find((field) => field?.key === "allow_exhibitions")?.value || undefined),
+              presentationOnly: toBoolean((node?.fields || []).find((field) => field?.key === "presentationOnly")?.value || (node?.fields || []).find((field) => field?.key === "presentation_only")?.value || undefined),
             },
             shopify: {
               metaobjectGid,
@@ -890,7 +629,7 @@ async function pullProductsInternal(input: PullInput, mode: PullMode): Promise<P
     ]);
     const customKunstlerValue = firstTruthy([node?.artistKunstler?.value || undefined, node?.artistKunstler?.reference?.id || undefined]) || null;
     const customKuenstlerValue = node?.artistLegacyKuenstler?.value?.trim() || null;
-    const lookup = await resolveCanonicalArtistForShopifyProduct({
+    const lookup = await mapShopifyProductToCanonicalArtist({
       shopDomain,
       customKunstlerValue,
       customKuenstlerValue,
