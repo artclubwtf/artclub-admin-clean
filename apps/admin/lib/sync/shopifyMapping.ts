@@ -10,6 +10,7 @@ export type ShopifyFieldReferenceNode = {
   alt?: string | null;
   url?: string | null;
   handle?: string | null;
+  displayName?: string | null;
   image?: {
     url?: string | null;
     altText?: string | null;
@@ -478,10 +479,22 @@ export async function mapShopifyProductToCanonicalArtist(input: {
   shopDomain: string;
   customKunstlerValue?: string | null;
   customKuenstlerValue?: string | null;
+  customKunstlerHandle?: string | null;
+  customKunstlerDisplayName?: string | null;
 }): Promise<CanonicalArtistProductMatch> {
   const customKunstlerValue = input.customKunstlerValue?.trim();
   const customKuenstlerValue = input.customKuenstlerValue?.trim();
-  const value = customKunstlerValue || customKuenstlerValue;
+  const customKunstlerHandle = input.customKunstlerHandle?.trim();
+  const customKunstlerDisplayName = input.customKunstlerDisplayName?.trim();
+  const lookupTextCandidates = uniq(
+    [
+      customKunstlerValue,
+      customKuenstlerValue,
+      customKunstlerHandle,
+      customKunstlerDisplayName ? slugifyLoose(customKunstlerDisplayName) : undefined,
+    ].filter(Boolean) as string[],
+  );
+  const value = customKunstlerValue || customKuenstlerValue || customKunstlerHandle || customKunstlerDisplayName;
   if (!value) {
     return {
       selectedArtist: null,
@@ -491,12 +504,12 @@ export async function mapShopifyProductToCanonicalArtist(input: {
   }
 
   const exact = new RegExp(`^${escapeRegex(value)}$`, "i");
+  const textCandidateRegexes = lookupTextCandidates.map((candidate) => new RegExp(`^${escapeRegex(candidate)}$`, "i"));
+  const regexOrFilters = textCandidateRegexes.flatMap((regex) => [{ publicSlug: regex }, { handle: regex }, { artistKey: regex }]);
   const matches = await CanonicalArtistModel.find({
     shopDomain: input.shopDomain,
     $or: [
-      { publicSlug: exact },
-      { handle: exact },
-      { artistKey: exact },
+      ...regexOrFilters,
       { shopifyMetaobjectId: value },
       { "shopify.metaobjectGid": value },
     ],
@@ -506,11 +519,15 @@ export async function mapShopifyProductToCanonicalArtist(input: {
     .lean();
 
   const publicSlugMatches = matches
-    .filter((artist) => artist.publicSlug && exact.test(artist.publicSlug))
+    .filter(
+      (artist) => artist.publicSlug && (exact.test(artist.publicSlug) || textCandidateRegexes.some((regex) => regex.test(artist.publicSlug!))),
+    )
     .map((artist) => artist.publicSlug!.trim());
-  const handleMatches = matches.filter((artist) => artist.handle && exact.test(artist.handle)).map((artist) => artist.handle!.trim());
+  const handleMatches = matches
+    .filter((artist) => artist.handle && (exact.test(artist.handle) || textCandidateRegexes.some((regex) => regex.test(artist.handle!))))
+    .map((artist) => artist.handle!.trim());
   const artistKeyMatches = matches
-    .filter((artist) => artist.artistKey && exact.test(artist.artistKey))
+    .filter((artist) => artist.artistKey && (exact.test(artist.artistKey) || textCandidateRegexes.some((regex) => regex.test(artist.artistKey))))
     .map((artist) => artist.artistKey.trim());
   const metaobjectMatches = matches
     .filter((artist) => artist.shopifyMetaobjectId === value || artist.shopify?.metaobjectGid === value)
@@ -547,9 +564,15 @@ export async function mapShopifyProductToCanonicalArtist(input: {
 
   const selectedArtist = matches[0];
   let reason = "matched_custom_kunstler_handle";
-  if (selectedArtist.publicSlug && exact.test(selectedArtist.publicSlug)) {
+  if (
+    selectedArtist.publicSlug &&
+    (exact.test(selectedArtist.publicSlug) || textCandidateRegexes.some((regex) => regex.test(selectedArtist.publicSlug!)))
+  ) {
     reason = "matched_custom_kunstler_publicSlug";
-  } else if (selectedArtist.artistKey && exact.test(selectedArtist.artistKey)) {
+  } else if (
+    selectedArtist.artistKey &&
+    (exact.test(selectedArtist.artistKey) || textCandidateRegexes.some((regex) => regex.test(selectedArtist.artistKey)))
+  ) {
     reason = "matched_custom_kunstler_artistKey";
   } else if (selectedArtist.shopifyMetaobjectId === value || selectedArtist.shopify?.metaobjectGid === value) {
     reason = "matched_custom_kunstler_shopify_metaobject";

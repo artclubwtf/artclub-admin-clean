@@ -90,6 +90,13 @@ function EntryImage({ src, alt }: { src: string; alt: string }) {
   );
 }
 
+function ProfileImage({ src, alt, className }: { src: string; alt: string; className: string }) {
+  if (!src) {
+    return <div className={`${className} bg-neutral-100`} aria-hidden />;
+  }
+  return <img src={src} alt={alt} className={className} />;
+}
+
 function ArtworksTab({
   artworks,
   onSelect,
@@ -309,11 +316,11 @@ export function PublicArtistProfilePage({ profile }: PublicArtistProfilePageProp
           <div className="relative">
             <div className="overflow-hidden rounded-[1rem] bg-neutral-100">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={profile.heroUrl || profile.avatarUrl} alt={profile.displayName} className="h-44 w-full object-cover sm:h-64" />
+              <ProfileImage src={profile.heroUrl || profile.avatarUrl} alt={profile.displayName} className="h-44 w-full object-cover sm:h-64" />
             </div>
             <div className="absolute -bottom-14 right-3 h-32 w-32 overflow-hidden rounded-full border-[5px] border-white bg-neutral-100 sm:right-8 sm:h-44 sm:w-44">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={profile.avatarUrl || profile.heroUrl} alt={profile.displayName} className="h-full w-full object-cover" />
+              <ProfileImage src={profile.avatarUrl || profile.heroUrl} alt={profile.displayName} className="h-full w-full object-cover" />
             </div>
           </div>
 

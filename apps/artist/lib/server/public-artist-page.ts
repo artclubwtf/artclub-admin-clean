@@ -1,7 +1,7 @@
 import { connectMongo } from "@/lib/server/mongodb";
 import { normalizePublicArtistMediaUrls } from "@/lib/server/artist-media";
 import { createArtistMediaUrlRewriter } from "@/lib/server/artist-media-rewrite";
-import { buildPublicArtistProfileShape } from "@/lib/server/public-artist-profile";
+import { buildPublicArtistProfileShape, resolveRenderableArtistProfileImages } from "@/lib/server/public-artist-profile";
 import { ArtistAnnouncementModel, CanonicalArtistModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 import { logArtistProfileRender } from "../../../admin/lib/sync/syncLogger";
 import type { PublicArtistArtworkItem, PublicArtistProfilePageData } from "@/lib/types";
@@ -53,6 +53,21 @@ export async function loadPublicArtistPageBySlug(rawSlug: string): Promise<Publi
 
   if (!artist) return null;
 
+  const { profileImages: renderableProfileImages, unresolvedGids } = resolveRenderableArtistProfileImages(artist.profileImages);
+  for (const unresolved of unresolvedGids) {
+    logArtistProfileRender("artist_profile_image_gid_without_url", {
+      service: "artist",
+      canonicalArtistId: String(artist._id),
+      publicSlug: artist.publicSlug || artist.handle || slug,
+      fieldKey: unresolved.fieldKey,
+      rawValue: unresolved.rawValue,
+    });
+  }
+  const renderableArtist = {
+    ...artist,
+    profileImages: renderableProfileImages,
+  };
+
   const [announcements, artworks] = await Promise.all([
     ArtistAnnouncementModel.find({
       shopDomain: artist.shopDomain,
@@ -88,9 +103,9 @@ export async function loadPublicArtistPageBySlug(rawSlug: string): Promise<Publi
     shopDomain: artist.shopDomain,
     artistKey: artist.artistKey,
     candidateUrls: [
-      artist.profileImages?.avatarUrl,
-      artist.profileImages?.heroUrl,
-      ...(Array.isArray(artist.profileImages?.galleryUrls) ? artist.profileImages.galleryUrls : []),
+      renderableArtist.profileImages?.avatarUrl,
+      renderableArtist.profileImages?.heroUrl,
+      ...(Array.isArray(renderableArtist.profileImages?.galleryUrls) ? renderableArtist.profileImages.galleryUrls : []),
       ...(Array.isArray(artist.experience) ? artist.experience.map((item: any) => item?.imageUrl) : []),
       ...(Array.isArray(artist.education) ? artist.education.map((item: any) => item?.imageUrl) : []),
       ...(Array.isArray(artist.exhibitions) ? artist.exhibitions.map((item: any) => item?.coverImageUrl) : []),
@@ -113,7 +128,7 @@ export async function loadPublicArtistPageBySlug(rawSlug: string): Promise<Publi
     : [];
 
   const profile = buildPublicArtistProfileShape({
-    artist,
+    artist: renderableArtist,
     announcements: announcements.map((item) => ({
       id: item._id.toString(),
       title: item.title,

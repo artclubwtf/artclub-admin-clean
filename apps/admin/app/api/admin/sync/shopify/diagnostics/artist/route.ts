@@ -6,8 +6,14 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import {
   extractShopifyArtistMetaobjectMapping,
   matchesArtistSlug,
+  resolveShopifyFileField,
   type ShopifyArtistMetaobjectNode,
 } from "@/lib/sync/shopifyMapping";
+import {
+  collectShopifyReferenceGids,
+  hydrateArtistMetaobjectWithResolvedReferences,
+  resolveShopifyReferenceNodes,
+} from "@/lib/sync/shopifyReferenceLookup";
 import { createSyncRunId, logShopifyDiagnostics, logSyncError } from "@/lib/sync/syncLogger";
 import { resolveShopDomain } from "@/lib/shopDomain";
 import { CanonicalArtistModel } from "@/models/CanonicalArtist";
@@ -266,7 +272,9 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: "artist_metaobject_not_found", runId, source }, { status: 404 });
     }
 
-    const mapping = extractShopifyArtistMetaobjectMapping(metaobject);
+    const referenceLookup = await resolveShopifyReferenceNodes(collectShopifyReferenceGids(metaobject.fields || []));
+    const hydratedMetaobject = hydrateArtistMetaobjectWithResolvedReferences(metaobject, referenceLookup);
+    const mapping = extractShopifyArtistMetaobjectMapping(hydratedMetaobject);
     logShopifyDiagnostics(
       "shopify_artist_metaobject_raw_fields",
       {
@@ -279,9 +287,35 @@ export async function GET(req: Request) {
       { runId, force: true },
     );
 
+    for (const field of hydratedMetaobject.fields || []) {
+      const fieldKey = field?.key?.trim();
+      if (!fieldKey || !["bilder", "bild_1", "bild_2", "bild_3"].includes(fieldKey)) continue;
+      const resolved = resolveShopifyFileField(field);
+      logShopifyDiagnostics(
+        "shopify_file_reference_resolve",
+        {
+          fieldKey: resolved.fieldKey,
+          rawValue: resolved.rawValuePreview,
+          hasReference: resolved.hasReference,
+          referenceTypename: resolved.referenceTypename,
+          mediaGid: resolved.mediaGid || resolved.shopifyFileGid || null,
+          imageUrlFound: Boolean(resolved.referenceImageUrl),
+          imageUrl: resolved.referenceImageUrl,
+          genericFileUrlFound: Boolean(resolved.referenceGenericFileUrl),
+          reason: resolved.resolvedUrl ? null : resolved.reason,
+        },
+        { runId, force: true },
+      );
+    }
+
     for (const fieldCheck of mapping.fieldMappings) {
       logShopifyDiagnostics(
         "shopify_artist_field_mapping_check",
+        fieldCheck,
+        { runId, force: true },
+      );
+      logShopifyDiagnostics(
+        "artist_metaobject_field_mapping_result",
         fieldCheck,
         { runId, force: true },
       );

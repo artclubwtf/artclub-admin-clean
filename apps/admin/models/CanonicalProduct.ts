@@ -21,6 +21,9 @@ const canonicalProductImagesSchema = new Schema(
     mediumUrl: { type: String },
     originalUrl: { type: String },
     galleryUrls: { type: [String], default: [] },
+    altText: { type: String, trim: true },
+    source: { type: String, trim: true },
+    artistMediaIds: { type: [String], default: [] },
   },
   { _id: false },
 );

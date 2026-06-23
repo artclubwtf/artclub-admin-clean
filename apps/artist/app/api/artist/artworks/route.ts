@@ -279,6 +279,9 @@ export async function POST(req: Request) {
         mediumUrl: primaryUrls.previewUrl,
         originalUrl: primaryUrls.url,
         galleryUrls,
+        altText: data.title,
+        source: "artist_media_v2",
+        artistMediaIds: media.map((item) => item._id.toString()),
       },
       dimensions: {
         widthCm: originalWidthCm ?? undefined,

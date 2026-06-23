@@ -22,6 +22,63 @@ function normalizeUrl(url: string) {
   return url.trim().toLowerCase();
 }
 
+function isShopifyGid(value: string | undefined | null) {
+  const trimmed = value?.trim();
+  return Boolean(trimmed && trimmed.startsWith("gid://shopify/"));
+}
+
+type RenderableArtistProfileImages = {
+  avatarUrl: string;
+  heroUrl: string;
+  galleryUrls: string[];
+  media?: any[];
+};
+
+export function resolveRenderableArtistProfileImages(profileImages: any): {
+  profileImages: RenderableArtistProfileImages;
+  unresolvedGids: Array<{ fieldKey: string; rawValue: string }>;
+} {
+  const media = Array.isArray(profileImages?.media) ? profileImages.media : [];
+  const mediaByGid = new Map<string, any>();
+  const mediaByFieldKey = new Map<string, any>();
+
+  for (const item of media) {
+    const gidCandidates = [item?.mediaGid, item?.shopifyFileGid].map((value) => (typeof value === "string" ? value.trim() : "")).filter(Boolean);
+    for (const gid of gidCandidates) {
+      mediaByGid.set(gid, item);
+    }
+    const fieldKey = typeof item?.fieldKey === "string" ? item.fieldKey.trim() : "";
+    if (fieldKey) {
+      mediaByFieldKey.set(fieldKey, item);
+    }
+  }
+
+  const unresolvedGids: Array<{ fieldKey: string; rawValue: string }> = [];
+  const resolveOne = (rawValue: string | undefined | null, fieldKey: string) => {
+    const trimmed = rawValue?.trim() || "";
+    if (!trimmed) return "";
+    if (!isShopifyGid(trimmed)) return trimmed;
+    const mediaItem = mediaByGid.get(trimmed) || mediaByFieldKey.get(fieldKey);
+    const resolvedUrl = typeof mediaItem?.url === "string" ? mediaItem.url.trim() : "";
+    if (resolvedUrl) return resolvedUrl;
+    unresolvedGids.push({ fieldKey, rawValue: trimmed });
+    return "";
+  };
+
+  const galleryFieldKeys = ["bild_1", "bild_2", "bild_3"];
+  return {
+    profileImages: {
+      ...(profileImages || {}),
+      avatarUrl: resolveOne(profileImages?.avatarUrl, "bild_1"),
+      heroUrl: resolveOne(profileImages?.heroUrl, "bilder"),
+      galleryUrls: (Array.isArray(profileImages?.galleryUrls) ? profileImages.galleryUrls : [])
+        .map((value: string, index: number) => resolveOne(value, galleryFieldKeys[index] || `gallery_${index}`))
+        .filter((value: string) => Boolean(value)),
+    },
+    unresolvedGids,
+  };
+}
+
 function mergeLegacyLinks(input: {
   links: ArtistProfileLinkItem[];
   websiteUrl?: string;

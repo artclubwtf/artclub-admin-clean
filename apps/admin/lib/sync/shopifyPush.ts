@@ -9,6 +9,7 @@ import {
   previewValue,
 } from "./syncLogger";
 import { CanonicalArtistModel } from "../../models/CanonicalArtist";
+import { ArtistMediaV2Model } from "../../models/ArtistMediaV2";
 import { CanonicalProductModel, type CanonicalProduct } from "../../models/CanonicalProduct";
 import { CanonicalVariantModel } from "../../models/CanonicalVariant";
 
@@ -40,6 +41,23 @@ type ShopifyVariantNode = {
 
 type PushableProduct = CanonicalProduct & {
   artistSlugForShopify?: string;
+  artistMetaobjectGidForShopify?: string;
+};
+
+type ProductImageResolutionInput = {
+  _id: unknown;
+  artistKey?: string | null;
+  images?: CanonicalProduct["images"] | null;
+  productKey: string;
+  shopDomain: string;
+};
+
+type ProductArtistResolutionInput = {
+  _id: unknown;
+  artistKey?: string | null;
+  canonicalArtistId?: CanonicalProduct["canonicalArtistId"] | null;
+  productKey: string;
+  shopDomain: string;
 };
 
 type ArtistSummary = {
@@ -69,19 +87,120 @@ function normalizePrice(priceCents: number): string {
   return (Math.max(0, Number.isFinite(priceCents) ? priceCents : 0) / 100).toFixed(2);
 }
 
-function productImageUrls(product: Pick<CanonicalProduct, "images">) {
-  return Array.from(
-    new Set(
-      [
-        product.images?.originalUrl,
-        product.images?.mediumUrl,
-        product.images?.thumbUrl,
-        ...(Array.isArray(product.images?.galleryUrls) ? product.images.galleryUrls : []),
-      ]
-        .map((value) => (value || "").trim())
-        .filter((value) => /^https?:\/\//i.test(value)),
-    ),
-  );
+function isHttpUrl(value?: string | null) {
+  return Boolean(value && /^https?:\/\//i.test(value.trim()));
+}
+
+function isShopifyGid(value?: string | null) {
+  return Boolean(value && value.trim().startsWith("gid://shopify/"));
+}
+
+function parseArtistMediaIdFromUrl(value?: string | null) {
+  if (!value) return null;
+  const match = value.match(/\/api\/(?:artist\/media|public\/artist-media)\/([a-fA-F0-9]{24})(?:\/file)?(?:[/?#]|$)/);
+  return match?.[1] || null;
+}
+
+function uniqStrings(values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.map((value) => (value || "").trim()).filter(Boolean)));
+}
+
+async function resolvePushableProductImageUrls(
+  product: ProductImageResolutionInput,
+  runId: string,
+) {
+  const rawCandidates = uniqStrings([
+    product.images?.originalUrl,
+    product.images?.mediumUrl,
+    product.images?.thumbUrl,
+    ...(Array.isArray(product.images?.galleryUrls) ? product.images.galleryUrls : []),
+  ]);
+  const directUrls: string[] = [];
+  const artistMediaIds: string[] = [];
+
+  for (const rawValue of rawCandidates) {
+    if (isHttpUrl(rawValue)) {
+      directUrls.push(rawValue);
+      continue;
+    }
+
+    if (isShopifyGid(rawValue)) {
+      logShopifyPush(
+        "product_image_not_pushable",
+        {
+          canonicalProductId: String(product._id),
+          productKey: product.productKey,
+          rawValue,
+          reason: "gid_without_url",
+        },
+        { runId, force: true },
+      );
+      continue;
+    }
+
+    const artistMediaId = parseArtistMediaIdFromUrl(rawValue);
+    if (artistMediaId) {
+      artistMediaIds.push(artistMediaId);
+      continue;
+    }
+
+    logShopifyPush(
+      "product_image_not_pushable",
+      {
+        canonicalProductId: String(product._id),
+        productKey: product.productKey,
+        rawValue,
+        reason: rawValue ? "unsupported_source" : "missing_url",
+      },
+      { runId, force: true },
+    );
+  }
+
+  if (artistMediaIds.length) {
+    const media = await ArtistMediaV2Model.find({
+      _id: { $in: artistMediaIds },
+      shopDomain: product.shopDomain,
+      ...(product.artistKey ? { artistKey: product.artistKey } : {}),
+    })
+      .select({ _id: 1, url: 1, previewUrl: 1 })
+      .lean();
+    const mediaById = new Map(media.map((item) => [String(item._id), item]));
+
+    for (const artistMediaId of uniqStrings(artistMediaIds)) {
+      const item = mediaById.get(artistMediaId);
+      if (!item) {
+        logShopifyPush(
+          "product_image_not_pushable",
+          {
+            canonicalProductId: String(product._id),
+            productKey: product.productKey,
+            artistMediaId,
+            reason: "artist_media_not_found",
+          },
+          { runId, force: true },
+        );
+        continue;
+      }
+
+      const resolvedUrl = uniqStrings([item.url, item.previewUrl]).find((value) => isHttpUrl(value)) || "";
+      if (!resolvedUrl) {
+        logShopifyPush(
+          "product_image_not_pushable",
+          {
+            canonicalProductId: String(product._id),
+            productKey: product.productKey,
+            artistMediaId,
+            reason: "missing_url",
+          },
+          { runId, force: true },
+        );
+        continue;
+      }
+      directUrls.push(resolvedUrl);
+    }
+  }
+
+  return uniqStrings(directUrls);
 }
 
 async function resolveArtistSlugForProduct(product: CanonicalProduct) {
@@ -94,6 +213,93 @@ async function resolveArtistSlugForProduct(product: CanonicalProduct) {
     if (slug?.trim()) return slug.trim();
   }
   return product.artistKey?.trim() || undefined;
+}
+
+async function findShopifyArtistMetaobjectByHandles(handles: Array<string | null | undefined>) {
+  const candidates = uniqStrings(handles);
+  for (const handle of candidates) {
+    const data = await callShopifyAdmin<{
+      metaobjectByHandle?: {
+        id?: string | null;
+        handle?: string | null;
+      } | null;
+    }>(
+      `
+        query FindArtistMetaobjectByHandle($handle: String!) {
+          metaobjectByHandle(handle: { type: "kunstler", handle: $handle }) {
+            id
+            handle
+          }
+        }
+      `,
+      { handle },
+    );
+    const metaobject = data?.metaobjectByHandle;
+    if (metaobject?.id) {
+      return {
+        id: metaobject.id,
+        handle: metaobject.handle?.trim() || handle,
+      };
+    }
+  }
+  return null;
+}
+
+async function ensureArtistMetaobjectGidForProduct(
+  product: ProductArtistResolutionInput,
+  artistSummary: ArtistSummary | null,
+  runId: string,
+) {
+  const artistSlug = artistSummary?.publicSlug || artistSummary?.handle || artistSummary?.artistKey || product.artistKey || undefined;
+  const existingGid = artistSummary?.shopifyMetaobjectGid || artistSummary?.shopifyMetaobjectId || "";
+  if (existingGid.trim()) {
+    return { artistMetaobjectGid: existingGid.trim(), artistSlug };
+  }
+
+  const matchedMetaobject = await findShopifyArtistMetaobjectByHandles([
+    artistSummary?.publicSlug,
+    artistSummary?.handle,
+    artistSummary?.artistKey,
+    product.artistKey,
+  ]);
+  if (matchedMetaobject?.id && product.canonicalArtistId) {
+    await CanonicalArtistModel.updateOne(
+      { _id: product.canonicalArtistId },
+      {
+        $set: {
+          shopifyMetaobjectId: matchedMetaobject.id,
+          "shopify.metaobjectGid": matchedMetaobject.id,
+        },
+      },
+    );
+    return { artistMetaobjectGid: matchedMetaobject.id, artistSlug: artistSlug || matchedMetaobject.handle || undefined };
+  }
+
+  const artistKey = artistSummary?.artistKey || product.artistKey;
+  if (!artistKey) {
+    return { artistMetaobjectGid: null, artistSlug };
+  }
+
+  const pushResult = await pushOneArtist({ shopDomain: product.shopDomain, artistKey, runId });
+  const failedItem = pushResult.items.find((item) => item.status === "error");
+  if (failedItem) {
+    throw new Error(failedItem.message || "Failed to create Shopify artist metaobject");
+  }
+
+  const refreshedArtist = await CanonicalArtistModel.findOne(
+    product.canonicalArtistId ? { _id: product.canonicalArtistId } : { shopDomain: product.shopDomain, artistKey },
+  )
+    .select({ publicSlug: 1, handle: 1, artistKey: 1, shopifyMetaobjectId: 1, shopify: 1 })
+    .lean();
+  const resolvedGid = refreshedArtist?.shopify?.metaobjectGid || refreshedArtist?.shopifyMetaobjectId || "";
+  if (!resolvedGid.trim()) {
+    throw new Error(`Missing Shopify artist metaobject for product ${product.productKey}`);
+  }
+
+  return {
+    artistMetaobjectGid: resolvedGid.trim(),
+    artistSlug: refreshedArtist?.publicSlug || refreshedArtist?.handle || refreshedArtist?.artistKey || artistSlug || undefined,
+  };
 }
 
 function resolveArtistAppUrl(artist: { appUrl?: string | null; publicSlug?: string | null; handle?: string | null }) {
@@ -194,7 +400,7 @@ async function loadArtistSummary(product: Pick<CanonicalProduct, "canonicalArtis
   };
 }
 
-async function createShopifyProduct(product: PushableProduct) {
+async function createShopifyProduct(product: PushableProduct, imageUrls: string[]) {
   const mutation = `
     mutation PushProductCreate($input: ProductInput!, $media: [CreateMediaInput!]) {
       productCreate(input: $input, media: $media) {
@@ -214,12 +420,13 @@ async function createShopifyProduct(product: PushableProduct) {
   `;
 
   const metafields = buildProductMetafieldsForArtwork({
+    artistMetaobjectGid: product.artistMetaobjectGidForShopify,
     artistSlug: product.artistSlugForShopify,
     widthCm: product.dimensions?.widthCm,
     heightCm: product.dimensions?.heightCm,
     kurzbeschreibung: product.shortDescription || product.shortText || undefined,
   });
-  const media = productImageUrls(product).map((url) => ({
+  const media = imageUrls.map((url) => ({
     originalSource: url,
     mediaContentType: "IMAGE",
     alt: product.title,
@@ -296,8 +503,7 @@ async function updateShopifyProduct(productGid: string, product: PushableProduct
   }
 }
 
-async function createProductMedia(productGid: string, product: PushableProduct) {
-  const imageUrls = productImageUrls(product);
+async function createProductMedia(productGid: string, product: PushableProduct, imageUrls: string[]) {
   if (!imageUrls.length) return;
 
   const existing = await callShopifyAdmin<{
@@ -368,6 +574,7 @@ async function setProductMetafields(productGid: string, product: PushableProduct
   `;
 
   const metafields = buildProductMetafieldsForArtwork({
+    artistMetaobjectGid: product.artistMetaobjectGidForShopify,
     artistSlug: product.artistSlugForShopify,
     widthCm: product.dimensions?.widthCm,
     heightCm: product.dimensions?.heightCm,
@@ -710,6 +917,7 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
       const saleableCheck = canPushSaleableProduct(product);
       let productGid = product.shopifyProductId || product.shopify?.productGid || "";
       const artistSummary = await loadArtistSummary(product);
+      const artistResolution = await ensureArtistMetaobjectGidForProduct(product, artistSummary, runId);
       const canonicalVariants = await CanonicalVariantModel.find({
         shopDomain: input.shopDomain,
         productKey: product.productKey,
@@ -718,11 +926,13 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
         .lean();
       const productForPush: PushableProduct = {
         ...product,
-        artistSlugForShopify: await resolveArtistSlugForProduct(product),
+        artistSlugForShopify: artistResolution.artistSlug || (await resolveArtistSlugForProduct(product)),
+        artistMetaobjectGidForShopify: artistResolution.artistMetaobjectGid || undefined,
       };
       const willUpdate = Boolean(productGid);
-      const imageUrls = productImageUrls(product);
+      const imageUrls = await resolvePushableProductImageUrls(product, runId);
       const metafieldSummary = buildProductMetafieldsForArtwork({
+        artistMetaobjectGid: productForPush.artistMetaobjectGidForShopify,
         artistSlug: productForPush.artistSlugForShopify,
         widthCm: product.dimensions?.widthCm,
         heightCm: product.dimensions?.heightCm,
@@ -738,6 +948,7 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
           hasArtist: Boolean(product.canonicalArtistId),
           artistName: artistSummary?.displayName || null,
           artistSlug: productForPush.artistSlugForShopify || null,
+          artistMetaobjectGid: productForPush.artistMetaobjectGidForShopify || null,
           isSaleable: saleableCheck.ok,
           forSale: product.forSale === true,
           allowPrints: product.allowPrints === true,
@@ -768,7 +979,11 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
           vendor: product.vendor || "artclub",
           status: normalizeShopStatus(product.status),
           metafields: {
-            "custom.kunstler": metafieldSummary.find((item) => item.key === "kunstler")?.value || null,
+            "custom.kunstler": {
+              type: metafieldSummary.find((item) => item.key === "kunstler")?.type || null,
+              value: metafieldSummary.find((item) => item.key === "kunstler")?.value || null,
+              artistSlug: productForPush.artistSlugForShopify || null,
+            },
             "custom.kurzbeschreibung": metafieldSummary.some((item) => item.key === "kurzbeschreibung"),
             "custom.breite_cm_": metafieldSummary.find((item) => item.key === "breite_cm_")?.value || null,
             "custom.height": metafieldSummary.find((item) => item.key === "height")?.value || null,
@@ -801,14 +1016,14 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
       if (productGid) {
         await updateShopifyProduct(productGid, productForPush);
       } else {
-        const created = await createShopifyProduct(productForPush);
+        const created = await createShopifyProduct(productForPush, imageUrls);
         productGid = created.productId;
         defaultVariantId = created.defaultVariantId;
         defaultInventoryItemId = created.defaultInventoryItemId;
       }
 
       await setProductMetafields(productGid, productForPush);
-      if (willUpdate) await createProductMedia(productGid, productForPush);
+      if (willUpdate) await createProductMedia(productGid, productForPush, imageUrls);
 
       const shopifyVariants = await fetchShopifyProductVariants(productGid);
       const variantBySku = new Map(

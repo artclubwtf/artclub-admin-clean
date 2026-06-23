@@ -19,7 +19,10 @@ type ProductDiagnosticsNode = {
   status?: string | null;
   images?: { nodes?: Array<{ url?: string | null }> | null } | null;
   variants?: { nodes?: Array<{ id?: string | null }> | null } | null;
-  artistKunstler?: { value?: string | null; reference?: { id?: string | null } | null } | null;
+  artistKunstler?: {
+    value?: string | null;
+    reference?: { id?: string | null; handle?: string | null; displayName?: string | null } | null;
+  } | null;
   artistLegacyKuenstler?: { value?: string | null } | null;
 };
 
@@ -75,6 +78,8 @@ async function fetchProductsForArtistSlug(artistSlug: string) {
               reference {
                 ... on Metaobject {
                   id
+                  handle
+                  displayName
                 }
               }
             }
@@ -109,7 +114,11 @@ async function fetchProductsForArtistSlug(artistSlug: string) {
     products: nodes.filter((node) => {
       const customKunstlerValue = (node.artistKunstler?.value || node.artistKunstler?.reference?.id || "").trim();
       const customKuenstlerValue = (node.artistLegacyKuenstler?.value || "").trim();
-      return customKunstlerValue === artistSlug || customKuenstlerValue === artistSlug;
+      return (
+        customKunstlerValue === artistSlug ||
+        customKuenstlerValue === artistSlug ||
+        (node.artistKunstler?.reference?.handle || "").trim() === artistSlug
+      );
     }),
     source: "first100_fallback" as const,
   };
@@ -150,7 +159,7 @@ export async function GET(req: Request) {
 
     const productPayloads = [] as Array<Record<string, unknown>>;
     for (const product of products) {
-      const customKunstlerValue = (product.artistKunstler?.value || product.artistKunstler?.reference?.id || "").trim() || null;
+      const customKunstlerValue = (product.artistKunstler?.reference?.id || product.artistKunstler?.value || "").trim() || null;
       const customKuenstlerValue = (product.artistLegacyKuenstler?.value || "").trim() || null;
 
       logShopifyDiagnostics(
@@ -168,6 +177,7 @@ export async function GET(req: Request) {
             customKuenstlerValue ? "custom.kuenstler" : null,
           ].filter(Boolean),
           customKunstlerValue,
+          customKunstlerHandle: product.artistKunstler?.reference?.handle || null,
           customKuenstlerValue,
         },
         { runId, force: true },
@@ -177,6 +187,8 @@ export async function GET(req: Request) {
         shopDomain,
         customKunstlerValue,
         customKuenstlerValue,
+        customKunstlerHandle: product.artistKunstler?.reference?.handle || null,
+        customKunstlerDisplayName: product.artistKunstler?.reference?.displayName || null,
       });
 
       logShopifyDiagnostics(
@@ -186,6 +198,7 @@ export async function GET(req: Request) {
           handle: product.handle || null,
           title: product.title || null,
           customKunstlerValue,
+          customKunstlerHandle: product.artistKunstler?.reference?.handle || null,
           canonicalArtistMatched: Boolean(mapping.selectedArtist),
           canonicalArtistId: mapping.selectedArtistId || null,
           reason: mapping.reason,
@@ -202,6 +215,7 @@ export async function GET(req: Request) {
         imageCount: (product.images?.nodes || []).filter((image) => image?.url).length,
         variantCount: (product.variants?.nodes || []).length,
         customKunstlerValue,
+        customKunstlerHandle: product.artistKunstler?.reference?.handle || null,
         customKuenstlerValue,
         canonicalArtistMatched: Boolean(mapping.selectedArtist),
         canonicalArtistId: mapping.selectedArtistId || null,

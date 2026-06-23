@@ -1,6 +1,7 @@
 import { ProfileForm } from "@/components/profile/ProfileForm";
 import { normalizePublicArtistMediaUrls } from "@/lib/server/artist-media";
 import { createArtistMediaUrlRewriter } from "@/lib/server/artist-media-rewrite";
+import { resolveRenderableArtistProfileImages } from "@/lib/server/public-artist-profile";
 import {
   serializeEducation,
   serializeExhibitions,
@@ -87,6 +88,16 @@ export default async function ProfilePage({
       status: { $ne: "archived" },
     }),
   ]);
+  const { profileImages: renderableProfileImages, unresolvedGids } = resolveRenderableArtistProfileImages(artist?.profileImages);
+  for (const unresolved of unresolvedGids) {
+    logArtistProfileRender("artist_profile_image_gid_without_url", {
+      service: "artist",
+      canonicalArtistId: String(context.canonicalArtist._id),
+      publicSlug: artist?.publicSlug || context.canonicalArtist.handle || context.user.artistKey,
+      fieldKey: unresolved.fieldKey,
+      rawValue: unresolved.rawValue,
+    });
+  }
 
   const variants = artworks.length
     ? await CanonicalVariantModel.find({
@@ -101,9 +112,9 @@ export default async function ProfilePage({
     shopDomain: context.user.shopDomain,
     artistKey: context.user.artistKey,
     candidateUrls: [
-      artist?.profileImages?.avatarUrl,
-      artist?.profileImages?.heroUrl,
-      ...(Array.isArray(artist?.profileImages?.galleryUrls) ? artist?.profileImages?.galleryUrls : []),
+      renderableProfileImages?.avatarUrl,
+      renderableProfileImages?.heroUrl,
+      ...(Array.isArray(renderableProfileImages?.galleryUrls) ? renderableProfileImages?.galleryUrls : []),
       ...(Array.isArray(artist?.experience) ? artist.experience.map((item: any) => item?.imageUrl) : []),
       ...(Array.isArray(artist?.education) ? artist.education.map((item: any) => item?.imageUrl) : []),
       ...(Array.isArray(artist?.exhibitions) ? artist.exhibitions.map((item: any) => item?.coverImageUrl) : []),
@@ -168,12 +179,12 @@ export default async function ProfilePage({
     canonicalArtistId: String(context.canonicalArtist._id),
     publicSlug: artist?.publicSlug || context.canonicalArtist.handle || context.user.artistKey,
     displayName: artist?.displayName || context.canonicalArtist.displayName || context.user.name || "",
-    coverImageUrl: rewriteMediaUrl(artist?.profileImages?.heroUrl || context.canonicalArtist.profileImages?.heroUrl || ""),
-    galleryImageCount: Array.isArray(artist?.profileImages?.galleryUrls)
-      ? artist.profileImages.galleryUrls.length
+    coverImageUrl: rewriteMediaUrl(renderableProfileImages?.heroUrl || ""),
+    galleryImageCount: Array.isArray(renderableProfileImages?.galleryUrls)
+      ? renderableProfileImages.galleryUrls.length
       : 0,
-    galleryImageUrls: Array.isArray(artist?.profileImages?.galleryUrls)
-      ? artist.profileImages.galleryUrls.map((value) => rewriteMediaUrl(value))
+    galleryImageUrls: Array.isArray(renderableProfileImages?.galleryUrls)
+      ? renderableProfileImages.galleryUrls.map((value) => rewriteMediaUrl(value))
       : [],
     hasIntro: Boolean(artist?.introduction),
     hasLongText: Boolean(artist?.longText),
@@ -193,10 +204,10 @@ export default async function ProfilePage({
         bio: context.canonicalArtist.bio || "",
         publicProfileVisible: artist?.publicProfile?.isVisible !== false,
         profileImages: {
-          avatarUrl: rewriteMediaUrl(context.canonicalArtist.profileImages?.avatarUrl || ""),
-          heroUrl: rewriteMediaUrl(context.canonicalArtist.profileImages?.heroUrl || ""),
-          galleryUrls: Array.isArray(context.canonicalArtist.profileImages?.galleryUrls)
-            ? context.canonicalArtist.profileImages.galleryUrls.map((value) => rewriteMediaUrl(value))
+          avatarUrl: rewriteMediaUrl(renderableProfileImages?.avatarUrl || ""),
+          heroUrl: rewriteMediaUrl(renderableProfileImages?.heroUrl || ""),
+          galleryUrls: Array.isArray(renderableProfileImages?.galleryUrls)
+            ? renderableProfileImages.galleryUrls.map((value) => rewriteMediaUrl(value))
             : [],
         },
         profileLinks: serializeProfileLinks(artist?.profileLinks),

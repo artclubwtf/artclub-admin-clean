@@ -12,6 +12,11 @@ import {
   type ShopifyArtistMetaobjectNode as MetaobjectNode,
 } from "@/lib/sync/shopifyMapping";
 import {
+  collectShopifyReferenceGids,
+  hydrateArtistMetaobjectWithResolvedReferences,
+  resolveShopifyReferenceNodes,
+} from "@/lib/sync/shopifyReferenceLookup";
+import {
   createSyncRunId,
   logArtistImport,
   logProductImport,
@@ -71,7 +76,7 @@ type ProductNode = {
   images?: { nodes?: Array<{ url?: string | null }> | null } | null;
   artistKunstler?: {
     value?: string | null;
-    reference?: { id?: string | null } | null;
+    reference?: { id?: string | null; handle?: string | null; displayName?: string | null } | null;
   } | null;
   artistLegacyKuenstler?: { value?: string | null } | null;
   metafieldWidth?: { value?: string | null } | null;
@@ -328,12 +333,16 @@ async function pullArtistsInternal(input: PullInput, mode: PullMode): Promise<Pu
 
   const now = new Date();
   const edges = data?.metaobjects?.edges || [];
+  const referenceLookup = await resolveShopifyReferenceNodes(
+    edges.flatMap((edge) => collectShopifyReferenceGids(edge?.node?.fields || [])),
+  );
   const ops: Array<Record<string, unknown>> = [];
   const importedMetaobjectIds: string[] = [];
   let importedCount = 0;
 
   for (const edge of edges) {
-    const node = edge?.node;
+    const originalNode = edge?.node;
+    const node = originalNode ? hydrateArtistMetaobjectWithResolvedReferences(originalNode, referenceLookup) : null;
     if (!node) continue;
     const metaobjectGid = node?.id?.trim();
     if (!metaobjectGid) continue;
@@ -402,6 +411,20 @@ async function pullArtistsInternal(input: PullInput, mode: PullMode): Promise<Pu
           mappedTo: fieldCheck.mappedTo,
           success: fieldCheck.success,
           reason: fieldCheck.reason,
+        },
+        { runId },
+      );
+      logArtistImport(
+        "artist_metaobject_field_mapping_result",
+        {
+          metaobjectId: metaobjectGid,
+          handle: mapping.handle,
+          fieldKey: fieldCheck.fieldKey,
+          mappedTo: fieldCheck.mappedTo,
+          success: fieldCheck.success,
+          reason: fieldCheck.reason,
+          resolvedUrl: fieldCheck.resolvedUrl,
+          mappedValuePreview: fieldCheck.mappedValuePreview,
         },
         { runId },
       );
@@ -495,6 +518,23 @@ async function pullArtistsInternal(input: PullInput, mode: PullMode): Promise<Pu
         },
         { runId },
       );
+      logArtistImport(
+        "canonical_artist_after_import",
+        {
+          canonicalArtistId: String(artist._id),
+          artistKey: artist.artistKey,
+          publicSlug: artist.publicSlug || null,
+          displayName: artist.displayName || null,
+          coverImageUrl: artist.profileImages?.heroUrl || null,
+          galleryImageUrls: Array.isArray(artist.profileImages?.galleryUrls) ? artist.profileImages.galleryUrls : [],
+          hasInstagram: Boolean(artist.instagram),
+          hasQuote: Boolean(artist.quote),
+          hasIntro: Boolean(artist.introduction),
+          hasLongText: Boolean(artist.longText),
+          shopifyMetaobjectId: artist.shopifyMetaobjectId || null,
+        },
+        { runId },
+      );
     }
   }
 
@@ -554,6 +594,8 @@ async function pullProductsInternal(input: PullInput, mode: PullMode): Promise<P
               reference {
                 ... on Metaobject {
                   id
+                  handle
+                  displayName
                 }
               }
             }
@@ -627,12 +669,14 @@ async function pullProductsInternal(input: PullInput, mode: PullMode): Promise<P
       node?.featuredImage?.url || "",
       ...(node?.images?.nodes || []).map((image) => image?.url || ""),
     ]);
-    const customKunstlerValue = firstTruthy([node?.artistKunstler?.value || undefined, node?.artistKunstler?.reference?.id || undefined]) || null;
+    const customKunstlerValue = firstTruthy([node?.artistKunstler?.reference?.id || undefined, node?.artistKunstler?.value || undefined]) || null;
     const customKuenstlerValue = node?.artistLegacyKuenstler?.value?.trim() || null;
     const lookup = await mapShopifyProductToCanonicalArtist({
       shopDomain,
       customKunstlerValue,
       customKuenstlerValue,
+      customKunstlerHandle: node?.artistKunstler?.reference?.handle || null,
+      customKunstlerDisplayName: node?.artistKunstler?.reference?.displayName || null,
     });
     const matchedArtist = lookup.selectedArtist;
     const artistMetaobjectGid = matchedArtist?.shopifyMetaobjectId || matchedArtist?.shopify?.metaobjectGid || undefined;
