@@ -631,7 +631,8 @@ async function fetchShopifyProductVariants(productGid: string): Promise<ShopifyV
 
 async function bulkUpdateShopifyVariants(
   productGid: string,
-  variants: Array<{ variantGid: string; sku: string; priceCents: number }>,
+  variants: Array<{ variantGid: string; finish: string; sizeCode: string; sku: string; priceCents: number }>,
+  runId: string,
 ) {
   if (!variants.length) return;
 
@@ -644,30 +645,58 @@ async function bulkUpdateShopifyVariants(
     }
   `;
 
+  const payloadVariants = variants.map((variant) => ({
+    id: variant.variantGid,
+    price: normalizePrice(variant.priceCents),
+    inventoryItem: {
+      sku: variant.sku,
+    },
+  }));
+
+  logShopifyPush(
+    "shopify_variant_bulk_payload",
+    {
+      operation: "update",
+      productGid,
+      variantCount: variants.length,
+      variants: variants.map((variant) => ({
+        finish: variant.finish,
+        size: variant.sizeCode,
+        price: normalizePrice(variant.priceCents),
+        sku: variant.sku,
+        hasInventoryItemSku: Boolean(variant.sku),
+        hasTopLevelSku: false,
+      })),
+    },
+    { runId, force: true },
+  );
+
   const data = await callShopifyAdmin<{
     productVariantsBulkUpdate?: {
-      userErrors?: Array<{ message?: string }>;
+      userErrors?: Array<{ field?: string[] | null; message?: string; code?: string | null }>;
     };
   }>(mutation, {
     productId: productGid,
-    variants: variants.map((variant) => ({
-      id: variant.variantGid,
-      sku: variant.sku,
-      price: normalizePrice(variant.priceCents),
-    })),
+    variants: payloadVariants,
   });
 
   const payload = data?.productVariantsBulkUpdate;
-  if (!payload) throw new Error("Shopify productVariantsBulkUpdate returned no payload");
+  if (!payload) throw new ShopifyPushError("Shopify productVariantsBulkUpdate returned no payload");
   if (payload.userErrors?.length) {
     const message = payload.userErrors.map((error) => error.message).filter(Boolean).join("; ");
-    throw new Error(message || "Shopify productVariantsBulkUpdate failed");
+    throw new ShopifyPushError(message || "Shopify productVariantsBulkUpdate failed", {
+      userErrors: payload.userErrors,
+      graphqlErrors: [],
+      productGid,
+      variants: payloadVariants,
+    });
   }
 }
 
 async function bulkCreateShopifyVariants(
   productGid: string,
   variants: Array<{ variantKey: string; finish: string; sizeCode: string; sku: string; priceCents: number }>,
+  runId: string,
 ): Promise<ShopifyVariantNode[]> {
   if (!variants.length) return [];
 
@@ -684,34 +713,61 @@ async function bulkCreateShopifyVariants(
     }
   `;
 
+  const payloadVariants = variants.map((variant) => ({
+    price: normalizePrice(variant.priceCents),
+    inventoryItem: {
+      sku: variant.sku,
+    },
+    optionValues: [
+      {
+        optionName: "Finish",
+        name: variant.finish || "Edition Art Print",
+      },
+      {
+        optionName: "Size",
+        name: variant.sizeCode || "Default",
+      },
+    ],
+  }));
+
+  logShopifyPush(
+    "shopify_variant_bulk_payload",
+    {
+      operation: "create",
+      productGid,
+      variantCount: variants.length,
+      variants: variants.map((variant) => ({
+        finish: variant.finish,
+        size: variant.sizeCode,
+        price: normalizePrice(variant.priceCents),
+        sku: variant.sku,
+        hasInventoryItemSku: Boolean(variant.sku),
+        hasTopLevelSku: false,
+      })),
+    },
+    { runId, force: true },
+  );
+
   const data = await callShopifyAdmin<{
     productVariantsBulkCreate?: {
       productVariants?: ShopifyVariantNode[];
-      userErrors?: Array<{ message?: string }>;
+      userErrors?: Array<{ field?: string[] | null; message?: string; code?: string | null }>;
     };
   }>(mutation, {
     productId: productGid,
-    variants: variants.map((variant) => ({
-      sku: variant.sku,
-      price: normalizePrice(variant.priceCents),
-      optionValues: [
-        {
-          optionName: "Finish",
-          name: variant.finish || "Edition Art Print",
-        },
-        {
-          optionName: "Size",
-          name: variant.sizeCode || "Default",
-        },
-      ],
-    })),
+    variants: payloadVariants,
   });
 
   const payload = data?.productVariantsBulkCreate;
-  if (!payload) throw new Error("Shopify productVariantsBulkCreate returned no payload");
+  if (!payload) throw new ShopifyPushError("Shopify productVariantsBulkCreate returned no payload");
   if (payload.userErrors?.length) {
     const message = payload.userErrors.map((error) => error.message).filter(Boolean).join("; ");
-    throw new Error(message || "Shopify productVariantsBulkCreate failed");
+    throw new ShopifyPushError(message || "Shopify productVariantsBulkCreate failed", {
+      userErrors: payload.userErrors,
+      graphqlErrors: [],
+      productGid,
+      variants: payloadVariants,
+    });
   }
   return payload.productVariants || [];
 }
@@ -1032,7 +1088,7 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
           .map((variant) => [variant.sku!.trim(), variant]),
       );
 
-      const updates: Array<{ variantGid: string; sku: string; priceCents: number }> = [];
+      const updates: Array<{ variantGid: string; finish: string; sizeCode: string; sku: string; priceCents: number }> = [];
       const missingVariants: Array<{ variantKey: string; finish: string; sizeCode: string; sku: string; priceCents: number }> = [];
       for (const [index, variant] of canonicalVariants.entries()) {
         const matchedBySku = variant.sku ? variantBySku.get(variant.sku) : undefined;
@@ -1050,6 +1106,8 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
         }
         updates.push({
           variantGid,
+          finish: variant.finish,
+          sizeCode: variant.sizeCode,
           sku: variant.sku,
           priceCents: variant.priceCents,
         });
@@ -1069,10 +1127,10 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
         );
       }
 
-      await bulkUpdateShopifyVariants(productGid, updates);
+      await bulkUpdateShopifyVariants(productGid, updates, runId);
 
       if (missingVariants.length) {
-        const createdVariants = await bulkCreateShopifyVariants(productGid, missingVariants);
+        const createdVariants = await bulkCreateShopifyVariants(productGid, missingVariants, runId);
         const createdBySku = new Map(
           createdVariants
             .filter((variant) => typeof variant.sku === "string" && variant.sku.trim())
