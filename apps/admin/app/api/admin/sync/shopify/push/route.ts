@@ -1,11 +1,14 @@
+import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { authOptions } from "@/lib/auth";
 import { connectMongo } from "@/lib/mongodb";
 import { isShopifyWriteEnabled } from "@/lib/featureFlags";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { getArtistShopifySyncMode } from "@/lib/artistShopifySyncMode";
 import { resolveShopDomain } from "@/lib/shopDomain";
+import { createSyncRunId, logShopifyPush, logSyncError } from "@/lib/sync/syncLogger";
 import { pushArtists, pushProducts } from "@/lib/sync/shopifyPush";
 import { SyncStateModel } from "@/models/SyncState";
 
@@ -21,6 +24,7 @@ const payloadSchema = z.object({
 export async function POST(req: Request) {
   const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
+  const session = await getServerSession(authOptions);
 
   if (!isShopifyWriteEnabled()) {
     return NextResponse.json({ ok: false, error: "shopify_write_disabled" }, { status: 403 });
@@ -37,6 +41,7 @@ export async function POST(req: Request) {
   const limit = parsed.data.limit;
   const startedAt = Date.now();
   const shopDomain = resolveShopDomain();
+  const runId = createSyncRunId("shopify-push");
   if (!shopDomain) {
     return NextResponse.json({ ok: false, error: "Missing Shopify shop domain" }, { status: 500 });
   }
@@ -44,6 +49,22 @@ export async function POST(req: Request) {
   await connectMongo();
 
   try {
+    logShopifyPush(
+      "admin_shopify_push_started",
+      {
+        triggeredBy: session?.user?.email || session?.user?.id || "unknown",
+        role: session?.user?.role || null,
+        scope,
+        shopDomain,
+        dryRun: Boolean(parsed.data.dryRun),
+        approvedOnly: Boolean(parsed.data.approvedOnly),
+        limit: limit || null,
+        artistKeysCount: parsed.data.artistKeys?.length || 0,
+        productKeysCount: parsed.data.productKeys?.length || 0,
+      },
+      { runId, force: true },
+    );
+
     const result =
       scope === "artists"
         ? await pushArtists({
@@ -51,6 +72,7 @@ export async function POST(req: Request) {
             limit,
             artistKeys: parsed.data.artistKeys,
             dryRun: parsed.data.dryRun,
+            runId,
           })
         : await pushProducts({
             shopDomain,
@@ -58,6 +80,7 @@ export async function POST(req: Request) {
             productKeys: parsed.data.productKeys,
             dryRun: parsed.data.dryRun,
             approvedOnly: parsed.data.approvedOnly,
+            runId,
           });
     const artistSyncMode = scope === "artists" ? getArtistShopifySyncMode() : undefined;
 
@@ -77,6 +100,20 @@ export async function POST(req: Request) {
       { upsert: true, setDefaultsOnInsert: true },
     );
 
+    logShopifyPush(
+      "admin_shopify_push_finished",
+      {
+        triggeredBy: session?.user?.email || session?.user?.id || "unknown",
+        scope,
+        runId,
+        pushedCount: result.pushedCount,
+        failedCount: result.failedCount,
+        skippedCount: result.skippedCount,
+        durationMs: Date.now() - startedAt,
+      },
+      { runId, force: true },
+    );
+
     return NextResponse.json(
       {
         ok: true,
@@ -88,6 +125,7 @@ export async function POST(req: Request) {
         errors: result.errors,
         items: result.items,
         dryRun: Boolean(parsed.data.dryRun),
+        runId,
         ...(artistSyncMode ? { artistSyncMode } : {}),
       },
       { status: 200 },
@@ -104,6 +142,17 @@ export async function POST(req: Request) {
       },
       { upsert: true, setDefaultsOnInsert: true },
     );
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    logSyncError(
+      "admin_shopify_push_failed",
+      error,
+      {
+        triggeredBy: session?.user?.email || session?.user?.id || "unknown",
+        scope,
+        shopDomain,
+        message,
+      },
+      { runId, force: true },
+    );
+    return NextResponse.json({ ok: false, error: message, runId }, { status: 500 });
   }
 }

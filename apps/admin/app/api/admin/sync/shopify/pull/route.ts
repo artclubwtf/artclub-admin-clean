@@ -1,10 +1,13 @@
+import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { authOptions } from "@/lib/auth";
 import { isMigrationModeEnabled } from "@/lib/featureFlags";
 import { connectMongo } from "@/lib/mongodb";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { resolveShopDomain } from "@/lib/shopDomain";
+import { createSyncRunId, logShopifyPull, logSyncError } from "@/lib/sync/syncLogger";
 import { pullArtists, pullProducts } from "@/lib/sync/shopifyPull";
 import { SyncStateModel } from "@/models/SyncState";
 
@@ -21,6 +24,7 @@ function mapScope(scope: "artists" | "products"): "shopify_pull_artists" | "shop
 export async function POST(req: Request) {
   const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
+  const session = await getServerSession(authOptions);
 
   if (!isMigrationModeEnabled()) {
     return NextResponse.json({ ok: false, error: "migration_mode_disabled" }, { status: 403 });
@@ -39,6 +43,7 @@ export async function POST(req: Request) {
   const full = Boolean(parsed.data.full);
   const syncScope = mapScope(scope);
   const shopDomain = resolveShopDomain();
+  const runId = createSyncRunId("shopify-pull");
 
   if (!shopDomain) {
     return NextResponse.json({ ok: false, error: "Missing Shopify shop domain" }, { status: 500 });
@@ -60,6 +65,20 @@ export async function POST(req: Request) {
   };
 
   try {
+    logShopifyPull(
+      "admin_shopify_pull_started",
+      {
+        triggeredBy: session?.user?.email || session?.user?.id || "unknown",
+        role: session?.user?.role || null,
+        runId,
+        scope,
+        shopDomain,
+        full,
+        limit: limit || null,
+      },
+      { runId, force: true },
+    );
+
     const existing = await SyncStateModel.findOne({ shopDomain, scope: syncScope })
       .select({ cursor: 1 })
       .lean();
@@ -70,8 +89,8 @@ export async function POST(req: Request) {
     do {
       const result: { importedCount: number; cursor: string | null } =
         scope === "artists"
-          ? await pullArtists({ shopDomain, limit, cursor })
-          : await pullProducts({ shopDomain, limit, cursor });
+          ? await pullArtists({ shopDomain, limit, cursor, runId })
+          : await pullProducts({ shopDomain, limit, cursor, runId });
 
       importedCount += result.importedCount;
       cursor = result.cursor;
@@ -91,6 +110,21 @@ export async function POST(req: Request) {
       { upsert: true, setDefaultsOnInsert: true },
     );
 
+    logShopifyPull(
+      "admin_shopify_pull_finished",
+      {
+        triggeredBy: session?.user?.email || session?.user?.id || "unknown",
+        scope,
+        runId,
+        artistsCount: scope === "artists" ? importedCount : 0,
+        productsCount: scope === "products" ? importedCount : 0,
+        errorsCount: 0,
+        cursor: finalCursor,
+        durationMs: Date.now() - startedAt,
+      },
+      { runId, force: true },
+    );
+
     return NextResponse.json(
       {
         ok: true,
@@ -98,13 +132,24 @@ export async function POST(req: Request) {
         importedCount,
         cursor: finalCursor,
         durationMs: Date.now() - startedAt,
+        runId,
       },
       { status: 200 },
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to pull from Shopify";
     await updateStateOnError(message);
-    console.error("Failed to pull from Shopify", { scope, shopDomain, message });
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    logSyncError(
+      "admin_shopify_pull_failed",
+      error,
+      {
+        triggeredBy: session?.user?.email || session?.user?.id || "unknown",
+        scope,
+        shopDomain,
+        message,
+      },
+      { runId, force: true },
+    );
+    return NextResponse.json({ ok: false, error: message, runId }, { status: 500 });
   }
 }

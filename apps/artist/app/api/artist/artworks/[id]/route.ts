@@ -13,6 +13,7 @@ import { buildPrintVariants, buildArtworkSku, dedupeTrimmed, normalizeSelectedPr
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 import { artistProductWriteOwnershipFilter } from "@/lib/server/product-ownership";
 import { autoPushProductToShopify } from "@/lib/server/shopify-auto-sync";
+import { createSyncRunId, logAutoSync, logSyncError } from "../../../../../../admin/lib/sync/syncLogger";
 
 const patchSchema = z
   .object({
@@ -123,6 +124,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ ok: false, error: "artwork_not_found" }, { status: 404 });
     }
 
+    const autoSyncRunId = createSyncRunId("artist-auto-sync");
+
     const payload = (await req.json().catch(() => null)) as unknown;
     const parsed = patchSchema.safeParse(payload || {});
     if (!parsed.success) {
@@ -206,8 +209,37 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           ? "prints_only"
           : "original_only";
     const saleable = data.forSale === true || data.printsEnabled === true;
+    const changedFields = [
+      artwork.title !== data.title ? "title" : null,
+      (artwork.description || "") !== (data.description || "") ? "description" : null,
+      artwork.forSale !== data.forSale ? "forSale" : null,
+      artwork.allowPrints !== data.printsEnabled ? "allowPrints" : null,
+      artwork.originalAvailable !== data.originalAvailable ? "originalAvailable" : null,
+      artwork.seriesId !== seriesId ? "seriesId" : null,
+      artwork.seriesName !== seriesName ? "seriesName" : null,
+      artwork.year !== (data.year ?? undefined) ? "year" : null,
+      (artwork.dimensions?.widthCm ?? null) !== originalWidthCm ? "dimensions.widthCm" : null,
+      (artwork.dimensions?.heightCm ?? null) !== originalHeightCm ? "dimensions.heightCm" : null,
+      JSON.stringify(Array.isArray(artwork.images?.galleryUrls) ? artwork.images.galleryUrls : []) !== JSON.stringify(galleryUrls)
+        ? "images.galleryUrls"
+        : null,
+    ].filter(Boolean) as string[];
+    const shopifyRelevantChanges = changedFields.length > 0 || saleable !== (artwork.forSale === true || artwork.allowPrints === true);
 
-    const changedFields: string[] = [
+    logAutoSync(
+      "artist_app_artwork_update_requested",
+      {
+        canonicalProductId: String(artwork._id),
+        productKey: artwork.productKey,
+        title: data.title,
+        changedFields,
+        shopifyRelevantChanges,
+        ownershipCheckResult: "passed",
+      },
+      { runId: autoSyncRunId, force: true },
+    );
+
+    const syncDirtyFields: string[] = [
       "title",
       "description",
       "offerings",
@@ -222,7 +254,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     const syncPatch = buildProductSyncPatch({
       currentDirtyFields: artwork.sync?.dirtyFields,
-      changedFields,
+      changedFields: syncDirtyFields,
       status: artwork.status,
       hasShopifyProduct: Boolean(artwork.shopify?.productGid),
     });
@@ -326,11 +358,56 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       await CanonicalVariantModel.insertMany(variantsToInsert, { ordered: true });
     }
 
+    logAutoSync(
+      "artist_app_auto_shopify_push_started",
+      {
+        canonicalProductId: String(artwork._id),
+        title: data.title,
+        canonicalArtistId: String(context.canonicalArtist._id),
+        reason: "artwork_updated",
+        isSaleable: saleable && nextStatus !== "archived",
+        existingShopifyProductId: artwork.shopifyProductId || null,
+        existingProductGid: artwork.shopify?.productGid || artwork.shopifyProductId || null,
+      },
+      { runId: autoSyncRunId, force: true },
+    );
+
     const sync = await autoPushProductToShopify({
       shopDomain: context.user.shopDomain,
       productKey: id,
       shouldPush: saleable && nextStatus !== "archived",
+      runId: autoSyncRunId,
+      reason: "artwork_updated",
     });
+
+    if (sync.ok) {
+      logAutoSync(
+        "artist_app_auto_shopify_push_succeeded",
+        {
+          canonicalProductId: String(artwork._id),
+          shopifyProductId: sync.shopifyProductId || artwork.shopifyProductId || null,
+          productGid: sync.productGid || artwork.shopify?.productGid || artwork.shopifyProductId || null,
+          variantCount: sync.variantCount ?? variantsToInsert.length,
+          syncStatus: sync.syncStatus || null,
+          lastPushAt: sync.lastPushAt || null,
+        },
+        { runId: autoSyncRunId, force: true },
+      );
+    } else {
+      logSyncError(
+        "artist_app_auto_shopify_push_failed",
+        sync.error,
+        {
+          canonicalProductId: String(artwork._id),
+          title: data.title,
+          canonicalArtistId: String(context.canonicalArtist._id),
+          errorMessage: sync.error,
+          graphqlErrors: null,
+          userErrors: null,
+        },
+        { runId: autoSyncRunId, force: true },
+      );
+    }
 
     return NextResponse.json({ ok: true, sync }, { status: 200 });
   } catch (error) {

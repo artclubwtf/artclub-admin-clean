@@ -1,10 +1,13 @@
+import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { authOptions } from "@/lib/auth";
 import { isMigrationModeEnabled } from "@/lib/featureFlags";
 import { connectMongo } from "@/lib/mongodb";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { resolveShopDomain } from "@/lib/shopDomain";
+import { createSyncRunId, logShopifyPull, logSyncError } from "@/lib/sync/syncLogger";
 import { importArtistsReadOnly, importProductsReadOnly } from "@/lib/sync/shopifyPull";
 import { SyncStateModel } from "@/models/SyncState";
 
@@ -23,6 +26,7 @@ async function runImport(params: {
   limit?: number;
   full: boolean;
   shopDomain: string;
+  runId: string;
 }) {
   const syncScope = mapScope(params.scope);
   const existing = await SyncStateModel.findOne({ shopDomain: params.shopDomain, scope: syncScope })
@@ -35,8 +39,8 @@ async function runImport(params: {
   do {
     const result: { importedCount: number; cursor: string | null } =
       params.scope === "artists"
-        ? await importArtistsReadOnly({ shopDomain: params.shopDomain, limit: params.limit, cursor })
-        : await importProductsReadOnly({ shopDomain: params.shopDomain, limit: params.limit, cursor });
+        ? await importArtistsReadOnly({ shopDomain: params.shopDomain, limit: params.limit, cursor, runId: params.runId })
+        : await importProductsReadOnly({ shopDomain: params.shopDomain, limit: params.limit, cursor, runId: params.runId });
 
     importedCount += result.importedCount;
     cursor = result.cursor;
@@ -66,6 +70,7 @@ async function runImport(params: {
 export async function POST(req: Request) {
   const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
+  const session = await getServerSession(authOptions);
 
   if (!isMigrationModeEnabled()) {
     return NextResponse.json({ ok: false, error: "migration_mode_disabled" }, { status: 403 });
@@ -80,6 +85,7 @@ export async function POST(req: Request) {
 
   const startedAt = Date.now();
   const shopDomain = resolveShopDomain();
+  const runId = createSyncRunId("shopify-import");
   if (!shopDomain) {
     return NextResponse.json({ ok: false, error: "Missing Shopify shop domain" }, { status: 500 });
   }
@@ -87,6 +93,19 @@ export async function POST(req: Request) {
   await connectMongo();
 
   try {
+    logShopifyPull(
+      "admin_shopify_reimport_started",
+      {
+        triggeredBy: session?.user?.email || session?.user?.id || "unknown",
+        role: session?.user?.role || null,
+        requestedScope: parsed.data.scope,
+        shopDomain,
+        full: Boolean(parsed.data.full),
+        limit: parsed.data.limit || null,
+      },
+      { runId, force: true },
+    );
+
     const scopes = parsed.data.scope === "all" ? (["artists", "products"] as const) : [parsed.data.scope];
     const results = [] as Array<{ scope: "artists" | "products"; importedCount: number; cursor: string | null }>;
 
@@ -97,9 +116,23 @@ export async function POST(req: Request) {
           limit: parsed.data.limit,
           full: Boolean(parsed.data.full),
           shopDomain,
+          runId,
         }),
       );
     }
+
+    logShopifyPull(
+      "admin_shopify_reimport_finished",
+      {
+        triggeredBy: session?.user?.email || session?.user?.id || "unknown",
+        runId,
+        artistsCount: results.find((item) => item.scope === "artists")?.importedCount || 0,
+        productsCount: results.find((item) => item.scope === "products")?.importedCount || 0,
+        errorsCount: 0,
+        durationMs: Date.now() - startedAt,
+      },
+      { runId, force: true },
+    );
 
     return NextResponse.json(
       {
@@ -107,12 +140,23 @@ export async function POST(req: Request) {
         mode: "read_only_import",
         shopDomain,
         durationMs: Date.now() - startedAt,
+        runId,
         results,
       },
       { status: 200 },
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "shopify_import_failed";
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    logSyncError(
+      "admin_shopify_reimport_failed",
+      error,
+      {
+        triggeredBy: session?.user?.email || session?.user?.id || "unknown",
+        shopDomain,
+        message,
+      },
+      { runId, force: true },
+    );
+    return NextResponse.json({ ok: false, error: message, runId }, { status: 500 });
   }
 }

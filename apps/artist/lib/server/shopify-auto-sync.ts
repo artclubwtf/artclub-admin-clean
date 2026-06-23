@@ -1,9 +1,24 @@
 import { pushOneArtist, pushOneProduct } from "../../../admin/lib/sync/shopifyPush";
-import { CanonicalArtistModel, CanonicalProductModel } from "@/lib/server/models";
+import {
+  createSyncRunId,
+  logAutoSync,
+  logSyncError,
+} from "../../../admin/lib/sync/syncLogger";
+import { CanonicalArtistModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 
 export type AutoShopifySyncResult =
-  | { ok: true; skipped?: boolean; message?: string }
-  | { ok: false; error: string };
+  | {
+      ok: true;
+      skipped?: boolean;
+      message?: string;
+      runId?: string;
+      shopifyProductId?: string | null;
+      productGid?: string | null;
+      variantCount?: number;
+      syncStatus?: string | null;
+      lastPushAt?: string | null;
+    }
+  | { ok: false; error: string; runId?: string };
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "shopify_sync_failed";
@@ -27,11 +42,24 @@ export async function autoPushProductToShopify(input: {
   shopDomain: string;
   productKey: string;
   shouldPush: boolean;
+  runId?: string;
+  reason?: string;
 }): Promise<AutoShopifySyncResult> {
-  if (!input.shouldPush) return { ok: true, skipped: true, message: "not_saleable" };
+  const runId = input.runId || createSyncRunId("artist-auto-sync");
+  if (!input.shouldPush) return { ok: true, skipped: true, message: "not_saleable", runId };
 
   try {
-    const result = await pushOneProduct({ shopDomain: input.shopDomain, productKey: input.productKey });
+    logAutoSync(
+      "artist_app_auto_shopify_push_started",
+      {
+        canonicalProductId: null,
+        productKey: input.productKey,
+        reason: input.reason || "auto_sync",
+      },
+      { runId },
+    );
+
+    const result = await pushOneProduct({ shopDomain: input.shopDomain, productKey: input.productKey, runId });
     const sync = resultFromPushItem(result, input.productKey);
     if (!sync.ok) {
       await CanonicalProductModel.updateOne(
@@ -44,8 +72,51 @@ export async function autoPushProductToShopify(input: {
           },
         },
       ).catch(() => null);
+      logSyncError(
+        "artist_app_auto_shopify_push_failed",
+        sync.error,
+        {
+          shopDomain: input.shopDomain,
+          productKey: input.productKey,
+        },
+        { runId, force: true },
+      );
+      return { ...sync, runId };
     }
-    return sync;
+
+    const product = await CanonicalProductModel.findOne({
+      shopDomain: input.shopDomain,
+      productKey: input.productKey,
+    })
+      .select({ _id: 1, shopifyProductId: 1, shopify: 1, sync: 1 })
+      .lean();
+    const variantCount = await CanonicalVariantModel.countDocuments({
+      shopDomain: input.shopDomain,
+      productKey: input.productKey,
+    }).catch(() => 0);
+
+    logAutoSync(
+      "artist_app_auto_shopify_push_succeeded",
+      {
+        canonicalProductId: product?._id ? String(product._id) : null,
+        shopifyProductId: product?.shopifyProductId || null,
+        productGid: product?.shopify?.productGid || product?.shopifyProductId || null,
+        variantCount,
+        syncStatus: product?.sync?.status || null,
+        lastPushAt: product?.sync?.lastPushAt ? new Date(product.sync.lastPushAt).toISOString() : null,
+      },
+      { runId },
+    );
+
+    return {
+      ...sync,
+      runId,
+      shopifyProductId: product?.shopifyProductId || null,
+      productGid: product?.shopify?.productGid || product?.shopifyProductId || null,
+      variantCount,
+      syncStatus: product?.sync?.status || null,
+      lastPushAt: product?.sync?.lastPushAt ? new Date(product.sync.lastPushAt).toISOString() : null,
+    };
   } catch (error) {
     const message = errorMessage(error);
     await CanonicalProductModel.updateOne(
@@ -58,7 +129,16 @@ export async function autoPushProductToShopify(input: {
         },
       },
     ).catch(() => null);
-    return { ok: false, error: message };
+    logSyncError(
+      "artist_app_auto_shopify_push_failed",
+      error,
+      {
+        shopDomain: input.shopDomain,
+        productKey: input.productKey,
+      },
+      { runId, force: true },
+    );
+    return { ok: false, error: message, runId };
   }
 }
 
@@ -66,11 +146,13 @@ export async function autoPushArtistToShopify(input: {
   shopDomain: string;
   artistKey: string;
   shouldPush: boolean;
+  runId?: string;
 }): Promise<AutoShopifySyncResult> {
-  if (!input.shouldPush) return { ok: true, skipped: true, message: "no_public_profile_changes" };
+  const runId = input.runId || createSyncRunId("artist-auto-sync");
+  if (!input.shouldPush) return { ok: true, skipped: true, message: "no_public_profile_changes", runId };
 
   try {
-    const result = await pushOneArtist({ shopDomain: input.shopDomain, artistKey: input.artistKey });
+    const result = await pushOneArtist({ shopDomain: input.shopDomain, artistKey: input.artistKey, runId });
     const sync = resultFromPushItem(result, input.artistKey);
     if (!sync.ok) {
       await CanonicalArtistModel.updateOne(
@@ -83,8 +165,18 @@ export async function autoPushArtistToShopify(input: {
           },
         },
       ).catch(() => null);
+      logSyncError(
+        "artist_app_auto_shopify_artist_push_failed",
+        sync.error,
+        {
+          shopDomain: input.shopDomain,
+          artistKey: input.artistKey,
+        },
+        { runId, force: true },
+      );
+      return { ...sync, runId };
     }
-    return sync;
+    return { ...sync, runId };
   } catch (error) {
     const message = errorMessage(error);
     await CanonicalArtistModel.updateOne(
@@ -97,6 +189,15 @@ export async function autoPushArtistToShopify(input: {
         },
       },
     ).catch(() => null);
-    return { ok: false, error: message };
+    logSyncError(
+      "artist_app_auto_shopify_artist_push_failed",
+      error,
+      {
+        shopDomain: input.shopDomain,
+        artistKey: input.artistKey,
+      },
+      { runId, force: true },
+    );
+    return { ok: false, error: message, runId };
   }
 }

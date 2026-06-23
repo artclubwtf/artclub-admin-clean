@@ -13,6 +13,7 @@ import { ensureCanonicalProductIndexes } from "@/lib/server/canonical-product-in
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 import { artistProductOwnershipFilter } from "@/lib/server/product-ownership";
 import { autoPushProductToShopify } from "@/lib/server/shopify-auto-sync";
+import { createSyncRunId, logAutoSync, logSyncError } from "../../../../../admin/lib/sync/syncLogger";
 
 const createArtworkSchema = z
   .object({
@@ -233,8 +234,29 @@ export async function POST(req: Request) {
           ? "prints_only"
           : "original_only";
     const saleable = data.forSale === true || data.printsEnabled === true;
+    const autoSyncRunId = createSyncRunId("artist-auto-sync");
 
-    await CanonicalProductModel.create({
+    logAutoSync(
+      "artist_app_artwork_create_requested",
+      {
+        userId: context.sessionUserId,
+        canonicalArtistId: String(context.canonicalArtist._id),
+        artistKey: context.user.artistKey,
+        title: data.title,
+        forSale: data.forSale,
+        allowPrints: data.printsEnabled,
+        printsEnabled: data.printsEnabled,
+        originalAvailable: data.originalAvailable,
+        imageCount: galleryUrls.length,
+        hasDimensions: Boolean(originalWidthCm && originalHeightCm),
+        widthCm: originalWidthCm,
+        heightCm: originalHeightCm,
+        variantPlanCount: variantsToInsert.length,
+      },
+      { runId: autoSyncRunId, force: true },
+    );
+
+    const createdProduct = await CanonicalProductModel.create({
       shopDomain: context.user.shopDomain,
       productKey,
       type: "artwork",
@@ -272,6 +294,18 @@ export async function POST(req: Request) {
       },
     });
 
+    logAutoSync(
+      "artist_app_artwork_created",
+      {
+        canonicalProductId: String(createdProduct._id),
+        productKey,
+        status: createdProduct.status,
+        syncNeedsPush: createdProduct.sync?.needsPush === true,
+        canonicalArtistId: String(context.canonicalArtist._id),
+      },
+      { runId: autoSyncRunId, force: true },
+    );
+
     try {
       await CanonicalVariantModel.insertMany(variantsToInsert, { ordered: true });
     } catch (error) {
@@ -282,11 +316,56 @@ export async function POST(req: Request) {
       throw error;
     }
 
+    logAutoSync(
+      "artist_app_auto_shopify_push_started",
+      {
+        canonicalProductId: String(createdProduct._id),
+        title: data.title,
+        canonicalArtistId: String(context.canonicalArtist._id),
+        reason: "artwork_created",
+        isSaleable: saleable,
+        existingShopifyProductId: null,
+        existingProductGid: null,
+      },
+      { runId: autoSyncRunId, force: true },
+    );
+
     const sync = await autoPushProductToShopify({
       shopDomain: context.user.shopDomain,
       productKey,
       shouldPush: saleable,
+      runId: autoSyncRunId,
+      reason: "artwork_created",
     });
+
+    if (sync.ok) {
+      logAutoSync(
+        "artist_app_auto_shopify_push_succeeded",
+        {
+          canonicalProductId: String(createdProduct._id),
+          shopifyProductId: sync.shopifyProductId || null,
+          productGid: sync.productGid || null,
+          variantCount: sync.variantCount ?? variantsToInsert.length,
+          syncStatus: sync.syncStatus || null,
+          lastPushAt: sync.lastPushAt || null,
+        },
+        { runId: autoSyncRunId, force: true },
+      );
+    } else {
+      logSyncError(
+        "artist_app_auto_shopify_push_failed",
+        sync.error,
+        {
+          canonicalProductId: String(createdProduct._id),
+          title: data.title,
+          canonicalArtistId: String(context.canonicalArtist._id),
+          errorMessage: sync.error,
+          graphqlErrors: null,
+          userErrors: null,
+        },
+        { runId: autoSyncRunId, force: true },
+      );
+    }
 
     return NextResponse.json({ ok: true, productKey, sync }, { status: 201 });
   } catch (error) {
