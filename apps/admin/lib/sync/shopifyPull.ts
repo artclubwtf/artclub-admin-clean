@@ -16,6 +16,7 @@ import {
   hydrateArtistMetaobjectWithResolvedReferences,
   resolveShopifyReferenceNodes,
 } from "@/lib/sync/shopifyReferenceLookup";
+import { normalizeFinishInternalCode, normalizeSizeInternalCode } from "@/lib/sync/shopifyVariantOptionMapping";
 import {
   createSyncRunId,
   logArtistImport,
@@ -808,22 +809,24 @@ async function pullProductsInternal(input: PullInput, mode: PullMode): Promise<P
       variantKeys.push(variantKey);
 
       const selectedOptions = variant.selectedOptions || [];
-      const finish = firstTruthy([
+      const finishRaw = firstTruthy([
         optionValue(selectedOptions, /finish|material|frame/i),
         selectedOptions[0]?.value || undefined,
         "standard",
       ]) || "standard";
-      const sizeCode = firstTruthy([
+      const sizeRaw = firstTruthy([
         optionValue(selectedOptions, /size|format|dimension/i),
         selectedOptions[1]?.value || undefined,
         "default",
       ]) || "default";
+      const finish = normalizeFinishInternalCode(finishRaw) || "standard";
+      const sizeCode = normalizeSizeInternalCode(sizeRaw) || "default";
 
       const sku = firstTruthy([variant.sku || undefined, `SKU-${variantGid.split("/").pop() || "UNKNOWN"}`]) || "SKU-UNKNOWN";
       variantLogRows.push({
         variantId: variantGid,
         sku,
-        title: `${finish} / ${sizeCode}`,
+        title: `${finishRaw} / ${sizeRaw}`,
         finish,
         size: sizeCode,
         price: variant?.price,

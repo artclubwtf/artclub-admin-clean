@@ -8,6 +8,14 @@ import {
   logSyncError,
   previewValue,
 } from "./syncLogger";
+import {
+  SHOPIFY_VARIANT_OPTION_NAMES,
+  buildVariantOptionKey,
+  normalizeFinishInternalCode,
+  normalizeSizeInternalCode,
+  toShopifyFinishValue,
+  toShopifySizeValue,
+} from "./shopifyVariantOptionMapping";
 import { CanonicalArtistModel } from "../../models/CanonicalArtist";
 import { ArtistMediaV2Model } from "../../models/ArtistMediaV2";
 import { CanonicalProductModel, type CanonicalProduct } from "../../models/CanonicalProduct";
@@ -36,7 +44,34 @@ type PushResult = {
 type ShopifyVariantNode = {
   id?: string | null;
   sku?: string | null;
+  selectedOptions?: Array<{ name?: string | null; value?: string | null }> | null;
   inventoryItem?: { id?: string | null } | null;
+};
+
+type ShopifyProductOptionNode = {
+  id?: string | null;
+  name?: string | null;
+  position?: number | null;
+  optionValues?: Array<{ id?: string | null; name?: string | null; hasVariants?: boolean | null }> | null;
+};
+
+type ShopifyProductState = {
+  options: ShopifyProductOptionNode[];
+  variants: ShopifyVariantNode[];
+};
+
+type VariantSyncInput = {
+  variantKey?: string;
+  variantGid?: string;
+  finish: string;
+  sizeCode: string;
+  sku: string;
+  priceCents: number;
+};
+
+type ShopifyVariantOptionValueInput = {
+  optionId: string;
+  name: string;
 };
 
 type PushableProduct = CanonicalProduct & {
@@ -400,16 +435,414 @@ async function loadArtistSummary(product: Pick<CanonicalProduct, "canonicalArtis
   };
 }
 
-async function createShopifyProduct(product: PushableProduct, imageUrls: string[]) {
+function normalizeOptionName(value?: string | null) {
+  return (value || "").trim().toLowerCase();
+}
+
+function normalizeOptionValue(value?: string | null) {
+  return (value || "").trim().toLowerCase();
+}
+
+function summarizeShopifyOptions(options: ShopifyProductOptionNode[]) {
+  return options.map((option) => ({
+    name: option.name || "",
+    id: option.id || null,
+    values: uniqStrings((option.optionValues || []).map((value) => value.name || "")),
+  }));
+}
+
+function findOptionByName(options: ShopifyProductOptionNode[], expectedName: string) {
+  return options.find((option) => normalizeOptionName(option.name) === normalizeOptionName(expectedName));
+}
+
+function optionValuesSet(option?: ShopifyProductOptionNode | null) {
+  return new Set((option?.optionValues || []).map((value) => normalizeOptionValue(value.name)));
+}
+
+function selectedOptionValue(selectedOptions: Array<{ name?: string | null; value?: string | null }> | null | undefined, pattern: RegExp) {
+  const match = (selectedOptions || []).find((option) => pattern.test(option.name || ""));
+  return match?.value?.trim() || "";
+}
+
+function isStandaloneDefaultVariant(variant: ShopifyVariantNode) {
+  const selectedOptions = variant.selectedOptions || [];
+  if (!selectedOptions.length) return true;
+  return selectedOptions.every((option) => {
+    const name = normalizeOptionName(option.name);
+    const value = normalizeOptionValue(option.value);
+    return name === "title" || value === "default title";
+  });
+}
+
+function toInternalVariantOptionPair(selectedOptions: Array<{ name?: string | null; value?: string | null }> | null | undefined) {
+  const finishRaw =
+    selectedOptionValue(selectedOptions, /finish|material|frame/i) ||
+    selectedOptions?.[0]?.value?.trim() ||
+    "";
+  const sizeRaw =
+    selectedOptionValue(selectedOptions, /size|format|dimension/i) ||
+    selectedOptions?.[1]?.value?.trim() ||
+    "";
+  return {
+    finishInternal: normalizeFinishInternalCode(finishRaw),
+    sizeInternal: normalizeSizeInternalCode(sizeRaw),
+  };
+}
+
+function buildRequiredProductOptions(variants: VariantSyncInput[]) {
+  const finishValues = uniqStrings(variants.map((variant) => toShopifyFinishValue(variant.finish)));
+  const sizeValues = uniqStrings(variants.map((variant) => toShopifySizeValue(variant.sizeCode)));
+  return {
+    [SHOPIFY_VARIANT_OPTION_NAMES.finish]: finishValues,
+    [SHOPIFY_VARIANT_OPTION_NAMES.size]: sizeValues,
+  };
+}
+
+function buildProductCreateOptions(variants: VariantSyncInput[]) {
+  const requiredOptions = buildRequiredProductOptions(variants);
+  return [
+    {
+      name: SHOPIFY_VARIANT_OPTION_NAMES.finish,
+      values: requiredOptions[SHOPIFY_VARIANT_OPTION_NAMES.finish].map((value) => ({ name: value })),
+    },
+    {
+      name: SHOPIFY_VARIANT_OPTION_NAMES.size,
+      values: requiredOptions[SHOPIFY_VARIANT_OPTION_NAMES.size].map((value) => ({ name: value })),
+    },
+  ].filter((option) => option.values.length);
+}
+
+function buildShopifyVariantOptionValues(
+  options: ShopifyProductOptionNode[],
+  variant: VariantSyncInput,
+): ShopifyVariantOptionValueInput[] {
+  const finishOption = findOptionByName(options, SHOPIFY_VARIANT_OPTION_NAMES.finish);
+  const sizeOption = findOptionByName(options, SHOPIFY_VARIANT_OPTION_NAMES.size);
+  if (!finishOption?.id || !sizeOption?.id) {
+    throw new ShopifyPushError("Shopify product options are not ready for variant push", {
+      actualProductOptionsFromShopify: summarizeShopifyOptions(options),
+      attemptedVariant: {
+        finishInternal: variant.finish,
+        finishShopifyValue: toShopifyFinishValue(variant.finish),
+        sizeInternal: variant.sizeCode,
+        sizeShopifyValue: toShopifySizeValue(variant.sizeCode),
+        sku: variant.sku,
+      },
+    });
+  }
+
+  return [
+    {
+      optionId: finishOption.id,
+      name: toShopifyFinishValue(variant.finish),
+    },
+    {
+      optionId: sizeOption.id,
+      name: toShopifySizeValue(variant.sizeCode),
+    },
+  ];
+}
+
+async function fetchShopifyProductState(productGid: string): Promise<ShopifyProductState> {
+  const query = `
+    query PushProductState($id: ID!) {
+      product(id: $id) {
+        options {
+          id
+          name
+          position
+          optionValues {
+            id
+            name
+            hasVariants
+          }
+        }
+        variants(first: 100) {
+          nodes {
+            id
+            sku
+            selectedOptions {
+              name
+              value
+            }
+            inventoryItem { id }
+          }
+        }
+      }
+    }
+  `;
+
+  const data = await callShopifyAdmin<{
+    product?: {
+      options?: ShopifyProductOptionNode[] | null;
+      variants?: {
+        nodes?: ShopifyVariantNode[] | null;
+      } | null;
+    } | null;
+  }>(query, { id: productGid });
+
+  return {
+    options: data?.product?.options || [],
+    variants: data?.product?.variants?.nodes || [],
+  };
+}
+
+async function createMissingProductOptions(
+  productGid: string,
+  options: Array<{ name: string; values: string[] }>,
+) {
+  if (!options.length) return;
+
   const mutation = `
-    mutation PushProductCreate($input: ProductInput!, $media: [CreateMediaInput!]) {
-      productCreate(input: $input, media: $media) {
+    mutation PushProductOptionsCreate($productId: ID!, $options: [OptionCreateInput!]!) {
+      productOptionsCreate(productId: $productId, options: $options, variantStrategy: LEAVE_AS_IS) {
+        product { id }
+        userErrors { field message code }
+      }
+    }
+  `;
+
+  const data = await callShopifyAdmin<{
+    productOptionsCreate?: {
+      userErrors?: Array<{ field?: string[] | null; message?: string; code?: string | null }>;
+    };
+  }>(mutation, {
+    productId: productGid,
+    options: options.map((option) => ({
+      name: option.name,
+      values: option.values.map((value) => ({ name: value })),
+    })),
+  });
+
+  const payload = data?.productOptionsCreate;
+  if (!payload) throw new ShopifyPushError("Shopify productOptionsCreate returned no payload");
+  if (payload.userErrors?.length) {
+    throw new ShopifyPushError("Shopify productOptionsCreate failed", {
+      userErrors: payload.userErrors,
+      graphqlErrors: [],
+      productGid,
+      attemptedOptions: options,
+    });
+  }
+}
+
+async function updateShopifyProductOption(
+  productGid: string,
+  option: ShopifyProductOptionNode,
+  input: {
+    name?: string;
+    optionValuesToAdd?: string[];
+    optionValuesToUpdate?: Array<{ id: string; name: string }>;
+  },
+) {
+  if (!option.id) {
+    throw new ShopifyPushError("Shopify product option is missing id", {
+      productGid,
+      option,
+      attemptedInput: input,
+    });
+  }
+
+  const mutation = `
+    mutation PushProductOptionUpdate(
+      $productId: ID!
+      $option: ProductOptionUpdateInput!
+      $optionValuesToAdd: [OptionValueCreateInput!]
+      $optionValuesToUpdate: [OptionValueUpdateInput!]
+    ) {
+      productOptionUpdate(
+        productId: $productId
+        option: $option
+        optionValuesToAdd: $optionValuesToAdd
+        optionValuesToUpdate: $optionValuesToUpdate
+        variantStrategy: LEAVE_AS_IS
+      ) {
+        product { id }
+        userErrors { field message code }
+      }
+    }
+  `;
+
+  const data = await callShopifyAdmin<{
+    productOptionUpdate?: {
+      userErrors?: Array<{ field?: string[] | null; message?: string; code?: string | null }>;
+    };
+  }>(mutation, {
+    productId: productGid,
+    option: {
+      id: option.id,
+      ...(input.name ? { name: input.name } : {}),
+      ...(typeof option.position === "number" ? { position: option.position } : {}),
+    },
+    optionValuesToAdd: input.optionValuesToAdd?.length
+      ? input.optionValuesToAdd.map((value) => ({ name: value }))
+      : undefined,
+    optionValuesToUpdate: input.optionValuesToUpdate?.length ? input.optionValuesToUpdate : undefined,
+  });
+
+  const payload = data?.productOptionUpdate;
+  if (!payload) throw new ShopifyPushError("Shopify productOptionUpdate returned no payload");
+  if (payload.userErrors?.length) {
+    throw new ShopifyPushError("Shopify productOptionUpdate failed", {
+      userErrors: payload.userErrors,
+      graphqlErrors: [],
+      productGid,
+      option,
+      attemptedInput: input,
+    });
+  }
+}
+
+async function ensureShopifyProductOptions(
+  productGid: string,
+  variants: VariantSyncInput[],
+  runId: string,
+  initialState?: ShopifyProductState,
+) {
+  const requiredOptions = buildRequiredProductOptions(variants);
+  let state = initialState || (await fetchShopifyProductState(productGid));
+  let finishOption = findOptionByName(state.options, SHOPIFY_VARIANT_OPTION_NAMES.finish);
+  let sizeOption = findOptionByName(state.options, SHOPIFY_VARIANT_OPTION_NAMES.size);
+  const titleOption = findOptionByName(state.options, "Title");
+
+  logShopifyPush(
+    "shopify_product_options_preflight",
+    {
+      productGid,
+      existingOptions: summarizeShopifyOptions(state.options),
+      requiredOptions: [
+        { name: SHOPIFY_VARIANT_OPTION_NAMES.finish, values: requiredOptions[SHOPIFY_VARIANT_OPTION_NAMES.finish] },
+        { name: SHOPIFY_VARIANT_OPTION_NAMES.size, values: requiredOptions[SHOPIFY_VARIANT_OPTION_NAMES.size] },
+      ],
+      missingOptions: [
+        ...(finishOption ? [] : [SHOPIFY_VARIANT_OPTION_NAMES.finish]),
+        ...(sizeOption ? [] : [SHOPIFY_VARIANT_OPTION_NAMES.size]),
+      ],
+      requiredFinishValues: requiredOptions[SHOPIFY_VARIANT_OPTION_NAMES.finish],
+      requiredSizeValues: requiredOptions[SHOPIFY_VARIANT_OPTION_NAMES.size],
+    },
+    { runId, force: true },
+  );
+
+  let mutated = false;
+
+  if (!finishOption && titleOption?.id) {
+    const defaultTitleValue = (titleOption.optionValues || []).find(
+      (value) => normalizeOptionValue(value.name) === "default title" && value.id,
+    );
+    const firstRequiredFinishValue =
+      requiredOptions[SHOPIFY_VARIANT_OPTION_NAMES.finish][0] || toShopifyFinishValue("original");
+    await updateShopifyProductOption(productGid, titleOption, {
+      name: SHOPIFY_VARIANT_OPTION_NAMES.finish,
+      optionValuesToAdd: requiredOptions[SHOPIFY_VARIANT_OPTION_NAMES.finish].filter(
+        (value) => !defaultTitleValue?.id || normalizeOptionValue(value) !== normalizeOptionValue(firstRequiredFinishValue),
+      ),
+      optionValuesToUpdate: defaultTitleValue?.id ? [{ id: defaultTitleValue.id, name: firstRequiredFinishValue }] : undefined,
+    });
+    mutated = true;
+    state = await fetchShopifyProductState(productGid);
+    finishOption = findOptionByName(state.options, SHOPIFY_VARIANT_OPTION_NAMES.finish);
+    sizeOption = findOptionByName(state.options, SHOPIFY_VARIANT_OPTION_NAMES.size);
+  }
+
+  if (!finishOption || !sizeOption) {
+    const missingOptionsToCreate = [
+      ...(finishOption ? [] : [{ name: SHOPIFY_VARIANT_OPTION_NAMES.finish, values: requiredOptions[SHOPIFY_VARIANT_OPTION_NAMES.finish] }]),
+      ...(sizeOption ? [] : [{ name: SHOPIFY_VARIANT_OPTION_NAMES.size, values: requiredOptions[SHOPIFY_VARIANT_OPTION_NAMES.size] }]),
+    ];
+    if (missingOptionsToCreate.length) {
+      await createMissingProductOptions(productGid, missingOptionsToCreate);
+      mutated = true;
+      state = await fetchShopifyProductState(productGid);
+      finishOption = findOptionByName(state.options, SHOPIFY_VARIANT_OPTION_NAMES.finish);
+      sizeOption = findOptionByName(state.options, SHOPIFY_VARIANT_OPTION_NAMES.size);
+    }
+  }
+
+  const missingFinishValues = requiredOptions[SHOPIFY_VARIANT_OPTION_NAMES.finish].filter(
+    (value) => !optionValuesSet(finishOption).has(normalizeOptionValue(value)),
+  );
+  if (finishOption?.id && missingFinishValues.length) {
+    await updateShopifyProductOption(productGid, finishOption, {
+      optionValuesToAdd: missingFinishValues,
+    });
+    mutated = true;
+  }
+
+  const missingSizeValues = requiredOptions[SHOPIFY_VARIANT_OPTION_NAMES.size].filter(
+    (value) => !optionValuesSet(sizeOption).has(normalizeOptionValue(value)),
+  );
+  if (sizeOption?.id && missingSizeValues.length) {
+    await updateShopifyProductOption(productGid, sizeOption, {
+      optionValuesToAdd: missingSizeValues,
+    });
+    mutated = true;
+  }
+
+  if (mutated) {
+    state = await fetchShopifyProductState(productGid);
+  }
+
+  logShopifyPush(
+    "shopify_product_options_ready",
+    {
+      productGid,
+      options: summarizeShopifyOptions(state.options),
+    },
+    { runId, force: true },
+  );
+
+  return state;
+}
+
+async function logVariantOptionErrorContext(
+  productGid: string,
+  attemptedVariants: Array<{ sku: string; optionValues?: ShopifyVariantOptionValueInput[] }>,
+  userErrors: unknown,
+  graphqlErrors: unknown,
+  runId: string,
+) {
+  const state = await fetchShopifyProductState(productGid);
+  logShopifyPush(
+    "shopify_variant_option_error_context",
+    {
+      productGid,
+      actualProductOptionsFromShopify: summarizeShopifyOptions(state.options),
+      attemptedOptionValues: attemptedVariants.map((variant) => ({
+        sku: variant.sku,
+        optionValues: variant.optionValues || [],
+      })),
+      userErrors,
+      graphqlErrors,
+    },
+    { runId, force: true },
+  );
+}
+
+async function createShopifyProduct(product: PushableProduct, imageUrls: string[], variants: VariantSyncInput[]) {
+  const mutation = `
+    mutation PushProductCreate($product: ProductCreateInput!, $media: [CreateMediaInput!]) {
+      productCreate(product: $product, media: $media) {
         product {
           id
-          variants(first: 1) {
+          options {
+            id
+            name
+            position
+            optionValues {
+              id
+              name
+              hasVariants
+            }
+          }
+          variants(first: 100) {
             nodes {
               id
               sku
+              selectedOptions {
+                name
+                value
+              }
               inventoryItem { id }
             }
           }
@@ -426,6 +859,7 @@ async function createShopifyProduct(product: PushableProduct, imageUrls: string[
     heightCm: product.dimensions?.heightCm,
     kurzbeschreibung: product.shortDescription || product.shortText || undefined,
   });
+  const productOptions = buildProductCreateOptions(variants);
   const media = imageUrls.map((url) => ({
     originalSource: url,
     mediaContentType: "IMAGE",
@@ -436,17 +870,19 @@ async function createShopifyProduct(product: PushableProduct, imageUrls: string[
     productCreate?: {
       product?: {
         id?: string;
-        variants?: { nodes?: ShopifyVariantNode[] };
+        options?: ShopifyProductOptionNode[] | null;
+        variants?: { nodes?: ShopifyVariantNode[] | null } | null;
       };
       userErrors?: Array<{ message?: string }>;
     };
   }>(mutation, {
-    input: {
+    product: {
       title: product.title,
       descriptionHtml: product.bodyHtml || product.descriptionHtml || product.description || undefined,
       vendor: product.vendor || "artclub",
       tags: product.tags || [],
       status: normalizeShopStatus(product.status),
+      ...(productOptions.length ? { productOptions } : {}),
       metafields,
     },
     media,
@@ -466,6 +902,10 @@ async function createShopifyProduct(product: PushableProduct, imageUrls: string[
     productId,
     defaultVariantId: defaultVariant?.id || null,
     defaultInventoryItemId: defaultVariant?.inventoryItem?.id || null,
+    productState: {
+      options: payload.product?.options || [],
+      variants: payload.product?.variants?.nodes || [],
+    },
   };
 }
 
@@ -603,34 +1043,9 @@ async function setProductMetafields(productGid: string, product: PushableProduct
   }
 }
 
-async function fetchShopifyProductVariants(productGid: string): Promise<ShopifyVariantNode[]> {
-  const query = `
-    query PushProductVariants($id: ID!) {
-      product(id: $id) {
-        variants(first: 100) {
-          nodes {
-            id
-            sku
-            inventoryItem { id }
-          }
-        }
-      }
-    }
-  `;
-
-  const data = await callShopifyAdmin<{
-    product?: {
-      variants?: {
-        nodes?: ShopifyVariantNode[];
-      };
-    };
-  }>(query, { id: productGid });
-
-  return data?.product?.variants?.nodes || [];
-}
-
 async function bulkUpdateShopifyVariants(
   productGid: string,
+  options: ShopifyProductOptionNode[],
   variants: Array<{ variantGid: string; finish: string; sizeCode: string; sku: string; priceCents: number }>,
   runId: string,
 ) {
@@ -645,13 +1060,17 @@ async function bulkUpdateShopifyVariants(
     }
   `;
 
-  const payloadVariants = variants.map((variant) => ({
-    id: variant.variantGid,
-    price: normalizePrice(variant.priceCents),
-    inventoryItem: {
-      sku: variant.sku,
-    },
-  }));
+  const payloadVariants = variants.map((variant) => {
+    const optionValues = buildShopifyVariantOptionValues(options, variant);
+    return {
+      id: variant.variantGid,
+      price: normalizePrice(variant.priceCents),
+      inventoryItem: {
+        sku: variant.sku,
+      },
+      optionValues,
+    };
+  });
 
   logShopifyPush(
     "shopify_variant_bulk_payload",
@@ -659,11 +1078,14 @@ async function bulkUpdateShopifyVariants(
       operation: "update",
       productGid,
       variantCount: variants.length,
-      variants: variants.map((variant) => ({
-        finish: variant.finish,
-        size: variant.sizeCode,
+      variants: variants.map((variant, index) => ({
+        finishInternal: normalizeFinishInternalCode(variant.finish),
+        finishShopifyValue: toShopifyFinishValue(variant.finish),
+        sizeInternal: normalizeSizeInternalCode(variant.sizeCode),
+        sizeShopifyValue: toShopifySizeValue(variant.sizeCode),
         price: normalizePrice(variant.priceCents),
         sku: variant.sku,
+        optionValues: payloadVariants[index]?.optionValues || [],
         hasInventoryItemSku: Boolean(variant.sku),
         hasTopLevelSku: false,
       })),
@@ -671,18 +1093,37 @@ async function bulkUpdateShopifyVariants(
     { runId, force: true },
   );
 
-  const data = await callShopifyAdmin<{
-    productVariantsBulkUpdate?: {
-      userErrors?: Array<{ field?: string[] | null; message?: string; code?: string | null }>;
-    };
-  }>(mutation, {
-    productId: productGid,
-    variants: payloadVariants,
-  });
+  let data:
+    | {
+        productVariantsBulkUpdate?: {
+          userErrors?: Array<{ field?: string[] | null; message?: string; code?: string | null }>;
+        };
+      }
+    | undefined;
+  const attemptedVariants = payloadVariants.map((payloadVariant, index) => ({
+    sku: variants[index]?.sku || "",
+    optionValues: payloadVariant.optionValues,
+  }));
+
+  try {
+    data = await callShopifyAdmin<{
+      productVariantsBulkUpdate?: {
+        userErrors?: Array<{ field?: string[] | null; message?: string; code?: string | null }>;
+      };
+    }>(mutation, {
+      productId: productGid,
+      variants: payloadVariants,
+    });
+  } catch (error) {
+    const graphqlErrors = error instanceof ShopifyPushError ? error.details?.graphqlErrors ?? null : null;
+    await logVariantOptionErrorContext(productGid, attemptedVariants, null, graphqlErrors, runId);
+    throw error;
+  }
 
   const payload = data?.productVariantsBulkUpdate;
   if (!payload) throw new ShopifyPushError("Shopify productVariantsBulkUpdate returned no payload");
   if (payload.userErrors?.length) {
+    await logVariantOptionErrorContext(productGid, attemptedVariants, payload.userErrors, [], runId);
     const message = payload.userErrors.map((error) => error.message).filter(Boolean).join("; ");
     throw new ShopifyPushError(message || "Shopify productVariantsBulkUpdate failed", {
       userErrors: payload.userErrors,
@@ -695,6 +1136,7 @@ async function bulkUpdateShopifyVariants(
 
 async function bulkCreateShopifyVariants(
   productGid: string,
+  options: ShopifyProductOptionNode[],
   variants: Array<{ variantKey: string; finish: string; sizeCode: string; sku: string; priceCents: number }>,
   runId: string,
 ): Promise<ShopifyVariantNode[]> {
@@ -718,16 +1160,7 @@ async function bulkCreateShopifyVariants(
     inventoryItem: {
       sku: variant.sku,
     },
-    optionValues: [
-      {
-        optionName: "Finish",
-        name: variant.finish || "Edition Art Print",
-      },
-      {
-        optionName: "Size",
-        name: variant.sizeCode || "Default",
-      },
-    ],
+    optionValues: buildShopifyVariantOptionValues(options, variant),
   }));
 
   logShopifyPush(
@@ -736,11 +1169,14 @@ async function bulkCreateShopifyVariants(
       operation: "create",
       productGid,
       variantCount: variants.length,
-      variants: variants.map((variant) => ({
-        finish: variant.finish,
-        size: variant.sizeCode,
+      variants: variants.map((variant, index) => ({
+        finishInternal: normalizeFinishInternalCode(variant.finish),
+        finishShopifyValue: toShopifyFinishValue(variant.finish),
+        sizeInternal: normalizeSizeInternalCode(variant.sizeCode),
+        sizeShopifyValue: toShopifySizeValue(variant.sizeCode),
         price: normalizePrice(variant.priceCents),
         sku: variant.sku,
+        optionValues: payloadVariants[index]?.optionValues || [],
         hasInventoryItemSku: Boolean(variant.sku),
         hasTopLevelSku: false,
       })),
@@ -748,19 +1184,39 @@ async function bulkCreateShopifyVariants(
     { runId, force: true },
   );
 
-  const data = await callShopifyAdmin<{
-    productVariantsBulkCreate?: {
-      productVariants?: ShopifyVariantNode[];
-      userErrors?: Array<{ field?: string[] | null; message?: string; code?: string | null }>;
-    };
-  }>(mutation, {
-    productId: productGid,
-    variants: payloadVariants,
-  });
+  let data:
+    | {
+        productVariantsBulkCreate?: {
+          productVariants?: ShopifyVariantNode[];
+          userErrors?: Array<{ field?: string[] | null; message?: string; code?: string | null }>;
+        };
+      }
+    | undefined;
+  const attemptedVariants = payloadVariants.map((payloadVariant, index) => ({
+    sku: variants[index]?.sku || "",
+    optionValues: payloadVariant.optionValues,
+  }));
+
+  try {
+    data = await callShopifyAdmin<{
+      productVariantsBulkCreate?: {
+        productVariants?: ShopifyVariantNode[];
+        userErrors?: Array<{ field?: string[] | null; message?: string; code?: string | null }>;
+      };
+    }>(mutation, {
+      productId: productGid,
+      variants: payloadVariants,
+    });
+  } catch (error) {
+    const graphqlErrors = error instanceof ShopifyPushError ? error.details?.graphqlErrors ?? null : null;
+    await logVariantOptionErrorContext(productGid, attemptedVariants, null, graphqlErrors, runId);
+    throw error;
+  }
 
   const payload = data?.productVariantsBulkCreate;
   if (!payload) throw new ShopifyPushError("Shopify productVariantsBulkCreate returned no payload");
   if (payload.userErrors?.length) {
+    await logVariantOptionErrorContext(productGid, attemptedVariants, payload.userErrors, [], runId);
     const message = payload.userErrors.map((error) => error.message).filter(Boolean).join("; ");
     throw new ShopifyPushError(message || "Shopify productVariantsBulkCreate failed", {
       userErrors: payload.userErrors,
@@ -987,6 +1443,13 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
       };
       const willUpdate = Boolean(productGid);
       const imageUrls = await resolvePushableProductImageUrls(product, runId);
+      const variantSyncInputs = canonicalVariants.map((variant) => ({
+        variantKey: variant.variantKey,
+        finish: variant.finish,
+        sizeCode: variant.sizeCode,
+        sku: variant.sku,
+        priceCents: variant.priceCents,
+      }));
       const metafieldSummary = buildProductMetafieldsForArtwork({
         artistMetaobjectGid: productForPush.artistMetaobjectGidForShopify,
         artistSlug: productForPush.artistSlugForShopify,
@@ -1027,6 +1490,7 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
 
       let defaultVariantId: string | null = null;
       let defaultInventoryItemId: string | null = null;
+      let initialProductState: ShopifyProductState | undefined;
 
       logShopifyPush(
         "shopify_product_push_payload",
@@ -1045,14 +1509,16 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
             "custom.height": metafieldSummary.find((item) => item.key === "height")?.value || null,
           },
           options: {
-            Finish: Array.from(new Set(canonicalVariants.map((variant) => variant.finish).filter(Boolean))),
-            Size: Array.from(new Set(canonicalVariants.map((variant) => variant.sizeCode).filter(Boolean))),
+            Finish: Array.from(new Set(canonicalVariants.map((variant) => toShopifyFinishValue(variant.finish)).filter(Boolean))),
+            Size: Array.from(new Set(canonicalVariants.map((variant) => toShopifySizeValue(variant.sizeCode)).filter(Boolean))),
           },
           mediaCount: imageUrls.length,
           variants: canonicalVariants.map((variant) => ({
             sku: variant.sku,
-            finish: variant.finish,
-            size: variant.sizeCode,
+            finishInternal: normalizeFinishInternalCode(variant.finish),
+            finishShopifyValue: toShopifyFinishValue(variant.finish),
+            sizeInternal: normalizeSizeInternalCode(variant.sizeCode),
+            sizeShopifyValue: toShopifySizeValue(variant.sizeCode),
             price: normalizePrice(variant.priceCents),
           })),
         },
@@ -1072,28 +1538,53 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
       if (productGid) {
         await updateShopifyProduct(productGid, productForPush);
       } else {
-        const created = await createShopifyProduct(productForPush, imageUrls);
+        const created = await createShopifyProduct(productForPush, imageUrls, variantSyncInputs);
         productGid = created.productId;
         defaultVariantId = created.defaultVariantId;
         defaultInventoryItemId = created.defaultInventoryItemId;
+        initialProductState = created.productState;
       }
 
       await setProductMetafields(productGid, productForPush);
       if (willUpdate) await createProductMedia(productGid, productForPush, imageUrls);
 
-      const shopifyVariants = await fetchShopifyProductVariants(productGid);
+      const productState = await ensureShopifyProductOptions(
+        productGid,
+        variantSyncInputs,
+        runId,
+        initialProductState,
+      );
+      const shopifyVariants = productState.variants;
       const variantBySku = new Map(
         shopifyVariants
           .filter((variant) => typeof variant.sku === "string" && variant.sku.trim())
           .map((variant) => [variant.sku!.trim(), variant]),
       );
+      const variantByOptionKey = new Map(
+        shopifyVariants
+          .map((variant) => {
+            const pair = toInternalVariantOptionPair(variant.selectedOptions);
+            return [buildVariantOptionKey(pair.finishInternal, pair.sizeInternal), variant] as const;
+          })
+          .filter(([key, variant]) => Boolean(key && key !== "::" && variant?.id)),
+      );
+      const reusableStandaloneVariant = shopifyVariants.find((variant) => isStandaloneDefaultVariant(variant)) || null;
+      let standaloneConsumed = false;
 
       const updates: Array<{ variantGid: string; finish: string; sizeCode: string; sku: string; priceCents: number }> = [];
       const missingVariants: Array<{ variantKey: string; finish: string; sizeCode: string; sku: string; priceCents: number }> = [];
       for (const [index, variant] of canonicalVariants.entries()) {
         const matchedBySku = variant.sku ? variantBySku.get(variant.sku) : undefined;
-        const fallbackDefault = !variant.shopify?.variantGid && !variant.shopifyVariantId && !matchedBySku && index === 0 ? defaultVariantId : null;
-        const variantGid = variant.shopifyVariantId || variant.shopify?.variantGid || matchedBySku?.id || fallbackDefault || null;
+        const matchedByOptions = variantByOptionKey.get(buildVariantOptionKey(variant.finish, variant.sizeCode));
+        const fallbackDefault =
+          !variant.shopify?.variantGid &&
+          !variant.shopifyVariantId &&
+          !matchedBySku &&
+          !matchedByOptions &&
+          !standaloneConsumed &&
+          (reusableStandaloneVariant?.id || (index === 0 ? defaultVariantId : null));
+        const variantGid =
+          variant.shopifyVariantId || variant.shopify?.variantGid || matchedBySku?.id || matchedByOptions?.id || fallbackDefault || null;
         if (!variantGid) {
           missingVariants.push({
             variantKey: variant.variantKey,
@@ -1111,8 +1602,15 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
           sku: variant.sku,
           priceCents: variant.priceCents,
         });
+        if (fallbackDefault) standaloneConsumed = true;
 
-        const inventoryItemGid = variant.shopify?.inventoryItemGid || matchedBySku?.inventoryItem?.id || defaultInventoryItemId || undefined;
+        const inventoryItemGid =
+          variant.shopify?.inventoryItemGid ||
+          matchedBySku?.inventoryItem?.id ||
+          matchedByOptions?.inventoryItem?.id ||
+          (reusableStandaloneVariant?.id === variantGid
+            ? reusableStandaloneVariant?.inventoryItem?.id || defaultInventoryItemId || undefined
+            : defaultInventoryItemId || undefined);
         await CanonicalVariantModel.updateOne(
           { shopDomain: input.shopDomain, productKey: product.productKey, variantKey: variant.variantKey },
           {
@@ -1127,10 +1625,10 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
         );
       }
 
-      await bulkUpdateShopifyVariants(productGid, updates, runId);
+      await bulkUpdateShopifyVariants(productGid, productState.options, updates, runId);
 
       if (missingVariants.length) {
-        const createdVariants = await bulkCreateShopifyVariants(productGid, missingVariants, runId);
+        const createdVariants = await bulkCreateShopifyVariants(productGid, productState.options, missingVariants, runId);
         const createdBySku = new Map(
           createdVariants
             .filter((variant) => typeof variant.sku === "string" && variant.sku.trim())
