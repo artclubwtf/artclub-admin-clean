@@ -1,18 +1,75 @@
-const workerSecret = (process.env.WORKER_SECRET || "").trim();
+const fs = require("fs");
+const path = require("path");
+const Module = require("module");
+const { transformSync } = require("next/dist/build/swc");
+
+const projectRoot = path.resolve(__dirname, "..");
 const batchSize = Number(process.env.SHOPIFY_SYNC_WORKER_BATCH_SIZE || 3);
 const delayMs = Number(process.env.SHOPIFY_SYNC_WORKER_DELAY_MS || 1500);
 const idleMs = Number(process.env.SHOPIFY_SYNC_WORKER_IDLE_MS || 10000);
-const workerUrl = (
-  process.env.SHOPIFY_SYNC_WORKER_URL ||
-  `http://127.0.0.1:${process.env.PORT || "3000"}/api/worker/shopify-sync`
-).trim();
+const workerUrl = (process.env.SHOPIFY_SYNC_WORKER_URL || "").trim();
+const configuredMode = (process.env.WORKER_MODE || "direct").trim().toLowerCase();
+const workerMode = configuredMode === "http" && workerUrl ? "http" : "direct";
 const runOnce = process.argv.includes("--once");
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function runBatch() {
+function registerTypeScriptRequireHook() {
+  const originalTsHandler = Module._extensions[".ts"];
+  const originalTsxHandler = Module._extensions[".tsx"];
+
+  function compile(module, filename) {
+    const source = fs.readFileSync(filename, "utf8");
+    const { code } = transformSync(source, {
+      filename,
+      sourceMaps: "inline",
+      jsc: {
+        target: "es2020",
+        parser: {
+          syntax: "typescript",
+          tsx: filename.endsWith(".tsx"),
+          decorators: true,
+          dynamicImport: true,
+        },
+      },
+      module: {
+        type: "commonjs",
+      },
+    });
+    module._compile(code, filename);
+  }
+
+  Module._extensions[".ts"] = compile;
+  Module._extensions[".tsx"] = compile;
+
+  return () => {
+    if (originalTsHandler) {
+      Module._extensions[".ts"] = originalTsHandler;
+    } else {
+      delete Module._extensions[".ts"];
+    }
+    if (originalTsxHandler) {
+      Module._extensions[".tsx"] = originalTsxHandler;
+    } else {
+      delete Module._extensions[".tsx"];
+    }
+  };
+}
+
+const restoreRequireHook = registerTypeScriptRequireHook();
+const {
+  runShopifySyncWorkerLoop,
+} = require(path.join(projectRoot, "lib/sync/shopifySyncWorker.ts"));
+const {
+  createSyncRunId,
+  logShopifyWorker,
+  logSyncError,
+} = require(path.join(projectRoot, "lib/sync/syncLogger.ts"));
+restoreRequireHook();
+
+async function runHttpBatch(workerSecret) {
   const response = await fetch(workerUrl, {
     method: "POST",
     headers: {
@@ -40,22 +97,73 @@ async function runBatch() {
   return json;
 }
 
-async function main() {
+async function runHttpLoop() {
+  const workerSecret = (process.env.WORKER_SECRET || "").trim();
+  const runId = createSyncRunId("shopify-worker-http");
   if (!workerSecret) {
-    throw new Error("Missing WORKER_SECRET");
+    throw new Error("Missing WORKER_SECRET for WORKER_MODE=http");
   }
 
-  console.log(`[shopify-sync-worker] start url=${workerUrl} batchSize=${batchSize} delayMs=${delayMs} idleMs=${idleMs} once=${runOnce}`);
+  logShopifyWorker(
+    "worker_started",
+    {
+      mode: "http",
+      batchSize,
+      delayMs,
+      idleMs,
+      hasMongoUri: Boolean(process.env.MONGODB_URI),
+      hasShopifyToken: Boolean(process.env.SHOPIFY_ADMIN_ACCESS_TOKEN),
+      hasLocationId: Boolean((process.env.SHOPIFY_ARTIST_STORAGE_LOCATION_ID || "").trim()),
+    },
+    { runId, force: true },
+  );
+
+  logShopifyWorker(
+    "worker_http_mode_started",
+    {
+      url: workerUrl,
+    },
+    { runId, force: true },
+  );
 
   do {
-    const startedAt = Date.now();
-    const result = await runBatch();
-    console.log(
-      `[shopify-sync-worker] batch ok locked=${result?.lockedCount ?? 0} succeeded=${result?.succeededCount ?? 0} failed=${result?.failedCount ?? 0} retried=${result?.retriedCount ?? 0} durationMs=${Date.now() - startedAt}`,
-    );
-    if (runOnce) break;
-    await sleep(idleMs);
+    try {
+      const startedAt = Date.now();
+      const result = await runHttpBatch(workerSecret);
+      console.log(
+        `[shopify-sync-worker] http batch ok locked=${result?.lockedCount ?? 0} succeeded=${result?.succeededCount ?? 0} failed=${result?.failedCount ?? 0} retried=${result?.retriedCount ?? 0} durationMs=${Date.now() - startedAt}`,
+      );
+      if (runOnce) return result;
+      if ((result?.lockedCount ?? 0) === 0) {
+        await sleep(idleMs);
+      }
+    } catch (error) {
+      logSyncError(
+        "shopify_worker_http_loop_failed",
+        error,
+        {
+          mode: "http",
+          url: workerUrl,
+        },
+        { runId, force: true },
+      );
+      if (runOnce) throw error;
+      await sleep(idleMs);
+    }
   } while (true);
+}
+
+async function main() {
+  if (workerMode === "http") {
+    return runHttpLoop();
+  }
+
+  return runShopifySyncWorkerLoop({
+    batchSize,
+    delayMs,
+    idleMs,
+    runOnce,
+  });
 }
 
 main().catch((error) => {

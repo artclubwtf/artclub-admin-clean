@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 
+import { connectMongo } from "../mongodb";
 import { CanonicalArtistModel } from "../../models/CanonicalArtist";
 import { CanonicalProductModel } from "../../models/CanonicalProduct";
 import { ShopifySyncJobModel, type ShopifySyncJob } from "../../models/ShopifySyncJob";
@@ -7,6 +8,7 @@ import { syncProductInventoryToShopify } from "./shopifyInventory";
 import {
   getShopifySyncWorkerBatchSize,
   getShopifySyncWorkerDelayMs,
+  getShopifySyncWorkerIdleMs,
   queueInventorySyncJob,
 } from "./shopifySyncJobs";
 import { pushOneArtist, pushOneProduct } from "./shopifyPush";
@@ -300,27 +302,18 @@ export async function runShopifySyncWorkerBatch(input?: {
   workerId?: string;
   batchSize?: number;
   delayMs?: number;
+  runId?: string;
 }) {
   const workerId = input?.workerId || `shopify-worker-${randomUUID()}`;
   const batchSize = input?.batchSize || getShopifySyncWorkerBatchSize();
   const delayMs = input?.delayMs ?? getShopifySyncWorkerDelayMs();
-  const runId = createSyncRunId("shopify-worker");
+  const runId = input?.runId || createSyncRunId("shopify-worker");
 
   let lockedCount = 0;
   let succeededCount = 0;
   let failedCount = 0;
   let retriedCount = 0;
   const processedJobIds: string[] = [];
-
-  logShopifyWorker(
-    "worker_started",
-    {
-      workerId,
-      batchSize,
-      delayMs,
-    },
-    { runId, force: true },
-  );
 
   for (let index = 0; index < batchSize; index += 1) {
     const job = await lockNextJob(workerId);
@@ -407,4 +400,64 @@ export async function runShopifySyncWorkerBatch(input?: {
 
   logShopifyWorker("worker_batch_finished", summary, { runId, force: true });
   return summary;
+}
+
+export async function runShopifySyncWorkerLoop(input?: {
+  workerId?: string;
+  batchSize?: number;
+  delayMs?: number;
+  idleMs?: number;
+  runOnce?: boolean;
+}) {
+  const workerId = input?.workerId || `shopify-worker-${randomUUID()}`;
+  const batchSize = input?.batchSize || getShopifySyncWorkerBatchSize();
+  const delayMs = input?.delayMs ?? getShopifySyncWorkerDelayMs();
+  const idleMs = input?.idleMs ?? getShopifySyncWorkerIdleMs();
+  const runOnce = input?.runOnce === true;
+  const runId = createSyncRunId("shopify-worker");
+
+  await connectMongo();
+
+  logShopifyWorker(
+    "worker_started",
+    {
+      mode: "direct",
+      workerId,
+      batchSize,
+      delayMs,
+      idleMs,
+      hasMongoUri: Boolean(process.env.MONGODB_URI),
+      hasShopifyToken: Boolean(process.env.SHOPIFY_ADMIN_ACCESS_TOKEN),
+      hasLocationId: Boolean((process.env.SHOPIFY_ARTIST_STORAGE_LOCATION_ID || "").trim()),
+    },
+    { runId, force: true },
+  );
+
+  do {
+    try {
+      const result = await runShopifySyncWorkerBatch({
+        workerId,
+        batchSize,
+        delayMs,
+        runId,
+      });
+
+      if (runOnce) return result;
+      if ((result.lockedCount || 0) === 0) {
+        await sleep(idleMs);
+      }
+    } catch (error) {
+      logSyncError(
+        "shopify_worker_loop_failed",
+        error,
+        {
+          workerId,
+          mode: "direct",
+        },
+        { runId, force: true },
+      );
+      if (runOnce) throw error;
+      await sleep(idleMs);
+    }
+  } while (true);
 }
