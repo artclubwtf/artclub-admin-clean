@@ -15,6 +15,21 @@ type ShopifyInventoryItemNode = {
   id?: string | null;
   sku?: string | null;
   tracked?: boolean | null;
+  inventoryLevels?: {
+    nodes?: ShopifyInventoryLevelNode[] | null;
+  } | null;
+};
+
+type ShopifyInventoryQuantityNode = {
+  name?: string | null;
+  quantity?: number | null;
+};
+
+type ShopifyInventoryLevelNode = {
+  location?: {
+    id?: string | null;
+  } | null;
+  quantities?: ShopifyInventoryQuantityNode[] | null;
 };
 
 type ShopifyInventoryVariantNode = {
@@ -153,7 +168,7 @@ async function callShopifyAdmin<TData>(query: string, variables: Record<string, 
 }
 
 export function getShopifyPrintInventoryQuantity() {
-  return toPositiveInt(process.env.SHOPIFY_PRINT_INVENTORY_QUANTITY, 999);
+  return toPositiveInt(process.env.SHOPIFY_PRINT_INVENTORY_QUANTITY, 50);
 }
 
 export function getShopifyOriginalInventoryQuantity() {
@@ -340,6 +355,17 @@ export async function fetchShopifyProductInventoryState(productGid: string) {
                 id
                 sku
                 tracked
+                inventoryLevels(first: 20) {
+                  nodes {
+                    location {
+                      id
+                    }
+                    quantities(names: ["available"]) {
+                      name
+                      quantity
+                    }
+                  }
+                }
               }
             }
           }
@@ -436,12 +462,29 @@ export async function persistResolvedInventoryItems(input: {
   return resolved;
 }
 
-function desiredQuantityForVariant(product: CanonicalProduct, variant: CanonicalVariant) {
+function desiredSeedQuantityForVariant(product: CanonicalProduct, variant: CanonicalVariant) {
   const finish = normalizeFinishInternalCode(variant.finish);
   if (finish === "original") {
     return product.originalAvailable === true && product.forSale === true ? getShopifyOriginalInventoryQuantity() : 0;
   }
   return product.allowPrints === true ? getShopifyPrintInventoryQuantity() : 0;
+}
+
+function editionLimitForVariant(product: CanonicalProduct, variant: CanonicalVariant) {
+  const finish = normalizeFinishInternalCode(variant.finish);
+  return finish === "original"
+    ? product.originalAvailable === true && product.forSale === true
+      ? getShopifyOriginalInventoryQuantity()
+      : 0
+    : product.allowPrints === true
+      ? getShopifyPrintInventoryQuantity()
+      : 0;
+}
+
+function currentQuantityAtLocation(item: ShopifyInventoryItemNode | null | undefined, locationId: string) {
+  const level = item?.inventoryLevels?.nodes?.find((node) => node?.location?.id === locationId);
+  const quantity = level?.quantities?.find((entry) => (entry?.name || "").trim().toLowerCase() === "available")?.quantity;
+  return typeof quantity === "number" && Number.isFinite(quantity) ? quantity : 0;
 }
 
 async function enableInventoryTracking(variants: ResolvedInventoryVariant[], runId: string) {
@@ -642,13 +685,12 @@ async function setShopifyInventoryQuantities(input: {
   return payload;
 }
 
-export async function syncProductInventoryToShopify(input: {
+export async function seedProductInventoryIfNeeded(input: {
   shopDomain: string;
   productKey: string;
   runId: string;
   jobId?: string;
   attempt?: number;
-  markProductSynced?: boolean;
 }) {
   const product = await CanonicalProductModel.findOne({
     shopDomain: input.shopDomain,
@@ -671,6 +713,17 @@ export async function syncProductInventoryToShopify(input: {
   }
 
   try {
+    logShopifyInventory(
+      "shopify_inventory_seed_started",
+      {
+        canonicalProductId: String(product._id),
+        productKey: input.productKey,
+        productGid,
+        jobId: input.jobId || null,
+      },
+      { runId: input.runId, force: true },
+    );
+
     const shopifyVariants = await fetchShopifyProductInventoryState(productGid);
     const resolvedInventoryItems = await persistResolvedInventoryItems({
       shopDomain: input.shopDomain,
@@ -691,27 +744,133 @@ export async function syncProductInventoryToShopify(input: {
         .filter((variant) => variant.shopify?.variantGid || variant.shopifyVariantId)
         .map((variant) => [variant.shopify?.variantGid || variant.shopifyVariantId || "", variant] as const),
     );
+    const shopifyVariantByGid = new Map(
+      shopifyVariants.filter((variant) => variant?.id).map((variant) => [variant.id || "", variant] as const),
+    );
 
     const location = await getArtistStorageLocation(input.runId);
-    const quantities = resolvedInventoryItems
-      .map((variant) => {
-        const canonicalVariant = canonicalVariantByGid.get(variant.variantGid);
-        if (!canonicalVariant) return null;
+    const now = new Date();
+    const quantitiesToSeed: Array<{
+      inventoryItemId: string;
+      locationId: string;
+      quantity: number;
+      sku: string;
+      variantGid: string;
+      variantKey: string;
+      canonicalVariantId: string;
+      editionLimit: number;
+    }> = [];
+    const variantActions: Array<Record<string, unknown>> = [];
+    let skippedAlreadySeededCount = 0;
+    let preservedExistingQuantityCount = 0;
 
-        return {
-          variant,
-          quantity: desiredQuantityForVariant(product, canonicalVariant),
-        };
-      })
-      .filter((entry): entry is { variant: ResolvedInventoryVariant; quantity: number } => Boolean(entry))
-      .map((entry) => ({
-        inventoryItemId: entry.variant.inventoryItemGid,
+    for (const resolvedVariant of resolvedInventoryItems) {
+      const canonicalVariant = canonicalVariantByGid.get(resolvedVariant.variantGid);
+      if (!canonicalVariant) continue;
+
+      const shopifyVariant = shopifyVariantByGid.get(resolvedVariant.variantGid);
+      const currentQuantity = currentQuantityAtLocation(shopifyVariant?.inventoryItem, location.id);
+      const editionLimit = editionLimitForVariant(product, canonicalVariant);
+
+      if (canonicalVariant.inventory?.inventorySeededAt) {
+        skippedAlreadySeededCount += 1;
+        await CanonicalVariantModel.updateOne(
+          { _id: canonicalVariant._id },
+          {
+            $set: {
+              "inventory.locationId": location.id,
+              "inventory.quantity": currentQuantity,
+              "inventory.availableQuantity": currentQuantity,
+              "inventory.inventorySeedStatus": "seeded",
+              "inventory.inventorySyncStatus": "seeded",
+              "inventory.lastInventorySyncAt": now,
+              "inventory.replenishmentDisabled": true,
+              "inventory.editionLimit": editionLimit,
+              "inventory.lastInventoryError": null,
+            },
+          },
+        );
+        logShopifyInventory(
+          "shopify_inventory_seed_skipped",
+          {
+            canonicalProductId: String(product._id),
+            productKey: input.productKey,
+            variantKey: canonicalVariant.variantKey,
+            sku: canonicalVariant.sku,
+            inventoryItemId: resolvedVariant.inventoryItemGid,
+            currentQuantity,
+            reason: "already_seeded",
+          },
+          { runId: input.runId, force: true },
+        );
+        variantActions.push({
+          variantKey: canonicalVariant.variantKey,
+          sku: canonicalVariant.sku,
+          inventoryItemId: resolvedVariant.inventoryItemGid,
+          currentQuantity,
+          action: "skipped_already_seeded",
+        });
+        continue;
+      }
+
+      if (currentQuantity > 0) {
+        preservedExistingQuantityCount += 1;
+        await CanonicalVariantModel.updateOne(
+          { _id: canonicalVariant._id },
+          {
+            $set: {
+              "inventory.locationId": location.id,
+              "inventory.quantity": currentQuantity,
+              "inventory.availableQuantity": currentQuantity,
+              "inventory.initialQuantity": currentQuantity,
+              "inventory.inventorySeededAt": now,
+              "inventory.inventorySeedJobId": input.jobId || null,
+              "inventory.inventorySeedStatus": "seeded",
+              "inventory.inventorySyncStatus": "seeded",
+              "inventory.lastInventorySyncAt": now,
+              "inventory.replenishmentDisabled": true,
+              "inventory.editionLimit": editionLimit,
+              "inventory.lastInventoryError": null,
+            },
+          },
+        );
+        logShopifyInventory(
+          "shopify_inventory_seed_done",
+          {
+            canonicalProductId: String(product._id),
+            productKey: input.productKey,
+            variantKey: canonicalVariant.variantKey,
+            sku: canonicalVariant.sku,
+            inventoryItemId: resolvedVariant.inventoryItemGid,
+            currentQuantity,
+            seededQuantity: currentQuantity,
+            reason: "existing_quantity_preserved",
+          },
+          { runId: input.runId, force: true },
+        );
+        variantActions.push({
+          variantKey: canonicalVariant.variantKey,
+          sku: canonicalVariant.sku,
+          inventoryItemId: resolvedVariant.inventoryItemGid,
+          currentQuantity,
+          action: "preserved_existing_quantity",
+        });
+        continue;
+      }
+
+      quantitiesToSeed.push({
+        inventoryItemId: resolvedVariant.inventoryItemGid,
         locationId: location.id,
-        quantity: entry.quantity,
-        sku: entry.variant.sku || entry.variant.inventorySku || entry.variant.variantKey,
-      }));
+        quantity: desiredSeedQuantityForVariant(product, canonicalVariant),
+        sku: resolvedVariant.sku || resolvedVariant.inventorySku || resolvedVariant.variantKey,
+        variantGid: resolvedVariant.variantGid,
+        variantKey: canonicalVariant.variantKey,
+        canonicalVariantId: String(canonicalVariant._id),
+        editionLimit,
+      });
+    }
 
-    if (!quantities.length) {
+    if (!resolvedInventoryItems.length) {
       throw new ShopifyInventoryError("shopify_inventory_items_missing", {
         productGid,
         productKey: input.productKey,
@@ -720,58 +879,107 @@ export async function syncProductInventoryToShopify(input: {
 
     const referenceDocumentUri = `artclub://shopify-sync/${input.jobId || input.runId}/${input.productKey}`;
     const idempotencyKey = `${input.jobId || input.runId}:${input.productKey}:${input.attempt || 1}`;
-    await setShopifyInventoryQuantities({
-      productGid,
-      locationId: location.id,
-      quantities,
-      idempotencyKey,
-      referenceDocumentUri,
-      runId: input.runId,
-    });
+    if (quantitiesToSeed.length) {
+      await setShopifyInventoryQuantities({
+        productGid,
+        locationId: location.id,
+        quantities: quantitiesToSeed.map((entry) => ({
+          inventoryItemId: entry.inventoryItemId,
+          locationId: entry.locationId,
+          quantity: entry.quantity,
+          sku: entry.sku,
+        })),
+        idempotencyKey,
+        referenceDocumentUri,
+        runId: input.runId,
+      });
 
-    const now = new Date();
-    for (const entry of quantities) {
-      await CanonicalVariantModel.updateOne(
-        {
-          shopDomain: input.shopDomain,
-          productKey: input.productKey,
-          "shopify.inventoryItemGid": entry.inventoryItemId,
-        },
-        {
-          $set: {
-            "inventory.locationId": location.id,
-            "inventory.quantity": entry.quantity,
-            "inventory.availableQuantity": entry.quantity,
-            "inventory.lastInventorySyncAt": now,
-            "inventory.inventorySyncStatus": "synced",
-            "inventory.tracked": true,
+      for (const entry of quantitiesToSeed) {
+        await CanonicalVariantModel.updateOne(
+          {
+            _id: entry.canonicalVariantId,
+            shopDomain: input.shopDomain,
+            productKey: input.productKey,
           },
-        },
-      );
+          {
+            $set: {
+              "inventory.locationId": location.id,
+              "inventory.quantity": entry.quantity,
+              "inventory.availableQuantity": entry.quantity,
+              "inventory.initialQuantity": entry.quantity,
+              "inventory.inventorySeededAt": now,
+              "inventory.inventorySeedJobId": input.jobId || null,
+              "inventory.inventorySeedStatus": "seeded",
+              "inventory.inventorySyncStatus": "seeded",
+              "inventory.lastInventorySyncAt": now,
+              "inventory.tracked": true,
+              "inventory.replenishmentDisabled": true,
+              "inventory.editionLimit": entry.editionLimit,
+              "inventory.lastInventoryError": null,
+            },
+          },
+        );
+        logShopifyInventory(
+          "shopify_inventory_seed_done",
+          {
+            canonicalProductId: String(product._id),
+            productKey: input.productKey,
+            variantKey: entry.variantKey,
+            sku: entry.sku,
+            inventoryItemId: entry.inventoryItemId,
+            seededQuantity: entry.quantity,
+            reason: "initial_seed",
+          },
+          { runId: input.runId, force: true },
+        );
+        variantActions.push({
+          variantKey: entry.variantKey,
+          sku: entry.sku,
+          inventoryItemId: entry.inventoryItemId,
+          currentQuantity: entry.quantity,
+          action: "seeded",
+        });
+      }
     }
 
     await CanonicalProductModel.updateOne(
       { _id: product._id, shopDomain: input.shopDomain, productKey: input.productKey },
       {
         $set: {
-          "sync.inventoryStatus": "synced",
+          status: product.status === "archived" ? "archived" : "shopify_synced",
+          "sync.status": "synced",
+          "sync.inventoryStatus": "seeded",
+          "sync.inventorySeedStatus": "seeded",
+          "sync.needsPush": false,
+          "sync.needsInventorySeed": false,
           "sync.lastInventorySyncAt": now,
-          ...(input.markProductSynced
-            ? {
-                "sync.status": "synced",
-                "sync.needsPush": false,
-                "sync.lastPushAt": now,
-                "sync.lastError": null,
-              }
-            : {}),
+          "sync.lastInventorySeededAt": now,
+          "sync.lastError": null,
         },
       },
+    );
+
+    logShopifyInventory(
+      "shopify_inventory_seed_finished",
+      {
+        canonicalProductId: String(product._id),
+        productKey: input.productKey,
+        productGid,
+        locationId: location.id,
+        seededCount: quantitiesToSeed.length,
+        skippedAlreadySeededCount,
+        preservedExistingQuantityCount,
+      },
+      { runId: input.runId, force: true },
     );
 
     return {
       productGid,
       locationId: location.id,
-      syncedCount: quantities.length,
+      seededCount: quantitiesToSeed.length,
+      skippedAlreadySeededCount,
+      preservedExistingQuantityCount,
+      variantActions,
     };
   } catch (error) {
     const details =
@@ -783,7 +991,10 @@ export async function syncProductInventoryToShopify(input: {
       {
         $set: {
           "sync.inventoryStatus": "error",
-          "sync.status": "inventory_error",
+          "sync.inventorySeedStatus": "error",
+          "sync.status": "inventory_seed_error",
+          "sync.needsPush": true,
+          "sync.needsInventorySeed": true,
           "sync.lastError": error instanceof Error ? error.message : "shopify_inventory_sync_failed",
         },
       },
@@ -793,13 +1004,15 @@ export async function syncProductInventoryToShopify(input: {
       { shopDomain: input.shopDomain, productKey: input.productKey },
       {
         $set: {
+          "inventory.inventorySeedStatus": "error",
           "inventory.inventorySyncStatus": "error",
+          "inventory.lastInventoryError": error instanceof Error ? error.message : "shopify_inventory_sync_failed",
         },
       },
     );
 
     logSyncError(
-      "shopify_inventory_sync_failed",
+      "shopify_inventory_seed_failed",
       error,
       {
         productKey: input.productKey,
@@ -815,4 +1028,21 @@ export async function syncProductInventoryToShopify(input: {
 
     throw error;
   }
+}
+
+export async function syncProductInventoryToShopify(input: {
+  shopDomain: string;
+  productKey: string;
+  runId: string;
+  jobId?: string;
+  attempt?: number;
+  markProductSynced?: boolean;
+}) {
+  return seedProductInventoryIfNeeded({
+    shopDomain: input.shopDomain,
+    productKey: input.productKey,
+    runId: input.runId,
+    jobId: input.jobId,
+    attempt: input.attempt,
+  });
 }

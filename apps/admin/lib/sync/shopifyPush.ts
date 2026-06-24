@@ -33,16 +33,31 @@ type PushInput = {
   dryRun?: boolean;
   approvedOnly?: boolean;
   runId?: string;
+  origin?: ProductPushOrigin;
+  service?: string;
+  jobId?: string;
 };
 
 type PushItemStatus = "created" | "updated" | "skipped" | "error" | "dry_run";
 
-type PushResult = {
+export type PushResult = {
   pushedCount: number;
   failedCount: number;
   skippedCount: number;
   errors: string[];
-  items: Array<{ key: string; status: PushItemStatus; message: string }>;
+  items: Array<{ key: string; status: PushItemStatus; message: string; productGid?: string | null }>;
+};
+
+export type ProductPushOrigin = "worker_direct" | "admin_manual" | "worker_http_route" | "artist_inline" | "admin_batch";
+
+export type PushCanonicalProductInput = {
+  shopDomain: string;
+  productKey: string;
+  dryRun?: boolean;
+  runId?: string;
+  jobId?: string;
+  origin: ProductPushOrigin;
+  service: string;
 };
 
 type ShopifyVariantNode = {
@@ -114,6 +129,17 @@ function mustEnv(name: string): string {
   const value = process.env[name] || (name === "SHOPIFY_SHOP_DOMAIN" ? process.env.SHOPIFY_STORE_DOMAIN : undefined);
   if (!value) throw new Error(`Missing env var: ${name}`);
   return value;
+}
+
+function envFlagEnabled(name: string) {
+  const value = (process.env[name] || "").trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes" || value === "on";
+}
+
+function assertInlineProductPushAllowed(origin?: ProductPushOrigin) {
+  if (origin === "artist_inline" && !envFlagEnabled("SHOPIFY_SYNC_INLINE")) {
+    throw new Error("inline_shopify_push_forbidden");
+  }
 }
 
 function normalizeShopStatus(status: CanonicalProduct["status"]): "DRAFT" | "ACTIVE" | "ARCHIVED" {
@@ -827,7 +853,12 @@ async function logVariantOptionErrorContext(
   );
 }
 
-async function createShopifyProduct(product: PushableProduct, imageUrls: string[], variants: VariantSyncInput[]) {
+async function createShopifyProduct(
+  product: PushableProduct,
+  imageUrls: string[],
+  variants: VariantSyncInput[],
+  additionalMetafields: Array<{ namespace: string; key: string; type: string; value: string }> = [],
+) {
   const mutation = `
     mutation PushProductCreate($product: ProductCreateInput!, $media: [CreateMediaInput!]) {
       productCreate(product: $product, media: $media) {
@@ -866,6 +897,7 @@ async function createShopifyProduct(product: PushableProduct, imageUrls: string[
     widthCm: product.dimensions?.widthCm,
     heightCm: product.dimensions?.heightCm,
     kurzbeschreibung: product.shortDescription || product.shortText || undefined,
+    additional: additionalMetafields,
   });
   const productOptions = buildProductCreateOptions(variants);
   const media = imageUrls.map((url) => ({
@@ -1011,7 +1043,11 @@ async function createProductMedia(productGid: string, product: PushableProduct, 
   }
 }
 
-async function setProductMetafields(productGid: string, product: PushableProduct) {
+async function setProductMetafields(
+  productGid: string,
+  product: PushableProduct,
+  additionalMetafields: Array<{ namespace: string; key: string; type: string; value: string }> = [],
+) {
   const mutation = `
     mutation PushProductMetafields($metafields: [MetafieldsSetInput!]!) {
       metafieldsSet(metafields: $metafields) {
@@ -1027,6 +1063,7 @@ async function setProductMetafields(productGid: string, product: PushableProduct
     widthCm: product.dimensions?.widthCm,
     heightCm: product.dimensions?.heightCm,
     kurzbeschreibung: product.shortDescription || product.shortText || undefined,
+    additional: additionalMetafields,
   }).map((metafield) => ({
     ownerId: productGid,
     namespace: metafield.namespace,
@@ -1255,7 +1292,7 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
   let failedCount = 0;
   let skippedCount = 0;
   const errors: string[] = [];
-  const items: Array<{ key: string; status: PushItemStatus; message: string }> = [];
+  const items: PushResult["items"] = [];
 
   for (const artist of artists) {
     try {
@@ -1413,8 +1450,12 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
 
 export async function pushProducts(input: PushInput): Promise<PushResult> {
   assertShopifyWriteEnabled();
+  assertInlineProductPushAllowed(input.origin);
   await connectMongo();
   const runId = input.runId || createSyncRunId("shopify-push");
+  const origin = input.origin || "admin_batch";
+  const service = input.service || "admin";
+  const jobId = input.jobId || null;
 
   const limit = Math.min(Math.max(input.limit ?? 20, 1), 250);
   const products = await CanonicalProductModel.find({
@@ -1430,7 +1471,7 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
   let failedCount = 0;
   let skippedCount = 0;
   const errors: string[] = [];
-  const items: Array<{ key: string; status: PushItemStatus; message: string }> = [];
+  const items: PushResult["items"] = [];
 
   for (const product of products) {
     try {
@@ -1458,13 +1499,54 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
         sku: variant.sku,
         priceCents: variant.priceCents,
       }));
+      const additionalMetafields = [
+        {
+          namespace: "custom",
+          key: "artclub_sync_origin",
+          type: "single_line_text_field",
+          value: origin,
+        },
+        ...(jobId
+          ? [
+              {
+                namespace: "custom",
+                key: "artclub_sync_job_id",
+                type: "single_line_text_field",
+                value: jobId,
+              },
+            ]
+          : []),
+        {
+          namespace: "custom",
+          key: "artclub_sync_run_id",
+          type: "single_line_text_field",
+          value: runId,
+        },
+      ];
       const metafieldSummary = buildProductMetafieldsForArtwork({
         artistMetaobjectGid: productForPush.artistMetaobjectGidForShopify,
         artistSlug: productForPush.artistSlugForShopify,
         widthCm: product.dimensions?.widthCm,
         heightCm: product.dimensions?.heightCm,
         kurzbeschreibung: product.shortDescription || product.shortText || undefined,
+        additional: additionalMetafields,
       });
+
+      logShopifyPush(
+        "shopify_product_push_origin",
+        {
+          origin,
+          service,
+          runId,
+          jobId,
+          canonicalProductId: String(product._id),
+          productKey: product.productKey,
+          existingProductGid: product.shopify?.productGid || product.shopifyProductId || null,
+          willCreate: !willUpdate,
+          willUpdate,
+        },
+        { runId, force: true },
+      );
 
       logShopifyPush(
         "shopify_product_push_preflight",
@@ -1546,14 +1628,14 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
       if (productGid) {
         await updateShopifyProduct(productGid, productForPush);
       } else {
-        const created = await createShopifyProduct(productForPush, imageUrls, variantSyncInputs);
+        const created = await createShopifyProduct(productForPush, imageUrls, variantSyncInputs, additionalMetafields);
         productGid = created.productId;
         defaultVariantId = created.defaultVariantId;
         defaultInventoryItemId = created.defaultInventoryItemId;
         initialProductState = created.productState;
       }
 
-      await setProductMetafields(productGid, productForPush);
+      await setProductMetafields(productGid, productForPush, additionalMetafields);
       if (willUpdate) await createProductMedia(productGid, productForPush, imageUrls);
 
       const productState = await ensureShopifyProductOptions(
@@ -1688,15 +1770,18 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
         {
           $set: {
             shopifyProductId: productGid,
-            status: product.status === "archived" ? "archived" : "shopify_synced",
+            status: product.status === "archived" ? "archived" : "shopify_pending",
             migrationStatus: "linked",
             approvalStatus: product.status === "archived" ? "archived" : "published",
             "shopify.productGid": productGid,
             "shopify.lastPushedAt": new Date(),
             "sync.lastPushAt": new Date(),
             "sync.lastError": null,
-            "sync.status": "synced",
-            "sync.needsPush": false,
+            "sync.status": "inventory_seed_pending",
+            "sync.inventoryStatus": "pending",
+            "sync.inventorySeedStatus": "pending",
+            "sync.needsPush": true,
+            "sync.needsInventorySeed": true,
             "sync.dirtyAt": null,
             "sync.dirtyFields": [],
           },
@@ -1708,6 +1793,7 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
         key: product.productKey,
         status: willUpdate ? "updated" : "created",
         message: willUpdate ? "Updated Shopify product and variants" : "Created Shopify product and variants",
+        productGid,
       });
 
       const storedVariants = await CanonicalVariantModel.find({
@@ -1723,8 +1809,8 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
           canonicalProductId: String(product._id),
           shopifyProductId: productGid,
           productGid,
-          syncNeedsPush: false,
-          syncStatus: "synced",
+          syncNeedsPush: true,
+          syncStatus: "inventory_seed_pending",
           lastPushAt: new Date().toISOString(),
           variantIdsStoredCount: storedVariants.length,
         },
@@ -1743,7 +1829,7 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
       failedCount += 1;
       const message = `${product.productKey}: ${error instanceof Error ? error.message : "push_failed"}`;
       errors.push(message);
-      items.push({ key: product.productKey, status: "error", message });
+      items.push({ key: product.productKey, status: "error", message, productGid: product.shopify?.productGid || product.shopifyProductId || null });
       logSyncError(
         "shopify_product_push_failed",
         error,
@@ -1771,12 +1857,7 @@ export async function pushOneArtist(input: { shopDomain: string; artistKey: stri
   });
 }
 
-export async function pushOneProduct(input: {
-  shopDomain: string;
-  productKey: string;
-  dryRun?: boolean;
-  runId?: string;
-}): Promise<PushResult> {
+export async function pushCanonicalProductToShopify(input: PushCanonicalProductInput): Promise<PushResult> {
   return pushProducts({
     shopDomain: input.shopDomain,
     productKeys: [input.productKey],
@@ -1784,5 +1865,28 @@ export async function pushOneProduct(input: {
     approvedOnly: false,
     dryRun: input.dryRun,
     runId: input.runId,
+    origin: input.origin,
+    service: input.service,
+    jobId: input.jobId,
+  });
+}
+
+export async function pushOneProduct(input: {
+  shopDomain: string;
+  productKey: string;
+  dryRun?: boolean;
+  runId?: string;
+  jobId?: string;
+  origin?: ProductPushOrigin;
+  service?: string;
+}): Promise<PushResult> {
+  return pushCanonicalProductToShopify({
+    shopDomain: input.shopDomain,
+    productKey: input.productKey,
+    dryRun: input.dryRun,
+    runId: input.runId,
+    jobId: input.jobId,
+    origin: input.origin || "admin_batch",
+    service: input.service || "admin",
   });
 }

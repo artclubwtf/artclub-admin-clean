@@ -73,6 +73,24 @@ export function buildRunnableJobQuery(now = new Date()) {
   };
 }
 
+export function formatShopifySyncJobForDiagnostics(job: ShopifySyncJobRecord | null | undefined) {
+  if (!job?._id) return null;
+  return {
+    id: String(job._id),
+    type: job.type,
+    status: job.status,
+    canonicalProductId: job.canonicalProductId ? String(job.canonicalProductId) : null,
+    productKey: job.productKey || null,
+    canonicalArtistId: job.canonicalArtistId ? String(job.canonicalArtistId) : null,
+    attempts: job.attempts || 0,
+    nextRunAt: job.nextRunAt ? new Date(job.nextRunAt).toISOString() : null,
+    lockedAt: job.lockedAt ? new Date(job.lockedAt).toISOString() : null,
+    lastError: job.lastError || null,
+    createdAt: job.createdAt ? new Date(job.createdAt).toISOString() : null,
+    updatedAt: job.updatedAt ? new Date(job.updatedAt).toISOString() : null,
+  };
+}
+
 export async function getShopifySyncQueueDiagnostics() {
   const now = new Date();
   const runnableQuery = buildRunnableJobQuery(now);
@@ -85,7 +103,7 @@ export async function getShopifySyncQueueDiagnostics() {
       ShopifySyncJobModel.countDocuments({ status: "succeeded" }),
       ShopifySyncJobModel.countDocuments(runnableQuery),
       ShopifySyncJobModel.findOne({ status: "queued" }).sort({ createdAt: 1 }).lean(),
-      ShopifySyncJobModel.find({}).sort({ createdAt: -1 }).limit(10).lean(),
+      ShopifySyncJobModel.find({}).sort({ createdAt: -1 }).limit(5).lean(),
     ]);
 
   return {
@@ -105,7 +123,7 @@ export async function getShopifySyncQueueDiagnostics() {
       statusIn: RUNNABLE_JOB_STATUSES,
       nextRunAt: "missing|null|<=now",
     },
-    latestJobs,
+    latestJobs: latestJobs.map((job) => formatShopifySyncJobForDiagnostics(job as ShopifySyncJobRecord)).filter(Boolean),
   };
 }
 
@@ -182,7 +200,12 @@ export async function enqueueShopifySyncJob(input: {
       {
         jobId: String(created._id),
         found: Boolean(confirmed?._id),
+        type: confirmed?.type || null,
         status: confirmed?.status || null,
+        nextRunAt: confirmed?.nextRunAt ? new Date(confirmed.nextRunAt).toISOString() : null,
+        canonicalProductId: confirmed?.canonicalProductId ? String(confirmed.canonicalProductId) : null,
+        canonicalArtistId: confirmed?.canonicalArtistId ? String(confirmed.canonicalArtistId) : null,
+        productKey: confirmed?.productKey || null,
         dbName: getShopifySyncJobDbName(),
         collectionName: getShopifySyncJobCollectionName(),
       },
@@ -213,6 +236,11 @@ export async function queueProductPushJob(input: {
     reason: input.reason || "product_changed",
     payload: {
       shopDomain: input.shopDomain,
+      source: "artist_app",
+      runId: input.runId,
+      productKey: input.productKey,
+      canonicalProductId: input.canonicalProductId,
+      ...(input.canonicalArtistId ? { canonicalArtistId: input.canonicalArtistId } : {}),
       ...(input.payload || {}),
     },
     runId: input.runId,
@@ -223,8 +251,12 @@ export async function queueProductPushJob(input: {
     { _id: input.canonicalProductId, shopDomain: input.shopDomain, productKey: input.productKey },
     {
       $set: {
+        status: "shopify_pending",
         "sync.status": "queued",
+        "sync.inventoryStatus": "pending",
+        "sync.inventorySeedStatus": "pending",
         "sync.needsPush": true,
+        "sync.needsInventorySeed": true,
         "sync.lastJobId": String(job._id),
         "sync.lastError": null,
       },
@@ -262,6 +294,8 @@ export async function queueInventorySyncJob(input: {
     {
       $set: {
         "sync.inventoryStatus": "queued",
+        "sync.inventorySeedStatus": "queued",
+        "sync.needsInventorySeed": true,
         "sync.lastJobId": String(job._id),
       },
     },

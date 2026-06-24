@@ -48,6 +48,9 @@ export const PRODUCT_METAFIELD_KEYS = {
   height: "height",
   width: "breite_cm_",
   views: "views",
+  syncOrigin: "artclub_sync_origin",
+  syncJobId: "artclub_sync_job_id",
+  syncRunId: "artclub_sync_run_id",
 } as const;
 
 type ShopifyKuenstlerFields = {

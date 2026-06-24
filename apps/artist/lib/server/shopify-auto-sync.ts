@@ -131,7 +131,13 @@ export async function autoPushProductToShopify(input: {
       { runId },
     );
 
-    const result = await pushOneProduct({ shopDomain: input.shopDomain, productKey: input.productKey, runId });
+    const result = await pushOneProduct({
+      shopDomain: input.shopDomain,
+      productKey: input.productKey,
+      runId,
+      origin: "artist_inline",
+      service: "artist",
+    });
     const sync = resultFromPushItem(result, input.productKey);
     if (!sync.ok) {
       await CanonicalProductModel.updateOne(

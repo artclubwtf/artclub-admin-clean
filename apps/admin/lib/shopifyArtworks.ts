@@ -48,6 +48,11 @@ function mustEnv(name: string): string {
   return value;
 }
 
+function envFlagEnabled(name: string) {
+  const value = (process.env[name] || "").trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes" || value === "on";
+}
+
 function buildShopifyAdminProductUrl(shopDomain: string, productGid: string): string | null {
   const numericId = productGid.split("/").pop();
   if (!numericId) return null;
@@ -338,6 +343,9 @@ export async function createDraftArtworkProduct(
   input: CreateDraftArtworkProductInput,
 ): Promise<CreateDraftArtworkProductResult> {
   assertShopifyWriteEnabled();
+  if (!envFlagEnabled("ALLOW_LEGACY_SHOPIFY_ARTWORK_CREATE")) {
+    throw new Error("legacy_shopify_artwork_create_disabled");
+  }
 
   const {
     artistShopifyMetaobjectGid,

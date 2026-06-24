@@ -98,6 +98,8 @@ export async function POST(req: Request) {
             dryRun: parsed.data.dryRun,
             approvedOnly: parsed.data.approvedOnly,
             runId,
+            origin: "admin_manual",
+            service: "admin",
           });
     const artistSyncMode = scope === "artists" ? getArtistShopifySyncMode() : undefined;
 

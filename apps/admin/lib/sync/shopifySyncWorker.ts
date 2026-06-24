@@ -14,9 +14,8 @@ import {
   getShopifySyncWorkerBatchSize,
   getShopifySyncWorkerDelayMs,
   getShopifySyncWorkerIdleMs,
-  queueInventorySyncJob,
 } from "./shopifySyncJobs";
-import { pushOneArtist, pushOneProduct } from "./shopifyPush";
+import { pushCanonicalProductToShopify, pushOneArtist, type PushResult } from "./shopifyPush";
 import {
   createSyncRunId,
   extractErrorDetails,
@@ -34,8 +33,8 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "shopify_sync_worker_failed";
 }
 
-function pushItemOutcome(result: Awaited<ReturnType<typeof pushOneProduct>> | Awaited<ReturnType<typeof pushOneArtist>>, key: string) {
-  const item = result.items.find((entry) => entry.key === key) || result.items[0];
+function pushItemOutcome(result: PushResult, key: string) {
+  const item = result.items.find((entry: PushResult["items"][number]) => entry.key === key) || result.items[0];
   if (!item) return { ok: result.failedCount === 0, status: "unknown", message: result.errors[0] || null };
   if (item.status === "created" || item.status === "updated") {
     return { ok: true, status: item.status, message: item.message };
@@ -59,6 +58,21 @@ function jobShopDomain(job: ShopifySyncJob) {
   return payloadShopDomain.trim();
 }
 
+function jobContext(job: ShopifySyncJobRecord, workerId: string, runId: string) {
+  return {
+    workerId,
+    runId,
+    jobId: String(job._id),
+    type: job.type,
+    canonicalProductId: job.canonicalProductId ? String(job.canonicalProductId) : null,
+    canonicalArtistId: job.canonicalArtistId ? String(job.canonicalArtistId) : null,
+    productKey: job.productKey || null,
+    artistKey: job.artistKey || null,
+    attempts: (job.attempts || 0) + 1,
+    origin: "worker_direct",
+  };
+}
+
 async function lockNextJob(workerId: string) {
   const now = new Date();
   return ShopifySyncJobModel.findOneAndUpdate(
@@ -68,8 +82,9 @@ async function lockNextJob(workerId: string) {
     {
       $set: {
         status: "processing",
-        lockedAt: new Date(),
+        lockedAt: now,
         lockedBy: workerId,
+        updatedAt: now,
       },
     },
     {
@@ -127,7 +142,11 @@ async function scheduleRetry(job: ShopifySyncJobRecord, error: unknown, runId: s
     {
       jobId: String(job._id),
       type: job.type,
+      canonicalProductId: job.canonicalProductId ? String(job.canonicalProductId) : null,
+      canonicalArtistId: job.canonicalArtistId ? String(job.canonicalArtistId) : null,
+      productKey: job.productKey || null,
       attempts,
+      origin: "worker_direct",
       nextRunAt: nextRunAt.toISOString(),
       errorMessage: errorMessage(error),
     },
@@ -192,28 +211,46 @@ async function markJobFailed(job: ShopifySyncJobRecord, error: unknown, runId: s
     {
       jobId: String(job._id),
       type: job.type,
+      canonicalProductId: job.canonicalProductId ? String(job.canonicalProductId) : null,
+      canonicalArtistId: job.canonicalArtistId ? String(job.canonicalArtistId) : null,
+      productKey: job.productKey || null,
       attempts,
+      origin: "worker_direct",
       errorMessage: errorMessage(error),
     },
     { runId, force: true },
   );
 }
 
-async function processProductPushJob(job: ShopifySyncJobRecord, runId: string) {
+async function processProductPushJob(job: ShopifySyncJobRecord, workerId: string, runId: string) {
   const shopDomain = jobShopDomain(job);
   if (!shopDomain || !job.productKey) {
     throw new Error("product_push_job_missing_context");
   }
 
-  const pushResult = await pushOneProduct({
+  logShopifyWorker("worker_product_push_started", jobContext(job, workerId, runId), { runId, force: true });
+  const pushResult = await pushCanonicalProductToShopify({
     shopDomain,
     productKey: job.productKey,
     runId,
+    jobId: String(job._id),
+    origin: "worker_direct",
+    service: "worker",
   });
   const outcome = pushItemOutcome(pushResult, job.productKey);
   if (!outcome.ok) {
     throw new Error(outcome.message || "shopify_product_push_failed");
   }
+
+  logShopifyWorker(
+    "worker_product_push_done",
+    {
+      ...jobContext(job, workerId, runId),
+      resultStatus: outcome.status,
+      message: outcome.message || null,
+    },
+    { runId, force: true },
+  );
 
   if (outcome.status === "skipped" || outcome.status === "dry_run") {
     return { productPush: outcome.status, message: outcome.message || null };
@@ -223,42 +260,37 @@ async function processProductPushJob(job: ShopifySyncJobRecord, runId: string) {
     throw new Error("product_push_job_missing_canonical_product_id");
   }
 
-  try {
-    const inventoryResult = await syncProductInventoryToShopify({
-      shopDomain,
-      productKey: job.productKey,
-      runId,
-      jobId: String(job._id),
-      attempt: (job.attempts || 0) + 1,
-      markProductSynced: true,
-    });
-    return {
-      productPush: outcome.status,
-      inventorySync: "synced",
+  logShopifyWorker("worker_inventory_seed_started", jobContext(job, workerId, runId), { runId, force: true });
+  const inventoryResult = await syncProductInventoryToShopify({
+    shopDomain,
+    productKey: job.productKey,
+    runId,
+    jobId: String(job._id),
+    attempt: (job.attempts || 0) + 1,
+    markProductSynced: true,
+  });
+  logShopifyWorker(
+    "worker_inventory_seed_done",
+    {
+      ...jobContext(job, workerId, runId),
       ...inventoryResult,
-    };
-  } catch (inventoryError) {
-    const inventoryJob = await queueInventorySyncJob({
-      canonicalProductId: String(job.canonicalProductId),
-      shopDomain,
-      productKey: job.productKey,
-      reason: "inventory_retry_after_product_push",
-    });
-    return {
-      productPush: outcome.status,
-      inventorySync: "queued_retry",
-      inventoryJobId: String(inventoryJob._id),
-      inventoryError: errorMessage(inventoryError),
-    };
-  }
+    },
+    { runId, force: true },
+  );
+  return {
+    productPush: outcome.status,
+    inventorySync: "seeded",
+    ...inventoryResult,
+  };
 }
 
-async function processInventorySyncJob(job: ShopifySyncJobRecord, runId: string) {
+async function processInventorySyncJob(job: ShopifySyncJobRecord, workerId: string, runId: string) {
   const shopDomain = jobShopDomain(job);
   if (!shopDomain || !job.productKey) {
     throw new Error("inventory_sync_job_missing_context");
   }
 
+  logShopifyWorker("worker_inventory_seed_started", jobContext(job, workerId, runId), { runId, force: true });
   const result = await syncProductInventoryToShopify({
     shopDomain,
     productKey: job.productKey,
@@ -267,14 +299,22 @@ async function processInventorySyncJob(job: ShopifySyncJobRecord, runId: string)
     attempt: (job.attempts || 0) + 1,
     markProductSynced: true,
   });
+  logShopifyWorker(
+    "worker_inventory_seed_done",
+    {
+      ...jobContext(job, workerId, runId),
+      ...result,
+    },
+    { runId, force: true },
+  );
 
   return {
-    inventorySync: "synced",
+    inventorySync: "seeded",
     ...result,
   };
 }
 
-async function processArtistPushJob(job: ShopifySyncJobRecord, runId: string) {
+async function processArtistPushJob(job: ShopifySyncJobRecord, workerId: string, runId: string) {
   const shopDomain = jobShopDomain(job);
   if (!shopDomain || !job.artistKey) {
     throw new Error("artist_push_job_missing_context");
@@ -296,10 +336,10 @@ async function processArtistPushJob(job: ShopifySyncJobRecord, runId: string) {
   };
 }
 
-async function processJob(job: ShopifySyncJobRecord, runId: string) {
-  if (job.type === "product_push") return processProductPushJob(job, runId);
-  if (job.type === "inventory_sync") return processInventorySyncJob(job, runId);
-  if (job.type === "artist_push") return processArtistPushJob(job, runId);
+async function processJob(job: ShopifySyncJobRecord, workerId: string, runId: string) {
+  if (job.type === "product_push") return processProductPushJob(job, workerId, runId);
+  if (job.type === "inventory_sync") return processInventorySyncJob(job, workerId, runId);
+  if (job.type === "artist_push") return processArtistPushJob(job, workerId, runId);
   return { skipped: true, reason: `unsupported_job_type:${job.type}` };
 }
 
@@ -324,16 +364,17 @@ export async function runShopifySyncWorkerBatch(input?: {
   logShopifyWorker(
     "worker_poll_started",
     {
+      workerId,
       dbName: diagnostics.dbName,
       collectionName: diagnostics.collectionName,
+      now: new Date().toISOString(),
       queuedCount: diagnostics.counts.queued,
       retryScheduledCount: diagnostics.counts.retry_scheduled,
       processingCount: diagnostics.counts.processing,
       failedCount: diagnostics.counts.failed,
       succeededCount: diagnostics.counts.succeeded,
-      nextRunnableCount: diagnostics.nextRunnableCount,
-      oldestQueuedJobId: diagnostics.oldestQueuedJobId,
-      oldestQueuedNextRunAt: diagnostics.oldestQueuedNextRunAt,
+      runnableCount: diagnostics.nextRunnableCount,
+      latestJobs: diagnostics.latestJobs,
       queryUsed: diagnostics.queryUsed,
     },
     { runId, force: true },
@@ -349,11 +390,7 @@ export async function runShopifySyncWorkerBatch(input?: {
     logShopifyWorker(
       "worker_job_locked",
       {
-        workerId,
-        jobId: String(job._id),
-        type: job.type,
-        productKey: job.productKey || null,
-        artistKey: job.artistKey || null,
+        ...jobContext(job, workerId, runId),
       },
       { runId, force: true },
     );
@@ -361,24 +398,18 @@ export async function runShopifySyncWorkerBatch(input?: {
     try {
       logShopifyWorker(
         "worker_job_started",
-        {
-          workerId,
-          jobId: String(job._id),
-          type: job.type,
-        },
+        jobContext(job, workerId, runId),
         { runId, force: true },
       );
 
-      const result = await processJob(job, runId);
+      const result = await processJob(job, workerId, runId);
       await markJobSucceeded(job, result);
       succeededCount += 1;
 
       logShopifyWorker(
         "worker_job_succeeded",
         {
-          workerId,
-          jobId: String(job._id),
-          type: job.type,
+          ...jobContext(job, workerId, runId),
           result,
         },
         { runId, force: true },
@@ -427,9 +458,8 @@ export async function runShopifySyncWorkerBatch(input?: {
       "worker_no_jobs_found",
       {
         queuedCount: diagnostics.counts.queued,
-        retryScheduledCount: diagnostics.counts.retry_scheduled,
-        nextRunnableCount: diagnostics.nextRunnableCount,
-        queryUsed: diagnostics.queryUsed,
+        runnableCount: diagnostics.nextRunnableCount,
+        latestJobs: diagnostics.latestJobs,
       },
       { runId, force: true },
     );
