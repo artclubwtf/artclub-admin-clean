@@ -125,6 +125,35 @@ type ArtistSummary = {
   shopifyMetaobjectGid?: string;
 };
 
+type PushableArtist = {
+  _id: unknown;
+  shopDomain: string;
+  artistKey: string;
+  handle: string;
+  publicSlug?: string | null;
+  displayName?: string | null;
+  appUrl?: string | null;
+  instagram?: string | null;
+  quote?: string | null;
+  introduction?: string | null;
+  longText?: string | null;
+  bio?: string | null;
+  categoryRef?: string | null;
+  shopifyMetaobjectId?: string | null;
+  shopify?: { metaobjectGid?: string | null } | null;
+  profileImages?: {
+    heroUrl?: string | null;
+    avatarUrl?: string | null;
+    galleryUrls?: string[] | null;
+    media?: Array<{ mediaGid?: string | null; shopifyFileGid?: string | null; url?: string | null; fieldKey?: string | null }> | null;
+  } | null;
+  sync?: {
+    status?: string | null;
+    dirtyFields?: string[] | null;
+    needsPush?: boolean | null;
+  } | null;
+};
+
 function mustEnv(name: string): string {
   const value = process.env[name] || (name === "SHOPIFY_SHOP_DOMAIN" ? process.env.SHOPIFY_STORE_DOMAIN : undefined);
   if (!value) throw new Error(`Missing env var: ${name}`);
@@ -140,6 +169,79 @@ function assertInlineProductPushAllowed(origin?: ProductPushOrigin) {
   if (origin === "artist_inline" && !envFlagEnabled("SHOPIFY_SYNC_INLINE")) {
     throw new Error("inline_shopify_push_forbidden");
   }
+}
+
+function slugifyArtistValue(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
+async function resolveUniqueArtistPublicSlug(artist: PushableArtist) {
+  const existing = (artist.publicSlug || "").trim();
+  if (existing) return { finalSlug: existing, generatedSlug: existing, wasGenerated: false };
+
+  const candidates = [
+    artist.displayName || "",
+    artist.handle || "",
+    artist.artistKey || "",
+    String(artist._id || ""),
+  ];
+  const baseSlug = candidates.map((value) => slugifyArtistValue(value)).find(Boolean) || `artist-${String(artist._id || "").slice(-8)}`;
+
+  let finalSlug = baseSlug;
+  let suffix = 2;
+  while (true) {
+    const conflict = await CanonicalArtistModel.findOne({
+      shopDomain: artist.shopDomain,
+      publicSlug: finalSlug,
+      _id: { $ne: artist._id },
+    })
+      .select({ _id: 1 })
+      .lean();
+    if (!conflict?._id) break;
+    finalSlug = `${baseSlug}-${suffix}`;
+    suffix += 1;
+  }
+
+  return { finalSlug, generatedSlug: finalSlug, wasGenerated: true };
+}
+
+function buildArtistAppUrl(publicSlug: string) {
+  const base = (process.env.ARTIST_APP_PUBLIC_URL || "").trim();
+  if (!base) return "";
+  return `${base.replace(/\/$/, "")}/artist/${encodeURIComponent(publicSlug)}`;
+}
+
+async function ensureArtistShopifyPushContext(artist: PushableArtist) {
+  const slugResolution = await resolveUniqueArtistPublicSlug(artist);
+  const appUrl = (artist.appUrl || "").trim() || buildArtistAppUrl(slugResolution.finalSlug);
+
+  const updatePayload: Record<string, unknown> = {};
+  if ((artist.publicSlug || "").trim() !== slugResolution.finalSlug) {
+    updatePayload.publicSlug = slugResolution.finalSlug;
+  }
+  if ((artist.appUrl || "").trim() !== appUrl) {
+    updatePayload.appUrl = appUrl;
+  }
+
+  if (Object.keys(updatePayload).length) {
+    await CanonicalArtistModel.updateOne(
+      { _id: artist._id, shopDomain: artist.shopDomain, artistKey: artist.artistKey },
+      { $set: updatePayload },
+    );
+  }
+
+  return {
+    finalSlug: slugResolution.finalSlug,
+    generatedSlug: slugResolution.generatedSlug,
+    appUrl,
+  };
 }
 
 function normalizeShopStatus(status: CanonicalProduct["status"]): "DRAFT" | "ACTIVE" | "ARCHIVED" {
@@ -365,21 +467,6 @@ async function ensureArtistMetaobjectGidForProduct(
     artistMetaobjectGid: resolvedGid.trim(),
     artistSlug: refreshedArtist?.publicSlug || refreshedArtist?.handle || refreshedArtist?.artistKey || artistSlug || undefined,
   };
-}
-
-function resolveArtistAppUrl(artist: { appUrl?: string | null; publicSlug?: string | null; handle?: string | null }) {
-  const direct = (artist.appUrl || "").trim();
-  if (direct) return direct;
-
-  const slug = (artist.publicSlug || artist.handle || "").trim();
-  const base =
-    (process.env.ARTIST_APP_BASE_URL || process.env.NEXT_PUBLIC_ARTIST_APP_URL || process.env.NEXT_PUBLIC_APP_URL || "").trim();
-
-  if (base && slug) {
-    return `${base.replace(/\/$/, "")}/artist/${encodeURIComponent(slug)}`;
-  }
-
-  return "";
 }
 
 function canPushSaleableProduct(product: Pick<CanonicalProduct, "forSale" | "allowPrints" | "approvalStatus">) {
@@ -1296,26 +1383,31 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
 
   for (const artist of artists) {
     try {
-      const appUrl = resolveArtistAppUrl(artist);
+      const pushableArtist = artist as PushableArtist;
+      const existingMetaobjectGid = pushableArtist.shopifyMetaobjectId || pushableArtist.shopify?.metaobjectGid || null;
       const willUpdate = Boolean(artist.shopifyMetaobjectId || artist.shopify?.metaobjectGid);
-      const payloadFields: Parameters<typeof upsertArtistMetaobject>[0]["fields"] =
-        syncMode === "legacy"
-          ? {
-              app_url: appUrl,
-              name: artist.displayName,
-              instagram: artist.instagram || undefined,
-              quote: artist.quote || undefined,
-              einleitung_1: artist.introduction || undefined,
-              text_1: artist.longText || artist.bio || undefined,
-              bilder: artist.profileImages?.heroUrl || undefined,
-              bild_1: artist.profileImages?.avatarUrl || undefined,
-              bild_2: artist.profileImages?.galleryUrls?.[1] || undefined,
-              bild_3: artist.profileImages?.galleryUrls?.[2] || undefined,
-            }
-          : {
-              app_url: appUrl,
-              name: artist.displayName,
-            };
+      const { finalSlug, generatedSlug, appUrl } = await ensureArtistShopifyPushContext(pushableArtist);
+      const mediaByFieldKey = new Map(
+        (pushableArtist.profileImages?.media || [])
+          .filter((item) => (item?.fieldKey || "").trim())
+          .map((item) => [
+            (item.fieldKey || "").trim(),
+            item.mediaGid || item.shopifyFileGid || item.url || null,
+          ] as const),
+      );
+      const payloadFields: Parameters<typeof upsertArtistMetaobject>[0]["fields"] = {
+        app_url: appUrl,
+        name: artist.displayName,
+        instagram: artist.instagram || undefined,
+        quote: artist.quote || undefined,
+        einleitung_1: artist.introduction || undefined,
+        text_1: artist.longText || artist.bio || undefined,
+        bilder: (mediaByFieldKey.get("bilder") || artist.profileImages?.heroUrl || undefined) || undefined,
+        bild_1: (mediaByFieldKey.get("bild_1") || artist.profileImages?.avatarUrl || undefined) || undefined,
+        bild_2: (mediaByFieldKey.get("bild_2") || artist.profileImages?.galleryUrls?.[1] || undefined) || undefined,
+        bild_3: (mediaByFieldKey.get("bild_3") || artist.profileImages?.galleryUrls?.[2] || undefined) || undefined,
+        kategorie: artist.categoryRef || undefined,
+      };
 
       logShopifyPush(
         "shopify_artist_push_preflight",
@@ -1323,8 +1415,9 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
           canonicalArtistId: String(artist._id),
           displayName: artist.displayName || null,
           publicSlug: artist.publicSlug || null,
+          generatedSlug,
           appUrl: appUrl || null,
-          existingMetaobjectGid: artist.shopifyMetaobjectId || artist.shopify?.metaobjectGid || null,
+          existingMetaobjectGid,
           willCreate: !willUpdate,
           willUpdate,
           hasCoverImage: Boolean(artist.profileImages?.heroUrl),
@@ -1334,32 +1427,21 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
       );
 
       if (!artist.displayName?.trim()) {
-        skippedCount += 1;
-        items.push({ key: artist.artistKey, status: "skipped", message: "Missing artist name" });
-        continue;
+        throw new Error("missing_artist_display_name");
       }
       if (!appUrl) {
-        skippedCount += 1;
-        items.push({ key: artist.artistKey, status: "skipped", message: "Missing app_url for Shopify metaobject" });
-        continue;
+        throw new Error("missing_artist_app_public_url");
       }
 
       logShopifyPush(
-        "shopify_artist_push_payload",
+        "shopify_artist_metaobject_payload",
         {
-          metaobjectType: "kunstler",
-          fields: {
-            name: Boolean(payloadFields.name),
-            app_url: Boolean(payloadFields.app_url),
-            instagram: Boolean(payloadFields.instagram),
-            quote: Boolean(payloadFields.quote),
-            einleitung_1: Boolean(payloadFields.einleitung_1),
-            text_1: Boolean(payloadFields.text_1),
-            bilder: Boolean(payloadFields.bilder),
-            bild_1: Boolean(payloadFields.bild_1),
-            bild_2: Boolean(payloadFields.bild_2),
-            bild_3: Boolean(payloadFields.bild_3),
-          },
+          type: "kunstler",
+          fieldKeys: Object.entries(payloadFields)
+            .filter(([, value]) => typeof value === "string" && value.trim())
+            .map(([key]) => key),
+          app_url: payloadFields.app_url || null,
+          name: payloadFields.name || null,
         },
         { runId },
       );
@@ -1375,14 +1457,16 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
       }
 
       const result = await upsertArtistMetaobject({
-        metaobjectId:
-          artist.shopifyMetaobjectId || (syncMode === "legacy" ? artist.shopify?.metaobjectGid || undefined : undefined),
-        handle: artist.handle,
+        metaobjectId: pushableArtist.shopifyMetaobjectId || pushableArtist.shopify?.metaobjectGid || undefined,
+        handle: finalSlug,
         fields: payloadFields,
       });
+      const persistedSlug = (result.handle || "").trim() || finalSlug;
+      const persistedAppUrl =
+        (artist.appUrl || "").trim() || buildArtistAppUrl(persistedSlug) || appUrl;
 
       logShopifyPush(
-        "shopify_artist_push_response",
+        "shopify_artist_metaobject_response",
         {
           metaobjectGid: result.id,
           userErrors: [],
@@ -1396,7 +1480,8 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
         {
           $set: {
             shopifyMetaobjectId: result.id,
-            publicSlug: artist.publicSlug || artist.handle,
+            publicSlug: persistedSlug,
+            appUrl: persistedAppUrl,
             migrationStatus: "linked",
             linkStatus: "linked",
             "shopify.metaobjectGid": result.id,
@@ -1409,6 +1494,18 @@ export async function pushArtists(input: PushInput): Promise<PushResult> {
             "sync.dirtyFields": [],
           },
         },
+      );
+
+      logShopifyPush(
+        "shopify_artist_push_db_updated",
+        {
+          canonicalArtistId: String(artist._id),
+          metaobjectGid: result.id,
+          publicSlug: persistedSlug,
+          appUrl: persistedAppUrl,
+          syncStatus: "synced",
+        },
+        { runId, force: true },
       );
 
       pushedCount += 1;

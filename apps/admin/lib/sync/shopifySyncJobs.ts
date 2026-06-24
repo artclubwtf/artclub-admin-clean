@@ -82,6 +82,7 @@ export function formatShopifySyncJobForDiagnostics(job: ShopifySyncJobRecord | n
     canonicalProductId: job.canonicalProductId ? String(job.canonicalProductId) : null,
     productKey: job.productKey || null,
     canonicalArtistId: job.canonicalArtistId ? String(job.canonicalArtistId) : null,
+    artistKey: job.artistKey || null,
     attempts: job.attempts || 0,
     nextRunAt: job.nextRunAt ? new Date(job.nextRunAt).toISOString() : null,
     lockedAt: job.lockedAt ? new Date(job.lockedAt).toISOString() : null,
