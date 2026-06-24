@@ -9,6 +9,10 @@ import {
   previewValue,
 } from "./syncLogger";
 import {
+  fetchShopifyProductInventoryState,
+  persistResolvedInventoryItems,
+} from "./shopifyInventory";
+import {
   SHOPIFY_VARIANT_OPTION_NAMES,
   buildVariantOptionKey,
   normalizeFinishInternalCode,
@@ -45,7 +49,7 @@ type ShopifyVariantNode = {
   id?: string | null;
   sku?: string | null;
   selectedOptions?: Array<{ name?: string | null; value?: string | null }> | null;
-  inventoryItem?: { id?: string | null } | null;
+  inventoryItem?: { id?: string | null; sku?: string | null; tracked?: boolean | null } | null;
 };
 
 type ShopifyProductOptionNode = {
@@ -565,7 +569,11 @@ async function fetchShopifyProductState(productGid: string): Promise<ShopifyProd
               name
               value
             }
-            inventoryItem { id }
+            inventoryItem {
+              id
+              sku
+              tracked
+            }
           }
         }
       }
@@ -1652,6 +1660,15 @@ export async function pushProducts(input: PushInput): Promise<PushResult> {
           );
         }
       }
+
+      const inventoryState = await fetchShopifyProductInventoryState(productGid);
+      await persistResolvedInventoryItems({
+        shopDomain: input.shopDomain,
+        productKey: product.productKey,
+        productGid,
+        variants: inventoryState,
+        runId,
+      });
 
       logShopifyPush(
         "shopify_product_push_response",

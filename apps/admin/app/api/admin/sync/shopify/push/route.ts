@@ -10,6 +10,8 @@ import { getArtistShopifySyncMode } from "@/lib/artistShopifySyncMode";
 import { resolveShopDomain } from "@/lib/shopDomain";
 import { createSyncRunId, logShopifyPush, logSyncError } from "@/lib/sync/syncLogger";
 import { pushArtists, pushProducts } from "@/lib/sync/shopifyPush";
+import { queueInventorySyncJob } from "@/lib/sync/shopifySyncJobs";
+import { CanonicalProductModel } from "@/models/CanonicalProduct";
 import { SyncStateModel } from "@/models/SyncState";
 
 const payloadSchema = z.object({
@@ -98,6 +100,30 @@ export async function POST(req: Request) {
             runId,
           });
     const artistSyncMode = scope === "artists" ? getArtistShopifySyncMode() : undefined;
+
+    if (scope === "products" && !parsed.data.dryRun) {
+      const successfulProductKeys = result.items
+        .filter((item) => item.status === "created" || item.status === "updated")
+        .map((item) => item.key);
+
+      if (successfulProductKeys.length) {
+        const products = await CanonicalProductModel.find({
+          shopDomain,
+          productKey: { $in: successfulProductKeys },
+        })
+          .select({ _id: 1, productKey: 1 })
+          .lean();
+
+        for (const product of products) {
+          await queueInventorySyncJob({
+            canonicalProductId: String(product._id),
+            shopDomain,
+            productKey: product.productKey,
+            reason: "admin_product_push_followup",
+          });
+        }
+      }
+    }
 
     await SyncStateModel.findOneAndUpdate(
       { shopDomain, scope: "shopify_push" },

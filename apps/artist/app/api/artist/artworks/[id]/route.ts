@@ -388,7 +388,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           shopifyProductId: sync.shopifyProductId || artwork.shopifyProductId || null,
           productGid: sync.productGid || artwork.shopify?.productGid || artwork.shopifyProductId || null,
           variantCount: sync.variantCount ?? variantsToInsert.length,
-          syncStatus: sync.syncStatus || null,
+          syncStatus: sync.status || sync.syncStatus || null,
           lastPushAt: sync.lastPushAt || null,
         },
         { runId: autoSyncRunId, force: true },
@@ -409,7 +409,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       );
     }
 
-    return NextResponse.json({ ok: true, sync }, { status: 200 });
+    return NextResponse.json(
+      {
+        ok: true,
+        artwork: {
+          id: String(artwork._id),
+          productKey: id,
+        },
+        sync,
+      },
+      { status: 200 },
+    );
   } catch (error) {
     return artistApiErrorResponse(error, "artwork_update_failed");
   }

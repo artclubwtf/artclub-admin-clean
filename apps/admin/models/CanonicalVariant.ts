@@ -5,6 +5,10 @@ const canonicalVariantInventorySchema = new Schema(
   {
     tracked: { type: Boolean, default: true },
     quantity: { type: Number },
+    locationId: { type: String, trim: true },
+    availableQuantity: { type: Number },
+    lastInventorySyncAt: { type: Date },
+    inventorySyncStatus: { type: String, trim: true },
   },
   { _id: false },
 );
@@ -13,6 +17,7 @@ const canonicalVariantShopifySchema = new Schema(
   {
     variantGid: { type: String },
     inventoryItemGid: { type: String },
+    inventorySku: { type: String },
   },
   { _id: false },
 );

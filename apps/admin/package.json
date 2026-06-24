@@ -9,7 +9,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "sh -c 'next start -p \"${PORT:-3000}\"'",
-    "lint": "eslint"
+    "lint": "eslint",
+    "shopify-sync-worker": "node scripts/run-shopify-sync-worker.js"
   },
   "dependencies": {
     "@artclub/models": "workspace:*",

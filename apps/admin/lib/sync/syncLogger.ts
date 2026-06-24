@@ -2,6 +2,8 @@ import { randomUUID } from "crypto";
 
 export const SHOPIFY_PULL_SCOPE = "ARTCLUB_SHOPIFY_PULL" as const;
 export const SHOPIFY_PUSH_SCOPE = "ARTCLUB_SHOPIFY_PUSH" as const;
+export const SHOPIFY_INVENTORY_SCOPE = "ARTCLUB_SHOPIFY_INVENTORY" as const;
+export const SHOPIFY_WORKER_SCOPE = "ARTCLUB_SHOPIFY_WORKER" as const;
 export const ARTIST_AUTO_SYNC_SCOPE = "ARTCLUB_ARTIST_AUTO_SYNC" as const;
 export const SHOPIFY_SYNC_ERROR_SCOPE = "ARTCLUB_SHOPIFY_SYNC_ERROR" as const;
 export const SHOPIFY_DIAGNOSTICS_SCOPE = "ARTCLUB_SHOPIFY_DIAGNOSTICS" as const;
@@ -10,6 +12,8 @@ export const ARTIST_PROFILE_RENDER_SCOPE = "ARTCLUB_ARTIST_PROFILE_RENDER" as co
 type SyncScope =
   | typeof SHOPIFY_PULL_SCOPE
   | typeof SHOPIFY_PUSH_SCOPE
+  | typeof SHOPIFY_INVENTORY_SCOPE
+  | typeof SHOPIFY_WORKER_SCOPE
   | typeof ARTIST_AUTO_SYNC_SCOPE
   | typeof SHOPIFY_SYNC_ERROR_SCOPE
   | typeof SHOPIFY_DIAGNOSTICS_SCOPE
@@ -126,6 +130,14 @@ export function logShopifyPull(event: string, payload: unknown, options?: SyncLo
 
 export function logShopifyPush(event: string, payload: unknown, options?: SyncLogOptions) {
   emit(SHOPIFY_PUSH_SCOPE, event, payload, options);
+}
+
+export function logShopifyInventory(event: string, payload: unknown, options?: SyncLogOptions) {
+  emit(SHOPIFY_INVENTORY_SCOPE, event, payload, options);
+}
+
+export function logShopifyWorker(event: string, payload: unknown, options?: SyncLogOptions) {
+  emit(SHOPIFY_WORKER_SCOPE, event, payload, options);
 }
 
 export function logArtistImport(event: string, payload: unknown, options?: SyncLogOptions) {

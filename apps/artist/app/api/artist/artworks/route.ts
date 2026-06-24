@@ -349,7 +349,7 @@ export async function POST(req: Request) {
           shopifyProductId: sync.shopifyProductId || null,
           productGid: sync.productGid || null,
           variantCount: sync.variantCount ?? variantsToInsert.length,
-          syncStatus: sync.syncStatus || null,
+          syncStatus: sync.status || sync.syncStatus || null,
           lastPushAt: sync.lastPushAt || null,
         },
         { runId: autoSyncRunId, force: true },
@@ -370,7 +370,18 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({ ok: true, productKey, sync }, { status: 201 });
+    return NextResponse.json(
+      {
+        ok: true,
+        productKey,
+        artwork: {
+          id: createdProduct._id.toString(),
+          productKey,
+        },
+        sync,
+      },
+      { status: 201 },
+    );
   } catch (error) {
     return artistApiErrorResponse(error, "artwork_create_failed");
   }

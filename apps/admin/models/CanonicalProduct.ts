@@ -48,11 +48,14 @@ const canonicalProductShopifySchema = new Schema(
 const canonicalProductSyncSchema = new Schema(
   {
     status: { type: String, trim: true },
+    inventoryStatus: { type: String, trim: true },
     dirtyFields: { type: [String], default: [] },
     dirtyAt: { type: Date },
     needsPush: { type: Boolean, default: false },
     lastPushAt: { type: Date },
     lastPullAt: { type: Date },
+    lastInventorySyncAt: { type: Date },
+    lastJobId: { type: String, trim: true },
     lastError: { type: String },
   },
   { _id: false },

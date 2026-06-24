@@ -6,6 +6,7 @@ export {
   canonicalProductStatuses,
 } from "../../../admin/models/CanonicalProduct";
 export { CanonicalVariantModel } from "../../../admin/models/CanonicalVariant";
+export { ShopifySyncJobModel } from "../../../admin/models/ShopifySyncJob";
 export { ArtistSeriesModel } from "../../../admin/models/ArtistSeries";
 export { ArtistMediaV2Model, artistMediaV2Kinds } from "../../../admin/models/ArtistMediaV2";
 export { TermsAcceptanceModel } from "../../../admin/models/TermsAcceptance";

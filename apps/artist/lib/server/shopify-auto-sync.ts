@@ -1,4 +1,10 @@
+import { syncProductInventoryToShopify } from "../../../admin/lib/sync/shopifyInventory";
 import { pushOneArtist, pushOneProduct } from "../../../admin/lib/sync/shopifyPush";
+import {
+  isShopifySyncInlineEnabled,
+  queueArtistPushJob,
+  queueProductPushJob,
+} from "../../../admin/lib/sync/shopifySyncJobs";
 import {
   createSyncRunId,
   logAutoSync,
@@ -12,6 +18,9 @@ export type AutoShopifySyncResult =
   | {
       ok: true;
       skipped?: boolean;
+      queued?: boolean;
+      status?: string | null;
+      jobId?: string | null;
       message?: string;
       runId?: string;
       shopifyProductId?: string | null;
@@ -77,6 +86,38 @@ export async function autoPushProductToShopify(input: {
   }
 
   try {
+    if (!isShopifySyncInlineEnabled()) {
+      if (!product?._id) {
+        return { ok: false, error: "canonical_product_not_found", runId };
+      }
+
+      const job = await queueProductPushJob({
+        canonicalProductId: String(product._id),
+        shopDomain: input.shopDomain,
+        productKey: input.productKey,
+        reason: input.reason || "auto_sync",
+      });
+
+      logAutoSync(
+        "artist_app_auto_shopify_push_queued",
+        {
+          canonicalProductId: String(product._id),
+          productKey: input.productKey,
+          jobId: String(job._id),
+          reason: input.reason || "auto_sync",
+        },
+        { runId, force: true },
+      );
+
+      return {
+        ok: true,
+        queued: true,
+        status: "queued",
+        jobId: String(job._id),
+        runId,
+      };
+    }
+
     logAutoSync(
       "artist_app_auto_shopify_push_started",
       {
@@ -94,9 +135,9 @@ export async function autoPushProductToShopify(input: {
         { shopDomain: input.shopDomain, productKey: input.productKey },
         {
           $set: {
-          "sync.needsPush": true,
-          "sync.lastError": sync.error,
-          "sync.status": "error",
+            "sync.needsPush": true,
+            "sync.lastError": sync.error,
+            "sync.status": "error",
           },
         },
       ).catch(() => null);
@@ -111,6 +152,13 @@ export async function autoPushProductToShopify(input: {
       );
       return { ...sync, runId };
     }
+
+    await syncProductInventoryToShopify({
+      shopDomain: input.shopDomain,
+      productKey: input.productKey,
+      runId,
+      markProductSynced: true,
+    });
 
     const productAfterPush = await CanonicalProductModel.findOne({
       shopDomain: input.shopDomain,
@@ -139,6 +187,7 @@ export async function autoPushProductToShopify(input: {
     return {
       ...sync,
       runId,
+      status: "synced",
       shopifyProductId: productAfterPush?.shopifyProductId || null,
       productGid: productAfterPush?.shopify?.productGid || productAfterPush?.shopifyProductId || null,
       variantCount,
@@ -206,6 +255,37 @@ export async function autoPushArtistToShopify(input: {
   }
 
   try {
+    if (!isShopifySyncInlineEnabled()) {
+      if (!artist?._id) {
+        return { ok: false, error: "canonical_artist_not_found", runId };
+      }
+
+      const job = await queueArtistPushJob({
+        canonicalArtistId: String(artist._id),
+        shopDomain: input.shopDomain,
+        artistKey: input.artistKey,
+        reason: "auto_sync",
+      });
+
+      logAutoSync(
+        "artist_app_auto_shopify_artist_push_queued",
+        {
+          canonicalArtistId: String(artist._id),
+          artistKey: input.artistKey,
+          jobId: String(job._id),
+        },
+        { runId, force: true },
+      );
+
+      return {
+        ok: true,
+        queued: true,
+        status: "queued",
+        jobId: String(job._id),
+        runId,
+      };
+    }
+
     const result = await pushOneArtist({ shopDomain: input.shopDomain, artistKey: input.artistKey, runId });
     const sync = resultFromPushItem(result, input.artistKey);
     if (!sync.ok) {
