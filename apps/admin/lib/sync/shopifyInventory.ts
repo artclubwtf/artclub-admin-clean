@@ -26,6 +26,10 @@ type ShopifyInventoryQuantityNode = {
 };
 
 type ShopifyInventoryLevelNode = {
+  id?: string | null;
+  item?: {
+    id?: string | null;
+  } | null;
   location?: {
     id?: string | null;
   } | null;
@@ -487,6 +491,10 @@ function currentQuantityAtLocation(item: ShopifyInventoryItemNode | null | undef
   return typeof quantity === "number" && Number.isFinite(quantity) ? quantity : 0;
 }
 
+function inventoryLevelAtLocation(item: ShopifyInventoryItemNode | null | undefined, locationId: string) {
+  return item?.inventoryLevels?.nodes?.find((node) => node?.location?.id === locationId) || null;
+}
+
 async function enableInventoryTracking(variants: ResolvedInventoryVariant[], runId: string) {
   const failures: Array<Record<string, unknown>> = [];
 
@@ -659,30 +667,178 @@ async function setShopifyInventoryQuantities(input: {
   }>(query, variables);
 
   const payload = data?.inventorySetQuantities;
-  logShopifyInventory(
-    "shopify_inventory_set_quantities_response",
-    {
-      productGid: input.productGid,
-      locationId: input.locationId,
-      userErrors: payload?.userErrors || [],
-      graphqlErrors: [],
-      syncedCount: input.quantities.length,
-    },
-    { runId: input.runId, force: true },
-  );
-
   if (!payload) {
     throw new ShopifyInventoryError("Shopify inventorySetQuantities returned no payload");
   }
 
   if (payload.userErrors?.length) {
+    logShopifyInventory(
+      "shopify_inventory_set_quantities_response",
+      {
+        productGid: input.productGid,
+        locationId: input.locationId,
+        userErrors: payload.userErrors || [],
+        graphqlErrors: [],
+        syncedCount: 0,
+      },
+      { runId: input.runId, force: true },
+    );
     throw new ShopifyInventoryError("Shopify inventorySetQuantities failed", {
       userErrors: payload.userErrors,
       graphqlErrors: [],
     });
   }
 
+  logShopifyInventory(
+    "shopify_inventory_set_quantities_response",
+    {
+      productGid: input.productGid,
+      locationId: input.locationId,
+      userErrors: [],
+      graphqlErrors: [],
+      syncedCount: input.quantities.length,
+    },
+    { runId: input.runId, force: true },
+  );
+
   return payload;
+}
+
+async function activateInventoryAtLocation(input: {
+  productGid: string;
+  inventoryItemId: string;
+  locationId: string;
+  available: number;
+  sku: string;
+  idempotencyKey: string;
+  runId: string;
+}) {
+  const version = shopifyApiVersion();
+  const useIdempotency = isApiVersionAtLeast(version, "2026-04");
+  const query = useIdempotency
+    ? `
+        mutation ActivateInventoryItem(
+          $inventoryItemId: ID!,
+          $locationId: ID!,
+          $available: Int,
+          $idempotencyKey: String!
+        ) {
+          inventoryActivate(
+            inventoryItemId: $inventoryItemId,
+            locationId: $locationId,
+            available: $available
+          ) @idempotent(key: $idempotencyKey) {
+            inventoryLevel {
+              id
+              quantities(names: ["available"]) {
+                name
+                quantity
+              }
+              item {
+                id
+              }
+              location {
+                id
+              }
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `
+    : `
+        mutation ActivateInventoryItem(
+          $inventoryItemId: ID!,
+          $locationId: ID!,
+          $available: Int
+        ) {
+          inventoryActivate(
+            inventoryItemId: $inventoryItemId,
+            locationId: $locationId,
+            available: $available
+          ) {
+            inventoryLevel {
+              id
+              quantities(names: ["available"]) {
+                name
+                quantity
+              }
+              item {
+                id
+              }
+              location {
+                id
+              }
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+  const variables: Record<string, unknown> = {
+    inventoryItemId: input.inventoryItemId,
+    locationId: input.locationId,
+    available: input.available,
+  };
+  if (useIdempotency) {
+    variables.idempotencyKey = input.idempotencyKey;
+  }
+
+  logShopifyInventory(
+    "shopify_inventory_activate_payload",
+    {
+      sku: input.sku,
+      inventoryItemId: input.inventoryItemId,
+      locationId: input.locationId,
+      available: input.available,
+      idempotencyKey: input.idempotencyKey,
+    },
+    { runId: input.runId, force: true },
+  );
+
+  const data = await callShopifyAdmin<{
+    inventoryActivate?: {
+      inventoryLevel?: ShopifyInventoryLevelNode | null;
+      userErrors?: Array<{ field?: string[] | null; message?: string }>;
+    } | null;
+  }>(query, variables);
+
+  const payload = data?.inventoryActivate;
+  if (!payload) {
+    throw new ShopifyInventoryError("Shopify inventoryActivate returned no payload");
+  }
+
+  const available =
+    payload.inventoryLevel?.quantities?.find((entry) => (entry?.name || "").trim().toLowerCase() === "available")?.quantity ?? null;
+
+  logShopifyInventory(
+    "shopify_inventory_activate_response",
+    {
+      sku: input.sku,
+      inventoryItemId: input.inventoryItemId,
+      inventoryLevelId: payload.inventoryLevel?.id || null,
+      available,
+      userErrors: payload.userErrors || [],
+      graphqlErrors: [],
+    },
+    { runId: input.runId, force: true },
+  );
+
+  if (payload.userErrors?.length) {
+    throw new ShopifyInventoryError("Shopify inventoryActivate failed", {
+      userErrors: payload.userErrors,
+      graphqlErrors: [],
+      inventoryItemId: input.inventoryItemId,
+      locationId: input.locationId,
+      sku: input.sku,
+    });
+  }
+
+  return payload.inventoryLevel || null;
 }
 
 export async function seedProductInventoryIfNeeded(input: {
@@ -750,6 +906,14 @@ export async function seedProductInventoryIfNeeded(input: {
 
     const location = await getArtistStorageLocation(input.runId);
     const now = new Date();
+    const variantsNeedingActivation: Array<{
+      canonicalVariantId: string;
+      variantKey: string;
+      sku: string;
+      inventoryItemId: string;
+      quantity: number;
+      editionLimit: number;
+    }> = [];
     const quantitiesToSeed: Array<{
       inventoryItemId: string;
       locationId: string;
@@ -763,12 +927,14 @@ export async function seedProductInventoryIfNeeded(input: {
     const variantActions: Array<Record<string, unknown>> = [];
     let skippedAlreadySeededCount = 0;
     let preservedExistingQuantityCount = 0;
+    let failedCount = 0;
 
     for (const resolvedVariant of resolvedInventoryItems) {
       const canonicalVariant = canonicalVariantByGid.get(resolvedVariant.variantGid);
       if (!canonicalVariant) continue;
 
       const shopifyVariant = shopifyVariantByGid.get(resolvedVariant.variantGid);
+      const inventoryLevel = inventoryLevelAtLocation(shopifyVariant?.inventoryItem, location.id);
       const currentQuantity = currentQuantityAtLocation(shopifyVariant?.inventoryItem, location.id);
       const editionLimit = editionLimitForVariant(product, canonicalVariant);
 
@@ -813,6 +979,18 @@ export async function seedProductInventoryIfNeeded(input: {
         continue;
       }
 
+      if (!inventoryLevel) {
+        variantsNeedingActivation.push({
+          canonicalVariantId: String(canonicalVariant._id),
+          variantKey: canonicalVariant.variantKey,
+          sku: resolvedVariant.sku || resolvedVariant.inventorySku || resolvedVariant.variantKey,
+          inventoryItemId: resolvedVariant.inventoryItemGid,
+          quantity: desiredSeedQuantityForVariant(product, canonicalVariant),
+          editionLimit,
+        });
+        continue;
+      }
+
       if (currentQuantity > 0) {
         preservedExistingQuantityCount += 1;
         await CanonicalVariantModel.updateOne(
@@ -835,13 +1013,14 @@ export async function seedProductInventoryIfNeeded(input: {
           },
         );
         logShopifyInventory(
-          "shopify_inventory_seed_done",
+          "shopify_inventory_already_stocked",
           {
             canonicalProductId: String(product._id),
             productKey: input.productKey,
             variantKey: canonicalVariant.variantKey,
             sku: canonicalVariant.sku,
             inventoryItemId: resolvedVariant.inventoryItemGid,
+            locationId: location.id,
             currentQuantity,
             seededQuantity: currentQuantity,
             reason: "existing_quantity_preserved",
@@ -879,6 +1058,64 @@ export async function seedProductInventoryIfNeeded(input: {
 
     const referenceDocumentUri = `artclub://shopify-sync/${input.jobId || input.runId}/${input.productKey}`;
     const idempotencyKey = `${input.jobId || input.runId}:${input.productKey}:${input.attempt || 1}`;
+    if (variantsNeedingActivation.length) {
+      logShopifyInventory(
+        "shopify_inventory_activation_started",
+        {
+          productGid,
+          locationId: location.id,
+          variantCount: variantsNeedingActivation.length,
+        },
+        { runId: input.runId, force: true },
+      );
+
+      for (const [index, entry] of variantsNeedingActivation.entries()) {
+        const activationLevel = await activateInventoryAtLocation({
+          productGid,
+          inventoryItemId: entry.inventoryItemId,
+          locationId: location.id,
+          available: entry.quantity,
+          sku: entry.sku,
+          idempotencyKey: `${idempotencyKey}:activate:${index + 1}:${entry.inventoryItemId}`,
+          runId: input.runId,
+        });
+        const activatedQuantity =
+          activationLevel?.quantities?.find((quantity) => (quantity?.name || "").trim().toLowerCase() === "available")?.quantity ??
+          entry.quantity;
+        await CanonicalVariantModel.updateOne(
+          {
+            _id: entry.canonicalVariantId,
+            shopDomain: input.shopDomain,
+            productKey: input.productKey,
+          },
+          {
+            $set: {
+              "inventory.locationId": location.id,
+              "inventory.quantity": activatedQuantity,
+              "inventory.availableQuantity": activatedQuantity,
+              "inventory.initialQuantity": activatedQuantity,
+              "inventory.inventorySeededAt": now,
+              "inventory.inventorySeedJobId": input.jobId || null,
+              "inventory.inventorySeedStatus": "seeded",
+              "inventory.inventorySyncStatus": "seeded",
+              "inventory.lastInventorySyncAt": now,
+              "inventory.tracked": true,
+              "inventory.replenishmentDisabled": true,
+              "inventory.editionLimit": entry.editionLimit,
+              "inventory.lastInventoryError": null,
+            },
+          },
+        );
+        variantActions.push({
+          variantKey: entry.variantKey,
+          sku: entry.sku,
+          inventoryItemId: entry.inventoryItemId,
+          currentQuantity: activatedQuantity,
+          action: "activated_and_seeded",
+        });
+      }
+    }
+
     if (quantitiesToSeed.length) {
       await setShopifyInventoryQuantities({
         productGid,
@@ -960,15 +1197,16 @@ export async function seedProductInventoryIfNeeded(input: {
     );
 
     logShopifyInventory(
-      "shopify_inventory_seed_finished",
+      "shopify_inventory_seed_done",
       {
         canonicalProductId: String(product._id),
         productKey: input.productKey,
         productGid,
         locationId: location.id,
-        seededCount: quantitiesToSeed.length,
-        skippedAlreadySeededCount,
-        preservedExistingQuantityCount,
+        seededCount: variantsNeedingActivation.length + quantitiesToSeed.length,
+        skippedCount: skippedAlreadySeededCount,
+        preservedCount: preservedExistingQuantityCount,
+        failedCount,
       },
       { runId: input.runId, force: true },
     );
@@ -976,9 +1214,10 @@ export async function seedProductInventoryIfNeeded(input: {
     return {
       productGid,
       locationId: location.id,
-      seededCount: quantitiesToSeed.length,
+      seededCount: variantsNeedingActivation.length + quantitiesToSeed.length,
       skippedAlreadySeededCount,
       preservedExistingQuantityCount,
+      failedCount,
       variantActions,
     };
   } catch (error) {

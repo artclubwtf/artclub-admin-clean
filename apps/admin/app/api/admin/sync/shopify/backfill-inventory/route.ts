@@ -33,6 +33,22 @@ function currentQuantityAtLocation(
   return typeof quantity === "number" && Number.isFinite(quantity) ? quantity : 0;
 }
 
+function hasInventoryLevelAtLocation(
+  inventoryItem:
+    | {
+        inventoryLevels?: {
+          nodes?: Array<{
+            location?: { id?: string | null } | null;
+          }> | null;
+        } | null;
+      }
+    | null
+    | undefined,
+  locationId: string,
+) {
+  return Boolean(inventoryItem?.inventoryLevels?.nodes?.some((node) => node?.location?.id === locationId));
+}
+
 export async function POST(req: Request) {
   const unauthorized = await requireAdmin(req);
   if (unauthorized) return unauthorized;
@@ -96,6 +112,7 @@ export async function POST(req: Request) {
           const shopifyVariant = shopifyVariantByGid.get(variantGid);
           const inventoryItemId = variant.shopify?.inventoryItemGid || shopifyVariant?.inventoryItem?.id || null;
           const currentQuantity = currentQuantityAtLocation(shopifyVariant?.inventoryItem, location.id);
+          const hasLevel = hasInventoryLevelAtLocation(shopifyVariant?.inventoryItem, location.id);
           const seedQuantity = (variant.finish || "").trim().toLowerCase() === "original"
             ? getShopifyOriginalInventoryQuantity()
             : getShopifyPrintInventoryQuantity();
@@ -107,6 +124,8 @@ export async function POST(req: Request) {
             currentQuantity,
             action: variant.inventory?.inventorySeededAt
               ? "skipped_already_seeded"
+              : !hasLevel
+                ? "would_activate"
               : currentQuantity > 0
                 ? "preserved_existing_quantity"
                 : "would_seed",
