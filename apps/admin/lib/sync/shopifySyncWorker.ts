@@ -6,6 +6,11 @@ import { CanonicalProductModel } from "../../models/CanonicalProduct";
 import { ShopifySyncJobModel, type ShopifySyncJob } from "../../models/ShopifySyncJob";
 import { syncProductInventoryToShopify } from "./shopifyInventory";
 import {
+  buildRunnableJobQuery,
+  getMongoHostMasked,
+  getShopifySyncJobCollectionName,
+  getShopifySyncJobDbName,
+  getShopifySyncQueueDiagnostics,
   getShopifySyncWorkerBatchSize,
   getShopifySyncWorkerDelayMs,
   getShopifySyncWorkerIdleMs,
@@ -55,10 +60,10 @@ function jobShopDomain(job: ShopifySyncJob) {
 }
 
 async function lockNextJob(workerId: string) {
+  const now = new Date();
   return ShopifySyncJobModel.findOneAndUpdate(
     {
-      status: { $in: ["queued", "retry_scheduled"] },
-      nextRunAt: { $lte: new Date() },
+      ...buildRunnableJobQuery(now),
     },
     {
       $set: {
@@ -314,6 +319,25 @@ export async function runShopifySyncWorkerBatch(input?: {
   let failedCount = 0;
   let retriedCount = 0;
   const processedJobIds: string[] = [];
+  const diagnostics = await getShopifySyncQueueDiagnostics();
+
+  logShopifyWorker(
+    "worker_poll_started",
+    {
+      dbName: diagnostics.dbName,
+      collectionName: diagnostics.collectionName,
+      queuedCount: diagnostics.counts.queued,
+      retryScheduledCount: diagnostics.counts.retry_scheduled,
+      processingCount: diagnostics.counts.processing,
+      failedCount: diagnostics.counts.failed,
+      succeededCount: diagnostics.counts.succeeded,
+      nextRunnableCount: diagnostics.nextRunnableCount,
+      oldestQueuedJobId: diagnostics.oldestQueuedJobId,
+      oldestQueuedNextRunAt: diagnostics.oldestQueuedNextRunAt,
+      queryUsed: diagnostics.queryUsed,
+    },
+    { runId, force: true },
+  );
 
   for (let index = 0; index < batchSize; index += 1) {
     const job = await lockNextJob(workerId);
@@ -398,6 +422,19 @@ export async function runShopifySyncWorkerBatch(input?: {
     processedJobIds,
   };
 
+  if (lockedCount === 0) {
+    logShopifyWorker(
+      "worker_no_jobs_found",
+      {
+        queuedCount: diagnostics.counts.queued,
+        retryScheduledCount: diagnostics.counts.retry_scheduled,
+        nextRunnableCount: diagnostics.nextRunnableCount,
+        queryUsed: diagnostics.queryUsed,
+      },
+      { runId, force: true },
+    );
+  }
+
   logShopifyWorker("worker_batch_finished", summary, { runId, force: true });
   return summary;
 }
@@ -427,6 +464,9 @@ export async function runShopifySyncWorkerLoop(input?: {
       delayMs,
       idleMs,
       hasMongoUri: Boolean(process.env.MONGODB_URI),
+      mongoDbName: getShopifySyncJobDbName(),
+      mongoHostMasked: getMongoHostMasked(),
+      jobCollectionName: getShopifySyncJobCollectionName(),
       hasShopifyToken: Boolean(process.env.SHOPIFY_ADMIN_ACCESS_TOKEN),
       hasLocationId: Boolean((process.env.SHOPIFY_ARTIST_STORAGE_LOCATION_ID || "").trim()),
     },
@@ -461,3 +501,9 @@ export async function runShopifySyncWorkerLoop(input?: {
     }
   } while (true);
 }
+
+export {
+  getMongoHostMasked,
+  getShopifySyncJobCollectionName,
+  getShopifySyncJobDbName,
+} from "./shopifySyncJobs";

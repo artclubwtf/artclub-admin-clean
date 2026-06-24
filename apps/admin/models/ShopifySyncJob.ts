@@ -38,7 +38,7 @@ const shopifySyncJobSchema = new Schema(
     result: { type: Schema.Types.Mixed },
     finishedAt: { type: Date },
   },
-  { timestamps: true },
+  { timestamps: true, collection: "shopify_sync_jobs" },
 );
 
 shopifySyncJobSchema.index({ status: 1, nextRunAt: 1 });
@@ -54,6 +54,6 @@ export type ShopifySyncJobStatus = (typeof shopifySyncJobStatuses)[number];
 
 export const ShopifySyncJobModel =
   (models.ShopifySyncJob as Model<ShopifySyncJob>) ||
-  model<ShopifySyncJob>("ShopifySyncJob", shopifySyncJobSchema);
+  model<ShopifySyncJob>("ShopifySyncJob", shopifySyncJobSchema, "shopify_sync_jobs");
 
 export type { ShopifySyncJob };

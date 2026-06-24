@@ -61,6 +61,9 @@ function registerTypeScriptRequireHook() {
 const restoreRequireHook = registerTypeScriptRequireHook();
 const {
   runShopifySyncWorkerLoop,
+  getMongoHostMasked,
+  getShopifySyncJobCollectionName,
+  getShopifySyncJobDbName,
 } = require(path.join(projectRoot, "lib/sync/shopifySyncWorker.ts"));
 const {
   createSyncRunId,
@@ -112,6 +115,9 @@ async function runHttpLoop() {
       delayMs,
       idleMs,
       hasMongoUri: Boolean(process.env.MONGODB_URI),
+      mongoDbName: getShopifySyncJobDbName(),
+      mongoHostMasked: getMongoHostMasked(),
+      jobCollectionName: getShopifySyncJobCollectionName(),
       hasShopifyToken: Boolean(process.env.SHOPIFY_ADMIN_ACCESS_TOKEN),
       hasLocationId: Boolean((process.env.SHOPIFY_ARTIST_STORAGE_LOCATION_ID || "").trim()),
     },

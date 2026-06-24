@@ -380,7 +380,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       reason: "artwork_updated",
     });
 
-    if (sync.ok) {
+    if (sync.ok && !sync.queued) {
       logAutoSync(
         "artist_app_auto_shopify_push_succeeded",
         {
@@ -393,7 +393,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         },
         { runId: autoSyncRunId, force: true },
       );
-    } else {
+    } else if (!sync.ok) {
       logSyncError(
         "artist_app_auto_shopify_push_failed",
         sync.error,

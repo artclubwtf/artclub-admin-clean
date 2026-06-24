@@ -63,7 +63,7 @@ export async function autoPushProductToShopify(input: {
     shopDomain: input.shopDomain,
     productKey: input.productKey,
   })
-    .select({ _id: 1, productKey: 1, shopifyProductId: 1, shopify: 1, sync: 1 })
+    .select({ _id: 1, productKey: 1, canonicalArtistId: 1, shopifyProductId: 1, shopify: 1, sync: 1 })
     .lean()
     .catch(() => null);
 
@@ -93,9 +93,11 @@ export async function autoPushProductToShopify(input: {
 
       const job = await queueProductPushJob({
         canonicalProductId: String(product._id),
+        canonicalArtistId: product.canonicalArtistId ? String(product.canonicalArtistId) : null,
         shopDomain: input.shopDomain,
         productKey: input.productKey,
         reason: input.reason || "auto_sync",
+        runId,
       });
 
       logAutoSync(
@@ -105,6 +107,7 @@ export async function autoPushProductToShopify(input: {
           productKey: input.productKey,
           jobId: String(job._id),
           reason: input.reason || "auto_sync",
+          syncStatus: "queued",
         },
         { runId, force: true },
       );
@@ -265,6 +268,7 @@ export async function autoPushArtistToShopify(input: {
         shopDomain: input.shopDomain,
         artistKey: input.artistKey,
         reason: "auto_sync",
+        runId,
       });
 
       logAutoSync(

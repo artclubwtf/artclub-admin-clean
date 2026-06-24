@@ -1,6 +1,10 @@
 import { CanonicalArtistModel } from "../../models/CanonicalArtist";
 import { CanonicalProductModel } from "../../models/CanonicalProduct";
 import {
+  logAutoSync,
+  logShopifyWorker,
+} from "./syncLogger";
+import {
   ShopifySyncJobModel,
   type ShopifySyncJob,
   type ShopifySyncJobStatus,
@@ -10,6 +14,7 @@ import {
 type ShopifySyncJobRecord = ShopifySyncJob & { _id: unknown };
 
 const ACTIVE_JOB_STATUSES: ShopifySyncJobStatus[] = ["queued", "processing", "retry_scheduled"];
+const RUNNABLE_JOB_STATUSES: ShopifySyncJobStatus[] = ["queued", "retry_scheduled"];
 
 function envFlagEnabled(name: string) {
   const value = (process.env[name] || "").trim().toLowerCase();
@@ -35,6 +40,73 @@ export function getShopifySyncWorkerDelayMs() {
 
 export function getShopifySyncWorkerIdleMs() {
   return envNumber("SHOPIFY_SYNC_WORKER_IDLE_MS", 10000);
+}
+
+function maskMongoHost(value: string) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.host ? `${url.protocol}//${url.host}` : null;
+  } catch {
+    const match = value.match(/@([^/?]+)/);
+    if (match?.[1]) return `mongodb://***@${match[1]}`;
+    return "mongodb://[masked]";
+  }
+}
+
+export function getShopifySyncJobCollectionName() {
+  return ShopifySyncJobModel.collection.collectionName;
+}
+
+export function getShopifySyncJobDbName() {
+  return ShopifySyncJobModel.db?.db?.databaseName || null;
+}
+
+export function getMongoHostMasked() {
+  return maskMongoHost((process.env.MONGODB_URI || "").trim());
+}
+
+export function buildRunnableJobQuery(now = new Date()) {
+  return {
+    status: { $in: RUNNABLE_JOB_STATUSES },
+    $or: [{ nextRunAt: { $exists: false } }, { nextRunAt: null }, { nextRunAt: { $lte: now } }],
+  };
+}
+
+export async function getShopifySyncQueueDiagnostics() {
+  const now = new Date();
+  const runnableQuery = buildRunnableJobQuery(now);
+  const [queuedCount, retryScheduledCount, processingCount, failedCount, succeededCount, nextRunnableCount, oldestQueuedJob, latestJobs] =
+    await Promise.all([
+      ShopifySyncJobModel.countDocuments({ status: "queued" }),
+      ShopifySyncJobModel.countDocuments({ status: "retry_scheduled" }),
+      ShopifySyncJobModel.countDocuments({ status: "processing" }),
+      ShopifySyncJobModel.countDocuments({ status: "failed" }),
+      ShopifySyncJobModel.countDocuments({ status: "succeeded" }),
+      ShopifySyncJobModel.countDocuments(runnableQuery),
+      ShopifySyncJobModel.findOne({ status: "queued" }).sort({ createdAt: 1 }).lean(),
+      ShopifySyncJobModel.find({}).sort({ createdAt: -1 }).limit(10).lean(),
+    ]);
+
+  return {
+    dbName: getShopifySyncJobDbName(),
+    collectionName: getShopifySyncJobCollectionName(),
+    counts: {
+      queued: queuedCount,
+      retry_scheduled: retryScheduledCount,
+      processing: processingCount,
+      failed: failedCount,
+      succeeded: succeededCount,
+    },
+    nextRunnableCount,
+    oldestQueuedJobId: oldestQueuedJob?._id ? String(oldestQueuedJob._id) : null,
+    oldestQueuedNextRunAt: oldestQueuedJob?.nextRunAt ? new Date(oldestQueuedJob.nextRunAt).toISOString() : null,
+    queryUsed: {
+      statusIn: RUNNABLE_JOB_STATUSES,
+      nextRunAt: "missing|null|<=now",
+    },
+    latestJobs,
+  };
 }
 
 async function findExistingActiveJob(filter: {
@@ -67,10 +139,13 @@ export async function enqueueShopifySyncJob(input: {
   payload?: Record<string, unknown>;
   maxAttempts?: number;
   nextRunAt?: Date;
+  runId?: string;
+  logScope?: "artist" | "worker";
 }) {
   const existing = (await findExistingActiveJob(input)) as ShopifySyncJobRecord | null;
   if (existing?._id) return existing;
 
+  const nextRunAt = input.nextRunAt || new Date();
   const created = await ShopifySyncJobModel.create({
     type: input.type,
     status: "queued",
@@ -81,30 +156,67 @@ export async function enqueueShopifySyncJob(input: {
     artistKey: input.artistKey || undefined,
     reason: input.reason || undefined,
     payload: input.payload || undefined,
+    attempts: 0,
     maxAttempts: input.maxAttempts ?? 5,
-    nextRunAt: input.nextRunAt || new Date(),
+    nextRunAt,
   });
 
-  return created.toObject() as ShopifySyncJobRecord;
+  const createdJob = created.toObject() as ShopifySyncJobRecord;
+  const confirmed = await ShopifySyncJobModel.findById(created._id).lean();
+  const logPayload = {
+    jobId: String(created._id),
+    type: createdJob.type,
+    status: createdJob.status,
+    canonicalProductId: createdJob.canonicalProductId ? String(createdJob.canonicalProductId) : null,
+    productKey: createdJob.productKey || null,
+    canonicalArtistId: createdJob.canonicalArtistId ? String(createdJob.canonicalArtistId) : null,
+    nextRunAt: nextRunAt.toISOString(),
+    collectionName: getShopifySyncJobCollectionName(),
+    dbName: getShopifySyncJobDbName(),
+  };
+
+  if (input.logScope === "artist") {
+    logAutoSync("artist_app_shopify_sync_job_created", logPayload, { runId: input.runId, force: true });
+    logAutoSync(
+      "artist_app_shopify_sync_job_confirmed_in_db",
+      {
+        jobId: String(created._id),
+        found: Boolean(confirmed?._id),
+        status: confirmed?.status || null,
+        dbName: getShopifySyncJobDbName(),
+        collectionName: getShopifySyncJobCollectionName(),
+      },
+      { runId: input.runId, force: true },
+    );
+  } else if (input.logScope === "worker") {
+    logShopifyWorker("worker_job_created", logPayload, { runId: input.runId, force: true });
+  }
+
+  return createdJob;
 }
 
 export async function queueProductPushJob(input: {
   canonicalProductId: string;
+  canonicalArtistId?: string | null;
   shopDomain: string;
   productKey: string;
   reason?: string;
   payload?: Record<string, unknown>;
+  runId?: string;
 }) {
   const job = await enqueueShopifySyncJob({
     type: "product_push",
     priority: 120,
     canonicalProductId: input.canonicalProductId,
+    canonicalArtistId: input.canonicalArtistId || undefined,
     productKey: input.productKey,
     reason: input.reason || "product_changed",
     payload: {
       shopDomain: input.shopDomain,
       ...(input.payload || {}),
     },
+    runId: input.runId,
+    logScope: "artist",
   });
 
   await CanonicalProductModel.updateOne(
@@ -129,6 +241,7 @@ export async function queueInventorySyncJob(input: {
   reason?: string;
   payload?: Record<string, unknown>;
   nextRunAt?: Date;
+  runId?: string;
 }) {
   const job = await enqueueShopifySyncJob({
     type: "inventory_sync",
@@ -141,6 +254,7 @@ export async function queueInventorySyncJob(input: {
       ...(input.payload || {}),
     },
     nextRunAt: input.nextRunAt,
+    runId: input.runId,
   });
 
   await CanonicalProductModel.updateOne(
@@ -162,6 +276,7 @@ export async function queueArtistPushJob(input: {
   artistKey: string;
   reason?: string;
   payload?: Record<string, unknown>;
+  runId?: string;
 }) {
   const job = await enqueueShopifySyncJob({
     type: "artist_push",
@@ -173,6 +288,8 @@ export async function queueArtistPushJob(input: {
       shopDomain: input.shopDomain,
       ...(input.payload || {}),
     },
+    runId: input.runId,
+    logScope: "artist",
   });
 
   await CanonicalArtistModel.updateOne(
