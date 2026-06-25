@@ -204,7 +204,7 @@
 
   function trackPageViews() {
     var context = pageContext();
-    if (context.artistSlug && /^\/(?:pages\/kuenstler|artist)\//i.test(context.path)) {
+    if (/^\/(?:pages\/kuenstler|artist)\//i.test(context.path)) {
       sendPayload(payloadForEvent("artist_profile_view", document.body));
     }
     if (context.productHandle && /^\/products\//i.test(context.path)) {
