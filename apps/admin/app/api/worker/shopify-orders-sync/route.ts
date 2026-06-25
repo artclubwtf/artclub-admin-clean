@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { backfillShopifyOrders } from "@/lib/shopifyOrderBackfill";
 import { connectMongo } from "@/lib/mongodb";
 import { resolveShopDomain } from "@/lib/shopDomain";
-import { createSyncRunId, logSyncError } from "@/lib/sync/syncLogger";
+import { createSyncRunId, logShopifyPull, logSyncError } from "@/lib/sync/syncLogger";
 import { hasValidWorkerSecret } from "@/lib/workerAuth";
 import { SyncStateModel } from "@/models/SyncState";
 
@@ -17,11 +17,39 @@ function isoWithOverlap(date: Date | null, overlapMinutes: number) {
 }
 
 export async function POST(req: Request) {
-  if (!hasValidWorkerSecret(req)) return unauthorized();
+  const runId = createSyncRunId("shopify-orders-sync");
+  logShopifyPull(
+    "route_hit",
+    {
+      path: new URL(req.url).pathname,
+      shopifyOrderId: null,
+      orderName: null,
+      fetchedFromShopify: false,
+      cached: false,
+      matchedLineItems: 0,
+      unmatchedLineItems: 0,
+    },
+    { runId, force: true },
+  );
+
+  if (!hasValidWorkerSecret(req)) {
+    logShopifyPull(
+      "shopify_orders_worker_sync_unauthorized",
+      {
+        shopifyOrderId: null,
+        orderName: null,
+        fetchedFromShopify: false,
+        cached: false,
+        matchedLineItems: 0,
+        unmatchedLineItems: 0,
+      },
+      { runId, force: true },
+    );
+    return unauthorized();
+  }
 
   const body = (await req.json().catch(() => null)) as { limitPerPage?: number; maxPages?: number; overlapMinutes?: number } | null;
   const shopDomain = resolveShopDomain();
-  const runId = createSyncRunId("shopify-orders-sync");
 
   if (!shopDomain) {
     return NextResponse.json({ ok: false, error: "missing_shopify_shop_domain", runId }, { status: 500 });
@@ -44,6 +72,23 @@ export async function POST(req: Request) {
       runId,
     });
 
+    logShopifyPull(
+      "shopify_orders_worker_sync_completed",
+      {
+        shopifyOrderId: null,
+        orderName: null,
+        fetchedFromShopify: result.processedOrdersCount > 0,
+        cached: result.importedOrdersCount > 0,
+        matchedLineItems: result.matchedLineItemsCount,
+        unmatchedLineItems: result.unmatchedLineItemsCount,
+        processedOrdersCount: result.processedOrdersCount,
+        importedOrdersCount: result.importedOrdersCount,
+        skippedOrdersCount: result.skippedOrdersCount,
+        since,
+      },
+      { runId, force: true },
+    );
+
     await SyncStateModel.findOneAndUpdate(
       { shopDomain, scope: "shopify_orders_sync" },
       {
@@ -58,6 +103,19 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ since, runId, ...result }, { status: 200 });
   } catch (error) {
+    logShopifyPull(
+      "shopify_orders_worker_sync_failed",
+      {
+        shopifyOrderId: null,
+        orderName: null,
+        fetchedFromShopify: false,
+        cached: false,
+        matchedLineItems: 0,
+        unmatchedLineItems: 0,
+        since,
+      },
+      { runId, force: true },
+    );
     await SyncStateModel.findOneAndUpdate(
       { shopDomain, scope: "shopify_orders_sync" },
       {

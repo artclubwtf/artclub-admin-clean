@@ -14,6 +14,17 @@ type LocationsResponse = {
   cities: { country: string; city: string; orders: number; revenue: number }[];
   updatedAt?: string;
 };
+type OrderSyncDiagnosticsResponse = {
+  cachedOrdersCount: number;
+  lastOrderSyncAt: string | null;
+  latestWebhookReceivedAt: string | null;
+  latestWorkerSyncAt: string | null;
+  lastSyncError?: string | null;
+  matchedLineItemsCount: number;
+  unmatchedLineItemsCount: number;
+  latestCachedOrders?: { shopifyOrderId: string; orderName: string; createdAt: string | null }[];
+  errors?: { scope: string; lastError: string | null; lastRunAt: string | null; lastSuccessAt: string | null }[];
+};
 
 type Ga4NotConfigured = { ok: false; code: "not_configured"; message: string; required: string[] };
 type Ga4ErrorResponse = { ok: false; code: string; message: string; required?: string[] };
@@ -84,6 +95,7 @@ export default function AnalyticsPageClient() {
   const [locations, setLocations] = useState<LocationsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [orderSyncDiagnostics, setOrderSyncDiagnostics] = useState<OrderSyncDiagnosticsResponse | null>(null);
   const [gaData, setGaData] = useState<Ga4Response | null>(null);
   const [gaLoading, setGaLoading] = useState(false);
   const [gaError, setGaError] = useState<string | null>(null);
@@ -122,9 +134,10 @@ export default function AnalyticsPageClient() {
       setError(null);
       try {
         const params = new URLSearchParams({ since: sinceIso, until: untilIso });
-        const [overviewRes, locationsRes] = await Promise.all([
+        const [overviewRes, locationsRes, diagnosticsRes] = await Promise.all([
           fetch(`/api/analytics/overview?${params.toString()}`, { cache: "no-store" }),
           fetch(`/api/analytics/locations?${params.toString()}&limit=8`, { cache: "no-store" }),
+          fetch("/api/admin/sync/shopify/orders/diagnostics?limit=5", { cache: "no-store" }),
         ]);
 
         if (!overviewRes.ok) {
@@ -136,10 +149,15 @@ export default function AnalyticsPageClient() {
           throw new Error(payload?.error || "Failed to load locations");
         }
 
-        const [overviewJson, locationsJson] = await Promise.all([overviewRes.json(), locationsRes.json()]);
+        const [overviewJson, locationsJson, diagnosticsJson] = await Promise.all([
+          overviewRes.json(),
+          locationsRes.json(),
+          diagnosticsRes.ok ? diagnosticsRes.json() : Promise.resolve(null),
+        ]);
         if (!active) return;
         setOverview(overviewJson as OverviewResponse);
         setLocations(locationsJson as LocationsResponse);
+        setOrderSyncDiagnostics(diagnosticsJson as OrderSyncDiagnosticsResponse | null);
       } catch (err) {
         if (!active) return;
         const message = err instanceof Error ? err.message : "Failed to load analytics";
@@ -339,6 +357,8 @@ export default function AnalyticsPageClient() {
   const gaCities = gaData && gaData.ok ? gaData.geoTopCities : [];
   const gaDevices = gaData && gaData.ok ? gaData.devices : [];
   const gaSources = gaData && gaData.ok ? gaData.sources : [];
+  const lastSyncError =
+    orderSyncDiagnostics?.lastSyncError || orderSyncDiagnostics?.errors?.find((entry) => entry.lastError)?.lastError || null;
 
   return (
     <div className="admin-dashboard">
@@ -384,6 +404,57 @@ export default function AnalyticsPageClient() {
         <>
           {error && <p className="text-sm text-red-600">{error}</p>}
           {renderKpiCards()}
+          <section className="acSection">
+            <div className="card">
+              <div className="cardHeader">
+                <div>
+                  <p className="text-sm text-slate-500 m-0">Shopify order sync</p>
+                  <strong className="text-lg">Auto-sync status</strong>
+                </div>
+              </div>
+              <div className="ac-divider" />
+              <div className="admin-cards-grid">
+                <div className="admin-stat-card">
+                  <small>Last order sync</small>
+                  <strong>
+                    {orderSyncDiagnostics?.lastOrderSyncAt
+                      ? new Date(orderSyncDiagnostics.lastOrderSyncAt).toLocaleString()
+                      : "Never"}
+                  </strong>
+                </div>
+                <div className="admin-stat-card">
+                  <small>Last webhook</small>
+                  <strong>
+                    {orderSyncDiagnostics?.latestWebhookReceivedAt
+                      ? new Date(orderSyncDiagnostics.latestWebhookReceivedAt).toLocaleString()
+                      : "Never"}
+                  </strong>
+                </div>
+                <div className="admin-stat-card">
+                  <small>Cached orders</small>
+                  <strong>{formatNumber(orderSyncDiagnostics?.cachedOrdersCount)}</strong>
+                </div>
+                <div className="admin-stat-card">
+                  <small>Matched line items</small>
+                  <strong>{formatNumber(orderSyncDiagnostics?.matchedLineItemsCount)}</strong>
+                  <p className="text-xs text-slate-500 m-0">
+                    Unmatched: {formatNumber(orderSyncDiagnostics?.unmatchedLineItemsCount)}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-col gap-2 text-sm text-slate-600">
+                <span>Last sync error: {lastSyncError || "None"}</span>
+                {orderSyncDiagnostics?.latestCachedOrders?.length ? (
+                  <span>
+                    Latest cached orders:{" "}
+                    {orderSyncDiagnostics.latestCachedOrders
+                      .map((order) => order.orderName || order.shopifyOrderId)
+                      .join(", ")}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </section>
           <section className="acSection">
             <div className="acSectionHeader">
               <div>

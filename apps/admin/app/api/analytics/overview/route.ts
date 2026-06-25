@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectMongo } from "@/lib/mongodb";
+import { ensureFreshShopifyOrderCache } from "@/lib/shopifyOrderAutoSync";
 import { isCountableShopifyOrder } from "@/lib/shopifyOrderStatus";
 import { ShopifyOrderCacheModel } from "@/models/ShopifyOrderCache";
 import { PosOrderModel } from "@/models/PosOrder";
@@ -82,6 +83,11 @@ export async function GET(req: Request) {
     const { since, until } = resolveRange(searchParams);
 
     await connectMongo();
+    try {
+      await ensureFreshShopifyOrderCache({ reason: "admin_analytics_overview" });
+    } catch (error) {
+      console.error("Failed to auto-sync Shopify orders for analytics overview", error);
+    }
 
     const shopifyMatch: Record<string, unknown> = {};
     const posMatch: Record<string, unknown> = {};

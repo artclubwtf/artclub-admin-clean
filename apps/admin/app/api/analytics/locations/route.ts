@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectMongo } from "@/lib/mongodb";
+import { ensureFreshShopifyOrderCache } from "@/lib/shopifyOrderAutoSync";
 import { isCountableShopifyOrder } from "@/lib/shopifyOrderStatus";
 import { ShopifyOrderCacheModel } from "@/models/ShopifyOrderCache";
 import { PosOrderModel } from "@/models/PosOrder";
@@ -105,6 +106,11 @@ export async function GET(req: Request) {
     const limit = Number.isFinite(limitParam) ? Math.min(Math.max(1, Math.floor(limitParam)), 50) : 5;
 
     await connectMongo();
+    try {
+      await ensureFreshShopifyOrderCache({ reason: "admin_analytics_locations" });
+    } catch (error) {
+      console.error("Failed to auto-sync Shopify orders for analytics locations", error);
+    }
 
     const shopifyMatch: Record<string, unknown> = {};
     const posMatch: Record<string, unknown> = {};

@@ -2,6 +2,7 @@ import type { ArtistEarningsOrderStatus, ArtistEarningsPayoutStatus, ArtistEarni
 
 import { artistEarningsResponse } from "@artclub/models";
 
+import { ensureFreshShopifyOrderCache } from "../../../admin/lib/shopifyOrderAutoSync";
 import type { ArtistContext } from "@/lib/server/artist-context";
 import { connectMongo } from "@/lib/server/mongodb";
 import {
@@ -109,6 +110,12 @@ export async function loadArtistEarnings(context: ArtistContext): Promise<Artist
 
   if (!canonicalArtist) {
     return finalizeEarningsResponse(context, buildEmptyResponse());
+  }
+
+  try {
+    await ensureFreshShopifyOrderCache({ reason: "artist_earnings" });
+  } catch (error) {
+    console.error("Failed to auto-sync Shopify orders for artist earnings", error);
   }
 
   const [orders, payouts] = await Promise.all([

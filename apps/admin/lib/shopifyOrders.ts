@@ -1,4 +1,4 @@
-import { PRODUCT_METAFIELD_KEYS, SHOPIFY_PRODUCT_NAMESPACE_CUSTOM } from "@/lib/shopify";
+import { PRODUCT_METAFIELD_KEYS, SHOPIFY_PRODUCT_NAMESPACE_CUSTOM } from "./shopify";
 
 type MoneySet = { shopMoney?: { amount?: string | null; currencyCode?: string | null } | null } | null;
 

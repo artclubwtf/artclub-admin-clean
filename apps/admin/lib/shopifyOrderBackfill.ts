@@ -1,18 +1,19 @@
 import { Types } from "mongoose";
 
-import { fetchShopifyOrders, type ShopifyOrder, type ShopifyOrderLine } from "@/lib/shopifyOrders";
+import { fetchShopifyOrders, type ShopifyOrder, type ShopifyOrderLine } from "./shopifyOrders";
 import {
   isCancelledShopifyOrder,
   isCountableShopifyOrder,
   isFullyRefundedShopifyOrder,
-} from "@/lib/shopifyOrderStatus";
-import { resolveShopDomain } from "@/lib/shopDomain";
-import { logShopifyPull } from "@/lib/sync/syncLogger";
-import { CanonicalArtistModel } from "@/models/CanonicalArtist";
-import { CanonicalProductModel } from "@/models/CanonicalProduct";
-import { CanonicalVariantModel } from "@/models/CanonicalVariant";
-import { ContractTermsModel } from "@/models/ContractTerms";
-import { orderSaleTypes, ShopifyOrderCacheModel } from "@/models/ShopifyOrderCache";
+} from "./shopifyOrderStatus";
+import { resolveShopDomain } from "./shopDomain";
+import { logShopifyPull } from "./sync/syncLogger";
+import { CanonicalArtistModel } from "../models/CanonicalArtist";
+import { CanonicalProductModel } from "../models/CanonicalProduct";
+import { CanonicalVariantModel } from "../models/CanonicalVariant";
+import { ContractTermsModel } from "../models/ContractTerms";
+import { orderSaleTypes, ShopifyOrderCacheModel } from "../models/ShopifyOrderCache";
+import { SyncStateModel } from "../models/SyncState";
 
 type InferredSaleType = (typeof orderSaleTypes)[number];
 type PayoutStatus = "pending" | "eligible" | "paid" | "refunded" | "cancelled";
@@ -576,25 +577,37 @@ export async function getShopifyOrdersDiagnostics(params?: { limit?: number; sin
   const limit = Math.min(Math.max(1, Math.floor(params?.limit || 20)), 100);
   const since = parseDate(params?.since);
   const until = parseDate(params?.until);
-  const latestOrders = await ShopifyOrderCacheModel.find({})
-    .sort({ createdAt: -1, updatedAt: -1 })
-    .limit(limit)
-    .select({
-      _id: 1,
-      shopDomain: 1,
-      shopifyOrderGid: 1,
-      orderName: 1,
-      createdAt: 1,
-      financialStatus: 1,
-      fulfillmentStatus: 1,
-      cancelledAt: 1,
-      refundedTotalGross: 1,
-      totalGross: 1,
-      currency: 1,
-      lineItems: 1,
-      lastImportedAt: 1,
-    })
-    .lean();
+  const shopDomain = resolveShopDomain();
+  const [cachedOrdersCount, latestOrders, syncStates] = await Promise.all([
+    ShopifyOrderCacheModel.countDocuments({}),
+    ShopifyOrderCacheModel.find({})
+      .sort({ createdAt: -1, updatedAt: -1 })
+      .limit(limit)
+      .select({
+        _id: 1,
+        shopDomain: 1,
+        shopifyOrderGid: 1,
+        orderName: 1,
+        createdAt: 1,
+        financialStatus: 1,
+        fulfillmentStatus: 1,
+        cancelledAt: 1,
+        refundedTotalGross: 1,
+        totalGross: 1,
+        currency: 1,
+        lineItems: 1,
+        lastImportedAt: 1,
+      })
+      .lean(),
+    shopDomain
+      ? SyncStateModel.find({
+          shopDomain,
+          scope: { $in: ["shopify_orders_webhook", "shopify_orders_sync"] },
+        })
+          .select({ scope: 1, lastRunAt: 1, lastSuccessAt: 1, lastError: 1 })
+          .lean()
+      : [],
+  ]);
 
   const matchedOrderItems: Array<Record<string, unknown>> = [];
   const unmatchedOrderItems: Array<Record<string, unknown>> = [];
@@ -642,15 +655,50 @@ export async function getShopifyOrdersDiagnostics(params?: { limit?: number; sin
     }
   }
 
+  const webhookState = syncStates.find((state) => state.scope === "shopify_orders_webhook") || null;
+  const workerState = syncStates.find((state) => state.scope === "shopify_orders_sync") || null;
+  const lastOrderSyncAt = [webhookState?.lastRunAt, workerState?.lastSuccessAt]
+    .filter((value): value is Date => value instanceof Date)
+    .sort((left, right) => right.getTime() - left.getTime())[0];
+  const errors = syncStates
+    .filter((state) => state.lastError)
+    .map((state) => ({
+      scope: state.scope,
+      lastError: state.lastError || null,
+      lastRunAt: state.lastRunAt ? new Date(state.lastRunAt).toISOString() : null,
+      lastSuccessAt: state.lastSuccessAt ? new Date(state.lastSuccessAt).toISOString() : null,
+    }));
+  const lastSyncError = errors[0]?.lastError || null;
+
   return {
     range: {
       since: since ? since.toISOString() : null,
       until: until ? until.toISOString() : null,
     },
+    cachedOrdersCount,
+    lastOrderSyncAt: lastOrderSyncAt ? new Date(lastOrderSyncAt).toISOString() : null,
+    latestWebhookReceivedAt: webhookState?.lastRunAt ? new Date(webhookState.lastRunAt).toISOString() : null,
+    latestWorkerSyncAt: workerState?.lastSuccessAt ? new Date(workerState.lastSuccessAt).toISOString() : null,
+    lastSyncError,
     totals: {
       totalCachedRevenue,
       analyticsRevenue,
     },
+    latestCachedOrders: latestOrders.map((order) => ({
+      id: String(order._id),
+      shopDomain: order.shopDomain || null,
+      shopifyOrderId: order.shopifyOrderGid,
+      orderName: order.orderName,
+      createdAt: order.createdAt ? new Date(order.createdAt).toISOString() : null,
+      financialStatus: order.financialStatus || null,
+      fulfillmentStatus: order.fulfillmentStatus || null,
+      cancelledAt: order.cancelledAt ? new Date(order.cancelledAt).toISOString() : null,
+      refundedTotalGross: Number(order.refundedTotalGross || 0),
+      totalGross: Number(order.totalGross || 0),
+      currency: order.currency || "EUR",
+      lineItemCount: Array.isArray(order.lineItems) ? order.lineItems.length : 0,
+      lastImportedAt: order.lastImportedAt ? new Date(order.lastImportedAt).toISOString() : null,
+    })),
     latestOrders: latestOrders.map((order) => ({
       id: String(order._id),
       shopDomain: order.shopDomain || null,
@@ -666,8 +714,13 @@ export async function getShopifyOrdersDiagnostics(params?: { limit?: number; sin
       lineItemCount: Array.isArray(order.lineItems) ? order.lineItems.length : 0,
       lastImportedAt: order.lastImportedAt ? new Date(order.lastImportedAt).toISOString() : null,
     })),
+    matchedLineItemsCount: matchedOrderItems.length,
+    unmatchedLineItemsCount: unmatchedOrderItems.length,
     matchedOrderItems: matchedOrderItems.slice(0, limit),
     unmatchedOrderItems: unmatchedOrderItems.slice(0, limit),
     artistEarningsRelevantLineItems: artistEarningsRelevantLineItems.slice(0, limit),
+    matchedLineItems: matchedOrderItems.slice(0, limit),
+    unmatchedLineItems: unmatchedOrderItems.slice(0, limit),
+    errors,
   };
 }
