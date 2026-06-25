@@ -37,8 +37,7 @@ export type ShopifyOrdersResult = {
 
 function mapShopifyOrderNode(node: any): ShopifyOrder {
   const total = parseMoney(node?.currentTotalPriceSet);
-  const refund = parseMoney(node?.currentTotalRefundedSet);
-  const currency = total.currencyCode || "EUR";
+  const currency = node?.currencyCode ?? total.currencyCode ?? "EUR";
 
   const lineItems: ShopifyOrderLine[] =
     node?.lineItems?.edges?.map(({ node: li }: any) => {
@@ -72,13 +71,47 @@ function mapShopifyOrderNode(node: any): ShopifyOrder {
     processedAt: node?.processedAt ?? null,
     financialStatus: node?.displayFinancialStatus ?? null,
     fulfillmentStatus: node?.displayFulfillmentStatus ?? null,
-    cancelledAt: node?.canceledAt ?? null,
-    refundedTotalGross: refund.amount ?? 0,
+    cancelledAt: node?.cancelledAt ?? null,
+    refundedTotalGross: 0,
     currency,
     totalGross: total.amount ?? 0,
     lineItems,
   };
 }
+
+const SHOPIFY_ORDER_FIELDS = `
+  id
+  name
+  createdAt
+  processedAt
+  currencyCode
+  displayFinancialStatus
+  displayFulfillmentStatus
+  cancelledAt
+  currentTotalPriceSet { shopMoney { amount currencyCode } }
+  lineItems(first: 100) {
+    edges {
+      node {
+        id
+        title
+        quantity
+        originalUnitPriceSet { shopMoney { amount currencyCode } }
+        originalTotalSet { shopMoney { amount currencyCode } }
+        discountedTotalSet { shopMoney { amount currencyCode } }
+        variant { id title }
+        product {
+          id
+          handle
+          title
+          tags
+          metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.artistMetaobject}") {
+            reference { ... on Metaobject { id handle } }
+          }
+        }
+      }
+    }
+  }
+`;
 
 function getShopifyEnv(): { shop: string; token: string; version: string } {
   const shop = process.env.SHOPIFY_SHOP_DOMAIN || process.env.SHOPIFY_STORE_DOMAIN;
@@ -126,37 +159,7 @@ export async function fetchShopifyOrders(params: {
         edges {
           cursor
           node {
-            id
-            name
-            createdAt
-            processedAt
-            displayFinancialStatus
-            displayFulfillmentStatus
-            canceledAt
-            currentTotalPriceSet { shopMoney { amount currencyCode } }
-            currentTotalRefundedSet { shopMoney { amount currencyCode } }
-            lineItems(first: 100) {
-              edges {
-                node {
-                  id
-                  title
-                  quantity
-                  originalUnitPriceSet { shopMoney { amount currencyCode } }
-                  originalTotalSet { shopMoney { amount currencyCode } }
-                  discountedTotalSet { shopMoney { amount currencyCode } }
-                  variant { id title }
-                  product {
-                    id
-                    handle
-                    title
-                    tags
-                    metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.artistMetaobject}") {
-                      reference { ... on Metaobject { id handle } }
-                    }
-                  }
-                }
-              }
-            }
+            ${SHOPIFY_ORDER_FIELDS}
           }
         }
         pageInfo { hasNextPage endCursor }
@@ -210,37 +213,7 @@ export async function fetchShopifyOrderById(orderId: string): Promise<ShopifyOrd
   const graphQuery = `
     query OrderById($id: ID!) {
       order(id: $id) {
-        id
-        name
-        createdAt
-        processedAt
-        displayFinancialStatus
-        displayFulfillmentStatus
-        canceledAt
-        currentTotalPriceSet { shopMoney { amount currencyCode } }
-        currentTotalRefundedSet { shopMoney { amount currencyCode } }
-        lineItems(first: 100) {
-          edges {
-            node {
-              id
-              title
-              quantity
-              originalUnitPriceSet { shopMoney { amount currencyCode } }
-              originalTotalSet { shopMoney { amount currencyCode } }
-              discountedTotalSet { shopMoney { amount currencyCode } }
-              variant { id title }
-              product {
-                id
-                handle
-                title
-                tags
-                metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.artistMetaobject}") {
-                  reference { ... on Metaobject { id handle } }
-                }
-              }
-            }
-          }
-        }
+        ${SHOPIFY_ORDER_FIELDS}
       }
     }
   `;

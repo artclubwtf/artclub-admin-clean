@@ -1,5 +1,12 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
+export type ShopifyWebhookHmacValidation = {
+  webhookSecretPresent: boolean;
+  hmacHeaderPresent: boolean;
+  rawBodyLength: number;
+  hmacValid: boolean;
+};
+
 function safeEqual(left: string, right: string) {
   const leftBuffer = Buffer.from(left);
   const rightBuffer = Buffer.from(right);
@@ -7,11 +14,33 @@ function safeEqual(left: string, right: string) {
   return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-export function validateShopifyWebhookHmac(rawBody: string, providedHmac: string | null) {
+export function getShopifyWebhookHmacValidation(rawBody: string, providedHmac: string | null): ShopifyWebhookHmacValidation {
   const secret = (process.env.SHOPIFY_WEBHOOK_SECRET || "").trim();
-  if (!secret || !providedHmac) return false;
+  const normalizedHmac = providedHmac?.trim() || "";
+  const webhookSecretPresent = Boolean(secret);
+  const hmacHeaderPresent = Boolean(normalizedHmac);
+  const rawBodyLength = Buffer.byteLength(rawBody, "utf8");
+
+  if (!webhookSecretPresent || !hmacHeaderPresent) {
+    return {
+      webhookSecretPresent,
+      hmacHeaderPresent,
+      rawBodyLength,
+      hmacValid: false,
+    };
+  }
+
   const expected = createHmac("sha256", secret).update(rawBody, "utf8").digest("base64");
-  return safeEqual(expected, providedHmac.trim());
+  return {
+    webhookSecretPresent,
+    hmacHeaderPresent,
+    rawBodyLength,
+    hmacValid: safeEqual(expected, normalizedHmac),
+  };
+}
+
+export function validateShopifyWebhookHmac(rawBody: string, providedHmac: string | null) {
+  return getShopifyWebhookHmacValidation(rawBody, providedHmac).hmacValid;
 }
 
 function toOrderGidFromNumeric(value: unknown) {

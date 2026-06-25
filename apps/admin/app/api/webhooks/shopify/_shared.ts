@@ -5,7 +5,7 @@ import { fetchShopifyOrderById } from "@/lib/shopifyOrders";
 import { connectMongo } from "@/lib/mongodb";
 import { resolveShopDomain } from "@/lib/shopDomain";
 import { createSyncRunId, logShopifyPull, logSyncError } from "@/lib/sync/syncLogger";
-import { extractShopifyWebhookOrderGid, validateShopifyWebhookHmac } from "@/lib/shopifyWebhook";
+import { extractShopifyWebhookOrderGid, getShopifyWebhookHmacValidation } from "@/lib/shopifyWebhook";
 import { SyncStateModel } from "@/models/SyncState";
 
 export const runtime = "nodejs";
@@ -47,11 +47,19 @@ export async function handleShopifyOrderWebhook(req: Request, topic: string) {
   const runId = createSyncRunId(`shopify-orders-webhook-${topic.replace(/[^\w-]+/g, "-")}`);
   const rawBody = await req.text();
   const providedHmac = req.headers.get("x-shopify-hmac-sha256");
+  const hmacValidation = getShopifyWebhookHmacValidation(rawBody, providedHmac);
+  const webhookLogBase = {
+    topic,
+    webhook_secret_present: hmacValidation.webhookSecretPresent,
+    hmac_header_present: hmacValidation.hmacHeaderPresent,
+    raw_body_length: hmacValidation.rawBodyLength,
+    hmac_valid: hmacValidation.hmacValid,
+  };
 
   logShopifyPull(
     "route_hit",
     {
-      topic,
+      ...webhookLogBase,
       path: new URL(req.url).pathname,
       shopifyOrderId: null,
       orderName: null,
@@ -65,7 +73,7 @@ export async function handleShopifyOrderWebhook(req: Request, topic: string) {
   logShopifyPull(
     "shopify_order_webhook_received",
     {
-      topic,
+      ...webhookLogBase,
       shopifyOrderId: null,
       orderName: null,
       fetchedFromShopify: false,
@@ -76,11 +84,11 @@ export async function handleShopifyOrderWebhook(req: Request, topic: string) {
     { runId, force: true },
   );
 
-  if (!validateShopifyWebhookHmac(rawBody, providedHmac)) {
+  if (!hmacValidation.hmacValid) {
     logShopifyPull(
       "hmac_invalid",
       {
-        topic,
+        ...webhookLogBase,
         shopifyOrderId: null,
         orderName: null,
         fetchedFromShopify: false,
@@ -117,7 +125,7 @@ export async function handleShopifyOrderWebhook(req: Request, topic: string) {
   logShopifyPull(
     "hmac_valid",
     {
-      topic,
+      ...webhookLogBase,
       shopifyOrderId: orderGid,
       orderName,
       fetchedFromShopify: false,
@@ -130,7 +138,7 @@ export async function handleShopifyOrderWebhook(req: Request, topic: string) {
   logShopifyPull(
     "shopify_order_webhook_hmac_valid",
     {
-      topic,
+      ...webhookLogBase,
       shopifyOrderId: orderGid,
       orderName,
       fetchedFromShopify: false,
