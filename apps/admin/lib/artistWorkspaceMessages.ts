@@ -11,6 +11,7 @@ import { workspaceConversationReferenceKinds } from "@artclub/models";
 import { connectMongo } from "./mongodb";
 import { ensureArtistWorkspaceThreadIndexes } from "./artistWorkspaceThreadIndexes";
 import { ArtistMediaV2Model } from "../models/ArtistMediaV2";
+import { CanonicalArtistModel } from "../models/CanonicalArtist";
 import { ArtistWorkspaceMessageModel } from "../models/ArtistWorkspaceMessage";
 import { ArtistWorkspaceThreadModel } from "../models/ArtistWorkspaceThread";
 import { UserModel } from "../models/User";
@@ -75,6 +76,50 @@ export type WorkspaceConversationDetail = {
   };
   messages: WorkspaceMessageItem[];
 };
+
+export type AdminWorkspaceArtistSummary = {
+  canonicalArtistId: string | null;
+  artistUserId: string | null;
+  artistKey: string;
+  artistName: string;
+  artistAvatarUrl: string | null;
+  artistEmail: string | null;
+  shopDomain: string;
+};
+
+export type AdminWorkspaceConversationSummary = WorkspaceConversationSummary & {
+  artist: AdminWorkspaceArtistSummary;
+};
+
+export type AdminWorkspaceConversationDetail = WorkspaceConversationDetail & {
+  artist: AdminWorkspaceArtistSummary;
+};
+
+type WorkspaceThreadLean = {
+  _id: Types.ObjectId;
+  shopDomain: string;
+  artistKey: string;
+  userId: Types.ObjectId;
+  subject?: string | null;
+  type?: WorkspaceConversationType;
+  status?: WorkspaceConversationStatus;
+  lastMessageAt?: Date | null;
+  lastMessagePreview?: string | null;
+  lastMessageSenderRole?: WorkspaceSenderRole | null;
+  artistLastReadAt?: Date | null;
+  teamLastReadAt?: Date | null;
+  references?: Array<{ kind: string; refId: string; label?: string | null }> | null;
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
+};
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function ownerLookupKey(input: { shopDomain: string; artistKey: string }) {
+  return `${input.shopDomain.toLowerCase().trim()}::${input.artistKey.trim()}`;
+}
 
 function buildDefaultMediaUrls(media: WorkspaceMediaDoc) {
   return {
@@ -188,20 +233,7 @@ async function countUnreadMessages(threadId: Types.ObjectId, since: Date | null 
 }
 
 async function toConversationSummary(
-  thread: {
-    _id: Types.ObjectId;
-    subject?: string | null;
-    type?: WorkspaceConversationType;
-    status?: WorkspaceConversationStatus;
-    lastMessageAt?: Date | null;
-    lastMessagePreview?: string | null;
-    lastMessageSenderRole?: WorkspaceSenderRole | null;
-    artistLastReadAt?: Date | null;
-    teamLastReadAt?: Date | null;
-    references?: Array<{ kind: string; refId: string; label?: string | null }> | null;
-    createdAt?: Date | null;
-    updatedAt?: Date | null;
-  },
+  thread: WorkspaceThreadLean,
   viewerRole: WorkspaceSenderRole,
 ) {
   const lastReadAt = viewerRole === "artist" ? thread.artistLastReadAt : thread.teamLastReadAt;
@@ -223,6 +255,58 @@ async function toConversationSummary(
     updatedAt: thread.updatedAt || null,
     referenceCount: Array.isArray(thread.references) ? thread.references.length : 0,
   } satisfies WorkspaceConversationSummary;
+}
+
+async function buildAdminArtistMap(threads: WorkspaceThreadLean[]) {
+  const ownerPairs = Array.from(new Set(threads.map((thread) => ownerLookupKey(thread))));
+  const userIds = Array.from(new Set(threads.map((thread) => thread.userId?.toString()).filter(Boolean))) as string[];
+
+  const [artists, users] = await Promise.all([
+    ownerPairs.length
+      ? CanonicalArtistModel.find({
+          $or: ownerPairs.map((pair) => {
+            const [shopDomain, artistKey] = pair.split("::");
+            return { shopDomain, artistKey };
+          }),
+        })
+          .select({ _id: 1, shopDomain: 1, artistKey: 1, displayName: 1, email: 1, profileImages: 1, linkedUserId: 1 })
+          .lean()
+      : [],
+    userIds.length
+      ? UserModel.find({ _id: { $in: userIds.map((id) => new Types.ObjectId(id)) } })
+          .select({ _id: 1, name: 1, email: 1, artistKey: 1, shopDomain: 1 })
+          .lean()
+      : [],
+  ]);
+
+  const userById = new Map(users.map((user) => [user._id.toString(), user]));
+  const artistMap = new Map(
+    artists.map((artist) => [
+      ownerLookupKey({ shopDomain: artist.shopDomain, artistKey: artist.artistKey }),
+      artist,
+    ]),
+  );
+
+  return { artistMap, userById };
+}
+
+function resolveAdminArtistSummary(
+  thread: WorkspaceThreadLean,
+  lookup: Awaited<ReturnType<typeof buildAdminArtistMap>>,
+): AdminWorkspaceArtistSummary {
+  const artist = lookup.artistMap.get(ownerLookupKey(thread));
+  const user = lookup.userById.get(thread.userId.toString());
+  const artistName = artist?.displayName?.trim() || user?.name?.trim() || thread.artistKey;
+
+  return {
+    canonicalArtistId: artist?._id ? String(artist._id) : null,
+    artistUserId: thread.userId ? String(thread.userId) : null,
+    artistKey: thread.artistKey,
+    artistName,
+    artistAvatarUrl: artist?.profileImages?.avatarUrl || null,
+    artistEmail: artist?.email || user?.email || null,
+    shopDomain: thread.shopDomain,
+  };
 }
 
 async function loadAttachmentsForMessages(
@@ -284,6 +368,80 @@ export async function listWorkspaceConversations(input: {
   return Promise.all(threads.map((thread) => toConversationSummary(thread, input.viewerRole)));
 }
 
+export async function listAdminWorkspaceConversations(input?: {
+  query?: string;
+  filter?: "all" | "unread" | "archived";
+}) {
+  await connectMongo();
+  await ensureArtistWorkspaceThreadIndexes();
+
+  const query = input?.query?.trim() || "";
+  const filter = input?.filter || "all";
+  const threadFilter: Record<string, unknown> = {};
+  if (filter === "archived") {
+    threadFilter.status = "archived";
+  }
+
+  if (query) {
+    const regex = new RegExp(escapeRegex(query), "i");
+    const [messageThreadIdsRaw, artistMatches, userMatches] = await Promise.all([
+      ArtistWorkspaceMessageModel.find({ text: regex }).distinct("threadId"),
+      CanonicalArtistModel.find({
+        $or: [{ displayName: regex }, { artistKey: regex }, { publicSlug: regex }],
+      })
+        .select({ shopDomain: 1, artistKey: 1 })
+        .lean(),
+      UserModel.find({
+        role: "artist",
+        $or: [{ name: regex }, { email: regex }, { artistKey: regex }],
+      })
+        .select({ shopDomain: 1, artistKey: 1 })
+        .lean(),
+    ]);
+
+    const ownerClauses = Array.from(
+      new Set(
+        [...artistMatches, ...userMatches]
+          .map((item) => (item.shopDomain && item.artistKey ? ownerLookupKey({ shopDomain: item.shopDomain, artistKey: item.artistKey }) : ""))
+          .filter(Boolean),
+      ),
+    ).map((pair) => {
+      const [shopDomain, artistKey] = pair.split("::");
+      return { shopDomain, artistKey };
+    });
+
+    const messageThreadIds = messageThreadIdsRaw
+      .map((value) => {
+        if (value instanceof Types.ObjectId) return value;
+        return Types.ObjectId.isValid(String(value)) ? new Types.ObjectId(String(value)) : null;
+      })
+      .filter((value): value is Types.ObjectId => Boolean(value));
+
+    threadFilter.$or = [
+      { subject: regex },
+      { lastMessagePreview: regex },
+      ...(ownerClauses.length ? ownerClauses : []),
+      ...(messageThreadIds.length ? [{ _id: { $in: messageThreadIds } }] : []),
+    ];
+  }
+
+  const threads = (await ArtistWorkspaceThreadModel.find(threadFilter)
+    .sort({ lastMessageAt: -1, createdAt: -1 })
+    .lean()) as WorkspaceThreadLean[];
+  const lookup = await buildAdminArtistMap(threads);
+
+  const summaries = (
+    await Promise.all(
+      threads.map(async (thread) => ({
+        ...(await toConversationSummary(thread, "team")),
+        artist: resolveAdminArtistSummary(thread, lookup),
+      })),
+    )
+  ) satisfies AdminWorkspaceConversationSummary[];
+
+  return filter === "unread" ? summaries.filter((conversation) => conversation.unreadCount > 0) : summaries;
+}
+
 export async function getWorkspaceConversationDetail(input: {
   shopDomain: string;
   artistKey: string;
@@ -329,13 +487,40 @@ export async function getWorkspaceConversationDetail(input: {
     messages: messages.map((message) => ({
       id: message._id.toString(),
       senderRole: message.senderRole,
-      senderLabel:
-        message.senderLabel || (message.senderRole === "artist" ? "Artist" : "ARTCLUB Team"),
+      senderLabel: message.senderRole === "team" ? "ARTCLUB Team" : message.senderLabel || "Artist",
       text: message.text || "",
       attachments: (message.mediaIds || []).map((id) => attachmentMap[id.toString()]).filter(Boolean),
       createdAt: message.createdAt || null,
     })),
   } satisfies WorkspaceConversationDetail;
+}
+
+export async function getAdminWorkspaceConversationDetail(input: { threadId: string; mediaUrlResolver?: MediaUrlResolver }) {
+  await connectMongo();
+  await ensureArtistWorkspaceThreadIndexes();
+
+  if (!Types.ObjectId.isValid(input.threadId)) return null;
+
+  const thread = (await ArtistWorkspaceThreadModel.findById(input.threadId).lean()) as WorkspaceThreadLean | null;
+  if (!thread) return null;
+
+  const [detail, lookup] = await Promise.all([
+    getWorkspaceConversationDetail({
+      shopDomain: thread.shopDomain,
+      artistKey: thread.artistKey,
+      threadId: thread._id.toString(),
+      viewerRole: "team",
+      mediaUrlResolver: input.mediaUrlResolver,
+    }),
+    buildAdminArtistMap([thread]),
+  ]);
+
+  if (!detail) return null;
+
+  return {
+    ...detail,
+    artist: resolveAdminArtistSummary(thread, lookup),
+  } satisfies AdminWorkspaceConversationDetail;
 }
 
 async function resolveAllowedMediaIds(input: { shopDomain: string; artistKey: string; mediaIds: string[] }) {
@@ -524,6 +709,60 @@ export async function markWorkspaceConversationRead(input: {
 
   if (!thread) return null;
   return toConversationSummary(thread, input.viewerRole);
+}
+
+export async function markAdminWorkspaceConversationRead(input: { threadId: string }) {
+  await connectMongo();
+  await ensureArtistWorkspaceThreadIndexes();
+
+  if (!Types.ObjectId.isValid(input.threadId)) return null;
+
+  const thread = (await ArtistWorkspaceThreadModel.findById(input.threadId).lean()) as WorkspaceThreadLean | null;
+  if (!thread) return null;
+
+  return markWorkspaceConversationRead({
+    shopDomain: thread.shopDomain,
+    artistKey: thread.artistKey,
+    threadId: thread._id.toString(),
+    viewerRole: "team",
+  });
+}
+
+export async function sendAdminWorkspaceMessage(input: {
+  threadId: string;
+  senderUserId?: Types.ObjectId | string | null;
+  text: string;
+  mediaIds?: string[];
+  mediaUrlResolver?: MediaUrlResolver;
+}) {
+  await connectMongo();
+  await ensureArtistWorkspaceThreadIndexes();
+
+  if (!Types.ObjectId.isValid(input.threadId)) {
+    throw new Error("invalid_thread_id");
+  }
+
+  const thread = (await ArtistWorkspaceThreadModel.findById(input.threadId).lean()) as WorkspaceThreadLean | null;
+  if (!thread) {
+    throw new Error("conversation_not_found");
+  }
+
+  return sendWorkspaceMessage({
+    shopDomain: thread.shopDomain,
+    artistKey: thread.artistKey,
+    threadId: thread._id.toString(),
+    senderRole: "team",
+    senderUserId: input.senderUserId,
+    senderLabel: "ARTCLUB Team",
+    text: input.text,
+    mediaIds: input.mediaIds,
+    mediaUrlResolver: input.mediaUrlResolver,
+  });
+}
+
+export async function countAdminUnreadConversations() {
+  const unread = await listAdminWorkspaceConversations({ filter: "unread" });
+  return unread.length;
 }
 
 export async function getOrCreateGeneralConversation(input: {

@@ -86,7 +86,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       userId: owner.userId,
       senderUserId: teamUser?.id || undefined,
       senderRole: "team",
-      senderLabel: teamUser?.name || "ARTCLUB Team",
+      senderLabel: "ARTCLUB Team",
       subject: createParsed.data.subject,
       type: createParsed.data.type,
       text: createParsed.data.text?.trim() || "",
@@ -120,7 +120,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     threadId: detail.conversation.id,
     senderRole: "team",
     senderUserId: teamUser?.id || undefined,
-    senderLabel: teamUser?.name || "ARTCLUB Team",
+    senderLabel: "ARTCLUB Team",
     text: messageParsed.data.text?.trim() || "",
     mediaIds: messageParsed.data.mediaIds,
   });

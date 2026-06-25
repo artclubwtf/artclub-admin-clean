@@ -2,9 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
-const navItems = [
+type NavItem = {
+  label: string;
+  href: string;
+  key?: "messages";
+};
+
+const navItems: NavItem[] = [
   { label: "Dashboard", href: "/admin" },
+  { label: "Messages", href: "/admin/messages", key: "messages" },
   { label: "Artistzentrale", href: "/admin/artists-v2" },
   { label: "Artists", href: "/admin/artists" },
   { label: "Artist Keys", href: "/admin/artists/keys" },
@@ -23,6 +31,29 @@ const navItems = [
 
 export default function AdminSidebar() {
   const pathname = usePathname() || "";
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadUnreadCount() {
+      try {
+        const res = await fetch("/api/admin/messages/unread-count", { cache: "no-store" });
+        const payload = (await res.json().catch(() => null)) as { count?: number } | null;
+        if (!active) return;
+        setUnreadCount(typeof payload?.count === "number" ? payload.count : 0);
+      } catch {
+        if (active) setUnreadCount(0);
+      }
+    }
+
+    void loadUnreadCount();
+    const intervalId = window.setInterval(loadUnreadCount, 15000);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   return (
     <aside className="admin-sidebar">
@@ -36,6 +67,7 @@ export default function AdminSidebar() {
           const matchesExact = pathname === item.href;
           const matchesNested = pathname.startsWith(`${item.href}/`);
           const isActive = matchesExact || (item.href !== "/admin" && matchesNested);
+          const showBadge = item.key === "messages" && unreadCount > 0;
           return (
             <Link
               key={item.href}
@@ -43,7 +75,8 @@ export default function AdminSidebar() {
               className={`admin-nav-link${isActive ? " active" : ""}`}
               aria-current={isActive ? "page" : undefined}
             >
-              {item.label}
+              <span>{item.label}</span>
+              {showBadge ? <span className="ml-auto inline-flex min-w-6 items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-semibold text-white">{unreadCount}</span> : null}
             </Link>
           );
         })}

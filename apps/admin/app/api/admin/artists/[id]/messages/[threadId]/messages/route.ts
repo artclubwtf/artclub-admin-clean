@@ -35,7 +35,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       threadId,
       senderRole: "team",
       senderUserId: session.user.id || undefined,
-      senderLabel: session.user.name || "ARTCLUB Team",
+      senderLabel: "ARTCLUB Team",
       text: parsed.data.text?.trim() || "",
       mediaIds: parsed.data.mediaIds,
     });
