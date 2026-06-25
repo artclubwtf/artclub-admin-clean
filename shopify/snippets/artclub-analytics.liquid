@@ -1,0 +1,32 @@
+{% comment %}
+  ARTCLUB Shopify analytics snippet.
+
+  Expected optional data attributes on artist/profile modules and artwork cards:
+  - data-artclub-track-impression="artist|artwork"
+  - data-artclub-track-click="artwork|shopify_product"
+  - data-artclub-artist-id="{{ canonical_artist_id }}"
+  - data-artclub-artist-slug="{{ artist_slug }}"
+  - data-artclub-product-id="{{ canonical_product_id }}"
+  - data-artclub-product-key="{{ product_key }}"
+  - data-artclub-shopify-product-id="{{ product.id }}"
+  - data-artclub-product-handle="{{ product.handle }}"
+
+  Replace `artclub_admin_base_url` with the deployed admin base URL that serves:
+  - /shopify/artclub-analytics.js
+  - /api/analytics/track
+{% endcomment %}
+
+{% assign artclub_admin_base_url = settings.artclub_admin_base_url | default: 'https://admin.example.com' %}
+
+<script>
+  window.ARTCLUB_ANALYTICS_CONFIG = {
+    endpoint: {{ artclub_admin_base_url | append: '/api/analytics/track' | json }},
+    canonicalArtistId: {{ canonical_artist_id | default: blank | json }},
+    artistSlug: {{ artist_slug | default: blank | json }},
+    canonicalProductId: {{ canonical_product_id | default: blank | json }},
+    productKey: {{ product_key | default: blank | json }},
+    shopifyProductId: {{ product.id | default: blank | json }},
+    productHandle: {{ product.handle | default: blank | json }}
+  };
+</script>
+<script src="{{ artclub_admin_base_url }}/shopify/artclub-analytics.js" defer crossorigin="anonymous"></script>

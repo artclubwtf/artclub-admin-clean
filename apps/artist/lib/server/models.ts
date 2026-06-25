@@ -20,3 +20,6 @@ export { ShopifyOrderCacheModel } from "../../../admin/models/ShopifyOrderCache"
 export { PayoutTransactionModel } from "../../../admin/models/PayoutTransaction";
 export { ContractTermsModel } from "../../../admin/models/ContractTerms";
 export { OrderLineOverrideModel } from "../../../admin/models/OrderLineOverride";
+export { AnalyticsDailyAggregateModel } from "../../../admin/models/AnalyticsDailyAggregate";
+export { AnalyticsEventModel } from "../../../admin/models/AnalyticsEvent";
+export { AnalyticsUniqueVisitorModel } from "../../../admin/models/AnalyticsUniqueVisitor";

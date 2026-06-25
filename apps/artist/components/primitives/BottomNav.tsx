@@ -46,6 +46,17 @@ function NavIcon({ item, active }: { item: BottomNavItem; active: boolean }) {
           <path d="M4 18.5h16" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
         </svg>
       );
+    case "analytics":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
+          <path d="M5 18.5h14" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+          <path d="M7.5 15.5 10.5 12.5l2.5 2.25 4-5.25" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="7.5" cy="15.5" r="1" fill="currentColor" />
+          <circle cx="10.5" cy="12.5" r="1" fill="currentColor" />
+          <circle cx="13" cy="14.75" r="1" fill="currentColor" />
+          <circle cx="17" cy="9.5" r="1" fill="currentColor" />
+        </svg>
+      );
     case "settings":
       return (
         <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
