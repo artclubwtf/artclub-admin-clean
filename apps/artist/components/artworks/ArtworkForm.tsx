@@ -12,6 +12,7 @@ import { Button } from "@/components/primitives/Button";
 import { Input } from "@/components/primitives/Input";
 import { PageTitle } from "@/components/primitives/PageTitle";
 import { Section } from "@/components/primitives/Section";
+import { useArtistSuccessNotice } from "@/components/feedback/ArtistSuccessNotice";
 import {
   buildPrintPricePreview,
   generateAspectRatioPrintSizes,
@@ -117,6 +118,7 @@ function mapArtworkError(code: string | undefined) {
 
 export function ArtworkForm({ mode, productKey, initialValue, series }: ArtworkFormProps) {
   const router = useRouter();
+  const { showSuccessNotice } = useArtistSuccessNotice();
   const value = initialValue || emptyValue;
 
   const [title, setTitle] = useState(value.title);
@@ -134,7 +136,6 @@ export function ArtworkForm({ mode, productKey, initialValue, series }: ArtworkF
   const [printSizeCodes, setPrintSizeCodes] = useState<string[]>(value.printSizeCodes);
   const [mediaItems, setMediaItems] = useState<ArtistMediaItem[]>(value.mediaItems);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const [isPending, startTransition] = useTransition();
 
@@ -253,39 +254,45 @@ export function ArtworkForm({ mode, productKey, initialValue, series }: ArtworkF
 
   async function submitForm() {
     setError(null);
-    setSuccess(null);
 
     startTransition(async () => {
-      const endpoint = mode === "create" ? "/api/artist/artworks" : `/api/artist/artworks/${encodeURIComponent(productKey || "")}`;
-      const method = mode === "create" ? "POST" : "PATCH";
-      const res = await fetch(endpoint, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          description,
-          year: year ? Number(year) : null,
-          originalWidthCm: parsedOriginalWidthCm,
-          originalHeightCm: parsedOriginalHeightCm,
-          originalPriceEur: originalPriceEur.trim() ? Number(originalPriceEur.replace(",", ".")) : null,
-          seriesId,
-          mediaIds: mediaItems.map((item) => item.id).filter(Boolean),
-          forSale,
-          originalAvailable,
-          printsEnabled,
-          printSizeCodes,
-        }),
-      });
-      const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; productKey?: string } | null;
-      if (!res.ok || !json?.ok) {
-        setError(mapArtworkError(json?.error));
-        return;
-      }
+      try {
+        const endpoint = mode === "create" ? "/api/artist/artworks" : `/api/artist/artworks/${encodeURIComponent(productKey || "")}`;
+        const method = mode === "create" ? "POST" : "PATCH";
+        const res = await fetch(endpoint, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title,
+            description,
+            year: year ? Number(year) : null,
+            originalWidthCm: parsedOriginalWidthCm,
+            originalHeightCm: parsedOriginalHeightCm,
+            originalPriceEur: originalPriceEur.trim() ? Number(originalPriceEur.replace(",", ".")) : null,
+            seriesId,
+            mediaIds: mediaItems.map((item) => item.id).filter(Boolean),
+            forSale,
+            originalAvailable,
+            printsEnabled,
+            printSizeCodes,
+          }),
+        });
+        const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; productKey?: string } | null;
+        if (!res.ok || !json?.ok) {
+          setError(mapArtworkError(json?.error));
+          return;
+        }
 
-      setSuccess(mode === "create" ? "Artwork created." : "Artwork updated.");
-      const nextKey = json?.productKey || productKey;
-      router.replace(nextKey ? `/artworks/${encodeURIComponent(nextKey)}` : "/artworks");
-      router.refresh();
+        showSuccessNotice("artwork", { persist: mode === "create" });
+        const nextKey = json?.productKey || productKey;
+        if (mode === "create" && nextKey) {
+          router.replace(`/artworks/${encodeURIComponent(nextKey)}`);
+          return;
+        }
+        router.refresh();
+      } catch {
+        setError("Could not save artwork.");
+      }
     });
   }
 
@@ -317,9 +324,7 @@ export function ArtworkForm({ mode, productKey, initialValue, series }: ArtworkF
         isLastStep={step === reviewStepIndex()}
         submitLabel={mode === "create" ? "Create artwork" : "Save artwork"}
         isSubmitting={isPending}
-        footerHint={
-          error ? <StatusMessage tone="error">{error}</StatusMessage> : success ? <StatusMessage tone="success">{success}</StatusMessage> : null
-        }
+        footerHint={error ? <StatusMessage tone="error">{error}</StatusMessage> : null}
       >
         {step === 0 ? (
           <Section title="Images" subtitle="Uploads create ArtistMediaV2 entries and link them into the artwork.">

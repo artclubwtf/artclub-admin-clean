@@ -189,6 +189,8 @@ export async function POST(req: Request) {
     const variantsToInsert: Array<{
       shopDomain: string;
       productKey: string;
+      canonicalProductId?: Types.ObjectId;
+      canonicalArtistId?: Types.ObjectId;
       variantKey: string;
       finish: string;
       sizeCode: string;
@@ -310,7 +312,14 @@ export async function POST(req: Request) {
     );
 
     try {
-      await CanonicalVariantModel.insertMany(variantsToInsert, { ordered: true });
+      await CanonicalVariantModel.insertMany(
+        variantsToInsert.map((variant) => ({
+          ...variant,
+          canonicalProductId: createdProduct._id,
+          canonicalArtistId: context.canonicalArtist._id,
+        })),
+        { ordered: true },
+      );
     } catch (error) {
       await CanonicalProductModel.deleteOne({
         shopDomain: context.user.shopDomain,

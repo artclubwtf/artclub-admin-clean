@@ -123,6 +123,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (!artwork) {
       return NextResponse.json({ ok: false, error: "artwork_not_found" }, { status: 404 });
     }
+    const existingVariants = await CanonicalVariantModel.find({
+      shopDomain: context.user.shopDomain,
+      productKey: artwork.productKey,
+    }).lean();
 
     const autoSyncRunId = createSyncRunId("artist-auto-sync");
 
@@ -212,29 +216,33 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const changedFields = [
       artwork.title !== data.title ? "title" : null,
       (artwork.description || "") !== (data.description || "") ? "description" : null,
+      (artwork.year ?? null) !== (data.year ?? null) ? "year" : null,
       artwork.forSale !== data.forSale ? "forSale" : null,
       artwork.allowPrints !== data.printsEnabled ? "allowPrints" : null,
       artwork.originalAvailable !== data.originalAvailable ? "originalAvailable" : null,
       artwork.seriesId !== seriesId ? "seriesId" : null,
       artwork.seriesName !== seriesName ? "seriesName" : null,
-      artwork.year !== (data.year ?? undefined) ? "year" : null,
       (artwork.dimensions?.widthCm ?? null) !== originalWidthCm ? "dimensions.widthCm" : null,
       (artwork.dimensions?.heightCm ?? null) !== originalHeightCm ? "dimensions.heightCm" : null,
+      (existingVariants.find((variant) => variant.variantKey === "original")?.priceCents ?? null) !== originalPriceCents ? "originalPriceCents" : null,
+      JSON.stringify(Array.from(new Set(existingVariants.filter((variant) => variant.finish !== "original").map((variant) => variant.sizeCode))).sort()) !==
+      JSON.stringify([...printSizeCodes].sort())
+        ? "printSizeCodes"
+        : null,
       JSON.stringify(Array.isArray(artwork.images?.galleryUrls) ? artwork.images.galleryUrls : []) !== JSON.stringify(galleryUrls)
         ? "images.galleryUrls"
         : null,
     ].filter(Boolean) as string[];
-    const shopifyRelevantChanges = changedFields.length > 0 || saleable !== (artwork.forSale === true || artwork.allowPrints === true);
+    const willQueueShopifyPush = saleable && artwork.status !== "archived";
 
     logAutoSync(
       "artist_app_artwork_update_requested",
       {
         canonicalProductId: String(artwork._id),
         productKey: artwork.productKey,
-        title: data.title,
+        canonicalArtistId: String(context.canonicalArtist._id),
         changedFields,
-        shopifyRelevantChanges,
-        ownershipCheckResult: "passed",
+        willQueueShopifyPush,
       },
       { runId: autoSyncRunId, force: true },
     );
@@ -312,14 +320,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       },
     );
 
-    await CanonicalVariantModel.deleteMany({
-      shopDomain: context.user.shopDomain,
-      productKey: id,
-    });
-
     const variantsToInsert: Array<{
       shopDomain: string;
       productKey: string;
+      canonicalProductId: Types.ObjectId;
+      canonicalArtistId: Types.ObjectId;
       variantKey: string;
       finish: string;
       sizeCode: string;
@@ -332,6 +337,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       variantsToInsert.push({
         shopDomain: context.user.shopDomain,
         productKey: id,
+        canonicalProductId: artwork._id,
+        canonicalArtistId: context.canonicalArtist._id,
         variantKey: "original",
         finish: "original",
         sizeCode: "ORIGINAL",
@@ -350,12 +357,69 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           selectedSizeCodes: printSizeCodes,
           originalWidthCm: originalWidthCm!,
           originalHeightCm: originalHeightCm!,
-        }),
+        }).map((variant) => ({
+          ...variant,
+          canonicalProductId: artwork._id,
+          canonicalArtistId: context.canonicalArtist._id,
+        })),
       );
     }
 
+    if (!variantsToInsert.length) {
+      return NextResponse.json({ ok: false, error: "no_variants_generated" }, { status: 400 });
+    }
+
+    const nextVariantKeys = new Set(variantsToInsert.map((variant) => variant.variantKey));
+    const variantsToDelete = existingVariants.filter((variant) => !nextVariantKeys.has(variant.variantKey)).map((variant) => variant.variantKey);
+    const existingVariantByKey = new Map(existingVariants.map((variant) => [variant.variantKey, variant]));
+
+    if (variantsToDelete.length) {
+      await CanonicalVariantModel.deleteMany({
+        shopDomain: context.user.shopDomain,
+        productKey: id,
+        variantKey: { $in: variantsToDelete },
+      });
+    }
+
     if (variantsToInsert.length) {
-      await CanonicalVariantModel.insertMany(variantsToInsert, { ordered: true });
+      await Promise.all(
+        variantsToInsert.map(async (variant) => {
+          const existingVariant = existingVariantByKey.get(variant.variantKey);
+          const setPayload: Record<string, unknown> = {
+            canonicalProductId: variant.canonicalProductId,
+            canonicalArtistId: variant.canonicalArtistId,
+            finish: variant.finish,
+            sizeCode: variant.sizeCode,
+            sku: variant.sku,
+            priceCents: variant.priceCents,
+            inventory: existingVariant?.inventory || {
+              tracked: variant.inventory.tracked,
+              replenishmentDisabled: true,
+            },
+            shopify: existingVariant?.shopify || {},
+            published: existingVariant?.published ?? false,
+          };
+          if (existingVariant?.shopifyVariantId) setPayload.shopifyVariantId = existingVariant.shopifyVariantId;
+          if (existingVariant?.syncState) setPayload.syncState = existingVariant.syncState;
+
+          await CanonicalVariantModel.updateOne(
+            {
+              shopDomain: context.user.shopDomain,
+              productKey: id,
+              variantKey: variant.variantKey,
+            },
+            {
+              $set: setPayload,
+              $setOnInsert: {
+                shopDomain: context.user.shopDomain,
+                productKey: id,
+                variantKey: variant.variantKey,
+              },
+            },
+            { upsert: true },
+          );
+        }),
+      );
     }
 
     logAutoSync(
@@ -375,10 +439,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const sync = await autoPushProductToShopify({
       shopDomain: context.user.shopDomain,
       productKey: id,
-      shouldPush: saleable && nextStatus !== "archived",
+      shouldPush: willQueueShopifyPush,
       runId: autoSyncRunId,
       reason: "artwork_updated",
     });
+
+    if (sync.ok && sync.queued) {
+      logAutoSync(
+        "artist_app_artwork_update_queued",
+        {
+          canonicalProductId: String(artwork._id),
+          productKey: artwork.productKey,
+          jobId: sync.jobId || null,
+          reason: "artwork_updated",
+        },
+        { runId: autoSyncRunId, force: true },
+      );
+    }
 
     if (sync.ok && !sync.queued) {
       logAutoSync(

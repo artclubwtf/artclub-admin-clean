@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { useArtistSuccessNotice } from "@/components/feedback/ArtistSuccessNotice";
 import { CheckboxField } from "@/components/forms/CheckboxField";
 import { MultiStepForm } from "@/components/forms/MultiStepForm";
 import { StatusMessage } from "@/components/forms/StatusMessage";
@@ -47,6 +48,7 @@ function toAnnouncementPayload(item: ArtistAnnouncementItem) {
 }
 
 export function AnnouncementsManager({ initialItems, embedded = false, onItemsChange, initialOpenCreate = false }: AnnouncementsManagerProps) {
+  const { showSuccessNotice } = useArtistSuccessNotice();
   const [items, setItems] = useState(initialItems);
   const [draft, setDraft] = useState(emptyAnnouncement);
   const [editingId, setEditingId] = useState<string | null>(initialOpenCreate ? "__new__" : null);
@@ -69,7 +71,8 @@ export function AnnouncementsManager({ initialItems, embedded = false, onItemsCh
     onItemsChange?.(nextItems);
     setDraft(emptyAnnouncement);
     setEditingId(null);
-    setStatus({ tone: "success", text: "Announcement created." });
+    setStatus(null);
+    showSuccessNotice();
   }
 
   async function updateItem(id: string, next: ArtistAnnouncementItem) {
@@ -88,7 +91,8 @@ export function AnnouncementsManager({ initialItems, embedded = false, onItemsCh
     setItems(nextItems);
     onItemsChange?.(nextItems);
     setEditingId(null);
-    setStatus({ tone: "success", text: "Announcement updated." });
+    setStatus(null);
+    showSuccessNotice();
   }
 
   async function deleteItem(id: string) {

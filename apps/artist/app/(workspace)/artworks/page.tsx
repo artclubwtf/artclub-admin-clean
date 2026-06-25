@@ -10,6 +10,13 @@ import { artistProductOwnershipFilter } from "@/lib/server/product-ownership";
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
+function presentSyncStatus(item: any) {
+  if (item.sync?.lastError) return "Error";
+  if (item.sync?.status === "queued" || item.status === "shopify_pending") return "Queued";
+  if (item.sync?.needsPush === true || item.sync?.status === "pending") return "Updating";
+  return "Synced";
+}
+
 export default async function ArtworksPage() {
   const context = await requireArtistContext();
   const artworks = await CanonicalProductModel.find({
@@ -31,19 +38,27 @@ export default async function ArtworksPage() {
         <div className="space-y-3">
           {artworks.length ? (
             artworks.map((item) => (
-              <Link key={item.productKey} href={`/artworks/${encodeURIComponent(item.productKey)}`} className="flex items-center gap-4 rounded-[1.75rem] bg-neutral-50 p-4">
-                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-[1.25rem] bg-white">
+              <div key={item.productKey} className="flex items-center gap-4 rounded-[1.75rem] bg-neutral-50 p-4">
+                <Link href={`/artworks/${encodeURIComponent(item.productKey)}`} className="h-20 w-20 shrink-0 overflow-hidden rounded-[1.25rem] bg-white">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={item.images?.thumbUrl || item.images?.mediumUrl || item.images?.originalUrl || "/"} alt={item.title} className="h-full w-full object-cover" />
-                </div>
-                <div className="min-w-0 space-y-1">
-                  <div className="text-base font-semibold tracking-[-0.02em] text-neutral-950">{item.title}</div>
+                </Link>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link href={`/artworks/${encodeURIComponent(item.productKey)}`} className="text-base font-semibold tracking-[-0.02em] text-neutral-950">
+                      {item.title}
+                    </Link>
+                    <span className="rounded-full bg-white px-3 py-1 text-xs font-medium tracking-[-0.01em] text-neutral-600">{presentSyncStatus(item)}</span>
+                  </div>
                   <div className="text-sm text-neutral-500">
-                    {item.status} · {item.forSale !== false ? "for sale" : "not for sale"} · {item.originalAvailable ? "original" : "no original"} · {item.allowPrints ? "prints" : "no prints"}
+                    {item.forSale !== false ? "for sale" : "not for sale"} · {item.originalAvailable ? "original" : "no original"} · {item.allowPrints ? "prints" : "no prints"}
                   </div>
                   {item.seriesName ? <div className="text-sm text-neutral-500">{item.seriesName}</div> : null}
                 </div>
-              </Link>
+                <Button href={`/artworks/${encodeURIComponent(item.productKey)}`} tone="secondary">
+                  Edit
+                </Button>
+              </div>
             ))
           ) : (
             <div className="rounded-[1.75rem] bg-neutral-50 px-4 py-4 text-sm text-neutral-500">No artworks yet.</div>
