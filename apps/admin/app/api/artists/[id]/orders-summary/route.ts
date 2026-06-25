@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { connectMongo } from "@/lib/mongodb";
 import { ArtistModel } from "@/models/Artist";
-import { ContractTermsModel } from "@/models/ContractTerms";
 import { PayoutTransactionModel } from "@/models/PayoutTransaction";
 import { loadArtistOrderSales } from "@/lib/artistOrderSales";
+import { computeArtistPayoutTotalFromSplit } from "@/lib/artistPayouts";
 import { createSyncRunId, logShopifyDiagnostics } from "@/lib/sync/syncLogger";
 
 type Totals = {
@@ -15,20 +15,7 @@ type Totals = {
   outstanding: number;
 };
 
-const emptyTotals: Totals = {
-  printGross: 0,
-  originalGross: 0,
-  unknownGross: 0,
-  earned: 0,
-  paid: 0,
-  outstanding: 0,
-};
-
-function computeEarned(printGross: number, originalGross: number, unknownGross: number, printPct: number, originalPct: number) {
-  // Unknown is treated like original until explicitly classified.
-  const effectiveOriginal = originalGross + unknownGross;
-  return printGross * (printPct / 100) + effectiveOriginal * (originalPct / 100);
-}
+const emptyTotals: Totals = { printGross: 0, originalGross: 0, unknownGross: 0, earned: 0, paid: 0, outstanding: 0 };
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -45,10 +32,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     }
 
     const metaobjectId = artist.shopifySync?.metaobjectId;
-    const terms = await ContractTermsModel.findOne({ kunstlerId: id }).lean();
-    const printPct = terms?.printCommissionPct ?? 0;
-    const originalPct = terms?.originalCommissionPct ?? 0;
-
     const now = new Date();
     const since30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
@@ -81,7 +64,11 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       },
       { ...emptyTotals },
     );
-    totalsAll.earned = computeEarned(totalsAll.printGross, totalsAll.originalGross, totalsAll.unknownGross, printPct, originalPct);
+    totalsAll.earned = computeArtistPayoutTotalFromSplit({
+      print: totalsAll.printGross,
+      original: totalsAll.originalGross,
+      unknown: totalsAll.unknownGross,
+    });
     totalsAll.paid = payouts.reduce((sum, p) => sum + Number(p.amount || 0), 0);
     totalsAll.outstanding = totalsAll.earned - totalsAll.paid;
 
@@ -96,7 +83,11 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         },
         { ...emptyTotals },
       );
-    totals30.earned = computeEarned(totals30.printGross, totals30.originalGross, totals30.unknownGross, printPct, originalPct);
+    totals30.earned = computeArtistPayoutTotalFromSplit({
+      print: totals30.printGross,
+      original: totals30.originalGross,
+      unknown: totals30.unknownGross,
+    });
     totals30.paid = totalsAll.paid; // payouts not filtered by date for outstanding calculations
     totals30.outstanding = totals30.earned - totals30.paid;
 
@@ -114,7 +105,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
           createdAt: p.createdAt,
           note: p.note,
         })),
-        commissionTerms: terms ? { printCommissionPct: terms.printCommissionPct, originalCommissionPct: terms.originalCommissionPct } : null,
+        commissionTerms: null,
         debug: {
           adminArtistOrdersCanonicalArtistId: sales.identity.canonicalArtistId,
           orderCountAdminLogic: orderEntries.length,

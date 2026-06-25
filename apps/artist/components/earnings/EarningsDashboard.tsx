@@ -105,7 +105,7 @@ export function EarningsDashboard({ earnings }: { earnings: ArtistEarningsRespon
         <StatCard
           label="Your Earnings"
           value={formatCurrency(earnings.estimatedArtistEarnings, earnings.currency)}
-          detail="Estimated based on current commission data."
+          detail="Calculated from gross sale price less VAT, then artist payout rate."
         />
         <StatCard label="Pending Payout" value={formatCurrency(earnings.pendingPayoutAmount, earnings.currency)} />
       </section>

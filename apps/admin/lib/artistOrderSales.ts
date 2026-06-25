@@ -1,11 +1,13 @@
 import { Types } from "mongoose";
 
+import { computeArtistPayout } from "./artistPayouts";
 import { ArtistModel } from "../models/Artist";
 import { CanonicalArtistModel } from "../models/CanonicalArtist";
 import { OrderLineOverrideModel } from "../models/OrderLineOverride";
 import { PosOrderModel } from "../models/PosOrder";
 import { ShopifyOrderCacheModel } from "../models/ShopifyOrderCache";
 import { connectMongo } from "./mongodb";
+import { logShopifyDiagnostics } from "./sync/syncLogger";
 
 export type ArtistOrderIdentity = {
   adminArtistId: string | null;
@@ -153,12 +155,6 @@ export async function loadArtistOrderSales(params: LoadArtistOrderSalesParams): 
   const legacyArtistIds = uniqNonEmpty([identity.adminArtistId, identity.legacyArtistId]);
   const metaobjectIds = identity.artistMetaobjectGids;
 
-  const emptyResult: ArtistOrderSalesResult = {
-    identity,
-    orders: [],
-    saleLines: [],
-  };
-
   const shopifyOr: Record<string, unknown>[] = [];
   if (metaobjectIds.length > 0) {
     shopifyOr.push(
@@ -248,9 +244,25 @@ export async function loadArtistOrderSales(params: LoadArtistOrderSalesParams): 
 
       const saleType = (override?.overrideSaleType || line.inferredSaleType || "unknown") as ArtistOrderSaleLine["saleType"];
       const gross = Number(override?.overrideGross !== undefined ? override.overrideGross : line.lineTotal || 0);
+      const payout = computeArtistPayout(gross, saleType);
       if (saleType === "print") printGross += gross;
       else if (saleType === "original") originalGross += gross;
       else unknownGross += gross;
+
+      logShopifyDiagnostics(
+        "artist_order_sales_line_payout",
+        {
+          orderName: label,
+          productTitle: line.title || "Untitled artwork",
+          variantTitle: line.variantTitle || null,
+          grossSalePrice: payout.grossSalePrice,
+          netSalePrice: payout.netSalePrice,
+          payoutRate: payout.payoutRate,
+          artistPayout: payout.artistPayout,
+          payoutType: payout.payoutType,
+        },
+        { verboseOnly: true },
+      );
 
       saleLines.push({
         source: "shopify",
@@ -270,8 +282,8 @@ export async function loadArtistOrderSales(params: LoadArtistOrderSalesParams): 
         variantTitle: line.variantTitle || null,
         quantity: Number(line.quantity || 0),
         salePrice: gross,
-        artistShare: Number(line.artistShare ?? line.estimatedArtistShare ?? gross),
-        artistShareIsEstimated: typeof line.artistShare !== "number",
+        artistShare: payout.artistPayout,
+        artistShareIsEstimated: saleType === "unknown",
         saleType,
       });
     });
@@ -312,9 +324,25 @@ export async function loadArtistOrderSales(params: LoadArtistOrderSalesParams): 
 
       const saleType = (override?.overrideSaleType || line.saleType || "unknown") as ArtistOrderSaleLine["saleType"];
       const gross = Number(override?.overrideGross !== undefined ? override.overrideGross : Number(line.quantity || 0) * Number(line.unitPrice || 0));
+      const payout = computeArtistPayout(gross, saleType);
       if (saleType === "print") printGross += gross;
       else if (saleType === "original") originalGross += gross;
       else unknownGross += gross;
+
+      logShopifyDiagnostics(
+        "artist_order_sales_line_payout",
+        {
+          orderName: label,
+          productTitle: line.title || "Untitled artwork",
+          variantTitle: null,
+          grossSalePrice: payout.grossSalePrice,
+          netSalePrice: payout.netSalePrice,
+          payoutRate: payout.payoutRate,
+          artistPayout: payout.artistPayout,
+          payoutType: payout.payoutType,
+        },
+        { verboseOnly: true },
+      );
 
       saleLines.push({
         source: "pos",
@@ -329,8 +357,8 @@ export async function loadArtistOrderSales(params: LoadArtistOrderSalesParams): 
         variantTitle: null,
         quantity: Number(line.quantity || 0),
         salePrice: gross,
-        artistShare: gross,
-        artistShareIsEstimated: true,
+        artistShare: payout.artistPayout,
+        artistShareIsEstimated: saleType === "unknown",
         saleType,
       });
     });

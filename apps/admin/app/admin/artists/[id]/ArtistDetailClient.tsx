@@ -3412,21 +3412,17 @@ export default function ArtistDetailClient({ artistId }: Props) {
             <p className="text-xl font-semibold text-slate-900">{formatCurrency(displayedTotals.originalGross)}</p>
           </div>
           <div className="rounded border border-slate-200 bg-white p-3 shadow-sm">
-            <p className="text-xs uppercase text-slate-500">Earned (commission)</p>
+            <p className="text-xs uppercase text-slate-500">Artist payout</p>
             <p className="text-xl font-semibold text-slate-900">{formatCurrency(displayedTotals.earned)}</p>
-            {ordersSummary?.commissionTerms && (
-              <p className="text-xs text-slate-500">
-                Print {ordersSummary.commissionTerms.printCommissionPct}% • Original {ordersSummary.commissionTerms.originalCommissionPct}%
-              </p>
-            )}
-            <p className="text-[11px] text-slate-500">Unknown lines count as original until classified.</p>
+            <p className="text-[11px] text-slate-500">Original: gross / 1.19 * 0.7. Print: gross / 1.19 * 0.4.</p>
+            <p className="text-[11px] text-slate-500">Unknown lines stay unknown and do not create artist payout.</p>
           </div>
           <div className="rounded border border-slate-200 bg-white p-3 shadow-sm">
             <p className="text-xs uppercase text-slate-500">Paid out</p>
             <p className="text-xl font-semibold text-slate-900">{formatCurrency(displayedTotals.paid)}</p>
           </div>
           <div className="rounded border border-slate-200 bg-white p-3 shadow-sm">
-            <p className="text-xs uppercase text-slate-500">Outstanding</p>
+            <p className="text-xs uppercase text-slate-500">Pending payout</p>
             <p className="text-xl font-semibold text-slate-900">{formatCurrency(displayedTotals.outstanding)}</p>
           </div>
         </div>

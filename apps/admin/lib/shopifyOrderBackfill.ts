@@ -1,6 +1,7 @@
 import { Types } from "mongoose";
 
 import { fetchShopifyOrders, type ShopifyOrder, type ShopifyOrderLine } from "./shopifyOrders";
+import { classifyArtistPayoutType, computeArtistPayout } from "./artistPayouts";
 import {
   isCancelledShopifyOrder,
   isCountableShopifyOrder,
@@ -12,7 +13,6 @@ import { ArtistModel } from "../models/Artist";
 import { CanonicalArtistModel } from "../models/CanonicalArtist";
 import { CanonicalProductModel } from "../models/CanonicalProduct";
 import { CanonicalVariantModel } from "../models/CanonicalVariant";
-import { ContractTermsModel } from "../models/ContractTerms";
 import { orderSaleTypes, ShopifyOrderCacheModel } from "../models/ShopifyOrderCache";
 import { SyncStateModel } from "../models/SyncState";
 
@@ -63,12 +63,6 @@ type LegacyArtistName = {
     displayName?: string | null;
     name?: string | null;
   };
-};
-
-type BackfillTerms = {
-  kunstlerId: string;
-  printCommissionPct: number;
-  originalCommissionPct: number;
 };
 
 type MatchOrigin = "metafield" | "vendor" | "variant" | "product" | "handle" | "unmatched";
@@ -172,46 +166,15 @@ function normalizeText(value: string | null | undefined) {
 }
 
 function inferSaleType(line: ShopifyOrderLine, matchedProduct: BackfillProduct | null): InferredSaleType {
-  const lowerTags = (line.productTags || []).map((tag) => tag.toLowerCase());
-  const variantTitle = (line.variantTitle || "").toLowerCase();
-  if (variantTitle.includes("print")) return "print";
-  if (variantTitle.includes("original") || variantTitle.includes("unikat")) return "original";
-  if (lowerTags.includes("original")) return "original";
-  if (matchedProduct?.offerings === "prints_only") return "print";
-  if (matchedProduct?.offerings === "original_only") return "original";
-  if (matchedProduct?.allowPrints && !matchedProduct?.originalAvailable) return "print";
-  if (matchedProduct?.originalAvailable && !matchedProduct?.allowPrints) return "original";
-  if (lowerTags.length > 0) return "print";
-  return "unknown";
-}
-
-function calculateArtistShare(params: {
-  salePrice: number;
-  saleType: InferredSaleType;
-  terms: BackfillTerms | null;
-}) {
-  if (!params.terms) {
-    return { artistShare: undefined, estimatedArtistShare: toMoney(params.salePrice) };
-  }
-
-  if (params.saleType === "print") {
-    return {
-      artistShare: toMoney(params.salePrice * (params.terms.printCommissionPct / 100)),
-      estimatedArtistShare: undefined,
-    };
-  }
-
-  if (params.saleType === "original") {
-    return {
-      artistShare: toMoney(params.salePrice * (params.terms.originalCommissionPct / 100)),
-      estimatedArtistShare: undefined,
-    };
-  }
-
-  return {
-    artistShare: undefined,
-    estimatedArtistShare: toMoney(params.salePrice * (params.terms.originalCommissionPct / 100)),
-  };
+  return classifyArtistPayoutType({
+    title: line.title,
+    productTitle: matchedProduct?.title || line.title,
+    variantTitle: line.variantTitle,
+    tags: line.productTags,
+    offerings: matchedProduct?.offerings || null,
+    allowPrints: matchedProduct?.allowPrints ?? null,
+    originalAvailable: matchedProduct?.originalAvailable ?? null,
+  });
 }
 
 function buildAllocations(lines: BackfillLineItem[]) {
@@ -288,18 +251,13 @@ async function loadBackfillContext(shopDomain: string) {
   ]);
 
   const legacyIds = artists.map((artist) => artist.legacyArtistId).filter((value): value is string => Boolean(value));
-  const [terms, legacyArtists] = await Promise.all([
-    legacyIds.length
-      ? ContractTermsModel.find({ kunstlerId: { $in: legacyIds } })
-          .select({ kunstlerId: 1, printCommissionPct: 1, originalCommissionPct: 1 })
-          .lean<BackfillTerms[]>()
-      : Promise.resolve([] as BackfillTerms[]),
-    legacyIds.length
-      ? ArtistModel.find({ _id: { $in: legacyIds.filter((value) => Types.ObjectId.isValid(value)).map((value) => new Types.ObjectId(value)) } })
-          .select({ _id: 1, name: 1, "publicProfile.displayName": 1, "publicProfile.name": 1 })
-          .lean<LegacyArtistName[]>()
-      : Promise.resolve([] as LegacyArtistName[]),
-  ]);
+  const legacyArtists = legacyIds.length
+    ? await ArtistModel.find({
+        _id: { $in: legacyIds.filter((value) => Types.ObjectId.isValid(value)).map((value) => new Types.ObjectId(value)) },
+      })
+        .select({ _id: 1, name: 1, "publicProfile.displayName": 1, "publicProfile.name": 1 })
+        .lean<LegacyArtistName[]>()
+    : [];
 
   const productByVariantGid = new Map<string, MatchResult>();
   const productByProductGid = new Map<string, MatchResult>();
@@ -307,7 +265,6 @@ async function loadBackfillContext(shopDomain: string) {
   const artistById = new Map<string, BackfillArtist>();
   const artistByMetaobjectGid = new Map<string, BackfillArtist>();
   const vendorCandidates = new Map<string, BackfillArtist[]>();
-  const termsByArtistId = new Map<string, BackfillTerms>();
   const productById = new Map<string, BackfillProduct>();
   const legacyArtistById = new Map<string, LegacyArtistName>();
 
@@ -338,12 +295,6 @@ async function loadBackfillContext(shopDomain: string) {
       existing.push(artist);
       vendorCandidates.set(vendorKey, existing);
     });
-  }
-
-  for (const term of terms) {
-    const artist = artists.find((candidate) => candidate.legacyArtistId === term.kunstlerId);
-    if (!artist) continue;
-    termsByArtistId.set(String(artist._id), term);
   }
 
   for (const product of products) {
@@ -391,7 +342,7 @@ async function loadBackfillContext(shopDomain: string) {
     }
   }
 
-  return { productByVariantGid, productByProductGid, productByHandle, artistById, artistByMetaobjectGid, artistByVendor, termsByArtistId };
+  return { productByVariantGid, productByProductGid, productByHandle, artistById, artistByMetaobjectGid, artistByVendor };
 }
 
 function matchLineItem(params: {
@@ -504,10 +455,9 @@ async function persistFetchedOrders(params: {
       });
       const artistId = match.canonicalArtistId ? String(match.canonicalArtistId) : null;
       const artist = artistId ? context.artistById.get(artistId) || null : null;
-      const terms = artistId ? context.termsByArtistId.get(artistId) || null : null;
       const lineTotal = Number(line.lineTotal || 0);
       const inferredSaleType = inferSaleType(line, match.productRecord);
-      const share = calculateArtistShare({ salePrice: lineTotal, saleType: inferredSaleType, terms });
+      const payout = computeArtistPayout(lineTotal, inferredSaleType);
       const payoutStatus: PayoutStatus = cancelled ? "cancelled" : fullyRefunded ? "refunded" : "pending";
       const lineId = line.id || `${order.id}:line:${index}`;
       const artistMetaobjectGid =
@@ -543,6 +493,20 @@ async function persistFetchedOrders(params: {
         if (accumulator.latestUnmatched.length < 20) accumulator.latestUnmatched.push(diagnosticItem);
         logShopifyPull("shopify_orders_backfill_line_unmatched", diagnosticItem, { runId, verboseOnly: true });
       }
+      logShopifyPull(
+        "shopify_orders_backfill_line_payout",
+        {
+          orderName: order.name || order.id,
+          productTitle: match.artworkTitle || line.title,
+          variantTitle: line.variantTitle || null,
+          grossSalePrice: payout.grossSalePrice,
+          netSalePrice: payout.netSalePrice,
+          payoutRate: payout.payoutRate,
+          artistPayout: payout.artistPayout,
+          payoutType: payout.payoutType,
+        },
+        { runId, verboseOnly: true },
+      );
 
       return {
         lineId,
@@ -563,8 +527,8 @@ async function persistFetchedOrders(params: {
         inferredSaleType,
         canonicalProductId: match.canonicalProductId,
         canonicalArtistId: match.canonicalArtistId,
-        artistShare: share.artistShare,
-        estimatedArtistShare: share.estimatedArtistShare,
+        artistShare: inferredSaleType === "unknown" ? undefined : payout.artistPayout,
+        estimatedArtistShare: inferredSaleType === "unknown" ? 0 : undefined,
         payoutStatus,
       };
     });

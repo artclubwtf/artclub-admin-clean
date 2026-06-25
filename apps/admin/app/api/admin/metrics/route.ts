@@ -3,11 +3,11 @@ import { connectMongo } from "@/lib/mongodb";
 import { ArtistModel } from "@/models/Artist";
 import { ContractModel } from "@/models/Contract";
 import { PayoutDetailsModel } from "@/models/PayoutDetails";
-import { ContractTermsModel } from "@/models/ContractTerms";
 import { ShopifyOrderCacheModel } from "@/models/ShopifyOrderCache";
 import { PosOrderModel } from "@/models/PosOrder";
 import { PayoutTransactionModel } from "@/models/PayoutTransaction";
 import { OrderLineOverrideModel } from "@/models/OrderLineOverride";
+import { computeArtistPayoutTotalFromSplit } from "@/lib/artistPayouts";
 
 const stageUnderContract = "Under Contract";
 
@@ -18,12 +18,6 @@ type ArtistTotals = {
   paid: number;
   earned: number;
 };
-
-function computeEarned(print: number, original: number, unknown: number, printPct: number, originalPct: number) {
-  // Unknown treated as original until classified.
-  const effectiveOriginal = original + unknown;
-  return print * (printPct / 100) + effectiveOriginal * (originalPct / 100);
-}
 
 export async function GET() {
   try {
@@ -45,17 +39,13 @@ export async function GET() {
       if (a.shopifySync?.metaobjectId) artistIdByMeta.set(a.shopifySync.metaobjectId, String(a._id));
     });
 
-    const [contracts, payoutDetails, terms, payouts] = await Promise.all([
+    const [contracts, payoutDetails, payouts] = await Promise.all([
       ContractModel.find({ kunstlerId: { $in: artistIds } }).lean(),
       PayoutDetailsModel.find({ kunstlerId: { $in: artistIds } }).lean(),
-      ContractTermsModel.find({ kunstlerId: { $in: artistIds } }).lean(),
       PayoutTransactionModel.find({
         $or: [{ artistMongoId: { $in: artistIds } }, { artistMetaobjectGid: { $in: artistMetaIds } }],
       }).lean(),
     ]);
-
-    const termsByArtist = new Map<string, { printPct: number; originalPct: number }>();
-    terms.forEach((t) => termsByArtist.set(t.kunstlerId, { printPct: t.printCommissionPct, originalPct: t.originalCommissionPct }));
 
     const payoutsByArtist = new Map<string, number>();
     payouts.forEach((p) => {
@@ -146,8 +136,11 @@ export async function GET() {
 
     // compute earned/outstanding
     totalsByArtist.forEach((totals, artistId) => {
-      const term = termsByArtist.get(artistId) || { printPct: 0, originalPct: 0 };
-      totals.earned = computeEarned(totals.print, totals.original, totals.unknown, term.printPct, term.originalPct);
+      totals.earned = computeArtistPayoutTotalFromSplit({
+        print: totals.print,
+        original: totals.original,
+        unknown: totals.unknown,
+      });
     });
 
     const openPayoutArtistsCount = Array.from(totalsByArtist.values()).filter((t) => t.earned - t.paid > 0).length;
