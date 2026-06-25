@@ -2,10 +2,9 @@ import { NextResponse } from "next/server";
 import { connectMongo } from "@/lib/mongodb";
 import { ArtistModel } from "@/models/Artist";
 import { ContractTermsModel } from "@/models/ContractTerms";
-import { ShopifyOrderCacheModel } from "@/models/ShopifyOrderCache";
-import { PosOrderModel } from "@/models/PosOrder";
 import { PayoutTransactionModel } from "@/models/PayoutTransaction";
-import { OrderLineOverrideModel } from "@/models/OrderLineOverride";
+import { loadArtistOrderSales } from "@/lib/artistOrderSales";
+import { createSyncRunId, logShopifyDiagnostics } from "@/lib/sync/syncLogger";
 
 type Totals = {
   printGross: number;
@@ -33,6 +32,7 @@ function computeEarned(printGross: number, originalGross: number, unknownGross: 
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const runId = createSyncRunId("admin-artist-orders-summary");
     const { id } = await params;
     const { searchParams } = new URL(_.url);
     const includeUnpaid = searchParams.get("includeUnpaid") === "true";
@@ -52,114 +52,19 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const now = new Date();
     const since30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    const orderEntries: {
-      id: string;
-      source: "shopify" | "pos";
-      createdAt: string;
-      label: string;
-      currency: string;
-      printGross: number;
-      originalGross: number;
-      unknownGross: number;
-    }[] = [];
+    const sales = await loadArtistOrderSales({ adminArtistId: id, includeUnpaid, includeCancelled });
+    const orderEntries = sales.orders;
 
-    if (metaobjectId) {
-        const shopifyOrders = await ShopifyOrderCacheModel.find({
-          $or: [
-            { "allocations.artistMetaobjectGid": metaobjectId },
-            { "lineItems.artistMetaobjectGid": metaobjectId },
-          ],
-        })
-          .sort({ createdAt: -1 })
-          .lean();
-
-      const shopifyIds = shopifyOrders.map((doc) => doc.shopifyOrderGid).filter(Boolean);
-      const overrides = await OrderLineOverrideModel.find({ orderSource: "shopify", shopifyOrderGid: { $in: shopifyIds } }).lean();
-      const overrideMap = new Map<string, any>();
-      overrides.forEach((ov) => ov.lineKey && overrideMap.set(`${ov.shopifyOrderGid}:${ov.lineKey}`, ov));
-
-      for (const doc of shopifyOrders) {
-        const status = (doc.financialStatus || "").toLowerCase();
-        const isPaid = status.includes("paid");
-        const isCancelled = Boolean(doc.cancelledAt) || Number(doc.refundedTotalGross || 0) > 0;
-        if (!includeUnpaid && !isPaid) continue;
-        if (!includeCancelled && isCancelled) continue;
-
-        const lineItems: any[] = Array.isArray(doc.lineItems) ? doc.lineItems : [];
-        let printGross = 0;
-        let originalGross = 0;
-        let unknownGross = 0;
-
-        lineItems.forEach((li, idx) => {
-          const lineKey = li.lineId || li.id || `${doc.shopifyOrderGid}:line:${idx}`;
-          const ov = overrideMap.get(`${doc.shopifyOrderGid}:${lineKey}`);
-          const artistMatch = ov?.overrideArtistMetaobjectGid !== undefined ? ov.overrideArtistMetaobjectGid === metaobjectId : li.artistMetaobjectGid === metaobjectId;
-          if (!artistMatch) return;
-          const saleType = ov?.overrideSaleType || li.inferredSaleType || "unknown";
-          const gross = ov?.overrideGross !== undefined ? ov.overrideGross : Number(li.lineTotal || 0);
-          if (saleType === "print") printGross += gross;
-          else if (saleType === "original") originalGross += gross;
-          else unknownGross += gross;
-        });
-
-        if (printGross + originalGross + unknownGross === 0) continue;
-
-        orderEntries.push({
-          id: String(doc._id || doc.shopifyOrderGid),
-          source: "shopify",
-          createdAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : new Date().toISOString(),
-          label: doc.orderName || doc.shopifyOrderGid || "Order",
-          currency: doc.currency || "EUR",
-          printGross,
-          originalGross,
-          unknownGross,
-        });
-      }
-    }
-
-    const posOrders = await PosOrderModel.find({
-      $or: [{ "lineItems.artistShopifyMetaobjectGid": metaobjectId || "__none__" }, { "lineItems.artistMongoId": id }],
-    })
-      .sort({ createdAt: -1 })
-      .lean();
-
-    const posIds = posOrders.map((doc) => doc._id?.toString()).filter(Boolean);
-    const posOverrides = await OrderLineOverrideModel.find({ orderSource: "pos", posOrderId: { $in: posIds } }).lean();
-    const posOverrideMap = new Map<string, any>();
-    posOverrides.forEach((ov) => ov.lineKey && posOverrideMap.set(`${ov.posOrderId}:${ov.lineKey}`, ov));
-
-    for (const doc of posOrders) {
-      const lineItems: any[] = Array.isArray(doc.lineItems) ? doc.lineItems : [];
-      let printGross = 0;
-      let originalGross = 0;
-      let unknownGross = 0;
-      lineItems.forEach((li, idx) => {
-        const lineKey = li.lineId || li.id || `pos:${doc._id}:line:${idx}`;
-        const ov = posOverrideMap.get(`${doc._id}:${lineKey}`);
-        const artistMatch =
-          ov?.overrideArtistMetaobjectGid !== undefined
-            ? ov.overrideArtistMetaobjectGid === metaobjectId
-            : li.artistShopifyMetaobjectGid === metaobjectId || li.artistMongoId === id;
-        if (!artistMatch) return;
-        const saleType = ov?.overrideSaleType || li.saleType || "unknown";
-        const gross =
-          ov?.overrideGross !== undefined ? ov.overrideGross : Number(li.quantity || 0) * Number(li.unitPrice || 0);
-        if (saleType === "print") printGross += gross;
-        else if (saleType === "original") originalGross += gross;
-        else unknownGross += gross;
-      });
-      if (printGross + originalGross + unknownGross === 0) continue;
-      orderEntries.push({
-        id: String(doc._id),
-        source: "pos",
-        createdAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : new Date().toISOString(),
-        label: doc.note || "POS order",
-        currency: doc.totals?.currency || "EUR",
-        printGross,
-        originalGross,
-        unknownGross,
-      });
-    }
+    logShopifyDiagnostics(
+      "admin_artist_orders_summary_loaded",
+      {
+        adminArtistOrdersCanonicalArtistId: sales.identity.canonicalArtistId,
+        orderCountAdminLogic: orderEntries.length,
+        adminArtistId: id,
+        artistMetaobjectId: metaobjectId || null,
+      },
+      { runId, force: true },
+    );
 
     const payoutFilter = metaobjectId
       ? { $or: [{ artistMongoId: id }, { artistMetaobjectGid: metaobjectId }] }
@@ -210,6 +115,10 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
           note: p.note,
         })),
         commissionTerms: terms ? { printCommissionPct: terms.printCommissionPct, originalCommissionPct: terms.originalCommissionPct } : null,
+        debug: {
+          adminArtistOrdersCanonicalArtistId: sales.identity.canonicalArtistId,
+          orderCountAdminLogic: orderEntries.length,
+        },
       },
       { status: 200 },
     );

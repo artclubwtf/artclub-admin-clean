@@ -2,13 +2,13 @@ import type { ArtistEarningsOrderStatus, ArtistEarningsPayoutStatus, ArtistEarni
 
 import { artistEarningsResponse } from "@artclub/models";
 
+import { loadArtistOrderSales } from "../../../admin/lib/artistOrderSales";
 import { ensureFreshShopifyOrderCache } from "../../../admin/lib/shopifyOrderAutoSync";
 import type { ArtistContext } from "@/lib/server/artist-context";
 import { connectMongo } from "@/lib/server/mongodb";
 import {
   CanonicalArtistModel,
   PayoutTransactionModel,
-  ShopifyOrderCacheModel,
 } from "@/lib/server/models";
 import { logArtistEarnings } from "../../../admin/lib/sync/syncLogger";
 
@@ -37,29 +37,6 @@ function toMonthLabel(monthKey: string) {
   const [year, month] = monthKey.split("-").map(Number);
   const date = new Date(Date.UTC(year, (month || 1) - 1, 1));
   return new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric", timeZone: "UTC" }).format(date);
-}
-
-function normalizeFinancialStatus(value?: string | null) {
-  return (value || "").trim().toLowerCase().replace(/\s+/g, "_");
-}
-
-function isPaidFinancialStatus(status: string) {
-  return status.includes("paid");
-}
-
-function normalizeOrderStatus(input: { financialStatus?: string | null; cancelledAt?: Date | null; refundedTotalGross?: number | null; totalGross?: number | null }) {
-  if (input.cancelledAt) return "cancelled" as const;
-
-  const financialStatus = normalizeFinancialStatus(input.financialStatus);
-  const refundedTotalGross = Number(input.refundedTotalGross || 0);
-  const totalGross = Number(input.totalGross || 0);
-
-  if (refundedTotalGross > 0 && totalGross > 0 && refundedTotalGross + 0.01 >= totalGross) return "refunded" as const;
-  if (financialStatus.includes("refund") && refundedTotalGross > 0 && (totalGross === 0 || refundedTotalGross + 0.01 >= totalGross)) {
-    return "refunded" as const;
-  }
-  if (isPaidFinancialStatus(financialStatus)) return "paid" as const;
-  return "pending" as const;
 }
 
 function buildEmptyResponse(): ArtistEarningsResponse {
@@ -118,12 +95,13 @@ export async function loadArtistEarnings(context: ArtistContext): Promise<Artist
     console.error("Failed to auto-sync Shopify orders for artist earnings", error);
   }
 
-  const [orders, payouts] = await Promise.all([
-    ShopifyOrderCacheModel.find({
-      "lineItems.canonicalArtistId": context.canonicalArtist._id,
-    })
-      .sort({ createdAt: -1 })
-      .lean(),
+  const [sales, payouts] = await Promise.all([
+    loadArtistOrderSales({
+      linkedUserId: context.user._id,
+      shopDomain: context.user.shopDomain,
+      includeUnpaid: true,
+      includeCancelled: true,
+    }),
     PayoutTransactionModel.find(
       canonicalArtist.shopify?.metaobjectGid || canonicalArtist.shopifyMetaobjectId || canonicalArtist.legacyArtistId
         ? {
@@ -139,7 +117,18 @@ export async function loadArtistEarnings(context: ArtistContext): Promise<Artist
       .lean(),
   ]);
 
-  const currency = payouts.find((entry) => entry.currency)?.currency || orders.find((entry) => entry.currency)?.currency || "EUR";
+  logArtistEarnings(
+    "artist_app_orders_resolved",
+    {
+      artistAppResolvedCanonicalArtistId: sales.identity.canonicalArtistId,
+      adminArtistOrdersCanonicalArtistId: String(context.canonicalArtist._id),
+      orderCountArtistApp: sales.orders.length,
+      orderCountAdminLogic: sales.orders.length,
+    },
+    { force: true },
+  );
+
+  const currency = payouts.find((entry) => entry.currency)?.currency || sales.orders.find((entry) => entry.currency)?.currency || "EUR";
 
   const saleRecords: SaleRecord[] = [];
   let paidOutAmount = 0;
@@ -147,46 +136,19 @@ export async function loadArtistEarnings(context: ArtistContext): Promise<Artist
     paidOutAmount += Number(payout.amount || 0);
   }
 
-  for (const order of orders) {
-    const orderStatus = normalizeOrderStatus({
-      financialStatus: order.financialStatus,
-      cancelledAt: order.cancelledAt,
-      refundedTotalGross: order.refundedTotalGross,
-      totalGross: order.totalGross,
+  for (const line of sales.saleLines) {
+    saleRecords.push({
+      orderDate: line.createdAt,
+      artworkTitle: line.artworkTitle || "Untitled artwork",
+      variantTitle: line.variantTitle || null,
+      quantity: Number(line.quantity || 0),
+      salePrice: toMoney(Number(line.salePrice || 0)),
+      artistShare: toMoney(Number(line.artistShare || 0)),
+      artistShareIsEstimated: line.artistShareIsEstimated,
+      payoutStatus: line.payoutStatus as ArtistEarningsPayoutStatus,
+      orderStatus: line.orderStatus as ArtistEarningsOrderStatus,
+      productKey: line.productKey || "",
     });
-    const financialStatus = normalizeFinancialStatus(order.financialStatus);
-    const countableSale = isPaidFinancialStatus(financialStatus);
-    const orderDate = new Date(order.createdAt || order.updatedAt || new Date());
-    const orderDateIso = orderDate.toISOString();
-
-    const lineItems = Array.isArray(order.lineItems) ? order.lineItems : [];
-    for (const line of lineItems) {
-      if (!line.canonicalArtistId || String(line.canonicalArtistId) !== String(context.canonicalArtist._id)) continue;
-
-      if (!countableSale && orderStatus !== "refunded" && orderStatus !== "cancelled") continue;
-
-      const salePrice = Number(line.lineTotal ?? 0);
-      const artistShare = line.artistShare ?? line.estimatedArtistShare ?? salePrice;
-      const artistShareIsEstimated = typeof line.artistShare !== "number";
-
-      saleRecords.push({
-        orderDate: orderDateIso,
-        artworkTitle: line.title || "Untitled artwork",
-        variantTitle: line.variantTitle || null,
-        quantity: Number(line.quantity || 0),
-        salePrice: toMoney(salePrice),
-        artistShare: toMoney(Number(artistShare || 0)),
-        artistShareIsEstimated,
-        payoutStatus:
-          orderStatus === "refunded"
-            ? "refunded"
-            : orderStatus === "cancelled"
-              ? "cancelled"
-              : ((line.payoutStatus as ArtistEarningsPayoutStatus | undefined) || "pending"),
-        orderStatus,
-        productKey: line.productKey || "",
-      });
-    }
   }
 
   saleRecords.sort((left, right) => new Date(left.orderDate).getTime() - new Date(right.orderDate).getTime());

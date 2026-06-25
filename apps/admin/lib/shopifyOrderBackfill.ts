@@ -8,6 +8,7 @@ import {
 } from "./shopifyOrderStatus";
 import { resolveShopDomain } from "./shopDomain";
 import { logShopifyPull } from "./sync/syncLogger";
+import { ArtistModel } from "../models/Artist";
 import { CanonicalArtistModel } from "../models/CanonicalArtist";
 import { CanonicalProductModel } from "../models/CanonicalProduct";
 import { CanonicalVariantModel } from "../models/CanonicalVariant";
@@ -44,10 +45,23 @@ type BackfillVariant = {
 
 type BackfillArtist = {
   _id: Types.ObjectId;
+  artistKey?: string | null;
+  handle?: string | null;
+  publicSlug?: string | null;
+  displayName?: string | null;
   legacyArtistId?: string | null;
   shopifyMetaobjectId?: string | null;
   shopify?: {
     metaobjectGid?: string | null;
+  };
+};
+
+type LegacyArtistName = {
+  _id: Types.ObjectId;
+  name?: string | null;
+  publicProfile?: {
+    displayName?: string | null;
+    name?: string | null;
   };
 };
 
@@ -57,13 +71,15 @@ type BackfillTerms = {
   originalCommissionPct: number;
 };
 
+type MatchOrigin = "metafield" | "vendor" | "variant" | "product" | "handle" | "unmatched";
+
 type MatchResult = {
   canonicalProductId: Types.ObjectId | null;
   canonicalArtistId: Types.ObjectId | null;
   productKey: string | null;
   artworkTitle: string | null;
   productRecord: BackfillProduct | null;
-  matchedBy: "variant" | "product" | "handle" | "none";
+  matchedBy: MatchOrigin;
 };
 
 type BackfillLineItem = {
@@ -79,6 +95,7 @@ type BackfillLineItem = {
   shopifyProductId: string | null;
   shopifyProductGid: string | null;
   productHandle: string | null;
+  vendor: string | null;
   productTags: string[];
   artistMetaobjectGid: string | null;
   inferredSaleType: InferredSaleType;
@@ -95,10 +112,13 @@ type BackfillDiagnosticsItem = {
   financialStatus: string | null;
   fulfillmentStatus: string | null;
   title: string;
+  lineItemTitle: string;
   variantTitle: string | null;
   shopifyProductId: string | null;
   shopifyVariantId: string | null;
   productHandle: string | null;
+  metafieldArtistGid: string | null;
+  vendor: string | null;
   canonicalProductId: string | null;
   canonicalArtistId: string | null;
   matchedBy: MatchResult["matchedBy"];
@@ -139,6 +159,16 @@ export type ShopifyOrdersBackfillOptions = {
 
 function toMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function normalizeText(value: string | null | undefined) {
+  return (value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ");
 }
 
 function inferSaleType(line: ShopifyOrderLine, matchedProduct: BackfillProduct | null): InferredSaleType {
@@ -244,26 +274,70 @@ async function loadBackfillContext(shopDomain: string) {
       })
       .lean<BackfillVariant[]>(),
     CanonicalArtistModel.find({ shopDomain })
-      .select({ _id: 1, legacyArtistId: 1, shopifyMetaobjectId: 1, "shopify.metaobjectGid": 1 })
+      .select({
+        _id: 1,
+        artistKey: 1,
+        handle: 1,
+        publicSlug: 1,
+        displayName: 1,
+        legacyArtistId: 1,
+        shopifyMetaobjectId: 1,
+        "shopify.metaobjectGid": 1,
+      })
       .lean<BackfillArtist[]>(),
   ]);
 
   const legacyIds = artists.map((artist) => artist.legacyArtistId).filter((value): value is string => Boolean(value));
-  const terms = legacyIds.length
-    ? await ContractTermsModel.find({ kunstlerId: { $in: legacyIds } })
-        .select({ kunstlerId: 1, printCommissionPct: 1, originalCommissionPct: 1 })
-        .lean<BackfillTerms[]>()
-    : [];
+  const [terms, legacyArtists] = await Promise.all([
+    legacyIds.length
+      ? ContractTermsModel.find({ kunstlerId: { $in: legacyIds } })
+          .select({ kunstlerId: 1, printCommissionPct: 1, originalCommissionPct: 1 })
+          .lean<BackfillTerms[]>()
+      : Promise.resolve([] as BackfillTerms[]),
+    legacyIds.length
+      ? ArtistModel.find({ _id: { $in: legacyIds.filter((value) => Types.ObjectId.isValid(value)).map((value) => new Types.ObjectId(value)) } })
+          .select({ _id: 1, name: 1, "publicProfile.displayName": 1, "publicProfile.name": 1 })
+          .lean<LegacyArtistName[]>()
+      : Promise.resolve([] as LegacyArtistName[]),
+  ]);
 
   const productByVariantGid = new Map<string, MatchResult>();
   const productByProductGid = new Map<string, MatchResult>();
   const productByHandle = new Map<string, MatchResult>();
   const artistById = new Map<string, BackfillArtist>();
+  const artistByMetaobjectGid = new Map<string, BackfillArtist>();
+  const vendorCandidates = new Map<string, BackfillArtist[]>();
   const termsByArtistId = new Map<string, BackfillTerms>();
   const productById = new Map<string, BackfillProduct>();
+  const legacyArtistById = new Map<string, LegacyArtistName>();
+
+  for (const legacyArtist of legacyArtists) {
+    legacyArtistById.set(String(legacyArtist._id), legacyArtist);
+  }
 
   for (const artist of artists) {
     artistById.set(String(artist._id), artist);
+    const metaobjectIds = [artist.shopify?.metaobjectGid, artist.shopifyMetaobjectId].map((value) => value?.trim()).filter(Boolean) as string[];
+    metaobjectIds.forEach((metaobjectId) => artistByMetaobjectGid.set(metaobjectId, artist));
+
+    const legacyArtist = artist.legacyArtistId ? legacyArtistById.get(artist.legacyArtistId) || null : null;
+    const vendorKeys = [
+      artist.displayName,
+      artist.artistKey,
+      artist.handle,
+      artist.publicSlug,
+      legacyArtist?.name,
+      legacyArtist?.publicProfile?.displayName,
+      legacyArtist?.publicProfile?.name,
+    ]
+      .map((value) => normalizeText(value))
+      .filter(Boolean);
+
+    vendorKeys.forEach((vendorKey) => {
+      const existing = vendorCandidates.get(vendorKey) || [];
+      existing.push(artist);
+      vendorCandidates.set(vendorKey, existing);
+    });
   }
 
   for (const term of terms) {
@@ -309,7 +383,15 @@ async function loadBackfillContext(shopDomain: string) {
     if (variantId) productByVariantGid.set(variantId, resolved);
   }
 
-  return { productByVariantGid, productByProductGid, productByHandle, artistById, termsByArtistId };
+  const artistByVendor = new Map<string, BackfillArtist>();
+  for (const [vendorKey, candidates] of vendorCandidates.entries()) {
+    const uniqueCandidates = Array.from(new Map(candidates.map((candidate) => [String(candidate._id), candidate])).values());
+    if (uniqueCandidates.length === 1) {
+      artistByVendor.set(vendorKey, uniqueCandidates[0]);
+    }
+  }
+
+  return { productByVariantGid, productByProductGid, productByHandle, artistById, artistByMetaobjectGid, artistByVendor, termsByArtistId };
 }
 
 function matchLineItem(params: {
@@ -317,33 +399,76 @@ function matchLineItem(params: {
   productByVariantGid: Map<string, MatchResult>;
   productByProductGid: Map<string, MatchResult>;
   productByHandle: Map<string, MatchResult>;
+  artistByMetaobjectGid: Map<string, BackfillArtist>;
+  artistByVendor: Map<string, BackfillArtist>;
 }): MatchResult {
-  const variantKey = params.line.variantId?.trim();
-  if (variantKey) {
-    const matched = params.productByVariantGid.get(variantKey);
-    if (matched) return matched;
-  }
-
-  const productKey = params.line.productId?.trim();
-  if (productKey) {
-    const matched = params.productByProductGid.get(productKey);
-    if (matched) return matched;
-  }
-
-  const handle = params.line.productHandle?.trim().toLowerCase();
-  if (handle) {
-    const matched = params.productByHandle.get(handle);
-    if (matched) return matched;
-  }
-
-  return {
+  let productMatch: MatchResult = {
     canonicalProductId: null,
     canonicalArtistId: null,
     productKey: null,
     artworkTitle: null,
     productRecord: null,
-    matchedBy: "none",
+    matchedBy: "unmatched",
   };
+
+  const variantKey = params.line.variantId?.trim();
+  if (variantKey) {
+    const matched = params.productByVariantGid.get(variantKey);
+    if (matched) productMatch = matched;
+  }
+
+  if (!productMatch.canonicalProductId && !productMatch.canonicalArtistId) {
+    const productKey = params.line.productId?.trim();
+    if (productKey) {
+      const matched = params.productByProductGid.get(productKey);
+      if (matched) productMatch = matched;
+    }
+  }
+
+  if (!productMatch.canonicalProductId && !productMatch.canonicalArtistId) {
+    const handle = params.line.productHandle?.trim().toLowerCase();
+    if (handle) {
+      const matched = params.productByHandle.get(handle);
+      if (matched) productMatch = matched;
+    }
+  }
+
+  const metafieldArtist = params.line.artistMetaobjectGid?.trim()
+    ? params.artistByMetaobjectGid.get(params.line.artistMetaobjectGid.trim()) || null
+    : null;
+  if (metafieldArtist) {
+    const productArtistId = productMatch.canonicalArtistId ? String(productMatch.canonicalArtistId) : null;
+    const metafieldArtistId = String(metafieldArtist._id);
+    const keepProduct = !productArtistId || productArtistId === metafieldArtistId;
+
+    return {
+      canonicalProductId: keepProduct ? productMatch.canonicalProductId : null,
+      canonicalArtistId: metafieldArtist._id,
+      productKey: keepProduct ? productMatch.productKey : null,
+      artworkTitle: keepProduct ? productMatch.artworkTitle : null,
+      productRecord: keepProduct ? productMatch.productRecord : null,
+      matchedBy: "metafield",
+    };
+  }
+
+  const vendorKey = normalizeText(params.line.vendor);
+  const vendorArtist = vendorKey ? params.artistByVendor.get(vendorKey) || null : null;
+  if (vendorArtist) {
+    const productArtistId = productMatch.canonicalArtistId ? String(productMatch.canonicalArtistId) : null;
+    const vendorArtistId = String(vendorArtist._id);
+    const keepProduct = !productArtistId || productArtistId === vendorArtistId;
+
+    return {
+      canonicalProductId: keepProduct ? productMatch.canonicalProductId : null,
+      canonicalArtistId: vendorArtist._id,
+      productKey: keepProduct ? productMatch.productKey : null,
+      artworkTitle: keepProduct ? productMatch.artworkTitle : null,
+      productRecord: keepProduct ? productMatch.productRecord : null,
+      matchedBy: "vendor",
+    };
+  }
+
+  return productMatch;
 }
 
 async function persistFetchedOrders(params: {
@@ -374,6 +499,8 @@ async function persistFetchedOrders(params: {
         productByVariantGid: context.productByVariantGid,
         productByProductGid: context.productByProductGid,
         productByHandle: context.productByHandle,
+        artistByMetaobjectGid: context.artistByMetaobjectGid,
+        artistByVendor: context.artistByVendor,
       });
       const artistId = match.canonicalArtistId ? String(match.canonicalArtistId) : null;
       const artist = artistId ? context.artistById.get(artistId) || null : null;
@@ -395,18 +522,22 @@ async function persistFetchedOrders(params: {
         financialStatus: order.financialStatus || null,
         fulfillmentStatus: order.fulfillmentStatus || null,
         title: match.artworkTitle || line.title,
+        lineItemTitle: match.artworkTitle || line.title,
         variantTitle: line.variantTitle || null,
         shopifyProductId: line.productId || null,
         shopifyVariantId: line.variantId || null,
         productHandle: line.productHandle || null,
+        metafieldArtistGid: line.artistMetaobjectGid || null,
+        vendor: line.vendor || null,
         canonicalProductId: match.canonicalProductId ? String(match.canonicalProductId) : null,
         canonicalArtistId: match.canonicalArtistId ? String(match.canonicalArtistId) : null,
         matchedBy: match.matchedBy,
       };
 
-      if (match.canonicalArtistId && match.canonicalProductId) {
+      if (match.canonicalArtistId) {
         accumulator.matchedLineItemsCount += 1;
         if (accumulator.latestMatched.length < 20) accumulator.latestMatched.push(diagnosticItem);
+        logShopifyPull("shopify_orders_backfill_line_match", diagnosticItem, { runId, verboseOnly: true });
       } else {
         accumulator.unmatchedLineItemsCount += 1;
         if (accumulator.latestUnmatched.length < 20) accumulator.latestUnmatched.push(diagnosticItem);
@@ -426,6 +557,7 @@ async function persistFetchedOrders(params: {
         shopifyProductId: line.productId || null,
         shopifyProductGid: line.productId || null,
         productHandle: line.productHandle || null,
+        vendor: line.vendor || null,
         productTags: Array.isArray(line.productTags) ? line.productTags : [],
         artistMetaobjectGid,
         inferredSaleType,
@@ -642,7 +774,7 @@ export async function getShopifyOrdersDiagnostics(params?: { limit?: number; sin
         payoutStatus: line.payoutStatus || null,
       };
 
-      if (line.canonicalArtistId && line.canonicalProductId) matchedOrderItems.push(item);
+      if (line.canonicalArtistId) matchedOrderItems.push(item);
       else unmatchedOrderItems.push(item);
       if (countable && line.canonicalArtistId) {
         artistEarningsRelevantLineItems.push(item);

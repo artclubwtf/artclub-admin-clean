@@ -12,6 +12,7 @@ export type ShopifyOrderLine = {
   lineTotal: number;
   productId: string | null;
   productHandle: string | null;
+  vendor: string | null;
   productTags: string[];
   artistMetaobjectGid: string | null;
 };
@@ -59,6 +60,7 @@ function mapShopifyOrderNode(node: any): ShopifyOrder {
         lineTotal,
         productId: li?.product?.id ?? null,
         productHandle: li?.product?.handle ?? null,
+        vendor: li?.product?.vendor ?? null,
         productTags: normalizeTags(li?.product?.tags),
         artistMetaobjectGid: li?.product?.metafield?.reference?.id ?? null,
       };
@@ -103,6 +105,7 @@ const SHOPIFY_ORDER_FIELDS = `
           id
           handle
           title
+          vendor
           tags
           metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.artistMetaobject}") {
             reference { ... on Metaobject { id handle } }

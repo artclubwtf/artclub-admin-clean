@@ -17,6 +17,7 @@ const shopifyOrderLineItemSchema = new Schema(
     shopifyProductId: { type: String },
     shopifyProductGid: { type: String },
     productHandle: { type: String },
+    vendor: { type: String },
     productTags: { type: [String], default: [] },
     artistMetaobjectGid: { type: String },
     inferredSaleType: { type: String, enum: orderSaleTypes, default: "unknown" },
