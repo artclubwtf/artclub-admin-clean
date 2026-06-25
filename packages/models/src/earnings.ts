@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const artistEarningsPayoutStatuses = z.enum(["pending", "eligible", "paid", "refunded", "cancelled"]);
+export const artistEarningsPayoutStatuses = z.enum(["pending", "eligible", "paid", "partially_refunded", "refunded", "cancelled"]);
 export type ArtistEarningsPayoutStatus = z.infer<typeof artistEarningsPayoutStatuses>;
 
 export const artistEarningsOrderStatuses = z.enum(["pending", "paid", "refunded", "cancelled"]);

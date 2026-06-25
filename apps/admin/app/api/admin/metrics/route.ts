@@ -7,7 +7,8 @@ import { ShopifyOrderCacheModel } from "@/models/ShopifyOrderCache";
 import { PosOrderModel } from "@/models/PosOrder";
 import { PayoutTransactionModel } from "@/models/PayoutTransaction";
 import { OrderLineOverrideModel } from "@/models/OrderLineOverride";
-import { computeArtistPayoutTotalFromSplit } from "@/lib/artistPayouts";
+import { computeArtistPayoutTotalFromSplit, computeRemainingGross } from "@/lib/artistPayouts";
+import { isCountableShopifyOrder } from "@/lib/shopifyOrderStatus";
 
 const stageUnderContract = "Under Contract";
 
@@ -94,6 +95,7 @@ export async function GET() {
 
     // Shopify lines with overrides
     for (const order of shopifyOrders) {
+      if (!isCountableShopifyOrder(order)) continue;
       const lines: any[] = Array.isArray(order.lineItems) ? order.lineItems : [];
       lines.forEach((li, idx) => {
         const baseKey = li.lineId || li.id || `${order.shopifyOrderGid}:line:${idx}`;
@@ -105,10 +107,11 @@ export async function GET() {
         if (!artistId) return;
         const saleType = ov?.overrideSaleType || li.inferredSaleType || "unknown";
         const gross = ov?.overrideGross !== undefined ? ov.overrideGross : Number(li.lineTotal || 0);
+        const remainingGross = computeRemainingGross(gross, Number(li.refundedAmount || 0));
         const bucket = ensureTotals(artistId);
-        if (saleType === "print") bucket.print += gross;
-        else if (saleType === "original") bucket.original += gross;
-        else bucket.unknown += gross;
+        if (saleType === "print") bucket.print += remainingGross;
+        else if (saleType === "original") bucket.original += remainingGross;
+        else bucket.unknown += remainingGross;
       });
     }
 

@@ -45,9 +45,10 @@ async function updateWebhookSyncState(params: { lastError: string | null }) {
 
 export async function handleShopifyOrderWebhook(req: Request, topic: string) {
   const runId = createSyncRunId(`shopify-orders-webhook-${topic.replace(/[^\w-]+/g, "-")}`);
-  const rawBody = await req.text();
+  const rawBodyBuffer = Buffer.from(await req.arrayBuffer());
+  const rawBody = rawBodyBuffer.toString("utf8");
   const providedHmac = req.headers.get("x-shopify-hmac-sha256");
-  const hmacValidation = getShopifyWebhookHmacValidation(rawBody, providedHmac);
+  const hmacValidation = getShopifyWebhookHmacValidation(rawBodyBuffer, providedHmac);
   const webhookLogBase = {
     topic,
     webhook_secret_present: hmacValidation.webhookSecretPresent,

@@ -23,7 +23,7 @@ function formatDate(value: string) {
 
 function statusTone(status: ArtistRecentSale["payoutStatus"] | ArtistRecentSale["orderStatus"]) {
   if (status === "paid") return "bg-emerald-100 text-emerald-700";
-  if (status === "refunded" || status === "cancelled") return "bg-rose-100 text-rose-700";
+  if (status === "refunded" || status === "partially_refunded" || status === "cancelled") return "bg-rose-100 text-rose-700";
   if (status === "eligible") return "bg-sky-100 text-sky-700";
   return "bg-amber-100 text-amber-700";
 }

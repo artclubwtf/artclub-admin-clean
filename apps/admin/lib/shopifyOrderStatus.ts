@@ -1,6 +1,7 @@
 export type ShopifyOrderStatusLike = {
   financialStatus?: string | null;
   cancelledAt?: Date | string | null;
+  refundedAmount?: number | null;
   refundedTotalGross?: number | null;
   totalGross?: number | null;
 };
@@ -10,7 +11,15 @@ export function normalizeShopifyFinancialStatus(value?: string | null) {
 }
 
 export function isPaidShopifyFinancialStatus(status: string) {
-  return status.includes("paid");
+  return status === "paid" || status === "partially_paid";
+}
+
+export function isPartiallyRefundedShopifyOrder(order: ShopifyOrderStatusLike) {
+  const status = normalizeShopifyFinancialStatus(order.financialStatus);
+  const refundedGross = Number(order.refundedAmount ?? order.refundedTotalGross ?? 0);
+  const remainingGross = Number(order.totalGross || 0);
+  if (status === "partially_refunded") return remainingGross > 0;
+  return refundedGross > 0 && remainingGross > 0 && !isCancelledShopifyOrder(order);
 }
 
 export function isCancelledShopifyOrder(order: ShopifyOrderStatusLike) {
@@ -20,16 +29,18 @@ export function isCancelledShopifyOrder(order: ShopifyOrderStatusLike) {
 
 export function isFullyRefundedShopifyOrder(order: ShopifyOrderStatusLike) {
   const status = normalizeShopifyFinancialStatus(order.financialStatus);
-  const refundedGross = Number(order.refundedTotalGross || 0);
-  const totalGross = Number(order.totalGross || 0);
-  if (refundedGross > 0 && totalGross > 0 && refundedGross + 0.01 >= totalGross) return true;
-  return status.includes("refund") && refundedGross > 0 && (totalGross === 0 || refundedGross + 0.01 >= totalGross);
+  const refundedGross = Number(order.refundedAmount ?? order.refundedTotalGross ?? 0);
+  const remainingGross = Number(order.totalGross || 0);
+  if (status === "refunded") return true;
+  if (refundedGross > 0 && remainingGross <= 0.01) return true;
+  return false;
 }
 
 export function isCountableShopifyOrder(order: ShopifyOrderStatusLike) {
   if (isCancelledShopifyOrder(order)) return false;
   if (isFullyRefundedShopifyOrder(order)) return false;
-  return isPaidShopifyFinancialStatus(normalizeShopifyFinancialStatus(order.financialStatus));
+  const normalized = normalizeShopifyFinancialStatus(order.financialStatus);
+  return isPaidShopifyFinancialStatus(normalized) || isPartiallyRefundedShopifyOrder(order);
 }
 
 export function normalizeShopifyOrderStatus(order: ShopifyOrderStatusLike) {

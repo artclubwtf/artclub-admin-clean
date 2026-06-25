@@ -1,12 +1,20 @@
 import { Types } from "mongoose";
 
-import { computeArtistPayout } from "./artistPayouts";
+import { computeArtistPayout, computeRemainingGross, computeRemainingQuantity } from "./artistPayouts";
 import { ArtistModel } from "../models/Artist";
 import { CanonicalArtistModel } from "../models/CanonicalArtist";
 import { OrderLineOverrideModel } from "../models/OrderLineOverride";
 import { PosOrderModel } from "../models/PosOrder";
 import { ShopifyOrderCacheModel } from "../models/ShopifyOrderCache";
 import { connectMongo } from "./mongodb";
+import {
+  isCancelledShopifyOrder,
+  isCountableShopifyOrder,
+  isFullyRefundedShopifyOrder,
+  isPaidShopifyFinancialStatus,
+  normalizeShopifyFinancialStatus,
+  normalizeShopifyOrderStatus,
+} from "./shopifyOrderStatus";
 import { logShopifyDiagnostics } from "./sync/syncLogger";
 
 export type ArtistOrderIdentity = {
@@ -34,7 +42,7 @@ export type ArtistOrderSaleLine = {
   label: string;
   currency: string;
   orderStatus: "paid" | "pending" | "refunded" | "cancelled";
-  payoutStatus: "pending" | "eligible" | "paid" | "refunded" | "cancelled";
+  payoutStatus: "pending" | "eligible" | "paid" | "partially_refunded" | "refunded" | "cancelled";
   productKey: string;
   artworkTitle: string;
   variantTitle: string | null;
@@ -43,6 +51,8 @@ export type ArtistOrderSaleLine = {
   artistShare: number;
   artistShareIsEstimated: boolean;
   saleType: "print" | "original" | "unknown";
+  refundedAmount: number;
+  refundedQuantity: number;
 };
 
 export type ArtistOrderSalesResult = {
@@ -66,20 +76,6 @@ function uniqNonEmpty(values: Array<string | null | undefined>) {
 
 function toObjectId(value: string | null) {
   return value && Types.ObjectId.isValid(value) ? new Types.ObjectId(value) : null;
-}
-
-function normalizeFinancialStatus(value?: string | null) {
-  return (value || "").trim().toLowerCase();
-}
-
-function deriveShopifyOrderStatus(doc: {
-  financialStatus?: string | null;
-  cancelledAt?: Date | null;
-  refundedTotalGross?: number | null;
-}) {
-  if (doc.cancelledAt) return "cancelled" as const;
-  if (Number(doc.refundedTotalGross || 0) > 0) return "refunded" as const;
-  return normalizeFinancialStatus(doc.financialStatus).includes("paid") ? ("paid" as const) : ("pending" as const);
 }
 
 async function resolveArtistOrderIdentity(params: LoadArtistOrderSalesParams): Promise<ArtistOrderIdentity> {
@@ -215,13 +211,15 @@ export async function loadArtistOrderSales(params: LoadArtistOrderSalesParams): 
   const legacyArtistIdSet = new Set(legacyArtistIds);
 
   for (const doc of shopifyOrders) {
-    const status = normalizeFinancialStatus(doc.financialStatus);
-    const isPaid = status.includes("paid");
-    const isCancelled = Boolean(doc.cancelledAt) || Number(doc.refundedTotalGross || 0) > 0;
-    if (!includeUnpaid && !isPaid) continue;
-    if (!includeCancelled && isCancelled) continue;
+    const normalizedFinancialStatus = normalizeShopifyFinancialStatus(doc.financialStatus);
+    const isPaid = isPaidShopifyFinancialStatus(normalizedFinancialStatus);
+    const isCancelled = isCancelledShopifyOrder(doc);
+    const fullyRefunded = isFullyRefundedShopifyOrder(doc);
+    const countableSale = isCountableShopifyOrder(doc);
+    if (!includeUnpaid && !countableSale && !isPaid) continue;
+    if (!includeCancelled && (isCancelled || fullyRefunded)) continue;
 
-    const orderStatus = deriveShopifyOrderStatus(doc);
+    const orderStatus = normalizeShopifyOrderStatus(doc);
     const createdAt = doc.createdAt ? new Date(doc.createdAt).toISOString() : new Date().toISOString();
     const label = doc.orderName || doc.shopifyOrderGid || "Order";
     const currency = doc.currency || "EUR";
@@ -244,10 +242,14 @@ export async function loadArtistOrderSales(params: LoadArtistOrderSalesParams): 
 
       const saleType = (override?.overrideSaleType || line.inferredSaleType || "unknown") as ArtistOrderSaleLine["saleType"];
       const gross = Number(override?.overrideGross !== undefined ? override.overrideGross : line.lineTotal || 0);
-      const payout = computeArtistPayout(gross, saleType);
-      if (saleType === "print") printGross += gross;
-      else if (saleType === "original") originalGross += gross;
-      else unknownGross += gross;
+      const refundedAmount = Number(line.refundedAmount || 0);
+      const refundedQuantity = Number(line.refundedQuantity || 0);
+      const remainingGross = computeRemainingGross(gross, refundedAmount);
+      const remainingQuantity = computeRemainingQuantity(line.quantity, refundedQuantity);
+      const payout = computeArtistPayout(remainingGross, saleType);
+      if (saleType === "print") printGross += remainingGross;
+      else if (saleType === "original") originalGross += remainingGross;
+      else unknownGross += remainingGross;
 
       logShopifyDiagnostics(
         "artist_order_sales_line_payout",
@@ -280,11 +282,13 @@ export async function loadArtistOrderSales(params: LoadArtistOrderSalesParams): 
         productKey: line.productKey || "",
         artworkTitle: line.title || "Untitled artwork",
         variantTitle: line.variantTitle || null,
-        quantity: Number(line.quantity || 0),
-        salePrice: gross,
+        quantity: remainingQuantity,
+        salePrice: remainingGross,
         artistShare: payout.artistPayout,
         artistShareIsEstimated: saleType === "unknown",
         saleType,
+        refundedAmount,
+        refundedQuantity,
       });
     });
 
@@ -360,6 +364,8 @@ export async function loadArtistOrderSales(params: LoadArtistOrderSalesParams): 
         artistShare: payout.artistPayout,
         artistShareIsEstimated: saleType === "unknown",
         saleType,
+        refundedAmount: 0,
+        refundedQuantity: 0,
       });
     });
 

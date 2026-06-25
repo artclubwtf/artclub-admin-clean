@@ -2,6 +2,7 @@ import type { ArtistEarningsOrderStatus, ArtistEarningsPayoutStatus, ArtistEarni
 
 import { artistEarningsResponse } from "@artclub/models";
 
+import { computeArtistPayout } from "../../../admin/lib/artistPayouts";
 import { loadArtistOrderSales } from "../../../admin/lib/artistOrderSales";
 import { ensureFreshShopifyOrderCache } from "../../../admin/lib/shopifyOrderAutoSync";
 import type { ArtistContext } from "@/lib/server/artist-context";
@@ -23,6 +24,7 @@ type SaleRecord = {
   payoutStatus: ArtistEarningsPayoutStatus;
   orderStatus: ArtistEarningsOrderStatus;
   productKey: string;
+  refundedAmount: number;
 };
 
 function toMoney(value: number) {
@@ -148,6 +150,7 @@ export async function loadArtistEarnings(context: ArtistContext): Promise<Artist
       payoutStatus: line.payoutStatus as ArtistEarningsPayoutStatus,
       orderStatus: line.orderStatus as ArtistEarningsOrderStatus,
       productKey: line.productKey || "",
+      refundedAmount: toMoney(computeArtistPayout(Number(line.refundedAmount || 0), line.saleType).artistPayout),
     });
   }
 
@@ -173,10 +176,8 @@ export async function loadArtistEarnings(context: ArtistContext): Promise<Artist
 
   for (const record of saleRecords) {
     const isRefunded = record.orderStatus === "refunded" || record.orderStatus === "cancelled";
-    if (isRefunded) {
-      refundedAmount += record.artistShare;
-      continue;
-    }
+    refundedAmount += record.refundedAmount;
+    if (isRefunded) continue;
 
     totalSalesAmount += record.salePrice;
     soldItemsCount += record.quantity;

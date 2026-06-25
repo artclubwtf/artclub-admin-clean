@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 
 import { fetchShopifyOrders, type ShopifyOrder, type ShopifyOrderLine } from "./shopifyOrders";
-import { classifyArtistPayoutType, computeArtistPayout } from "./artistPayouts";
+import { classifyArtistPayoutType, computeArtistPayout, computeRemainingGross, computeRemainingQuantity } from "./artistPayouts";
 import {
   isCancelledShopifyOrder,
   isCountableShopifyOrder,
@@ -17,7 +17,7 @@ import { orderSaleTypes, ShopifyOrderCacheModel } from "../models/ShopifyOrderCa
 import { SyncStateModel } from "../models/SyncState";
 
 type InferredSaleType = (typeof orderSaleTypes)[number];
-type PayoutStatus = "pending" | "eligible" | "paid" | "refunded" | "cancelled";
+type PayoutStatus = "pending" | "eligible" | "paid" | "partially_refunded" | "refunded" | "cancelled";
 
 type BackfillProduct = {
   _id: Types.ObjectId;
@@ -86,6 +86,8 @@ type BackfillLineItem = {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  refundedQuantity: number;
+  refundedAmount: number;
   shopifyProductId: string | null;
   shopifyProductGid: string | null;
   productHandle: string | null;
@@ -456,9 +458,14 @@ async function persistFetchedOrders(params: {
       const artistId = match.canonicalArtistId ? String(match.canonicalArtistId) : null;
       const artist = artistId ? context.artistById.get(artistId) || null : null;
       const lineTotal = Number(line.lineTotal || 0);
+      const refundedAmount = Number(line.refundedAmount || 0);
+      const refundedQuantity = Number(line.refundedQuantity || 0);
+      const remainingGross = cancelled || fullyRefunded ? 0 : computeRemainingGross(lineTotal, refundedAmount);
+      const remainingQuantity = cancelled || fullyRefunded ? 0 : computeRemainingQuantity(line.quantity, refundedQuantity);
       const inferredSaleType = inferSaleType(line, match.productRecord);
-      const payout = computeArtistPayout(lineTotal, inferredSaleType);
-      const payoutStatus: PayoutStatus = cancelled ? "cancelled" : fullyRefunded ? "refunded" : "pending";
+      const payout = computeArtistPayout(remainingGross, inferredSaleType);
+      const payoutStatus: PayoutStatus =
+        cancelled ? "cancelled" : fullyRefunded ? "refunded" : refundedAmount > 0 ? "partially_refunded" : "pending";
       const lineId = line.id || `${order.id}:line:${index}`;
       const artistMetaobjectGid =
         line.artistMetaobjectGid ||
@@ -499,7 +506,7 @@ async function persistFetchedOrders(params: {
           orderName: order.name || order.id,
           productTitle: match.artworkTitle || line.title,
           variantTitle: line.variantTitle || null,
-          grossSalePrice: payout.grossSalePrice,
+          grossSalePrice: Number(line.lineTotal || 0),
           netSalePrice: payout.netSalePrice,
           payoutRate: payout.payoutRate,
           artistPayout: payout.artistPayout,
@@ -515,9 +522,11 @@ async function persistFetchedOrders(params: {
         variantTitle: line.variantTitle || null,
         shopifyVariantId: line.variantId || null,
         shopifyVariantGid: line.variantId || null,
-        quantity: Number(line.quantity || 0),
+        quantity: remainingQuantity,
         unitPrice: Number(line.unitPrice || 0),
         lineTotal,
+        refundedQuantity,
+        refundedAmount,
         shopifyProductId: line.productId || null,
         shopifyProductGid: line.productId || null,
         productHandle: line.productHandle || null,
@@ -548,6 +557,7 @@ async function persistFetchedOrders(params: {
         financialStatus: order.financialStatus,
         fulfillmentStatus: order.fulfillmentStatus,
         cancelledAt: order.cancelledAt ? new Date(order.cancelledAt) : undefined,
+        refundedAmount: order.refundedAmount ?? order.refundedTotalGross ?? 0,
         refundedTotalGross: order.refundedTotalGross ?? 0,
         currency: order.currency || "EUR",
         totalGross: Number.isFinite(order.totalGross) ? order.totalGross : 0,

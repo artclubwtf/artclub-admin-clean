@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectMongo } from "@/lib/mongodb";
 import { ensureFreshShopifyOrderCache } from "@/lib/shopifyOrderAutoSync";
+import { computeRemainingGross } from "@/lib/artistPayouts";
 import { isCountableShopifyOrder } from "@/lib/shopifyOrderStatus";
 import { ShopifyOrderCacheModel } from "@/models/ShopifyOrderCache";
 import { PosOrderModel } from "@/models/PosOrder";
@@ -23,7 +24,7 @@ type OrderWithAddress = {
   shipping_address?: AddressLike;
   billing_address?: AddressLike;
 };
-type ShopifyLineItem = { lineId?: string; id?: string; lineTotal?: number };
+type ShopifyLineItem = { lineId?: string; id?: string; lineTotal?: number; refundedAmount?: number };
 type ShopifyOrderAgg = {
   shopifyOrderGid: string;
   financialStatus?: string | null;
@@ -196,7 +197,8 @@ export async function GET(req: Request) {
         const lineKey = li.lineId || li.id || `${order.shopifyOrderGid}:line:${idx}`;
         const ov = shopifyOvMap.get(`${order.shopifyOrderGid}:${lineKey}`);
         const gross = Number(ov?.overrideGross ?? li.lineTotal ?? 0);
-        orderRevenue += gross;
+        const remainingGross = computeRemainingGross(gross, Number(li.refundedAmount || 0));
+        orderRevenue += remainingGross;
       });
 
       if (!orderRevenue) {

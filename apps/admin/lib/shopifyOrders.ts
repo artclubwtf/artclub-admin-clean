@@ -10,6 +10,8 @@ export type ShopifyOrderLine = {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  refundedQuantity: number;
+  refundedAmount: number;
   productId: string | null;
   productHandle: string | null;
   vendor: string | null;
@@ -25,6 +27,7 @@ export type ShopifyOrder = {
   financialStatus?: string | null;
   fulfillmentStatus?: string | null;
   cancelledAt?: string | null;
+  refundedAmount?: number | null;
   refundedTotalGross?: number | null;
   currency: string;
   totalGross: number;
@@ -38,13 +41,31 @@ export type ShopifyOrdersResult = {
 
 function mapShopifyOrderNode(node: any): ShopifyOrder {
   const total = parseMoney(node?.currentTotalPriceSet);
+  const refunded = parseMoney(node?.totalRefundedSet);
   const currency = node?.currencyCode ?? total.currencyCode ?? "EUR";
+  const refundByLineId = new Map<string, { refundedQuantity: number; refundedAmount: number }>();
+
+  for (const refund of Array.isArray(node?.refunds) ? node.refunds : []) {
+    const refundLineItems = refund?.refundLineItems?.nodes ?? refund?.refundLineItems?.edges?.map(({ node: refundLine }: any) => refundLine) ?? [];
+    for (const refundLine of refundLineItems) {
+      const lineItemId = refundLine?.lineItem?.id;
+      if (!lineItemId) continue;
+      const subtotal = parseMoney(refundLine?.subtotalSet);
+      const totalTax = parseMoney(refundLine?.totalTaxSet);
+      const refundedAmount = Number(subtotal.amount || 0) + Number(totalTax.amount || 0);
+      const existing = refundByLineId.get(lineItemId) || { refundedQuantity: 0, refundedAmount: 0 };
+      existing.refundedQuantity += Number(refundLine?.quantity || 0);
+      existing.refundedAmount += refundedAmount;
+      refundByLineId.set(lineItemId, existing);
+    }
+  }
 
   const lineItems: ShopifyOrderLine[] =
     node?.lineItems?.edges?.map(({ node: li }: any) => {
       const unit = parseMoney(li?.originalUnitPriceSet);
       const discountedTotal = parseMoney(li?.discountedTotalSet);
       const originalTotal = parseMoney(li?.originalTotalSet);
+      const refundedLine = refundByLineId.get(li?.id ?? "") || { refundedQuantity: 0, refundedAmount: 0 };
       const lineTotal =
         discountedTotal.amount ??
         originalTotal.amount ??
@@ -58,6 +79,8 @@ function mapShopifyOrderNode(node: any): ShopifyOrder {
         quantity: Number(li?.quantity ?? 0),
         unitPrice: unit.amount ?? 0,
         lineTotal,
+        refundedQuantity: Number(refundedLine.refundedQuantity || 0),
+        refundedAmount: Number(refundedLine.refundedAmount || 0),
         productId: li?.product?.id ?? null,
         productHandle: li?.product?.handle ?? null,
         vendor: li?.product?.vendor ?? null,
@@ -74,7 +97,8 @@ function mapShopifyOrderNode(node: any): ShopifyOrder {
     financialStatus: node?.displayFinancialStatus ?? null,
     fulfillmentStatus: node?.displayFulfillmentStatus ?? null,
     cancelledAt: node?.cancelledAt ?? null,
-    refundedTotalGross: 0,
+    refundedAmount: refunded.amount ?? 0,
+    refundedTotalGross: refunded.amount ?? 0,
     currency,
     totalGross: total.amount ?? 0,
     lineItems,
@@ -91,6 +115,19 @@ const SHOPIFY_ORDER_FIELDS = `
   displayFulfillmentStatus
   cancelledAt
   currentTotalPriceSet { shopMoney { amount currencyCode } }
+  totalRefundedSet { shopMoney { amount currencyCode } }
+  refunds {
+    id
+    totalRefundedSet { shopMoney { amount currencyCode } }
+    refundLineItems(first: 100) {
+      nodes {
+        lineItem { id }
+        quantity
+        subtotalSet { shopMoney { amount currencyCode } }
+        totalTaxSet { shopMoney { amount currencyCode } }
+      }
+    }
+  }
   lineItems(first: 100) {
     edges {
       node {

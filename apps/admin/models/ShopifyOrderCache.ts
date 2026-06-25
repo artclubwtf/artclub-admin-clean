@@ -1,7 +1,7 @@
 import { InferSchemaType, Model, Schema, model, models } from "mongoose";
 
 export const orderSaleTypes = ["print", "original", "unknown"] as const;
-export const orderPayoutStatuses = ["pending", "eligible", "paid", "refunded", "cancelled"] as const;
+export const orderPayoutStatuses = ["pending", "eligible", "paid", "partially_refunded", "refunded", "cancelled"] as const;
 
 const shopifyOrderLineItemSchema = new Schema(
   {
@@ -14,6 +14,8 @@ const shopifyOrderLineItemSchema = new Schema(
     quantity: { type: Number, required: true },
     unitPrice: { type: Number, required: true },
     lineTotal: { type: Number, required: true },
+    refundedQuantity: { type: Number, default: 0 },
+    refundedAmount: { type: Number, default: 0 },
     shopifyProductId: { type: String },
     shopifyProductGid: { type: String },
     productHandle: { type: String },
@@ -58,6 +60,7 @@ const shopifyOrderCacheSchema = new Schema(
     processedAt: { type: Date },
     financialStatus: { type: String },
     cancelledAt: { type: Date },
+    refundedAmount: { type: Number },
     refundedTotalGross: { type: Number },
     fulfillmentStatus: { type: String },
     currency: { type: String, default: "EUR" },

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectMongo } from "@/lib/mongodb";
 import { ensureFreshShopifyOrderCache } from "@/lib/shopifyOrderAutoSync";
+import { computeRemainingGross } from "@/lib/artistPayouts";
 import { isCountableShopifyOrder } from "@/lib/shopifyOrderStatus";
 import { ShopifyOrderCacheModel } from "@/models/ShopifyOrderCache";
 import { PosOrderModel } from "@/models/PosOrder";
@@ -13,6 +14,7 @@ type ShopifyLineItem = {
   lineId?: string;
   id?: string;
   lineTotal?: number;
+  refundedAmount?: number;
   inferredSaleType?: "print" | "original" | "unknown" | string;
 };
 type ShopifyOrderAgg = {
@@ -160,6 +162,7 @@ export async function GET(req: Request) {
     });
 
     let revenue = 0;
+    let refundedAmount = 0;
     let ordersCount = 0;
     const split: SplitBuckets = { print: 0, original: 0, unknown: 0 };
 
@@ -172,18 +175,21 @@ export async function GET(req: Request) {
         const lineKey = li.lineId || li.id || `${order.shopifyOrderGid}:line:${idx}`;
         const ov = shopifyOvMap.get(`${order.shopifyOrderGid}:${lineKey}`);
         const gross = Number(ov?.overrideGross ?? li.lineTotal ?? 0);
+        const refundedGross = Number(li.refundedAmount || 0);
+        const remainingGross = computeRemainingGross(gross, refundedGross);
         const saleType = ov?.overrideSaleType ?? li.inferredSaleType ?? "unknown";
-        orderRevenue += gross;
-        applyLineSplit(split, saleType, gross);
+        orderRevenue += remainingGross;
+        refundedAmount += refundedGross;
+        applyLineSplit(split, saleType, remainingGross);
       });
 
       if (!orderRevenue) {
         orderRevenue = Number(order.totalGross || 0);
       }
 
-      revenue += orderRevenue;
-      ordersCount += 1;
-    }
+        revenue += orderRevenue;
+        ordersCount += 1;
+      }
 
     for (const order of posOrders) {
       const lines: PosLineItem[] = Array.isArray(order.lineItems) ? order.lineItems : [];
@@ -212,6 +218,7 @@ export async function GET(req: Request) {
     const response = {
       totals: {
         revenue,
+        refundedAmount,
         orders: ordersCount,
         aov: ordersCount > 0 ? revenue / ordersCount : 0,
       },

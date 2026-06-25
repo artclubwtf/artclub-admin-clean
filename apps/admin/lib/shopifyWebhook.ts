@@ -14,12 +14,17 @@ function safeEqual(left: string, right: string) {
   return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-export function getShopifyWebhookHmacValidation(rawBody: string, providedHmac: string | null): ShopifyWebhookHmacValidation {
+function toRawBodyBuffer(rawBody: string | Buffer) {
+  return Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody, "utf8");
+}
+
+export function getShopifyWebhookHmacValidation(rawBody: string | Buffer, providedHmac: string | null): ShopifyWebhookHmacValidation {
   const secret = (process.env.SHOPIFY_WEBHOOK_SECRET || "").trim();
   const normalizedHmac = providedHmac?.trim() || "";
   const webhookSecretPresent = Boolean(secret);
   const hmacHeaderPresent = Boolean(normalizedHmac);
-  const rawBodyLength = Buffer.byteLength(rawBody, "utf8");
+  const rawBodyBuffer = toRawBodyBuffer(rawBody);
+  const rawBodyLength = rawBodyBuffer.byteLength;
 
   if (!webhookSecretPresent || !hmacHeaderPresent) {
     return {
@@ -30,7 +35,7 @@ export function getShopifyWebhookHmacValidation(rawBody: string, providedHmac: s
     };
   }
 
-  const expected = createHmac("sha256", secret).update(rawBody, "utf8").digest("base64");
+  const expected = createHmac("sha256", secret).update(rawBodyBuffer).digest("base64");
   return {
     webhookSecretPresent,
     hmacHeaderPresent,
@@ -39,7 +44,7 @@ export function getShopifyWebhookHmacValidation(rawBody: string, providedHmac: s
   };
 }
 
-export function validateShopifyWebhookHmac(rawBody: string, providedHmac: string | null) {
+export function validateShopifyWebhookHmac(rawBody: string | Buffer, providedHmac: string | null) {
   return getShopifyWebhookHmacValidation(rawBody, providedHmac).hmacValid;
 }
 

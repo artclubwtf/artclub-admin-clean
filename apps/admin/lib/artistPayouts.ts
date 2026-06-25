@@ -24,6 +24,14 @@ type ArtistPayoutComputation = {
   artistPayout: number;
 };
 
+export function computeRemainingGross(grossSalePrice: number, refundedAmount: number) {
+  return toMoney(Math.max(Number(grossSalePrice || 0) - Number(refundedAmount || 0), 0));
+}
+
+export function computeRemainingQuantity(quantity: number, refundedQuantity: number) {
+  return Math.max(Number(quantity || 0) - Number(refundedQuantity || 0), 0);
+}
+
 export function computeArtistPayoutTotalFromSplit(split: { print: number; original: number; unknown: number }) {
   return toMoney(
     computeArtistPayout(split.print, "print").artistPayout +
