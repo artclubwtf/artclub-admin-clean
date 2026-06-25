@@ -1,6 +1,11 @@
 import { Types } from "mongoose";
 
 import { fetchShopifyOrders, type ShopifyOrder, type ShopifyOrderLine } from "@/lib/shopifyOrders";
+import {
+  isCancelledShopifyOrder,
+  isCountableShopifyOrder,
+  isFullyRefundedShopifyOrder,
+} from "@/lib/shopifyOrderStatus";
 import { resolveShopDomain } from "@/lib/shopDomain";
 import { logShopifyPull } from "@/lib/sync/syncLogger";
 import { CanonicalArtistModel } from "@/models/CanonicalArtist";
@@ -98,6 +103,18 @@ type BackfillDiagnosticsItem = {
   matchedBy: MatchResult["matchedBy"];
 };
 
+type BackfillContext = Awaited<ReturnType<typeof loadBackfillContext>>;
+type BackfillAccumulator = {
+  processedOrdersCount: number;
+  importedOrdersCount: number;
+  processedLineItemsCount: number;
+  matchedLineItemsCount: number;
+  unmatchedLineItemsCount: number;
+  skippedOrdersCount: number;
+  latestMatched: BackfillDiagnosticsItem[];
+  latestUnmatched: BackfillDiagnosticsItem[];
+};
+
 export type ShopifyOrdersBackfillResult = {
   ok: true;
   shopDomain: string;
@@ -121,27 +138,6 @@ export type ShopifyOrdersBackfillOptions = {
 
 function toMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
-}
-
-function normalizeFinancialStatus(value?: string | null) {
-  return (value || "").trim().toLowerCase().replace(/\s+/g, "_");
-}
-
-function isPaidFinancialStatus(status: string) {
-  return status.includes("paid");
-}
-
-function isCancelledOrder(order: Pick<ShopifyOrder, "cancelledAt" | "financialStatus">) {
-  const status = normalizeFinancialStatus(order.financialStatus);
-  return Boolean(order.cancelledAt) || status.includes("cancelled") || status.includes("voided");
-}
-
-function isFullyRefundedOrder(order: Pick<ShopifyOrder, "financialStatus" | "refundedTotalGross" | "totalGross">) {
-  const status = normalizeFinancialStatus(order.financialStatus);
-  const refundedGross = Number(order.refundedTotalGross || 0);
-  const totalGross = Number(order.totalGross || 0);
-  if (refundedGross > 0 && totalGross > 0 && refundedGross + 0.01 >= totalGross) return true;
-  return status.includes("refunded") && refundedGross > 0 && (totalGross === 0 || refundedGross + 0.01 >= totalGross);
 }
 
 function inferSaleType(line: ShopifyOrderLine, matchedProduct: BackfillProduct | null): InferredSaleType {
@@ -207,6 +203,19 @@ function buildAllocations(lines: BackfillLineItem[]) {
   }
 
   return Array.from(map.values());
+}
+
+function createAccumulator(): BackfillAccumulator {
+  return {
+    processedOrdersCount: 0,
+    importedOrdersCount: 0,
+    processedLineItemsCount: 0,
+    matchedLineItemsCount: 0,
+    unmatchedLineItemsCount: 0,
+    skippedOrdersCount: 0,
+    latestMatched: [],
+    latestUnmatched: [],
+  };
 }
 
 async function loadBackfillContext(shopDomain: string) {
@@ -336,6 +345,159 @@ function matchLineItem(params: {
   };
 }
 
+async function persistFetchedOrders(params: {
+  shopDomain: string;
+  orders: ShopifyOrder[];
+  context: BackfillContext;
+  runId?: string;
+  accumulator: BackfillAccumulator;
+}) {
+  const { shopDomain, orders, context, runId, accumulator } = params;
+
+  for (const order of orders) {
+    accumulator.processedOrdersCount += 1;
+
+    const cancelled = isCancelledShopifyOrder(order);
+    const fullyRefunded = isFullyRefundedShopifyOrder(order);
+    const countableSale = isCountableShopifyOrder(order);
+
+    if (!countableSale && !cancelled && !fullyRefunded) {
+      accumulator.skippedOrdersCount += 1;
+      continue;
+    }
+
+    const lines: BackfillLineItem[] = order.lineItems.map((line, index) => {
+      accumulator.processedLineItemsCount += 1;
+      const match = matchLineItem({
+        line,
+        productByVariantGid: context.productByVariantGid,
+        productByProductGid: context.productByProductGid,
+        productByHandle: context.productByHandle,
+      });
+      const artistId = match.canonicalArtistId ? String(match.canonicalArtistId) : null;
+      const artist = artistId ? context.artistById.get(artistId) || null : null;
+      const terms = artistId ? context.termsByArtistId.get(artistId) || null : null;
+      const lineTotal = Number(line.lineTotal || 0);
+      const inferredSaleType = inferSaleType(line, match.productRecord);
+      const share = calculateArtistShare({ salePrice: lineTotal, saleType: inferredSaleType, terms });
+      const payoutStatus: PayoutStatus = cancelled ? "cancelled" : fullyRefunded ? "refunded" : "pending";
+      const lineId = line.id || `${order.id}:line:${index}`;
+      const artistMetaobjectGid =
+        line.artistMetaobjectGid ||
+        artist?.shopify?.metaobjectGid ||
+        artist?.shopifyMetaobjectId ||
+        null;
+
+      const diagnosticItem: BackfillDiagnosticsItem = {
+        shopifyOrderId: order.id,
+        orderName: order.name || order.id,
+        financialStatus: order.financialStatus || null,
+        fulfillmentStatus: order.fulfillmentStatus || null,
+        title: match.artworkTitle || line.title,
+        variantTitle: line.variantTitle || null,
+        shopifyProductId: line.productId || null,
+        shopifyVariantId: line.variantId || null,
+        productHandle: line.productHandle || null,
+        canonicalProductId: match.canonicalProductId ? String(match.canonicalProductId) : null,
+        canonicalArtistId: match.canonicalArtistId ? String(match.canonicalArtistId) : null,
+        matchedBy: match.matchedBy,
+      };
+
+      if (match.canonicalArtistId && match.canonicalProductId) {
+        accumulator.matchedLineItemsCount += 1;
+        if (accumulator.latestMatched.length < 20) accumulator.latestMatched.push(diagnosticItem);
+      } else {
+        accumulator.unmatchedLineItemsCount += 1;
+        if (accumulator.latestUnmatched.length < 20) accumulator.latestUnmatched.push(diagnosticItem);
+        logShopifyPull("shopify_orders_backfill_line_unmatched", diagnosticItem, { runId, verboseOnly: true });
+      }
+
+      return {
+        lineId,
+        productKey: match.productKey,
+        title: match.artworkTitle || line.title,
+        variantTitle: line.variantTitle || null,
+        shopifyVariantId: line.variantId || null,
+        shopifyVariantGid: line.variantId || null,
+        quantity: Number(line.quantity || 0),
+        unitPrice: Number(line.unitPrice || 0),
+        lineTotal,
+        shopifyProductId: line.productId || null,
+        shopifyProductGid: line.productId || null,
+        productHandle: line.productHandle || null,
+        productTags: Array.isArray(line.productTags) ? line.productTags : [],
+        artistMetaobjectGid,
+        inferredSaleType,
+        canonicalProductId: match.canonicalProductId,
+        canonicalArtistId: match.canonicalArtistId,
+        artistShare: share.artistShare,
+        estimatedArtistShare: share.estimatedArtistShare,
+        payoutStatus,
+      };
+    });
+
+    const allocations = buildAllocations(lines);
+
+    await ShopifyOrderCacheModel.findOneAndUpdate(
+      { shopifyOrderGid: order.id },
+      {
+        shopDomain,
+        source: "shopify",
+        shopifyOrderId: order.id,
+        shopifyOrderGid: order.id,
+        orderName: order.name || order.id,
+        createdAt: order.createdAt ? new Date(order.createdAt) : new Date(),
+        processedAt: order.processedAt ? new Date(order.processedAt) : undefined,
+        financialStatus: order.financialStatus,
+        fulfillmentStatus: order.fulfillmentStatus,
+        cancelledAt: order.cancelledAt ? new Date(order.cancelledAt) : undefined,
+        refundedTotalGross: order.refundedTotalGross ?? 0,
+        currency: order.currency || "EUR",
+        totalGross: Number.isFinite(order.totalGross) ? order.totalGross : 0,
+        lineItems: lines,
+        allocations,
+        lastImportedAt: new Date(),
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
+
+    accumulator.importedOrdersCount += 1;
+  }
+}
+
+export async function cacheShopifyFetchedOrders(params: {
+  shopDomain?: string | null;
+  orders: ShopifyOrder[];
+  runId?: string;
+}) {
+  const shopDomain = resolveShopDomain(params.shopDomain);
+  if (!shopDomain) throw new Error("missing_shopify_shop_domain");
+
+  const context = await loadBackfillContext(shopDomain);
+  const accumulator = createAccumulator();
+  await persistFetchedOrders({
+    shopDomain,
+    orders: params.orders,
+    context,
+    runId: params.runId,
+    accumulator,
+  });
+
+  return {
+    ok: true as const,
+    shopDomain,
+    pageCount: 1,
+    processedOrdersCount: accumulator.processedOrdersCount,
+    importedOrdersCount: accumulator.importedOrdersCount,
+    processedLineItemsCount: accumulator.processedLineItemsCount,
+    matchedLineItemsCount: accumulator.matchedLineItemsCount,
+    unmatchedLineItemsCount: accumulator.unmatchedLineItemsCount,
+    skippedOrdersCount: accumulator.skippedOrdersCount,
+    latestMatched: accumulator.latestMatched,
+    latestUnmatched: accumulator.latestUnmatched,
+  };
+}
+
 export async function backfillShopifyOrders(options: ShopifyOrdersBackfillOptions = {}): Promise<ShopifyOrdersBackfillResult> {
   const shopDomain = resolveShopDomain();
   if (!shopDomain) {
@@ -357,138 +519,16 @@ export async function backfillShopifyOrders(options: ShopifyOrdersBackfillOption
     { runId, force: true },
   );
 
-  const { productByVariantGid, productByProductGid, productByHandle, artistById, termsByArtistId } = await loadBackfillContext(shopDomain);
+  const context = await loadBackfillContext(shopDomain);
 
   let after: string | null = null;
   let pageCount = 0;
-  let processedOrdersCount = 0;
-  let importedOrdersCount = 0;
-  let processedLineItemsCount = 0;
-  let matchedLineItemsCount = 0;
-  let unmatchedLineItemsCount = 0;
-  let skippedOrdersCount = 0;
-
-  const latestMatched: BackfillDiagnosticsItem[] = [];
-  const latestUnmatched: BackfillDiagnosticsItem[] = [];
+  const accumulator = createAccumulator();
 
   while (pageCount < maxPages) {
     const result = await fetchShopifyOrders({ limit: limitPerPage, after, since: options.since || null });
     pageCount += 1;
-
-    for (const order of result.orders) {
-      processedOrdersCount += 1;
-
-      const normalizedFinancialStatus = normalizeFinancialStatus(order.financialStatus);
-      const cancelled = isCancelledOrder(order);
-      const fullyRefunded = isFullyRefundedOrder(order);
-      const countableSale = isPaidFinancialStatus(normalizedFinancialStatus);
-
-      if (!countableSale && !cancelled && !fullyRefunded) {
-        skippedOrdersCount += 1;
-        continue;
-      }
-
-      const lines: BackfillLineItem[] = order.lineItems.map((line, index) => {
-        processedLineItemsCount += 1;
-        const match = matchLineItem({
-          line,
-          productByVariantGid,
-          productByProductGid,
-          productByHandle,
-        });
-        const artistId = match.canonicalArtistId ? String(match.canonicalArtistId) : null;
-        const artist = artistId ? artistById.get(artistId) || null : null;
-        const terms = artistId ? termsByArtistId.get(artistId) || null : null;
-        const lineTotal = Number(line.lineTotal || 0);
-        const inferredSaleType = inferSaleType(line, match.productRecord);
-        const share = calculateArtistShare({ salePrice: lineTotal, saleType: inferredSaleType, terms });
-        const payoutStatus: PayoutStatus = cancelled ? "cancelled" : fullyRefunded ? "refunded" : "pending";
-        const lineId = line.id || `${order.id}:line:${index}`;
-        const artistMetaobjectGid =
-          line.artistMetaobjectGid ||
-          artist?.shopify?.metaobjectGid ||
-          artist?.shopifyMetaobjectId ||
-          null;
-
-        const diagnosticItem: BackfillDiagnosticsItem = {
-          shopifyOrderId: order.id,
-          orderName: order.name || order.id,
-          financialStatus: order.financialStatus || null,
-          fulfillmentStatus: order.fulfillmentStatus || null,
-          title: match.artworkTitle || line.title,
-          variantTitle: line.variantTitle || null,
-          shopifyProductId: line.productId || null,
-          shopifyVariantId: line.variantId || null,
-          productHandle: line.productHandle || null,
-          canonicalProductId: match.canonicalProductId ? String(match.canonicalProductId) : null,
-          canonicalArtistId: match.canonicalArtistId ? String(match.canonicalArtistId) : null,
-          matchedBy: match.matchedBy,
-        };
-
-        if (match.canonicalArtistId && match.canonicalProductId) {
-          matchedLineItemsCount += 1;
-          if (latestMatched.length < 20) latestMatched.push(diagnosticItem);
-        } else {
-          unmatchedLineItemsCount += 1;
-          if (latestUnmatched.length < 20) latestUnmatched.push(diagnosticItem);
-          logShopifyPull(
-            "shopify_orders_backfill_line_unmatched",
-            diagnosticItem,
-            { runId, verboseOnly: true },
-          );
-        }
-
-        return {
-          lineId,
-          productKey: match.productKey,
-          title: match.artworkTitle || line.title,
-          variantTitle: line.variantTitle || null,
-          shopifyVariantId: line.variantId || null,
-          shopifyVariantGid: line.variantId || null,
-          quantity: Number(line.quantity || 0),
-          unitPrice: Number(line.unitPrice || 0),
-          lineTotal,
-          shopifyProductId: line.productId || null,
-          shopifyProductGid: line.productId || null,
-          productHandle: line.productHandle || null,
-          productTags: Array.isArray(line.productTags) ? line.productTags : [],
-          artistMetaobjectGid,
-          inferredSaleType,
-          canonicalProductId: match.canonicalProductId,
-          canonicalArtistId: match.canonicalArtistId,
-          artistShare: share.artistShare,
-          estimatedArtistShare: share.estimatedArtistShare,
-          payoutStatus,
-        };
-      });
-
-      const allocations = buildAllocations(lines);
-
-      await ShopifyOrderCacheModel.findOneAndUpdate(
-        { shopifyOrderGid: order.id },
-        {
-          shopDomain,
-          source: "shopify",
-          shopifyOrderId: order.id,
-          shopifyOrderGid: order.id,
-          orderName: order.name || order.id,
-          createdAt: order.createdAt ? new Date(order.createdAt) : new Date(),
-          processedAt: order.processedAt ? new Date(order.processedAt) : undefined,
-          financialStatus: order.financialStatus,
-          fulfillmentStatus: order.fulfillmentStatus,
-          cancelledAt: order.cancelledAt ? new Date(order.cancelledAt) : undefined,
-          refundedTotalGross: order.refundedTotalGross ?? 0,
-          currency: order.currency || "EUR",
-          totalGross: Number.isFinite(order.totalGross) ? order.totalGross : 0,
-          lineItems: lines,
-          allocations,
-          lastImportedAt: new Date(),
-        },
-        { upsert: true, new: true, setDefaultsOnInsert: true },
-      );
-
-      importedOrdersCount += 1;
-    }
+    await persistFetchedOrders({ shopDomain, orders: result.orders, context, runId, accumulator });
 
     if (!result.pageInfo.hasNextPage || !result.pageInfo.endCursor) break;
     after = result.pageInfo.endCursor;
@@ -498,14 +538,14 @@ export async function backfillShopifyOrders(options: ShopifyOrdersBackfillOption
     ok: true,
     shopDomain,
     pageCount,
-    processedOrdersCount,
-    importedOrdersCount,
-    processedLineItemsCount,
-    matchedLineItemsCount,
-    unmatchedLineItemsCount,
-    skippedOrdersCount,
-    latestMatched,
-    latestUnmatched,
+    processedOrdersCount: accumulator.processedOrdersCount,
+    importedOrdersCount: accumulator.importedOrdersCount,
+    processedLineItemsCount: accumulator.processedLineItemsCount,
+    matchedLineItemsCount: accumulator.matchedLineItemsCount,
+    unmatchedLineItemsCount: accumulator.unmatchedLineItemsCount,
+    skippedOrdersCount: accumulator.skippedOrdersCount,
+    latestMatched: accumulator.latestMatched,
+    latestUnmatched: accumulator.latestUnmatched,
   };
 
   logShopifyPull(
@@ -513,12 +553,12 @@ export async function backfillShopifyOrders(options: ShopifyOrdersBackfillOption
     {
       shopDomain,
       pageCount,
-      processedOrdersCount,
-      importedOrdersCount,
-      processedLineItemsCount,
-      matchedLineItemsCount,
-      unmatchedLineItemsCount,
-      skippedOrdersCount,
+      processedOrdersCount: accumulator.processedOrdersCount,
+      importedOrdersCount: accumulator.importedOrdersCount,
+      processedLineItemsCount: accumulator.processedLineItemsCount,
+      matchedLineItemsCount: accumulator.matchedLineItemsCount,
+      unmatchedLineItemsCount: accumulator.unmatchedLineItemsCount,
+      skippedOrdersCount: accumulator.skippedOrdersCount,
     },
     { runId, force: true },
   );
@@ -526,8 +566,16 @@ export async function backfillShopifyOrders(options: ShopifyOrdersBackfillOption
   return summary;
 }
 
-export async function getShopifyOrdersDiagnostics(params?: { limit?: number }) {
+export async function getShopifyOrdersDiagnostics(params?: { limit?: number; since?: string; until?: string }) {
+  function parseDate(value?: string | null) {
+    if (!value) return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
   const limit = Math.min(Math.max(1, Math.floor(params?.limit || 20)), 100);
+  const since = parseDate(params?.since);
+  const until = parseDate(params?.until);
   const latestOrders = await ShopifyOrderCacheModel.find({})
     .sort({ createdAt: -1, updatedAt: -1 })
     .limit(limit)
@@ -550,10 +598,19 @@ export async function getShopifyOrdersDiagnostics(params?: { limit?: number }) {
 
   const matchedOrderItems: Array<Record<string, unknown>> = [];
   const unmatchedOrderItems: Array<Record<string, unknown>> = [];
+  const artistEarningsRelevantLineItems: Array<Record<string, unknown>> = [];
+  let totalCachedRevenue = 0;
+  let analyticsRevenue = 0;
 
   for (const order of latestOrders) {
+    const countable = isCountableShopifyOrder(order);
+    const createdAt = order.createdAt ? new Date(order.createdAt) : null;
+    const inRange = (!since || (createdAt && createdAt >= since)) && (!until || (createdAt && createdAt <= until));
     const lineItems = Array.isArray(order.lineItems) ? order.lineItems : [];
+    let orderRevenue = 0;
     for (const line of lineItems) {
+      const lineGross = Number(line.lineTotal || 0);
+      orderRevenue += lineGross;
       const item = {
         shopifyOrderId: order.shopifyOrderGid,
         orderName: order.orderName,
@@ -574,10 +631,26 @@ export async function getShopifyOrdersDiagnostics(params?: { limit?: number }) {
 
       if (line.canonicalArtistId && line.canonicalProductId) matchedOrderItems.push(item);
       else unmatchedOrderItems.push(item);
+      if (countable && line.canonicalArtistId) {
+        artistEarningsRelevantLineItems.push(item);
+      }
+    }
+
+    if (countable) {
+      totalCachedRevenue += orderRevenue || Number(order.totalGross || 0);
+      if (inRange) analyticsRevenue += orderRevenue || Number(order.totalGross || 0);
     }
   }
 
   return {
+    range: {
+      since: since ? since.toISOString() : null,
+      until: until ? until.toISOString() : null,
+    },
+    totals: {
+      totalCachedRevenue,
+      analyticsRevenue,
+    },
     latestOrders: latestOrders.map((order) => ({
       id: String(order._id),
       shopDomain: order.shopDomain || null,
@@ -595,5 +668,6 @@ export async function getShopifyOrdersDiagnostics(params?: { limit?: number }) {
     })),
     matchedOrderItems: matchedOrderItems.slice(0, limit),
     unmatchedOrderItems: unmatchedOrderItems.slice(0, limit),
+    artistEarningsRelevantLineItems: artistEarningsRelevantLineItems.slice(0, limit),
   };
 }

@@ -5,6 +5,7 @@ import { backfillShopifyOrders } from "@/lib/shopifyOrderBackfill";
 import { connectMongo } from "@/lib/mongodb";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { createSyncRunId, logSyncError } from "@/lib/sync/syncLogger";
+import { hasValidWorkerSecret } from "@/lib/workerAuth";
 
 const payloadSchema = z.object({
   limitPerPage: z.number().int().min(1).max(100).optional(),
@@ -13,8 +14,10 @@ const payloadSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const unauthorized = await requireAdmin(req);
-  if (unauthorized) return unauthorized;
+  if (!hasValidWorkerSecret(req)) {
+    const unauthorized = await requireAdmin(req);
+    if (unauthorized) return unauthorized;
+  }
 
   const body = (await req.json().catch(() => null)) as unknown;
   const parsed = payloadSchema.safeParse(body || {});

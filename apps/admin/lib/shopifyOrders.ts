@@ -35,6 +35,51 @@ export type ShopifyOrdersResult = {
   pageInfo: { hasNextPage: boolean; endCursor: string | null };
 };
 
+function mapShopifyOrderNode(node: any): ShopifyOrder {
+  const total = parseMoney(node?.currentTotalPriceSet);
+  const refund = parseMoney(node?.currentTotalRefundedSet);
+  const currency = total.currencyCode || "EUR";
+
+  const lineItems: ShopifyOrderLine[] =
+    node?.lineItems?.edges?.map(({ node: li }: any) => {
+      const unit = parseMoney(li?.originalUnitPriceSet);
+      const discountedTotal = parseMoney(li?.discountedTotalSet);
+      const originalTotal = parseMoney(li?.originalTotalSet);
+      const lineTotal =
+        discountedTotal.amount ??
+        originalTotal.amount ??
+        (Number.isFinite(unit.amount ?? null) ? (unit.amount as number) * Number(li?.quantity ?? 0) : 0);
+
+      return {
+        id: li?.id ?? "",
+        title: li?.title ?? "Line item",
+        variantTitle: li?.variant?.title ?? null,
+        variantId: li?.variant?.id ?? null,
+        quantity: Number(li?.quantity ?? 0),
+        unitPrice: unit.amount ?? 0,
+        lineTotal,
+        productId: li?.product?.id ?? null,
+        productHandle: li?.product?.handle ?? null,
+        productTags: normalizeTags(li?.product?.tags),
+        artistMetaobjectGid: li?.product?.metafield?.reference?.id ?? null,
+      };
+    }) ?? [];
+
+  return {
+    id: node?.id ?? "",
+    name: node?.name ?? "",
+    createdAt: node?.createdAt ?? null,
+    processedAt: node?.processedAt ?? null,
+    financialStatus: node?.displayFinancialStatus ?? null,
+    fulfillmentStatus: node?.displayFulfillmentStatus ?? null,
+    cancelledAt: node?.canceledAt ?? null,
+    refundedTotalGross: refund.amount ?? 0,
+    currency,
+    totalGross: total.amount ?? 0,
+    lineItems,
+  };
+}
+
 function getShopifyEnv(): { shop: string; token: string; version: string } {
   const shop = process.env.SHOPIFY_SHOP_DOMAIN || process.env.SHOPIFY_STORE_DOMAIN;
   const token = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
@@ -153,51 +198,80 @@ export async function fetchShopifyOrders(params: {
 
   const edges = json.data?.orders?.edges ?? [];
   const pageInfo = json.data?.orders?.pageInfo ?? { hasNextPage: false, endCursor: null };
-
-    const orders: ShopifyOrder[] = edges.map(({ node }) => {
-    const total = parseMoney(node?.currentTotalPriceSet);
-    const refund = parseMoney(node?.currentTotalRefundedSet);
-    const currency = total.currencyCode || "EUR";
-
-    const lineItems: ShopifyOrderLine[] =
-      node?.lineItems?.edges?.map(({ node: li }: any) => {
-        const unit = parseMoney(li?.originalUnitPriceSet);
-        const discountedTotal = parseMoney(li?.discountedTotalSet);
-        const originalTotal = parseMoney(li?.originalTotalSet);
-        const lineTotal =
-          discountedTotal.amount ??
-          originalTotal.amount ??
-          (Number.isFinite(unit.amount ?? null) ? (unit.amount as number) * Number(li?.quantity ?? 0) : 0);
-
-        return {
-          id: li?.id ?? "",
-          title: li?.title ?? "Line item",
-          variantTitle: li?.variant?.title ?? null,
-          variantId: li?.variant?.id ?? null,
-          quantity: Number(li?.quantity ?? 0),
-          unitPrice: unit.amount ?? 0,
-          lineTotal,
-          productId: li?.product?.id ?? null,
-          productHandle: li?.product?.handle ?? null,
-          productTags: normalizeTags(li?.product?.tags),
-          artistMetaobjectGid: li?.product?.metafield?.reference?.id ?? null,
-        };
-      }) ?? [];
-
-    return {
-      id: node?.id ?? "",
-      name: node?.name ?? "",
-      createdAt: node?.createdAt ?? null,
-      processedAt: node?.processedAt ?? null,
-      financialStatus: node?.displayFinancialStatus ?? null,
-      fulfillmentStatus: node?.displayFulfillmentStatus ?? null,
-      cancelledAt: node?.canceledAt ?? null,
-      refundedTotalGross: refund.amount ?? 0,
-      currency,
-      totalGross: total.amount ?? 0,
-      lineItems,
-    };
-  });
+  const orders: ShopifyOrder[] = edges.map(({ node }) => mapShopifyOrderNode(node));
 
   return { orders, pageInfo };
+}
+
+export async function fetchShopifyOrderById(orderId: string): Promise<ShopifyOrder | null> {
+  const { shop, token, version } = getShopifyEnv();
+  const url = `https://${shop}/admin/api/${version}/graphql.json`;
+
+  const graphQuery = `
+    query OrderById($id: ID!) {
+      order(id: $id) {
+        id
+        name
+        createdAt
+        processedAt
+        displayFinancialStatus
+        displayFulfillmentStatus
+        canceledAt
+        currentTotalPriceSet { shopMoney { amount currencyCode } }
+        currentTotalRefundedSet { shopMoney { amount currencyCode } }
+        lineItems(first: 100) {
+          edges {
+            node {
+              id
+              title
+              quantity
+              originalUnitPriceSet { shopMoney { amount currencyCode } }
+              originalTotalSet { shopMoney { amount currencyCode } }
+              discountedTotalSet { shopMoney { amount currencyCode } }
+              variant { id title }
+              product {
+                id
+                handle
+                title
+                tags
+                metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.artistMetaobject}") {
+                  reference { ... on Metaobject { id handle } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Shopify-Access-Token": token,
+    },
+    body: JSON.stringify({
+      query: graphQuery,
+      variables: { id: orderId },
+    }),
+    cache: "no-store",
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Shopify API error ${res.status}: ${text}`);
+  }
+
+  const json = JSON.parse(text) as {
+    data?: { order?: any | null };
+    errors?: unknown;
+  };
+
+  if (json.errors) {
+    throw new Error(`Shopify GraphQL errors: ${JSON.stringify(json.errors)}`);
+  }
+
+  const node = json.data?.order;
+  return node ? mapShopifyOrderNode(node) : null;
 }

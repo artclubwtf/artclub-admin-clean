@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectMongo } from "@/lib/mongodb";
+import { isCountableShopifyOrder } from "@/lib/shopifyOrderStatus";
 import { ShopifyOrderCacheModel } from "@/models/ShopifyOrderCache";
 import { PosOrderModel } from "@/models/PosOrder";
 import { OrderLineOverrideModel } from "@/models/OrderLineOverride";
@@ -24,6 +25,9 @@ type OrderWithAddress = {
 type ShopifyLineItem = { lineId?: string; id?: string; lineTotal?: number };
 type ShopifyOrderAgg = {
   shopifyOrderGid: string;
+  financialStatus?: string | null;
+  cancelledAt?: Date | null;
+  refundedTotalGross?: number | null;
   totalGross?: number;
   lineItems?: ShopifyLineItem[];
 } & OrderWithAddress;
@@ -119,6 +123,9 @@ export async function GET(req: Request) {
           $project: {
             shopifyOrderGid: 1,
             createdAt: 1,
+            financialStatus: 1,
+            cancelledAt: 1,
+            refundedTotalGross: 1,
             totalGross: 1,
             lineItems: 1,
             shippingAddress: 1,
@@ -175,6 +182,8 @@ export async function GET(req: Request) {
     const cityMap = new Map<string, LocationBucket>();
 
     for (const order of shopifyOrders) {
+      if (!isCountableShopifyOrder(order)) continue;
+
       const lines: ShopifyLineItem[] = Array.isArray(order.lineItems) ? order.lineItems : [];
       let orderRevenue = 0;
       lines.forEach((li, idx) => {

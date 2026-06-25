@@ -1,6 +1,6 @@
 import { InferSchemaType, Model, Schema, model, models } from "mongoose";
 
-export const syncStateScopes = ["shopify_pull_products", "shopify_pull_artists", "shopify_push"] as const;
+export const syncStateScopes = ["shopify_pull_products", "shopify_pull_artists", "shopify_push", "shopify_orders_sync"] as const;
 
 const syncStateSchema = new Schema(
   {

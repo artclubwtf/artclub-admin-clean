@@ -45,6 +45,10 @@ export async function middleware(req: NextRequest) {
       pathname.startsWith("/api/mobile") ||
       pathname.startsWith("/api/pos-agent") ||
       pathname.startsWith("/api/webhooks/verifone") ||
+      pathname.startsWith("/api/webhooks/shopify") ||
+      pathname.startsWith("/api/worker/shopify-sync") ||
+      pathname.startsWith("/api/worker/shopify-orders-sync") ||
+      pathname.startsWith("/api/admin/sync/shopify/orders/backfill") ||
       pathname === "/api/artists/v2/register" ||
       pathname === "/api/artists/v3/register" ||
       pathname === "/api/shopify/files/upload" ||

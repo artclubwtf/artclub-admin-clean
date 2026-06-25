@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectMongo } from "@/lib/mongodb";
+import { isCountableShopifyOrder } from "@/lib/shopifyOrderStatus";
 import { ShopifyOrderCacheModel } from "@/models/ShopifyOrderCache";
 import { PosOrderModel } from "@/models/PosOrder";
 import { OrderLineOverrideModel } from "@/models/OrderLineOverride";
@@ -15,6 +16,9 @@ type ShopifyLineItem = {
 };
 type ShopifyOrderAgg = {
   shopifyOrderGid: string;
+  financialStatus?: string | null;
+  cancelledAt?: Date | null;
+  refundedTotalGross?: number | null;
   totalGross?: number;
   currency?: string;
   lineItems?: ShopifyLineItem[];
@@ -97,6 +101,9 @@ export async function GET(req: Request) {
           $project: {
             shopifyOrderGid: 1,
             createdAt: 1,
+            financialStatus: 1,
+            cancelledAt: 1,
+            refundedTotalGross: 1,
             totalGross: 1,
             currency: 1,
             lineItems: 1,
@@ -151,6 +158,8 @@ export async function GET(req: Request) {
     const split: SplitBuckets = { print: 0, original: 0, unknown: 0 };
 
     for (const order of shopifyOrders) {
+      if (!isCountableShopifyOrder(order)) continue;
+
       const lines: ShopifyLineItem[] = Array.isArray(order.lineItems) ? order.lineItems : [];
       let orderRevenue = 0;
       lines.forEach((li, idx) => {

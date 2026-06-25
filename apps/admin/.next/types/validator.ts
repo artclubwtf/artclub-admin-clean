@@ -1073,6 +1073,24 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../app/api/admin/sync/shopify/orders/backfill/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/sync/shopify/orders/backfill">> = Specific
+  const handler = {} as typeof import("../../app/api/admin/sync/shopify/orders/backfill/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/api/admin/sync/shopify/orders/diagnostics/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/sync/shopify/orders/diagnostics">> = Specific
+  const handler = {} as typeof import("../../app/api/admin/sync/shopify/orders/diagnostics/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../app/api/admin/sync/shopify/pull/route.ts
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/sync/shopify/pull">> = Specific
@@ -2108,10 +2126,55 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../app/api/webhooks/shopify/orders/create/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/webhooks/shopify/orders/create">> = Specific
+  const handler = {} as typeof import("../../app/api/webhooks/shopify/orders/create/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/api/webhooks/shopify/orders/paid/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/webhooks/shopify/orders/paid">> = Specific
+  const handler = {} as typeof import("../../app/api/webhooks/shopify/orders/paid/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/api/webhooks/shopify/orders/updated/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/webhooks/shopify/orders/updated">> = Specific
+  const handler = {} as typeof import("../../app/api/webhooks/shopify/orders/updated/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/api/webhooks/shopify/refunds/create/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/webhooks/shopify/refunds/create">> = Specific
+  const handler = {} as typeof import("../../app/api/webhooks/shopify/refunds/create/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../app/api/webhooks/verifone/route.ts
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/webhooks/verifone">> = Specific
   const handler = {} as typeof import("../../app/api/webhooks/verifone/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/api/worker/shopify-orders-sync/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/worker/shopify-orders-sync">> = Specific
+  const handler = {} as typeof import("../../app/api/worker/shopify-orders-sync/route.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check
