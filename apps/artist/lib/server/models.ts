@@ -16,3 +16,7 @@ export { ArtistRegistrationKeyModel } from "../../../admin/models/ArtistRegistra
 export { ArtistWorkspaceThreadModel } from "../../../admin/models/ArtistWorkspaceThread";
 export { ArtistWorkspaceMessageModel } from "../../../admin/models/ArtistWorkspaceMessage";
 export { ArtistAnnouncementModel } from "../../../admin/models/ArtistAnnouncement";
+export { ShopifyOrderCacheModel } from "../../../admin/models/ShopifyOrderCache";
+export { PayoutTransactionModel } from "../../../admin/models/PayoutTransaction";
+export { ContractTermsModel } from "../../../admin/models/ContractTerms";
+export { OrderLineOverrideModel } from "../../../admin/models/OrderLineOverride";

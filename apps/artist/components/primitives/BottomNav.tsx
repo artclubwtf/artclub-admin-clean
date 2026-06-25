@@ -37,6 +37,15 @@ function NavIcon({ item, active }: { item: BottomNavItem; active: boolean }) {
           <path d="M6 18.5c1.1-2.17 3.16-3.5 6-3.5s4.9 1.33 6 3.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
         </svg>
       );
+    case "earnings":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
+          <path d="M5.75 18.5V11.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+          <path d="M12 18.5V7.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+          <path d="M18.25 18.5V4.75" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+          <path d="M4 18.5h16" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+        </svg>
+      );
     case "settings":
       return (
         <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
@@ -61,6 +70,10 @@ export function BottomNav() {
   const pathname = usePathname() || "/";
   const router = useRouter();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const splitIndex = Math.floor(bottomNavItems.length / 2);
+  const leftItems = bottomNavItems.slice(0, splitIndex);
+  const rightItems = bottomNavItems.slice(splitIndex);
+  const columnCount = leftItems.length + rightItems.length + 1;
 
   useEffect(() => {
     setSheetOpen(false);
@@ -111,8 +124,11 @@ export function BottomNav() {
       ) : null}
 
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 px-4 pb-[max(env(safe-area-inset-bottom),1rem)]">
-        <nav className="pointer-events-auto mx-auto grid max-w-2xl grid-cols-5 items-end rounded-full bg-white/92 px-2 py-2 backdrop-blur-sm">
-          {bottomNavItems.slice(0, 2).map((item) => {
+        <nav
+          className="pointer-events-auto mx-auto grid max-w-2xl items-end rounded-full bg-white/92 px-2 py-2 backdrop-blur-sm"
+          style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
+        >
+          {leftItems.map((item) => {
             const active = isActive(pathname, item.href);
 
             return (
@@ -148,7 +164,7 @@ export function BottomNav() {
             </button>
           </div>
 
-          {bottomNavItems.slice(2).map((item) => {
+          {rightItems.map((item) => {
             const active = isActive(pathname, item.href);
 
             return (

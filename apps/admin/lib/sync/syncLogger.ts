@@ -8,6 +8,7 @@ export const ARTIST_AUTO_SYNC_SCOPE = "ARTCLUB_ARTIST_AUTO_SYNC" as const;
 export const SHOPIFY_SYNC_ERROR_SCOPE = "ARTCLUB_SHOPIFY_SYNC_ERROR" as const;
 export const SHOPIFY_DIAGNOSTICS_SCOPE = "ARTCLUB_SHOPIFY_DIAGNOSTICS" as const;
 export const ARTIST_PROFILE_RENDER_SCOPE = "ARTCLUB_ARTIST_PROFILE_RENDER" as const;
+export const ARTIST_EARNINGS_SCOPE = "ARTCLUB_ARTIST_EARNINGS" as const;
 
 type SyncScope =
   | typeof SHOPIFY_PULL_SCOPE
@@ -17,7 +18,8 @@ type SyncScope =
   | typeof ARTIST_AUTO_SYNC_SCOPE
   | typeof SHOPIFY_SYNC_ERROR_SCOPE
   | typeof SHOPIFY_DIAGNOSTICS_SCOPE
-  | typeof ARTIST_PROFILE_RENDER_SCOPE;
+  | typeof ARTIST_PROFILE_RENDER_SCOPE
+  | typeof ARTIST_EARNINGS_SCOPE;
 
 type SyncLogOptions = {
   runId?: string;
@@ -158,6 +160,10 @@ export function logShopifyDiagnostics(event: string, payload: unknown, options?:
 
 export function logArtistProfileRender(event: string, payload: unknown, options?: SyncLogOptions) {
   emit(ARTIST_PROFILE_RENDER_SCOPE, event, payload, options);
+}
+
+export function logArtistEarnings(event: string, payload: unknown, options?: SyncLogOptions) {
+  emit(ARTIST_EARNINGS_SCOPE, event, payload, options);
 }
 
 export function logSyncError(event: string, error: unknown, payload?: unknown, options?: SyncLogOptions) {

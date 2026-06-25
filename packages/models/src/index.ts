@@ -4,5 +4,6 @@ export const ArtistStage = z.enum(["Idea", "In Review", "Angebot", "Under Contra
 export type ArtistStage = z.infer<typeof ArtistStage>;
 
 export * from "./artwork";
+export * from "./earnings";
 export * from "./messages";
 export * from "./mobile";
