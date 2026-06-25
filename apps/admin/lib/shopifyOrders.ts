@@ -6,10 +6,12 @@ export type ShopifyOrderLine = {
   id: string;
   title: string;
   variantTitle: string | null;
+  variantId: string | null;
   quantity: number;
   unitPrice: number;
   lineTotal: number;
   productId: string | null;
+  productHandle: string | null;
   productTags: string[];
   artistMetaobjectGid: string | null;
 };
@@ -97,9 +99,10 @@ export async function fetchShopifyOrders(params: {
                   originalUnitPriceSet { shopMoney { amount currencyCode } }
                   originalTotalSet { shopMoney { amount currencyCode } }
                   discountedTotalSet { shopMoney { amount currencyCode } }
-                  variant { title }
+                  variant { id title }
                   product {
                     id
+                    handle
                     title
                     tags
                     metafield(namespace: "${SHOPIFY_PRODUCT_NAMESPACE_CUSTOM}", key: "${PRODUCT_METAFIELD_KEYS.artistMetaobject}") {
@@ -170,10 +173,12 @@ export async function fetchShopifyOrders(params: {
           id: li?.id ?? "",
           title: li?.title ?? "Line item",
           variantTitle: li?.variant?.title ?? null,
+          variantId: li?.variant?.id ?? null,
           quantity: Number(li?.quantity ?? 0),
           unitPrice: unit.amount ?? 0,
           lineTotal,
           productId: li?.product?.id ?? null,
+          productHandle: li?.product?.handle ?? null,
           productTags: normalizeTags(li?.product?.tags),
           artistMetaobjectGid: li?.product?.metafield?.reference?.id ?? null,
         };

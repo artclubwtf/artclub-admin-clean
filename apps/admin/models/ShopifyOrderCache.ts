@@ -1,19 +1,30 @@
 import { InferSchemaType, Model, Schema, model, models } from "mongoose";
 
 export const orderSaleTypes = ["print", "original", "unknown"] as const;
+export const orderPayoutStatuses = ["pending", "eligible", "paid", "refunded", "cancelled"] as const;
 
 const shopifyOrderLineItemSchema = new Schema(
   {
     lineId: { type: String },
+    productKey: { type: String },
     title: { type: String, required: true },
     variantTitle: { type: String },
+    shopifyVariantId: { type: String },
+    shopifyVariantGid: { type: String },
     quantity: { type: Number, required: true },
     unitPrice: { type: Number, required: true },
     lineTotal: { type: Number, required: true },
+    shopifyProductId: { type: String },
     shopifyProductGid: { type: String },
+    productHandle: { type: String },
     productTags: { type: [String], default: [] },
     artistMetaobjectGid: { type: String },
     inferredSaleType: { type: String, enum: orderSaleTypes, default: "unknown" },
+    canonicalProductId: { type: Schema.Types.ObjectId, ref: "CanonicalProduct" },
+    canonicalArtistId: { type: Schema.Types.ObjectId, ref: "CanonicalArtist" },
+    artistShare: { type: Number },
+    estimatedArtistShare: { type: Number },
+    payoutStatus: { type: String, enum: orderPayoutStatuses, default: "pending" },
   },
   { _id: false },
 );
@@ -37,7 +48,9 @@ const allocationSchema = new Schema(
 
 const shopifyOrderCacheSchema = new Schema(
   {
+    shopDomain: { type: String, lowercase: true, trim: true },
     source: { type: String, enum: ["shopify"], default: "shopify", required: true },
+    shopifyOrderId: { type: String },
     shopifyOrderGid: { type: String, required: true, unique: true },
     orderName: { type: String, required: true },
     createdAt: { type: Date, required: true },
@@ -56,6 +69,9 @@ const shopifyOrderCacheSchema = new Schema(
 );
 
 shopifyOrderCacheSchema.index({ createdAt: -1 });
+shopifyOrderCacheSchema.index({ shopDomain: 1, createdAt: -1 });
+shopifyOrderCacheSchema.index({ "lineItems.canonicalArtistId": 1, createdAt: -1 });
+shopifyOrderCacheSchema.index({ "lineItems.canonicalProductId": 1, createdAt: -1 });
 
 type ShopifyOrderCache = InferSchemaType<typeof shopifyOrderCacheSchema>;
 

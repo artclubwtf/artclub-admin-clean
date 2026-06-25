@@ -6,22 +6,10 @@ import type { ArtistContext } from "@/lib/server/artist-context";
 import { connectMongo } from "@/lib/server/mongodb";
 import {
   CanonicalArtistModel,
-  CanonicalProductModel,
-  ContractTermsModel,
-  OrderLineOverrideModel,
   PayoutTransactionModel,
   ShopifyOrderCacheModel,
 } from "@/lib/server/models";
 import { logArtistEarnings } from "../../../admin/lib/sync/syncLogger";
-
-type ProductRecord = {
-  productKey: string;
-  title: string;
-  offerings?: string;
-  allowPrints?: boolean;
-  originalAvailable?: boolean;
-  shopifyProductGid?: string | null;
-};
 
 type SaleRecord = {
   orderDate: string;
@@ -34,11 +22,6 @@ type SaleRecord = {
   payoutStatus: ArtistEarningsPayoutStatus;
   orderStatus: ArtistEarningsOrderStatus;
   productKey: string;
-};
-
-type ContractTerms = {
-  printCommissionPct: number;
-  originalCommissionPct: number;
 };
 
 function toMoney(value: number) {
@@ -55,68 +38,27 @@ function toMonthLabel(monthKey: string) {
   return new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric", timeZone: "UTC" }).format(date);
 }
 
-function normalizeOrderStatus(input: { financialStatus?: string | null; cancelledAt?: Date | null; refundedTotalGross?: number | null }) {
+function normalizeFinancialStatus(value?: string | null) {
+  return (value || "").trim().toLowerCase().replace(/\s+/g, "_");
+}
+
+function isPaidFinancialStatus(status: string) {
+  return status.includes("paid");
+}
+
+function normalizeOrderStatus(input: { financialStatus?: string | null; cancelledAt?: Date | null; refundedTotalGross?: number | null; totalGross?: number | null }) {
   if (input.cancelledAt) return "cancelled" as const;
 
-  const financialStatus = (input.financialStatus || "").trim().toLowerCase();
-  if (financialStatus.includes("refund")) return "refunded" as const;
-  if ((input.refundedTotalGross || 0) > 0 && financialStatus.includes("partially")) return "paid" as const;
-  if ((input.refundedTotalGross || 0) > 0 && !financialStatus) return "paid" as const;
-  if ((input.refundedTotalGross || 0) > 0 && financialStatus.includes("paid")) return "paid" as const;
-  if (financialStatus.includes("paid")) return "paid" as const;
+  const financialStatus = normalizeFinancialStatus(input.financialStatus);
+  const refundedTotalGross = Number(input.refundedTotalGross || 0);
+  const totalGross = Number(input.totalGross || 0);
+
+  if (refundedTotalGross > 0 && totalGross > 0 && refundedTotalGross + 0.01 >= totalGross) return "refunded" as const;
+  if (financialStatus.includes("refund") && refundedTotalGross > 0 && (totalGross === 0 || refundedTotalGross + 0.01 >= totalGross)) {
+    return "refunded" as const;
+  }
+  if (isPaidFinancialStatus(financialStatus)) return "paid" as const;
   return "pending" as const;
-}
-
-function inferSaleType(input: {
-  rawSaleType?: string | null;
-  variantTitle?: string | null;
-  product?: Pick<ProductRecord, "offerings" | "allowPrints" | "originalAvailable"> | null;
-}) {
-  const raw = (input.rawSaleType || "").trim().toLowerCase();
-  if (raw === "print" || raw === "original") return raw;
-
-  const variantTitle = (input.variantTitle || "").trim().toLowerCase();
-  if (variantTitle.includes("print")) return "print" as const;
-  if (variantTitle.includes("original") || variantTitle.includes("unikat")) return "original" as const;
-
-  if (input.product?.offerings === "prints_only") return "print" as const;
-  if (input.product?.offerings === "original_only") return "original" as const;
-  if (input.product?.allowPrints && !input.product?.originalAvailable) return "print" as const;
-  if (input.product?.originalAvailable && !input.product?.allowPrints) return "original" as const;
-
-  return "unknown" as const;
-}
-
-function calculateArtistShare(params: {
-  salePrice: number;
-  saleType: "print" | "original" | "unknown";
-  terms: ContractTerms | null;
-}) {
-  if (!params.terms) {
-    return {
-      amount: toMoney(params.salePrice),
-      isEstimated: true,
-    };
-  }
-
-  if (params.saleType === "print") {
-    return {
-      amount: toMoney(params.salePrice * (params.terms.printCommissionPct / 100)),
-      isEstimated: false,
-    };
-  }
-
-  if (params.saleType === "original") {
-    return {
-      amount: toMoney(params.salePrice * (params.terms.originalCommissionPct / 100)),
-      isEstimated: false,
-    };
-  }
-
-  return {
-    amount: toMoney(params.salePrice * (params.terms.originalCommissionPct / 100)),
-    isEstimated: true,
-  };
 }
 
 function buildEmptyResponse(): ArtistEarningsResponse {
@@ -169,64 +111,12 @@ export async function loadArtistEarnings(context: ArtistContext): Promise<Artist
     return finalizeEarningsResponse(context, buildEmptyResponse());
   }
 
-  const [products, terms] = await Promise.all([
-    CanonicalProductModel.find({
-      shopDomain: context.user.shopDomain,
-      canonicalArtistId: context.canonicalArtist._id,
-      type: "artwork",
-      "shopify.productGid": { $exists: true, $type: "string" },
+  const [orders, payouts] = await Promise.all([
+    ShopifyOrderCacheModel.find({
+      "lineItems.canonicalArtistId": context.canonicalArtist._id,
     })
-      .select({
-        productKey: 1,
-        title: 1,
-        offerings: 1,
-        allowPrints: 1,
-        originalAvailable: 1,
-        "shopify.productGid": 1,
-      })
+      .sort({ createdAt: -1 })
       .lean(),
-    canonicalArtist.legacyArtistId
-      ? ContractTermsModel.findOne({ kunstlerId: canonicalArtist.legacyArtistId })
-          .select({ printCommissionPct: 1, originalCommissionPct: 1 })
-          .lean()
-      : Promise.resolve(null),
-  ]);
-
-  const productByShopifyGid = new Map<string, ProductRecord>();
-  for (const product of products) {
-    const productGid = product.shopify?.productGid?.trim();
-    if (!productGid) continue;
-    productByShopifyGid.set(productGid, {
-      productKey: product.productKey,
-      title: product.title,
-      offerings: product.offerings,
-      allowPrints: product.allowPrints,
-      originalAvailable: product.originalAvailable,
-      shopifyProductGid: productGid,
-    });
-  }
-
-  if (productByShopifyGid.size === 0) {
-    return finalizeEarningsResponse(context, buildEmptyResponse());
-  }
-
-  const productGids = Array.from(productByShopifyGid.keys());
-  const orders = await ShopifyOrderCacheModel.find({
-    "lineItems.shopifyProductGid": { $in: productGids },
-  })
-    .sort({ createdAt: -1 })
-    .lean();
-
-  const orderGids = orders.map((order) => order.shopifyOrderGid).filter((value): value is string => Boolean(value));
-  const [overrides, payouts] = await Promise.all([
-    orderGids.length
-      ? OrderLineOverrideModel.find({
-          orderSource: "shopify",
-          shopifyOrderGid: { $in: orderGids },
-        })
-          .select({ shopifyOrderGid: 1, lineKey: 1, overrideSaleType: 1, overrideGross: 1 })
-          .lean()
-      : Promise.resolve([]),
     PayoutTransactionModel.find(
       canonicalArtist.shopify?.metaobjectGid || canonicalArtist.shopifyMetaobjectId || canonicalArtist.legacyArtistId
         ? {
@@ -242,22 +132,7 @@ export async function loadArtistEarnings(context: ArtistContext): Promise<Artist
       .lean(),
   ]);
 
-  const overrideMap = new Map<string, { overrideSaleType?: string; overrideGross?: number }>();
-  for (const override of overrides) {
-    if (!override.shopifyOrderGid || !override.lineKey) continue;
-    overrideMap.set(`${override.shopifyOrderGid}:${override.lineKey}`, {
-      overrideSaleType: override.overrideSaleType || undefined,
-      overrideGross: override.overrideGross ?? undefined,
-    });
-  }
-
   const currency = payouts.find((entry) => entry.currency)?.currency || orders.find((entry) => entry.currency)?.currency || "EUR";
-  const contractTerms = terms
-    ? {
-        printCommissionPct: Number(terms.printCommissionPct || 0),
-        originalCommissionPct: Number(terms.originalCommissionPct || 0),
-      }
-    : null;
 
   const saleRecords: SaleRecord[] = [];
   let paidOutAmount = 0;
@@ -270,44 +145,39 @@ export async function loadArtistEarnings(context: ArtistContext): Promise<Artist
       financialStatus: order.financialStatus,
       cancelledAt: order.cancelledAt,
       refundedTotalGross: order.refundedTotalGross,
+      totalGross: order.totalGross,
     });
+    const financialStatus = normalizeFinancialStatus(order.financialStatus);
+    const countableSale = isPaidFinancialStatus(financialStatus);
     const orderDate = new Date(order.createdAt || order.updatedAt || new Date());
     const orderDateIso = orderDate.toISOString();
 
     const lineItems = Array.isArray(order.lineItems) ? order.lineItems : [];
-    for (let index = 0; index < lineItems.length; index += 1) {
-      const line = lineItems[index];
-      const productGid = line.shopifyProductGid?.trim();
-      if (!productGid) continue;
+    for (const line of lineItems) {
+      if (!line.canonicalArtistId || String(line.canonicalArtistId) !== String(context.canonicalArtist._id)) continue;
 
-      const product = productByShopifyGid.get(productGid);
-      if (!product) continue;
+      if (!countableSale && orderStatus !== "refunded" && orderStatus !== "cancelled") continue;
 
-      const lineKey = line.lineId || `${order.shopifyOrderGid}:line:${index}`;
-      const override = overrideMap.get(`${order.shopifyOrderGid}:${lineKey}`);
-      const salePrice = Number(override?.overrideGross ?? line.lineTotal ?? 0);
-      const saleType = inferSaleType({
-        rawSaleType: override?.overrideSaleType || line.inferredSaleType,
-        variantTitle: line.variantTitle,
-        product,
-      });
-      const artistShare = calculateArtistShare({
-        salePrice,
-        saleType,
-        terms: contractTerms,
-      });
+      const salePrice = Number(line.lineTotal ?? 0);
+      const artistShare = line.artistShare ?? line.estimatedArtistShare ?? salePrice;
+      const artistShareIsEstimated = typeof line.artistShare !== "number";
 
       saleRecords.push({
         orderDate: orderDateIso,
-        artworkTitle: product.title || line.title || "Untitled artwork",
+        artworkTitle: line.title || "Untitled artwork",
         variantTitle: line.variantTitle || null,
         quantity: Number(line.quantity || 0),
         salePrice: toMoney(salePrice),
-        artistShare: artistShare.amount,
-        artistShareIsEstimated: artistShare.isEstimated,
-        payoutStatus: orderStatus === "refunded" ? "refunded" : orderStatus === "cancelled" ? "cancelled" : "pending",
+        artistShare: toMoney(Number(artistShare || 0)),
+        artistShareIsEstimated,
+        payoutStatus:
+          orderStatus === "refunded"
+            ? "refunded"
+            : orderStatus === "cancelled"
+              ? "cancelled"
+              : ((line.payoutStatus as ArtistEarningsPayoutStatus | undefined) || "pending"),
         orderStatus,
-        productKey: product.productKey,
+        productKey: line.productKey || "",
       });
     }
   }
