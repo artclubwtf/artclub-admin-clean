@@ -36,16 +36,34 @@
     document.head.appendChild(link);
   }
 
-  function getContainerBaseUrl(container) {
-    var datasetBase = container && container.dataset ? trim(container.dataset.artclubArtistAppBase || "") : "";
-    return datasetBase || defaultBaseUrl;
+  function getContainerAppUrl(container) {
+    return container && container.dataset ? trim(container.dataset.artclubAppUrl || "") : "";
   }
 
   function getEmbedHtmlUrl(container) {
-    var baseUrl = getContainerBaseUrl(container);
-    var slug = normalizeHandle(container && container.dataset ? container.dataset.artclubArtistSlug || "" : "");
-    if (!baseUrl || !slug) return "";
-    return baseUrl.replace(/\/+$/, "") + "/api/public/artist-embed/" + encodeURIComponent(slug) + "/html";
+    var appUrl = getContainerAppUrl(container);
+    if (!appUrl) return "";
+
+    try {
+      var url = new URL(appUrl, window.location.href);
+      url.searchParams.set("embed", "1");
+      return url.toString();
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function getEmbedAssetBaseUrl(container) {
+    var appUrl = getContainerAppUrl(container);
+    if (appUrl) {
+      try {
+        return new URL(appUrl, window.location.href).origin;
+      } catch (_error) {
+        void 0;
+      }
+    }
+
+    return defaultBaseUrl;
   }
 
   function parsePayload(container) {
@@ -205,9 +223,17 @@
   }
 
   function loadContainer(container) {
-    var baseUrl = getContainerBaseUrl(container);
+    var appUrl = getContainerAppUrl(container);
+    var baseUrl = getEmbedAssetBaseUrl(container);
     var htmlUrl = getEmbedHtmlUrl(container);
-    if (!baseUrl || !htmlUrl) return;
+    if (!appUrl) {
+      container.innerHTML = '<div class="mx-auto max-w-5xl px-3 py-8 text-sm text-neutral-400 sm:px-8">Artist app URL missing.</div>';
+      return;
+    }
+    if (!baseUrl || !htmlUrl) {
+      container.innerHTML = '<div class="mx-auto max-w-5xl px-3 py-8 text-sm text-neutral-400 sm:px-8">Artist profile unavailable.</div>';
+      return;
+    }
 
     ensureStylesheet(baseUrl);
     container.innerHTML = '<div class="mx-auto max-w-5xl px-3 py-8 text-sm text-neutral-400 sm:px-8">Loading artist profile…</div>';
