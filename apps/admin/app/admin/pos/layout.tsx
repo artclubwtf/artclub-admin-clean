@@ -74,7 +74,7 @@ export default function PosLayout({ children }: { children: ReactNode }) {
         </div>
       </div>
 
-      <style jsx global>{`
+      <style>{`
         body.ac-pos-route .admin-sidebar {
           display: none !important;
         }

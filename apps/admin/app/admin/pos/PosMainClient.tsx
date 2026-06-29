@@ -1233,7 +1233,7 @@ export default function PosMainClient() {
         onSendReceiptEmail={handleSendReceiptEmail}
       />
 
-      <style jsx>{`
+      <style>{`
         .pos-card-added {
           animation: pos-bump 220ms ease-out;
         }
