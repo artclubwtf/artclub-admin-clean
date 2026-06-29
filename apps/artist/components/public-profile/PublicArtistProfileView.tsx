@@ -361,6 +361,7 @@ export function PublicArtistProfileView({
   return (
     <div
       className="min-h-screen bg-white"
+      data-artclub-public-profile="true"
       data-artclub-public-artist-view="true"
       data-artclub-artist-id={profile.canonicalArtistId}
       data-artclub-artist-slug={profile.slug}

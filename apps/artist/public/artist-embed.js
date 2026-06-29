@@ -40,17 +40,6 @@
     return container && container.dataset ? trim(container.dataset.artclubAppUrl || "") : "";
   }
 
-  function getEmbedHtmlUrl(container) {
-    var appUrl = getContainerAppUrl(container);
-    if (!appUrl) return "";
-
-    try {
-      return new URL(appUrl, window.location.href).toString();
-    } catch (_error) {
-      return "";
-    }
-  }
-
   function getEmbedAssetBaseUrl(container) {
     var appUrl = getContainerAppUrl(container);
     if (appUrl) {
@@ -100,6 +89,9 @@
   function extractEmbedMarkup(doc) {
     if (!doc) return "";
 
+    var publicProfile = doc.querySelector("[data-artclub-public-profile='true']");
+    if (publicProfile) return publicProfile.outerHTML;
+
     var shell = doc.querySelector("[data-artclub-public-shell='true']");
     if (shell) return shell.outerHTML;
 
@@ -120,7 +112,9 @@
   }
 
   function readArtistData(container, appUrl) {
-    var view = container.querySelector("[data-artclub-public-artist-view='true']");
+    var view =
+      container.querySelector("[data-artclub-public-profile='true']") ||
+      container.querySelector("[data-artclub-public-artist-view='true']");
     return {
       canonicalArtistId: trim((view && view.getAttribute("data-artclub-artist-id")) || container.dataset.artclubArtistId || ""),
       slug: normalizeHandle((view && view.getAttribute("data-artclub-artist-slug")) || container.dataset.artclubArtistSlug || getSlugFromAppUrl(appUrl)),
@@ -319,12 +313,11 @@
   function loadContainer(container) {
     var appUrl = getContainerAppUrl(container);
     var baseUrl = getEmbedAssetBaseUrl(container);
-    var htmlUrl = getEmbedHtmlUrl(container);
     if (!appUrl) {
       container.innerHTML = '<div class="mx-auto max-w-5xl px-3 py-8 text-sm text-neutral-400 sm:px-8">Artist app URL missing.</div>';
       return;
     }
-    if (!baseUrl || !htmlUrl) {
+    if (!baseUrl) {
       container.innerHTML = '<div class="mx-auto max-w-5xl px-3 py-8 text-sm text-neutral-400 sm:px-8">Artist profile unavailable.</div>';
       return;
     }
@@ -332,7 +325,7 @@
     ensureStylesheet(baseUrl);
     container.innerHTML = '<div class="mx-auto max-w-5xl px-3 py-8 text-sm text-neutral-400 sm:px-8">Loading artist profile…</div>';
 
-    fetch(htmlUrl, {
+    fetch(appUrl, {
       method: "GET",
       headers: { Accept: "text/html" },
       credentials: "omit",
@@ -343,7 +336,7 @@
         return response.text();
       })
       .then(function (html) {
-        renderContainer(container, html, htmlUrl);
+        renderContainer(container, html, appUrl);
       })
       .catch(function () {
         container.innerHTML = '<div class="mx-auto max-w-5xl px-3 py-8 text-sm text-neutral-400 sm:px-8">Artist profile unavailable.</div>';
