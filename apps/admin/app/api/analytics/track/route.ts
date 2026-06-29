@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 
 import { buildAnalyticsCorsHeaders, ingestAnalyticsEvent } from "@/lib/artistAnalytics";
 
-export async function OPTIONS() {
+export async function OPTIONS(req: Request) {
   return new NextResponse(null, {
     status: 204,
-    headers: buildAnalyticsCorsHeaders(),
+    headers: buildAnalyticsCorsHeaders(req.headers.get("origin")),
   });
 }
 
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
       { ok: false, error: "analytics_ingest_failed" },
       {
         status: 500,
-        headers: buildAnalyticsCorsHeaders(),
+        headers: buildAnalyticsCorsHeaders(req.headers.get("origin")),
       },
     );
   }

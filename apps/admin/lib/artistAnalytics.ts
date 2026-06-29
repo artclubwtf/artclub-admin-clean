@@ -10,6 +10,7 @@ import {
   type ArtistAnalyticsRange,
 } from "@artclub/models";
 
+import { resolvePublicCorsOrigin } from "@/lib/publicCors";
 import { mapShopifyProductToCanonicalArtist } from "@/lib/sync/shopifyMapping";
 import { resolveShopDomain } from "@/lib/shopDomain";
 import { getClientIp, rateLimit } from "@/lib/rateLimit";
@@ -64,17 +65,18 @@ export function resolveAnalyticsDateRange(range: ArtistAnalyticsRange) {
   return resolveArtistAnalyticsDateRange(range);
 }
 
-export function buildAnalyticsCorsHeaders() {
+export function buildAnalyticsCorsHeaders(origin?: string | null) {
   return {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": resolvePublicCorsOrigin(origin),
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
+    Vary: "Origin",
     "Cache-Control": "no-store",
   };
 }
 
 export async function ingestAnalyticsEvent(req: Request) {
-  const headers = buildAnalyticsCorsHeaders();
+  const headers = buildAnalyticsCorsHeaders(req.headers.get("origin"));
   const shopDomain = resolveShopDomain();
   if (!shopDomain) {
     return {

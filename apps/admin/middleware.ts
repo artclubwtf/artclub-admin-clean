@@ -69,6 +69,7 @@ export async function middleware(req: NextRequest) {
       pathname === "/api/shopify/files/upload" ||
       pathname === "/api/shopify/files/resolve" ||
       pathname === "/api/shopify/resolve-media" ||
+      pathname === "/api/analytics/track" ||
       pathname.startsWith("/api/artist-onboarding");
 
     if (allowedApi) return NextResponse.next();
