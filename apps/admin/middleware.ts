@@ -28,9 +28,8 @@ function isEnabled(rawValue: string | undefined, fallback = false) {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const isPublicShopifyAsset = pathname.startsWith("/shopify/");
-  const isPublicArtistEmbedApi = pathname.startsWith("/api/public/artist-embed");
 
-  if (isPublicShopifyAsset || isPublicArtistEmbedApi) {
+  if (isPublicShopifyAsset) {
     const headers = buildPublicCorsHeaders(req.headers.get("origin"));
     if (req.method === "OPTIONS") {
       return new NextResponse(null, { status: 204, headers });

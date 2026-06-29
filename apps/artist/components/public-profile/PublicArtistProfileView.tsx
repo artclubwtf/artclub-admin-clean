@@ -122,9 +122,17 @@ function ArtworksTab({
           data-artclub-artist-name={trackingSource ? artist.displayName : undefined}
           data-artclub-product-id={artwork.canonicalProductId}
           data-artclub-product-key={artwork.productKey}
-          data-artclub-shopify-product-id={trackingSource ? artwork.shopifyProductId : undefined}
-          data-artclub-product-handle={trackingSource ? artwork.productHandle : undefined}
-          data-artclub-embed-artwork-index={trackingSource ? index : undefined}
+          data-artclub-shopify-product-id={artwork.shopifyProductId || undefined}
+          data-artclub-product-handle={artwork.productHandle || undefined}
+          data-artclub-shopify-product-url={artwork.shopifyProductUrl || undefined}
+          data-artclub-artwork-title={artwork.title}
+          data-artclub-artwork-description={artwork.description || undefined}
+          data-artclub-artwork-price-label={artwork.priceLabel}
+          data-artclub-artwork-year={artwork.year || undefined}
+          data-artclub-artwork-series-name={artwork.seriesName || undefined}
+          data-artclub-artwork-detail-label={artwork.detailLabel}
+          data-artclub-artwork-image-url={artwork.imageUrl}
+          data-artclub-embed-artwork-index={index}
           onClick={onSelect ? () => onSelect(artwork) : undefined}
         >
           <div className="relative overflow-hidden rounded-[0.25rem] bg-neutral-100">
@@ -351,7 +359,13 @@ export function PublicArtistProfileView({
   const heroAnnouncement = profile.announcements.find((item) => item.isPinned) || profile.announcements[0] || null;
 
   return (
-    <div className="min-h-screen bg-white">
+    <div
+      className="min-h-screen bg-white"
+      data-artclub-public-artist-view="true"
+      data-artclub-artist-id={profile.canonicalArtistId}
+      data-artclub-artist-slug={profile.slug}
+      data-artclub-artist-name={profile.displayName}
+    >
       <div className="mx-auto max-w-5xl px-3 py-3 sm:px-8 sm:py-8">
         <div className="overflow-hidden rounded-[1rem] bg-white">
           <div className="relative">
@@ -404,8 +418,8 @@ export function PublicArtistProfileView({
               <button
                 key={tab.key}
                 type="button"
-                data-artclub-embed-tab={trackingSource ? tab.key : undefined}
-                data-artclub-embed-tab-active={trackingSource ? (activeTab === tab.key ? "true" : "false") : undefined}
+                data-artclub-embed-tab={tab.key}
+                data-artclub-embed-tab-active={activeTab === tab.key ? "true" : "false"}
                 onClick={onTabChange ? () => onTabChange(tab.key) : undefined}
                 className={`pb-3 pt-1 text-[1.02rem] font-medium tracking-[-0.02em] ${activeTab === tab.key ? "text-neutral-950" : "text-neutral-400"}`}
               >
@@ -416,19 +430,19 @@ export function PublicArtistProfileView({
         </div>
 
         <div className="py-5">
-          <div data-artclub-embed-panel={trackingSource ? "artworks" : undefined} hidden={activeTab !== "artworks"}>
+          <div data-artclub-embed-panel="artworks" hidden={activeTab !== "artworks"}>
             <ArtworksTab artworks={profile.artworks} artist={profile} trackingSource={trackingSource} onSelect={onArtworkSelect} />
           </div>
-          <div data-artclub-embed-panel={trackingSource ? "exhibitions" : undefined} hidden={activeTab !== "exhibitions"}>
+          <div data-artclub-embed-panel="exhibitions" hidden={activeTab !== "exhibitions"}>
             <ExhibitionsTab upcoming={profile.upcomingExhibitions} history={profile.exhibitionHistory} />
           </div>
-          <div data-artclub-embed-panel={trackingSource ? "education" : undefined} hidden={activeTab !== "education"}>
+          <div data-artclub-embed-panel="education" hidden={activeTab !== "education"}>
             <EducationTab items={profile.education} />
           </div>
-          <div data-artclub-embed-panel={trackingSource ? "experience" : undefined} hidden={activeTab !== "experience"}>
+          <div data-artclub-embed-panel="experience" hidden={activeTab !== "experience"}>
             <ExperienceTab items={profile.experience} />
           </div>
-          <div data-artclub-embed-panel={trackingSource ? "links" : undefined} hidden={activeTab !== "links"}>
+          <div data-artclub-embed-panel="links" hidden={activeTab !== "links"}>
             <LinksTab items={profile.links} />
           </div>
         </div>

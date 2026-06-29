@@ -8,7 +8,7 @@ type PublicShellProps = {
 
 export function PublicShell({ children }: PublicShellProps) {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white" data-artclub-public-shell="true">
       <Container className="flex min-h-screen flex-col justify-between py-8">
         <div className="space-y-10">
           <div className="space-y-2 pt-4">
