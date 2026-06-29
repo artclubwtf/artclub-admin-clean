@@ -1,0 +1,13 @@
+{% form 'customer', customer %}
+  <label for="bio-test">Biografie (Test)</label>
+  <textarea id="bio-test"
+            name="customer[metafields][custom.biography]">
+    {{ customer.metafields.custom.biography.value }}
+  </textarea>
+
+  <button type="submit">Speichern</button>
+
+  {% if form.posted_successfully? %}
+    <p style="color:green">✅ Metafeld wurde gespeichert!</p>
+  {% endif %}
+{% endform %}

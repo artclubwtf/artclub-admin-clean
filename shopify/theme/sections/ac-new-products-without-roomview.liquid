@@ -1,0 +1,716 @@
+{% comment %}
+  AC Product Artwork — No Render (kein Wandfoto, kein Overlay)
+  - Hero: Produktbild auf neutralem Hintergrund, sticky
+  - Konfigurator direkt darunter: Model → Finish → Size
+  - Wishlist (localStorage ac_wishlist)
+  - Keine Wallzone, keine Acryl/Floater-Overlays
+  - Gleiche Logik wie ac-pdp-il.liquid
+{% endcomment %}
+
+{%- assign artist_metaobject = product.metafields.custom.kunstler.value -%}
+{%- assign artist_name = artist_metaobject.name | default: product.vendor -%}
+{%- assign artist_avatar = artist_metaobject.bilder -%}
+{%- assign artist_slug = artist_metaobject.system.handle | default: blank -%}
+{%- assign artist_metaobject_id = artist_metaobject.system.id | default: blank -%}
+
+<section
+  id="ac-pdp-nr-{{ section.id }}"
+  class="ac-pdp-nr"
+  data-section-id="{{ section.id }}"
+  data-product-id="{{ product.id }}"
+  data-artclub-track-impression="artwork"
+  data-artclub-product-handle="{{ product.handle }}"
+  data-artclub-shopify-product-id="{{ product.id }}"
+  data-artclub-product-title="{{ product.title | escape }}"
+  {%- if artist_slug != blank -%} data-artclub-artist-slug="{{ artist_slug }}"{%- endif -%}
+  {%- if artist_metaobject_id != blank -%} data-artclub-artist-metaobject-id="{{ artist_metaobject_id }}"{%- endif -%}
+  {%- if artist_name != blank -%} data-artclub-artist-name="{{ artist_name | escape }}"{%- endif -%}
+>
+<style>
+/* =============================================
+   BASE
+   ============================================= */
+#ac-pdp-nr-{{ section.id }}{
+  background:#fff;
+  padding: 0 0 100px;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+#ac-pdp-nr-{{ section.id }} *{ box-sizing:border-box; }
+
+/* =============================================
+   HERO STAGE — sticky
+   ============================================= */
+#ac-pdp-nr-{{ section.id }} .nr-stage{
+  position:sticky;
+  top:0;
+  z-index:50;
+  width:100%;
+  height: clamp(380px, 52vh, 620px);
+  overflow:hidden;
+  background: var(--nr-bg, #f5f5f5);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+@media (max-width:680px){
+  #ac-pdp-nr-{{ section.id }} .nr-stage{
+    height: clamp(260px, 55vw, 420px);
+  }
+}
+
+/* Artwork image — centered, contains, transitions on variant switch */
+#ac-pdp-nr-{{ section.id }} .nr-art{
+  display:block;
+  max-width:90%;
+  max-height:90%;
+  width:auto;
+  height:auto;
+  object-fit:contain;
+  transition: opacity .22s ease, transform .28s ease;
+  flex-shrink:0;
+}
+#ac-pdp-nr-{{ section.id }} .nr-art.is-switching{
+  opacity:0;
+  transform:scale(0.97);
+}
+
+/* Stage top-bar */
+#ac-pdp-nr-{{ section.id }} .nr-stage__bar{
+  position:absolute; top:0; left:0; right:0;
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 18px 24px;
+  z-index:30;
+  pointer-events:none;
+}
+#ac-pdp-nr-{{ section.id }} .nr-stage__bar > *{ pointer-events:auto; }
+#ac-pdp-nr-{{ section.id }} .nr-back{
+  display:inline-flex; align-items:center; gap:8px;
+  text-decoration:none;
+  font-size:13px; font-weight:600; color:#0b0b0c;
+  background:rgba(255,255,255,0.88);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  border:1px solid rgba(0,0,0,0.08);
+  border-radius:999px;
+  padding:8px 14px;
+  cursor:pointer;
+  transition:box-shadow .18s ease;
+}
+#ac-pdp-nr-{{ section.id }} .nr-back:hover{
+  box-shadow:0 6px 18px rgba(0,0,0,0.10);
+}
+#ac-pdp-nr-{{ section.id }} .nr-wishbtn{
+  width:44px; height:44px; border-radius:999px;
+  border:1px solid rgba(0,0,0,0.10);
+  background:rgba(255,255,255,0.88);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer;
+  transition:transform .16s ease, box-shadow .16s ease;
+}
+#ac-pdp-nr-{{ section.id }} .nr-wishbtn:hover{
+  transform:translateY(-1px);
+  box-shadow:0 8px 20px rgba(0,0,0,0.10);
+}
+#ac-pdp-nr-{{ section.id }} .nr-wishbtn.is-active svg path{ fill:#0b0b0c; stroke:#0b0b0c; }
+#ac-pdp-nr-{{ section.id }} .nr-wishbtn svg{ width:18px; height:18px; display:block; }
+
+/* =============================================
+   CONTENT WRAP
+   ============================================= */
+#ac-pdp-nr-{{ section.id }} .nr-wrap{
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* =============================================
+   TITLE + ARTIST
+   ============================================= */
+#ac-pdp-nr-{{ section.id }} .nr-meta{
+  padding-top: 36px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid #ebebeb;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:24px;
+}
+#ac-pdp-nr-{{ section.id }} .nr-meta__left{ flex:1 1 auto; min-width:0; }
+#ac-pdp-nr-{{ section.id }} .nr-title{
+  font-size: clamp(30px, 5vw, 52px);
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  font-weight: 680;
+  color: #0b0b0c;
+  margin: 0 0 16px;
+}
+#ac-pdp-nr-{{ section.id }} .nr-artist{
+  display:flex; align-items:center; gap:12px;
+}
+#ac-pdp-nr-{{ section.id }} .nr-avatar{
+  width:38px; height:38px; border-radius:999px;
+  overflow:hidden; background:#e9e9ee;
+  flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid rgba(0,0,0,0.06);
+}
+#ac-pdp-nr-{{ section.id }} .nr-avatar img{ width:100%; height:100%; object-fit:cover; display:block; }
+#ac-pdp-nr-{{ section.id }} .nr-avatar__fallback{
+  font-size:12px; font-weight:700; color:#111; opacity:.7; letter-spacing:.03em;
+}
+#ac-pdp-nr-{{ section.id }} .nr-artistname{
+  font-size:16px; font-weight:600; color:#0b0b0c; opacity:.88;
+}
+
+/* =============================================
+   CONFIGURATOR
+   ============================================= */
+#ac-pdp-nr-{{ section.id }} .nr-config{ padding-top: 32px; }
+#ac-pdp-nr-{{ section.id }} .nr-config__group{ margin-bottom: 28px; }
+#ac-pdp-nr-{{ section.id }} .nr-config__group[hidden]{ display:none !important; }
+#ac-pdp-nr-{{ section.id }} .nr-config__head{
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ebebeb;
+  margin-bottom: 14px;
+}
+#ac-pdp-nr-{{ section.id }} .nr-config__kicker{
+  font-size:11px; font-weight:700; letter-spacing:.07em;
+  text-transform:uppercase; color:#888;
+}
+#ac-pdp-nr-{{ section.id }} .nr-config__label{
+  font-size:17px; font-weight:700; color:#0b0b0c; margin-top:4px;
+}
+#ac-pdp-nr-{{ section.id }} .nr-choices{
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+#ac-pdp-nr-{{ section.id }} .nr-choice{
+  appearance:none;
+  border:1.5px solid #e0e0e0;
+  background:#fff;
+  border-radius:14px;
+  padding:14px 16px;
+  cursor:pointer;
+  text-align:left;
+  display:flex; align-items:flex-start; justify-content:space-between; gap:10px;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .14s ease;
+}
+#ac-pdp-nr-{{ section.id }} .nr-choice:hover:not([disabled]){
+  border-color:#bbb;
+  transform:translateY(-1px);
+  box-shadow:0 6px 18px rgba(0,0,0,0.07);
+}
+#ac-pdp-nr-{{ section.id }} .nr-choice.is-active{
+  border-color:#0071e3;
+  box-shadow:0 0 0 2.5px rgba(0,113,227,0.20);
+}
+#ac-pdp-nr-{{ section.id }} .nr-choice[disabled]{
+  opacity:.42; cursor:not-allowed;
+}
+#ac-pdp-nr-{{ section.id }} .nr-choice__body{ flex:1 1 auto; min-width:0; }
+#ac-pdp-nr-{{ section.id }} .nr-choice__title{
+  font-size:15px; font-weight:700; color:#0b0b0c; line-height:1.2;
+}
+#ac-pdp-nr-{{ section.id }} .nr-choice__sub{
+  font-size:12px; color:#888; margin-top:3px; line-height:1.35;
+}
+#ac-pdp-nr-{{ section.id }} .nr-choice__price{
+  font-size:13px; font-weight:700; color:#0b0b0c; white-space:nowrap; padding-top:1px;
+}
+
+/* =============================================
+   STICKY ATC BAR
+   ============================================= */
+#ac-pdp-nr-{{ section.id }} .nr-atcbar{
+  position:sticky; bottom:0; z-index:100;
+  background:rgba(255,255,255,0.94);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+  border-top:1px solid rgba(0,0,0,0.08);
+  padding:12px 24px calc(12px + env(safe-area-inset-bottom, 0px));
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+}
+#ac-pdp-nr-{{ section.id }} .nr-atcbar__info{ flex:1 1 auto; min-width:0; }
+#ac-pdp-nr-{{ section.id }} .nr-atcbar__title{
+  font-size:13px; font-weight:700; color:#0b0b0c; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+#ac-pdp-nr-{{ section.id }} .nr-atcbar__sub{
+  font-size:12px; color:#888; margin-top:2px;
+}
+#ac-pdp-nr-{{ section.id }} .nr-atc{
+  appearance:none; border:0;
+  background:#0b0b0c; color:#fff;
+  border-radius:999px;
+  padding:13px 20px;
+  font-size:14px; font-weight:700; line-height:1;
+  display:inline-flex; align-items:center; gap:10px;
+  cursor:pointer; white-space:nowrap;
+  transition:background .18s ease, opacity .18s ease;
+}
+#ac-pdp-nr-{{ section.id }} .nr-atc:hover:not([disabled]){ background:#1a1a1a; }
+#ac-pdp-nr-{{ section.id }} .nr-atc[disabled]{ opacity:.38; cursor:not-allowed; }
+#ac-pdp-nr-{{ section.id }} .nr-atc__price{ font-weight:800; font-size:14px; }
+
+/* =============================================
+   DESCRIPTION
+   ============================================= */
+#ac-pdp-nr-{{ section.id }} .nr-desc{
+  padding: 36px 0 0;
+  border-top:1px solid #ebebeb;
+  margin-top: 36px;
+}
+#ac-pdp-nr-{{ section.id }} .nr-desc p{
+  font-size:16px; line-height:1.68; color:#141417; opacity:.9;
+  margin:0 0 16px;
+}
+#ac-pdp-nr-{{ section.id }} .nr-desc p:last-child{ margin:0; }
+
+/* =============================================
+   RESPONSIVE
+   ============================================= */
+@media (max-width:680px){
+  #ac-pdp-nr-{{ section.id }} .nr-meta{ flex-direction:column; gap:14px; }
+  #ac-pdp-nr-{{ section.id }} .nr-choices{ grid-template-columns:1fr; }
+  #ac-pdp-nr-{{ section.id }} .nr-atcbar{ flex-direction:column; align-items:stretch; gap:8px; }
+  #ac-pdp-nr-{{ section.id }} .nr-atc{ width:100%; justify-content:space-between; }
+}
+</style>
+
+  {%- assign tags_lc = product.tags | join: ',' | downcase -%}
+  {%- assign title_lc = product.title | downcase -%}
+  {%- assign force_original_only = false -%}
+  {%- if product.has_only_default_variant -%}
+    {%- if tags_lc contains 'original' or title_lc contains 'original' or product.metafields.custom.height != blank or product.metafields.custom.breite_cm_ != blank -%}
+      {%- assign force_original_only = true -%}
+    {%- endif -%}
+  {%- endif -%}
+
+  {%- capture variants_json -%}[{% for v in product.variants %}{% if forloop.first == false %},{% endif %}{
+    "id":{{ v.id }},"title":{{ v.title | json }},"sku":{{ v.sku | json }},
+    "price":{{ v.price | json }},"available":{{ v.available | json }},
+    "option1":{{ v.option1 | json }},"option2":{{ v.option2 | json }},"option3":{{ v.option3 | json }},
+    "img":{% if v.featured_media %}{{ v.featured_media | image_url: width: 1600 | json }}{% else %}null{% endif %}
+  }{% endfor %}]{%- endcapture -%}
+
+  {%- assign art_default_img = product.featured_media | default: product.media.first -%}
+  {%- assign art_default_src = art_default_img | image_url: width: 1600 -%}
+
+  <!-- HERO STAGE -->
+  <div class="nr-stage" data-nr-stage style="--nr-bg: {{ section.settings.stage_bg | default: '#f5f5f5' }};">
+
+    <!-- top bar -->
+    <div class="nr-stage__bar">
+      {% if section.settings.show_back %}
+        <button type="button" class="nr-back" onclick="history.back()">← {{ section.settings.back_label }}</button>
+      {% else %}
+        <div></div>
+      {% endif %}
+      <button type="button" class="nr-wishbtn" aria-label="Zur Wunschliste" aria-pressed="false" data-nr-wish>
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 20.5s-7-4.3-9.4-8.2C.6 8.7 2.6 5.5 6 5.5c1.9 0 3.3 1 4 2.1.7-1.1 2.1-2.1 4-2.1 3.4 0 5.4 3.2 3.4 6.8C19 16.2 12 20.5 12 20.5z"
+            stroke="#0b0b0c" stroke-width="1.6" fill="transparent"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Artwork image — swapped by JS on variant change -->
+    {% if art_default_src %}
+      <img
+        data-nr-art
+        src="{{ art_default_src }}"
+        alt="{{ product.title | escape }}"
+        class="nr-art"
+      >
+    {% endif %}
+  </div>
+
+  <!-- CONTENT -->
+  <div class="nr-wrap">
+
+    <!-- Title + Artist -->
+    <div class="nr-meta">
+      <div class="nr-meta__left">
+        <h1 class="nr-title">{{ product.title }}</h1>
+        <div class="nr-artist">
+          <div class="nr-avatar" aria-hidden="true">
+            {% if artist_avatar != blank %}
+              {{ artist_avatar | image_url: width: 120 | image_tag: loading: 'lazy', alt: artist_name }}
+            {% else %}
+              <div class="nr-avatar__fallback">{{ artist_name | slice: 0, 1 | upcase }}</div>
+            {% endif %}
+          </div>
+          {% if artist_name != blank %}<span class="nr-artistname">{{ artist_name }}</span>{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Configurator -->
+    <div class="nr-config" data-nr-config>
+
+      <div class="nr-config__group" data-group="model">
+        <div class="nr-config__head">
+          <div class="nr-config__kicker">Ausführung</div>
+          <div class="nr-config__label">Was passt zu dir?</div>
+        </div>
+        <div class="nr-choices" data-model-choices></div>
+      </div>
+
+      <div class="nr-config__group" data-group="finish" hidden>
+        <div class="nr-config__head">
+          <div class="nr-config__kicker">Finish</div>
+          <div class="nr-config__label">Rahmen & Oberfläche</div>
+        </div>
+        <div class="nr-choices" data-finish-choices></div>
+      </div>
+
+      <div class="nr-config__group" data-group="size" hidden>
+        <div class="nr-config__head">
+          <div class="nr-config__kicker">Größe</div>
+          <div class="nr-config__label">Wähle dein Format</div>
+        </div>
+        <div class="nr-choices" data-size-choices></div>
+      </div>
+
+      <!-- Description -->
+      {%- assign werk_text_mf = product.metafields.custom.werk_text -%}
+      {%- assign desc_html = product.description -%}
+      {% if werk_text_mf != blank or desc_html != blank %}
+        <div class="nr-desc">
+          {% if werk_text_mf != blank %}
+            {%- assign t = werk_text_mf | replace: '\r\n', '\n' -%}
+            {%- assign t = t | replace: '\n\n', '[[P]]' -%}
+            {%- assign t = t | replace: '\n', ' ' -%}
+            {%- assign t = t | replace: '[[P]]', '</p><p>' -%}
+            <p>{{ t }}</p>
+          {% else %}
+            {{ desc_html }}
+          {% endif %}
+        </div>
+      {% endif %}
+
+    </div>
+
+    <!-- Sticky ATC Bar -->
+    <div class="nr-atcbar" data-nr-atcbar>
+      <div class="nr-atcbar__info">
+        <div class="nr-atcbar__title">{{ product.title }}</div>
+        <div class="nr-atcbar__sub" data-nr-summary>Bitte auswählen</div>
+      </div>
+      <form method="post" action="/cart/add" data-nr-atcform>
+        <input type="hidden" name="id" value="" data-nr-variant>
+        <button type="submit" class="nr-atc" disabled data-nr-atcbtn>
+          <span>{{ section.settings.atc_label | default: 'In den Warenkorb' }}</span>
+          <span class="nr-atc__price" data-nr-price></span>
+        </button>
+      </form>
+    </div>
+
+  </div>
+
+<script>
+(function(){
+  var ROOT = document.getElementById('ac-pdp-nr-{{ section.id }}');
+  if(!ROOT) return;
+
+  /* ─── Data ─── */
+  var PID         = String(ROOT.dataset.productId || '');
+  var VARIANTS    = {{ variants_json | strip_newlines }};
+  var FORCE_ORIG  = {{ force_original_only | json }};
+  var DEFAULT_ART = {{ art_default_src | default: '' | json }};
+  var CURRENCY    = {{ shop.currency | json }};
+
+  var ORIG_SIZE = (function(){
+    {% if product.metafields.custom.height and product.metafields.custom.breite_cm_ %}
+      return '{{ product.metafields.custom.height | round: 0 }}x{{ product.metafields.custom.breite_cm_ | round: 0 }}';
+    {% else %}
+      return '60x40';
+    {% endif %}
+  })();
+
+  /* ─── Helpers ─── */
+  function fmt(cents){
+    try{ return new Intl.NumberFormat('de-DE',{style:'currency',currency:CURRENCY}).format((cents||0)/100); }
+    catch(e){ return ((cents||0)/100).toFixed(2); }
+  }
+  function isOrig(v){ return /original/i.test(v.option1||'')||/original/i.test(v.title||''); }
+  function finishKey(v){
+    var o1=v.option1||'',o2=v.option2||'',o3=v.option3||'';
+    return (o3&&/print|edition/i.test(o1)) ? o2 : o1;
+  }
+  function sizeKey(v){
+    var o1=v.option1||'',o2=v.option2||'',o3=v.option3||'';
+    return (o3&&/print|edition/i.test(o1)) ? o3 : o2;
+  }
+  function uniq(arr){ var o=[]; (arr||[]).forEach(function(x){if(x&&o.indexOf(x)<0)o.push(x);}); return o; }
+  function sizeArea(s){
+    var m=String(s||'').match(/(\d+(?:[.,]\d+)?)\s*[x×]\s*(\d+(?:[.,]\d+)?)/i);
+    return m ? parseFloat(m[1].replace(',','.'))*parseFloat(m[2].replace(',','.')) : 0;
+  }
+
+  var ORIGINAL = FORCE_ORIG ? (VARIANTS[0]||null) : (VARIANTS.find(isOrig)||null);
+  var EDITIONS = FORCE_ORIG ? [] : VARIANTS.filter(function(v){return !isOrig(v);});
+
+  /* ─── DOM ─── */
+  var artImg     = ROOT.querySelector('[data-nr-art]');
+  var wishBtn    = ROOT.querySelector('[data-nr-wish]');
+  var modelWrap  = ROOT.querySelector('[data-model-choices]');
+  var finishWrap = ROOT.querySelector('[data-finish-choices]');
+  var sizeWrap   = ROOT.querySelector('[data-size-choices]');
+  var grpFinish  = ROOT.querySelector('[data-group="finish"]');
+  var grpSize    = ROOT.querySelector('[data-group="size"]');
+  var summaryEl  = ROOT.querySelector('[data-nr-summary]');
+  var variantInp = ROOT.querySelector('[data-nr-variant]');
+  var atcBtn     = ROOT.querySelector('[data-nr-atcbtn]');
+  var atcPrice   = ROOT.querySelector('[data-nr-price]');
+
+  /* ─── Wishlist ─── */
+  var WL_KEY = 'ac_wishlist';
+  function getWL(){ try{var r=JSON.parse(localStorage.getItem(WL_KEY));return Array.isArray(r)?r.map(String):[];}catch(e){return[];} }
+  function setWL(a){ localStorage.setItem(WL_KEY,JSON.stringify(a)); window.dispatchEvent(new CustomEvent('ac:wishlist:changed',{detail:{ids:a}})); }
+  function syncWish(){
+    if(!wishBtn) return;
+    var on=getWL().indexOf(PID)>=0;
+    wishBtn.classList.toggle('is-active',on);
+    wishBtn.setAttribute('aria-pressed',on?'true':'false');
+  }
+  if(wishBtn) wishBtn.addEventListener('click',function(){
+    var l=getWL(),i=l.indexOf(PID);
+    if(i>=0)l.splice(i,1);else l.push(PID);
+    setWL(l);syncWish();
+  });
+  window.addEventListener('storage',function(e){if(e.key===WL_KEY)syncWish();});
+  window.addEventListener('ac:wishlist:changed',syncWish);
+  syncWish();
+
+  /* ─── Image swap with fade ─── */
+  function swapImage(src){
+    if(!artImg||!src) return;
+    if(artImg.src === src) return;
+    artImg.classList.add('is-switching');
+    setTimeout(function(){
+      artImg.src = src;
+      artImg.onload = function(){ artImg.classList.remove('is-switching'); };
+      // Fallback if already cached
+      if(artImg.complete) artImg.classList.remove('is-switching');
+    }, 120);
+  }
+
+  /* ─── State ─── */
+  var mode   = null;
+  var finish = null;
+  var size   = null;
+
+  function finishesList(){ return uniq(EDITIONS.map(function(v){return String(finishKey(v)||'');})); }
+  function sizesForFinish(f){
+    return uniq(EDITIONS.filter(function(v){return String(finishKey(v))===String(f);})
+      .map(function(v){return String(sizeKey(v)||'');}))
+      .sort(function(a,b){return sizeArea(a)-sizeArea(b);});
+  }
+  function pickVariant(f,s){
+    var list=EDITIONS.filter(function(v){return String(finishKey(v))===String(f)&&String(sizeKey(v))===String(s);});
+    return list.find(function(v){return v.available;})||list[0]||null;
+  }
+  function finishMinPrice(f){
+    var list=EDITIONS.filter(function(v){return String(finishKey(v))===String(f);});
+    if(!list.length) return null;
+    var src=list.filter(function(v){return v.available;});
+    if(!src.length) src=list;
+    var min=src.reduce(function(m,v){return Math.min(m,Number(v.price||0));},Infinity);
+    return isFinite(min)?min:null;
+  }
+
+  /* ─── ATC ─── */
+  function setATC(v,summary){
+    if(summaryEl) summaryEl.textContent=summary||'Bitte auswählen';
+    if(!variantInp||!atcBtn||!atcPrice) return;
+    if(!v||!v.id){ variantInp.value=''; atcBtn.disabled=true; atcPrice.textContent=''; return; }
+    variantInp.value=v.id;
+    atcBtn.disabled=!v.available;
+    atcPrice.textContent=fmt(v.price);
+  }
+
+  /* ─── Image update ─── */
+  function updateImage(){
+    if(mode==='original'){
+      swapImage((ORIGINAL&&ORIGINAL.img)?ORIGINAL.img:DEFAULT_ART);
+      return;
+    }
+    var chosen=null;
+    if(finish&&size){
+      chosen=pickVariant(finish,size);
+    } else if(finish){
+      chosen=EDITIONS.find(function(v){return String(finishKey(v))===String(finish)&&v.available;})
+            ||EDITIONS.find(function(v){return String(finishKey(v))===String(finish);})||null;
+    } else if(EDITIONS.length===1){
+      chosen=EDITIONS[0];
+    }
+    swapImage((chosen&&chosen.img)?chosen.img:DEFAULT_ART);
+  }
+
+  /* ─── Card builder ─── */
+  function card(opts){
+    var b=document.createElement('button');
+    b.type='button';
+    b.className='nr-choice'+(opts.active?' is-active':'');
+    if(opts.disabled) b.disabled=true;
+    b.innerHTML=
+      '<div class="nr-choice__body">'+
+        '<div class="nr-choice__title">'+opts.title+'</div>'+
+        (opts.sub?'<div class="nr-choice__sub">'+opts.sub+'</div>':'')+
+      '</div>'+
+      (opts.price?'<div class="nr-choice__price">'+opts.price+'</div>':'');
+    if(!opts.disabled&&typeof opts.onClick==='function')
+      b.addEventListener('click',opts.onClick);
+    return b;
+  }
+
+  /* ─── Render ─── */
+  function renderAll(){ renderModel(); renderFinish(); renderSize(); updateImage(); }
+
+  function renderModel(){
+    modelWrap.innerHTML='';
+    if(ORIGINAL){
+      var sold=ORIGINAL.available===false;
+      var szTxt=ORIG_SIZE?'Originalgröße '+ORIG_SIZE.replace('x','×')+' cm':'';
+      modelWrap.appendChild(card({
+        title:'Original',
+        sub:sold?(szTxt?szTxt+' · Verkauft':'Verkauft'):szTxt,
+        price:fmt(ORIGINAL.price),
+        active:mode==='original',
+        disabled:sold,
+        onClick:function(){
+          mode='original'; finish=null; size=null;
+          grpFinish.hidden=true; grpSize.hidden=true;
+          setATC(ORIGINAL,'Original');
+          renderAll();
+        }
+      }));
+    }
+    if(EDITIONS.length){
+      var avail=EDITIONS.filter(function(v){return v.available;});
+      var src=avail.length?avail:EDITIONS;
+      var minP=src.reduce(function(m,v){return Math.min(m,Number(v.price||0));},Infinity);
+      modelWrap.appendChild(card({
+        title:'Print / Edition',
+        sub:'Wähle Finish & Größe',
+        price:isFinite(minP)?'ab '+fmt(minP):'',
+        active:mode==='edition',
+        disabled:EDITIONS.every(function(v){return !v.available;}),
+        onClick:function(){
+          mode='edition';
+          if(!finish) finish=finishesList()[0]||null;
+          if(!size&&finish){
+            var szs=sizesForFinish(finish);
+            size=szs[0]||null;
+          }
+          grpFinish.hidden=false;
+          grpSize.hidden=!finish;
+          var v=finish&&size?pickVariant(finish,size):null;
+          setATC(v, v?'Edition · '+finish+' · '+size : finish?'Edition · '+finish:'Edition');
+          renderAll();
+        }
+      }));
+    }
+  }
+
+  function renderFinish(){
+    finishWrap.innerHTML='';
+    if(mode!=='edition'){ grpFinish.hidden=true; return; }
+    grpFinish.hidden=false;
+    finishesList().forEach(function(f){
+      var p=finishMinPrice(f);
+      finishWrap.appendChild(card({
+        title:f, sub:'',
+        price:p!=null?'ab '+fmt(p):'',
+        active:String(finish)===String(f),
+        onClick:function(){
+          finish=f;
+          var szs=sizesForFinish(f);
+          size=szs.find(function(s){var v=pickVariant(f,s);return v&&v.available;})||szs[0]||null;
+          grpSize.hidden=false;
+          var v=size?pickVariant(finish,size):null;
+          setATC(v, v?'Edition · '+f+' · '+size : 'Edition · '+f);
+          renderFinish(); renderSize(); updateImage();
+        }
+      }));
+    });
+  }
+
+  function renderSize(){
+    sizeWrap.innerHTML='';
+    if(mode!=='edition'||!finish){ grpSize.hidden=true; return; }
+    grpSize.hidden=false;
+    var sizes=sizesForFinish(finish);
+    sizes.forEach(function(sz){
+      var v=pickVariant(finish,sz);
+      var dis=!v||!v.available;
+      sizeWrap.appendChild(card({
+        title:'Size '+sz,
+        sub:dis?'Nicht verfügbar':'',
+        price:v?fmt(v.price):'',
+        active:String(size)===String(sz),
+        disabled:dis,
+        onClick:function(){
+          size=sz;
+          var chosen=pickVariant(finish,sz);
+          setATC(chosen,'Edition · '+finish+' · '+sz);
+          renderSize();
+          updateImage();
+        }
+      }));
+    });
+  }
+
+  /* ─── Default selection ─── */
+  if(ORIGINAL&&ORIGINAL.available){
+    mode='original';
+    grpFinish.hidden=true; grpSize.hidden=true;
+    setATC(ORIGINAL,'Original');
+  } else if(EDITIONS.length){
+    mode='edition';
+    finish=finishesList()[0]||null;
+    if(finish){
+      var initSzs=sizesForFinish(finish);
+      size=initSzs.find(function(s){var v=pickVariant(finish,s);return v&&v.available;})||initSzs[0]||null;
+    }
+    grpFinish.hidden=false;
+    grpSize.hidden=!finish;
+    var initV=finish&&size?pickVariant(finish,size):null;
+    setATC(initV, initV?'Edition · '+finish+' · '+size : finish?'Edition · '+finish:'Edition');
+  } else {
+    mode='original';
+    grpFinish.hidden=true; grpSize.hidden=true;
+    setATC(ORIGINAL,'Original · Verkauft');
+  }
+
+  renderModel(); renderFinish(); renderSize();
+
+  // Initial image
+  if(artImg&&artImg.complete&&artImg.naturalWidth){
+    updateImage();
+  } else if(artImg){
+    artImg.addEventListener('load',updateImage,{once:true});
+  }
+
+})();
+</script>
+
+{% schema %}
+{
+  "name": "AC Product Artwork",
+  "settings": [
+    { "type": "checkbox", "id": "show_back",   "label": "Back-Link anzeigen", "default": true },
+    { "type": "text",     "id": "back_label",  "label": "Zurück-Text",        "default": "Back" },
+    { "type": "text",     "id": "atc_label",   "label": "Warenkorb Button",   "default": "In den Warenkorb" },
+    { "type": "color",    "id": "stage_bg",    "label": "Hintergrundfarbe Stage", "default": "#f5f5f5" }
+  ],
+  "blocks": [],
+  "presets": [
+    { "name": "AC Product Artwork (No Render)", "category": "ARTCLUB" }
+  ]
+}
+{% endschema %}
+</section>

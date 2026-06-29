@@ -1,0 +1,686 @@
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  #ac-wrap {
+    --ac-black: #0a0a0a;
+    --ac-white: #ffffff;
+    --ac-bg: #f7f6f2;
+    --ac-mid: #6b6b6b;
+    --ac-border: #e2e1dc;
+    --ac-font: 'Inter', sans-serif;
+    font-family: var(--ac-font);
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--ac-black);
+    background: var(--ac-bg);
+    padding: 40px;
+    border-radius: 12px;
+  }
+  #ac-wrap * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── TOPBAR ── */
+  #ac-wrap .ac-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 28px;
+    border-bottom: 1px solid var(--ac-border);
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  #ac-wrap .ac-logo {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--ac-black);
+  }
+  #ac-wrap .ac-lang-toggle {
+    display: flex;
+    border: 1px solid var(--ac-border);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--ac-white);
+  }
+  #ac-wrap .ac-lang-btn {
+    background: transparent;
+    border: none;
+    color: var(--ac-mid);
+    font-family: var(--ac-font);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    padding: 6px 14px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.15s;
+  }
+  #ac-wrap .ac-lang-btn.active {
+    background: var(--ac-black);
+    color: #ffffff;
+  }
+
+  /* ── HERO ── */
+  #ac-wrap .ac-hero {
+    margin-bottom: 36px;
+  }
+  #ac-wrap .ac-eyebrow {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ac-mid);
+    margin-bottom: 12px;
+    display: block;
+  }
+  #ac-wrap h1 {
+    font-size: clamp(26px, 4vw, 42px);
+    font-weight: 300;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    color: var(--ac-black);
+    margin-bottom: 16px;
+    font-family: var(--ac-font);
+  }
+  #ac-wrap .ac-meta {
+    font-size: 12px;
+    color: var(--ac-mid);
+    line-height: 1.8;
+  }
+
+  /* ── KPI ROW ── */
+  #ac-wrap .ac-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 36px;
+  }
+  #ac-wrap .ac-kpi {
+    background: var(--ac-white);
+    border: 1px solid var(--ac-border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  #ac-wrap .ac-kpi-val {
+    font-size: 26px;
+    font-weight: 600;
+    color: var(--ac-black);
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  #ac-wrap .ac-kpi-label {
+    font-size: 11px;
+    color: var(--ac-mid);
+    margin-top: 5px;
+    line-height: 1.4;
+  }
+
+  /* ── GRID ── */
+  #ac-wrap .ac-section-label {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ac-mid);
+    margin-bottom: 14px;
+    display: block;
+  }
+  #ac-wrap .ac-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 8px;
+    margin-bottom: 40px;
+  }
+  #ac-wrap .ac-card {
+    background: var(--ac-white);
+    border: 1px solid var(--ac-border);
+    border-radius: 10px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color 0.15s;
+    cursor: default;
+  }
+  #ac-wrap .ac-card:hover { border-color: #b0afab; }
+  #ac-wrap .ac-card-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  #ac-wrap .ac-card-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  #ac-wrap .ac-card-right { flex: 1; }
+  #ac-wrap .ac-card-num {
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--ac-mid);
+    text-transform: uppercase;
+    margin-bottom: 3px;
+    display: block;
+  }
+  #ac-wrap .ac-card-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ac-black);
+    line-height: 1.3;
+  }
+  #ac-wrap .ac-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  #ac-wrap .ac-pill {
+    font-size: 10px;
+    font-weight: 400;
+    padding: 2px 8px;
+    border-radius: 100px;
+    line-height: 1.6;
+    white-space: nowrap;
+  }
+  #ac-wrap .p-gray  { background: #f0efea; color: #5f5e5a; }
+  #ac-wrap .p-blue  { background: #e8f1fb; color: #1a5fa0; }
+  #ac-wrap .p-teal  { background: #e0f5ee; color: #0d6e54; }
+  #ac-wrap .p-amber { background: #faeeda; color: #844f0b; }
+  #ac-wrap .p-coral { background: #faece7; color: #943a1c; }
+  #ac-wrap .p-purple{ background: #eeedfe; color: #5049b4; }
+  #ac-wrap .i-blue  { background: #e8f1fb; }
+  #ac-wrap .i-teal  { background: #e0f5ee; }
+  #ac-wrap .i-amber { background: #faeeda; }
+  #ac-wrap .i-coral { background: #faece7; }
+  #ac-wrap .i-purple{ background: #eeedfe; }
+  #ac-wrap .i-gray  { background: #f0efea; }
+
+  /* ── DIVIDER ── */
+  #ac-wrap .ac-divider {
+    height: 1px;
+    background: var(--ac-border);
+    margin: 0 0 40px;
+  }
+
+  /* ── TOC ── */
+  #ac-wrap .ac-toc {
+    margin-bottom: 40px;
+  }
+  #ac-wrap .ac-toc-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px 40px;
+    list-style: none;
+    margin-top: 12px;
+  }
+  #ac-wrap .ac-toc-grid a {
+    color: var(--ac-black);
+    text-decoration: none;
+    font-size: 12px;
+    display: flex;
+    gap: 10px;
+    padding: 4px 0;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.15s;
+    align-items: baseline;
+  }
+  #ac-wrap .ac-toc-grid a:hover { border-bottom-color: var(--ac-black); }
+  #ac-wrap .ac-toc-num {
+    font-size: 10px;
+    color: var(--ac-mid);
+    min-width: 26px;
+    font-weight: 500;
+  }
+
+  /* ── SECTIONS ── */
+  #ac-wrap .ac-section {
+    border-top: 1px solid var(--ac-border);
+    padding: 32px 0;
+  }
+  #ac-wrap .ac-section:last-of-type { border-bottom: 1px solid var(--ac-border); }
+  #ac-wrap .ac-section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  #ac-wrap .ac-s-num {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    color: var(--ac-mid);
+    min-width: 30px;
+    text-transform: uppercase;
+  }
+  #ac-wrap .ac-s-title {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--ac-black);
+  }
+  #ac-wrap .ac-clause {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 12px;
+    padding-left: 44px;
+  }
+  #ac-wrap .ac-c-num {
+    font-size: 11px;
+    color: var(--ac-mid);
+    min-width: 28px;
+    flex-shrink: 0;
+    padding-top: 1px;
+    font-weight: 400;
+  }
+  #ac-wrap .ac-c-text {
+    font-size: 13px;
+    line-height: 1.75;
+    color: #1c1c1c;
+  }
+  #ac-wrap .ac-c-text strong {
+    font-weight: 600;
+    display: block;
+    margin: 10px 0 4px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ac-black);
+  }
+  #ac-wrap .ac-c-text strong:first-child { margin-top: 0; }
+
+  /* ── FOOTER ── */
+  #ac-wrap .ac-footer {
+    padding-top: 28px;
+    font-size: 11px;
+    color: var(--ac-mid);
+    line-height: 1.9;
+  }
+
+  @media (max-width: 640px) {
+    #ac-wrap { padding: 24px 20px; }
+    #ac-wrap .ac-kpi-row { grid-template-columns: repeat(2, 1fr); }
+    #ac-wrap .ac-grid { grid-template-columns: 1fr; }
+    #ac-wrap .ac-toc-grid { grid-template-columns: 1fr; }
+    #ac-wrap .ac-clause { padding-left: 0; }
+  }
+</style>
+
+<div id="ac-wrap">
+
+  <!-- TOPBAR -->
+  <div class="ac-topbar">
+    <div class="ac-logo">artclub&reg;</div>
+    <div class="ac-lang-toggle">
+      <button class="ac-lang-btn active" onclick="acSetLang('de')" id="ac-btn-de">DE</button>
+      <button class="ac-lang-btn" onclick="acSetLang('en')" id="ac-btn-en">EN</button>
+    </div>
+  </div>
+
+  <!-- HERO -->
+  <div class="ac-hero">
+    <span class="ac-eyebrow" data-de="Rechtliches Dokument" data-en="Legal Document">Rechtliches Dokument</span>
+    <h1 data-de="Zusammenarbeits&shy;bedingungen" data-en="Terms of Collaboration">Zusammenarbeits&shy;bedingungen</h1>
+    <div class="ac-meta" data-de="Artclub Mixed Media GmbH &middot; Friedrichsruherstr. 37, 14193 Berlin &middot; Vertreten durch Sebastian Krau&szlig; (Gesch&auml;ftsf&uuml;hrer) &middot; Stand: April 2025" data-en="Artclub Mixed Media GmbH &middot; Friedrichsruherstr. 37, 14193 Berlin &middot; Represented by Sebastian Krau&szlig; (Managing Director) &middot; As of: April 2025">
+      Artclub Mixed Media GmbH &middot; Friedrichsruherstr. 37, 14193 Berlin &middot; Vertreten durch Sebastian Krau&szlig; (Gesch&auml;ftsf&uuml;hrer) &middot; Stand: April 2025
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="ac-kpi-row">
+    <div class="ac-kpi">
+      <div class="ac-kpi-val">70%</div>
+      <div class="ac-kpi-label" data-de="K&uuml;nstler&shy;anteil Originals (Verkauf)" data-en="Artist share originals (sale)">K&uuml;nstleranteil Originals (Verkauf)</div>
+    </div>
+    <div class="ac-kpi">
+      <div class="ac-kpi-val">40%</div>
+      <div class="ac-kpi-label" data-de="K&uuml;nstler&shy;anteil Prints (Verkauf)" data-en="Artist share prints (sale)">K&uuml;nstleranteil Prints (Verkauf)</div>
+    </div>
+    <div class="ac-kpi">
+      <div class="ac-kpi-val">70%</div>
+      <div class="ac-kpi-label" data-de="K&uuml;nstler&shy;anteil Originals (Miete)" data-en="Artist share originals (rental)">K&uuml;nstleranteil Originals (Miete)</div>
+    </div>
+    <div class="ac-kpi">
+      <div class="ac-kpi-val">50%</div>
+      <div class="ac-kpi-label" data-de="K&uuml;nstler&shy;anteil Prints (Miete)" data-en="Artist share prints (rental)">K&uuml;nstleranteil Prints (Miete)</div>
+    </div>
+  </div>
+
+  <!-- GRID OVERVIEW -->
+  <span class="ac-section-label" data-de="&Uuml;bersicht" data-en="Overview">&Uuml;bersicht</span>
+  <div class="ac-grid">
+
+    <div class="ac-card">
+      <div class="ac-card-top">
+        <div class="ac-card-icon i-gray"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2" stroke="#5f5e5a" stroke-width="1.3"/><path d="M5 8h6M5 5.5h6M5 10.5h4" stroke="#5f5e5a" stroke-width="1.2" stroke-linecap="round"/></svg></div>
+        <div class="ac-card-right"><span class="ac-card-num">&sect; 1</span><span class="ac-card-title" data-de="Gegenstand &amp; Geltungsbereich" data-en="Subject &amp; Scope">Gegenstand &amp; Geltungsbereich</span></div>
+      </div>
+      <div class="ac-pills"><span class="ac-pill p-gray">Verkauf</span><span class="ac-pill p-gray">Vermietung</span><span class="ac-pill p-gray">Ausstellung</span></div>
+    </div>
+
+    <div class="ac-card">
+      <div class="ac-card-top">
+        <div class="ac-card-icon i-blue"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2v9M5 8l3 3 3-3" stroke="#1a5fa0" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 13h10" stroke="#1a5fa0" stroke-width="1.4" stroke-linecap="round"/></svg></div>
+        <div class="ac-card-right"><span class="ac-card-num">&sect; 2</span><span class="ac-card-title" data-de="&Uuml;berlassung der Werke" data-en="Provision of Works">&Uuml;berlassung der Werke</span></div>
+      </div>
+      <div class="ac-pills"><span class="ac-pill p-blue">Kommission</span><span class="ac-pill p-blue">Eigentum beim K&uuml;nstler</span></div>
+    </div>
+
+    <div class="ac-card">
+      <div class="ac-card-top">
+        <div class="ac-card-icon i-amber"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 13l4-8 3 5 2-3 2 6" stroke="#844f0b" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="ac-card-right"><span class="ac-card-num">&sect; 3</span><span class="ac-card-title" data-de="Transport &amp; Gefahrtragung" data-en="Transport &amp; Risk">Transport &amp; Gefahrtragung</span></div>
+      </div>
+      <div class="ac-pills"><span class="ac-pill p-amber">Anlieferung: K&uuml;nstler</span><span class="ac-pill p-amber">Versand: ARTCLUB</span></div>
+    </div>
+
+    <div class="ac-card">
+      <div class="ac-card-top">
+        <div class="ac-card-icon i-teal"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="#0d6e54" stroke-width="1.3"/><path d="M8 5v3l2 2" stroke="#0d6e54" stroke-width="1.3" stroke-linecap="round"/></svg></div>
+        <div class="ac-card-right"><span class="ac-card-num">&sect; 4</span><span class="ac-card-title" data-de="Verkauf &amp; Kommission" data-en="Sale &amp; Commission">Verkauf &amp; Kommission</span></div>
+      </div>
+      <div class="ac-pills"><span class="ac-pill p-teal">Original: 70% K&uuml;nstler</span><span class="ac-pill p-teal">Print: 40% K&uuml;nstler</span><span class="ac-pill p-teal">Zahlung in 30 Tagen</span></div>
+    </div>
+
+    <div class="ac-card">
+      <div class="ac-card-top">
+        <div class="ac-card-icon i-purple"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="2" stroke="#5049b4" stroke-width="1.3"/><path d="M5 7h6M5 9.5h4" stroke="#5049b4" stroke-width="1.3" stroke-linecap="round"/></svg></div>
+        <div class="ac-card-right"><span class="ac-card-num">&sect; 5</span><span class="ac-card-title" data-de="Vermietung von Kunstwerken" data-en="Rental of Artworks">Vermietung von Kunstwerken</span></div>
+      </div>
+      <div class="ac-pills"><span class="ac-pill p-purple">1/36 Verkaufspreis/Monat</span><span class="ac-pill p-purple">Original: 70%</span><span class="ac-pill p-purple">Print: 50%</span></div>
+    </div>
+
+    <div class="ac-card">
+      <div class="ac-card-top">
+        <div class="ac-card-icon i-teal"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 12l4-8 4 8" stroke="#0d6e54" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 9h5" stroke="#0d6e54" stroke-width="1.4" stroke-linecap="round"/></svg></div>
+        <div class="ac-card-right"><span class="ac-card-num">&sect; 6</span><span class="ac-card-title" data-de="Preisgestaltung" data-en="Pricing">Preisgestaltung</span></div>
+      </div>
+      <div class="ac-pills"><span class="ac-pill p-teal">Gemeinsam festgelegt</span><span class="ac-pill p-teal">Zustimmung bei &Auml;nderung</span></div>
+    </div>
+
+    <div class="ac-card">
+      <div class="ac-card-top">
+        <div class="ac-card-icon i-coral"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="1.5" stroke="#943a1c" stroke-width="1.3"/><path d="M5 3V2M11 3V2M2 7h12" stroke="#943a1c" stroke-width="1.3" stroke-linecap="round"/></svg></div>
+        <div class="ac-card-right"><span class="ac-card-num">&sect; 7</span><span class="ac-card-title" data-de="Ausstellungen &amp; Events" data-en="Exhibitions &amp; Events">Ausstellungen &amp; Events</span></div>
+      </div>
+      <div class="ac-pills"><span class="ac-pill p-coral">Freiwillig</span><span class="ac-pill p-coral">50% Transportkosten</span><span class="ac-pill p-coral">Abholung in 7 Tagen</span><span class="ac-pill p-coral">10&euro;/Werk/Woche Verzug</span></div>
+    </div>
+
+    <div class="ac-card">
+      <div class="ac-card-top">
+        <div class="ac-card-icon i-blue"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="3" stroke="#1a5fa0" stroke-width="1.3"/><path d="M3 13c0-2.761 2.239-5 5-5s5 2.239 5 5" stroke="#1a5fa0" stroke-width="1.3" stroke-linecap="round"/></svg></div>
+        <div class="ac-card-right"><span class="ac-card-num">&sect; 8</span><span class="ac-card-title" data-de="Marketing &amp; Bildrechte" data-en="Marketing &amp; Image Rights">Marketing &amp; Bildrechte</span></div>
+      </div>
+      <div class="ac-pills"><span class="ac-pill p-blue">Namensnennung immer</span><span class="ac-pill p-blue">Keine Weiterlizenzierung</span></div>
+    </div>
+
+    <div class="ac-card">
+      <div class="ac-card-top">
+        <div class="ac-card-icon i-purple"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 10l3-6 2 4 2-2 3 4" stroke="#5049b4" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="ac-card-right"><span class="ac-card-num">&sect; 9</span><span class="ac-card-title" data-de="Stil, Qualit&auml;t &amp; Werkauswahl" data-en="Style, Quality &amp; Selection">Stil, Qualit&auml;t &amp; Werkauswahl</span></div>
+      </div>
+      <div class="ac-pills"><span class="ac-pill p-purple">Originalit&auml;t garantiert</span><span class="ac-pill p-purple">Ablehnungsrecht ARTCLUB</span></div>
+    </div>
+
+    <div class="ac-card">
+      <div class="ac-card-top">
+        <div class="ac-card-icon i-teal"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M9 2H5a1.5 1.5 0 00-1.5 1.5v9A1.5 1.5 0 005 14h6a1.5 1.5 0 001.5-1.5V6L9 2z" stroke="#0d6e54" stroke-width="1.3" stroke-linejoin="round"/><path d="M9 2v4h3.5" stroke="#0d6e54" stroke-width="1.3" stroke-linejoin="round"/></svg></div>
+        <div class="ac-card-right"><span class="ac-card-num">&sect; 10</span><span class="ac-card-title" data-de="Urheberrecht &amp; Nutzungsrechte" data-en="Copyright &amp; Usage Rights">Urheberrecht &amp; Nutzungsrechte</span></div>
+      </div>
+      <div class="ac-pills"><span class="ac-pill p-teal">Urheberrecht beim K&uuml;nstler</span><span class="ac-pill p-teal">Keine &Uuml;bertragung</span></div>
+    </div>
+
+    <div class="ac-card">
+      <div class="ac-card-top">
+        <div class="ac-card-icon i-amber"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 12c1-2 6-7 8-8" stroke="#844f0b" stroke-width="1.4" stroke-linecap="round"/><path d="M9 3l1.5 3.5L14 8" stroke="#844f0b" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="ac-card-right"><span class="ac-card-num">&sect; 11</span><span class="ac-card-title" data-de="Verwendung der Unterschrift" data-en="Use of Signature">Verwendung der Unterschrift</span></div>
+      </div>
+      <div class="ac-pills"><span class="ac-pill p-amber">Nur Echtheitszertifikate</span><span class="ac-pill p-amber">Keine Werbenutzung</span></div>
+    </div>
+
+    <div class="ac-card">
+      <div class="ac-card-top">
+        <div class="ac-card-icon i-coral"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="#943a1c" stroke-width="1.3"/><path d="M8 5v3l2 2" stroke="#943a1c" stroke-width="1.3" stroke-linecap="round"/></svg></div>
+        <div class="ac-card-right"><span class="ac-card-num">&sect; 12</span><span class="ac-card-title" data-de="Laufzeit &amp; K&uuml;ndigung" data-en="Duration &amp; Termination">Laufzeit &amp; K&uuml;ndigung</span></div>
+      </div>
+      <div class="ac-pills"><span class="ac-pill p-coral">Unbefristet</span><span class="ac-pill p-coral">45 Tage Frist</span><span class="ac-pill p-coral">E-Mail gen&uuml;gt</span></div>
+    </div>
+
+    <div class="ac-card">
+      <div class="ac-card-top">
+        <div class="ac-card-icon i-blue"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="#1a5fa0" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="ac-card-right"><span class="ac-card-num">&sect; 13</span><span class="ac-card-title" data-de="&Auml;nderungen der Bedingungen" data-en="Changes to Terms">&Auml;nderungen der Bedingungen</span></div>
+      </div>
+      <div class="ac-pills"><span class="ac-pill p-blue">30 Tage Vorank&uuml;ndigung</span><span class="ac-pill p-blue">Aktive Zustimmung n&ouml;tig</span></div>
+    </div>
+
+    <div class="ac-card">
+      <div class="ac-card-top">
+        <div class="ac-card-icon i-coral"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v5M8 10.5v1" stroke="#943a1c" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="8" r="6" stroke="#943a1c" stroke-width="1.3"/></svg></div>
+        <div class="ac-card-right"><span class="ac-card-num">&sect; 14</span><span class="ac-card-title" data-de="Haftung" data-en="Liability">Haftung</span></div>
+      </div>
+      <div class="ac-pills"><span class="ac-pill p-coral">Vorsatz unbeschr&auml;nkt</span><span class="ac-pill p-coral">Fahrl&auml;ssigkeit begrenzt</span></div>
+    </div>
+
+    <div class="ac-card">
+      <div class="ac-card-top">
+        <div class="ac-card-icon i-gray"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="3" y="2" width="10" height="12" rx="1.5" stroke="#5f5e5a" stroke-width="1.3"/><path d="M5.5 5.5h5M5.5 8h5M5.5 10.5h3" stroke="#5f5e5a" stroke-width="1.2" stroke-linecap="round"/></svg></div>
+        <div class="ac-card-right"><span class="ac-card-num">&sect; 15</span><span class="ac-card-title" data-de="Datenschutz" data-en="Data Protection">Datenschutz</span></div>
+      </div>
+      <div class="ac-pills"><span class="ac-pill p-gray">DSGVO Art. 6 lit. b+c</span><span class="ac-pill p-gray">datenschutz@artclub.wtf</span></div>
+    </div>
+
+    <div class="ac-card">
+      <div class="ac-card-top">
+        <div class="ac-card-icon i-gray"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M8 3l5 5-5 5" stroke="#5f5e5a" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="ac-card-right"><span class="ac-card-num">&sect; 16</span><span class="ac-card-title" data-de="Schlussbestimmungen" data-en="Final Provisions">Schlussbestimmungen</span></div>
+      </div>
+      <div class="ac-pills"><span class="ac-pill p-gray">Deutsches Recht</span><span class="ac-pill p-gray">Gerichtsstand Berlin</span><span class="ac-pill p-gray">Salvatorische Klausel</span></div>
+    </div>
+
+  </div>
+
+  <div class="ac-divider"></div>
+
+  <!-- TOC -->
+  <div class="ac-toc">
+    <span class="ac-section-label" data-de="Inhalt" data-en="Contents">Inhalt</span>
+    <ul class="ac-toc-grid">
+      <li><a href="#acs1"><span class="ac-toc-num">&sect; 1</span><span data-de="Gegenstand und Geltungsbereich" data-en="Subject and Scope">Gegenstand und Geltungsbereich</span></a></li>
+      <li><a href="#acs9"><span class="ac-toc-num">&sect; 9</span><span data-de="Stil, Qualit&auml;t und Werkauswahl" data-en="Style, Quality and Selection">Stil, Qualit&auml;t und Werkauswahl</span></a></li>
+      <li><a href="#acs2"><span class="ac-toc-num">&sect; 2</span><span data-de="&Uuml;berlassung der Werke" data-en="Provision of Works">&Uuml;berlassung der Werke</span></a></li>
+      <li><a href="#acs10"><span class="ac-toc-num">&sect; 10</span><span data-de="Urheberrecht und Nutzungsrechte" data-en="Copyright and Usage Rights">Urheberrecht und Nutzungsrechte</span></a></li>
+      <li><a href="#acs3"><span class="ac-toc-num">&sect; 3</span><span data-de="Transport und Gefahrtragung" data-en="Transport and Risk">Transport und Gefahrtragung</span></a></li>
+      <li><a href="#acs11"><span class="ac-toc-num">&sect; 11</span><span data-de="Verwendung der Unterschrift" data-en="Use of Signature">Verwendung der Unterschrift</span></a></li>
+      <li><a href="#acs4"><span class="ac-toc-num">&sect; 4</span><span data-de="Verkauf und Kommission" data-en="Sale and Commission">Verkauf und Kommission</span></a></li>
+      <li><a href="#acs12"><span class="ac-toc-num">&sect; 12</span><span data-de="Laufzeit und K&uuml;ndigung" data-en="Duration and Termination">Laufzeit und K&uuml;ndigung</span></a></li>
+      <li><a href="#acs5"><span class="ac-toc-num">&sect; 5</span><span data-de="Vermietung von Kunstwerken" data-en="Rental of Artworks">Vermietung von Kunstwerken</span></a></li>
+      <li><a href="#acs13"><span class="ac-toc-num">&sect; 13</span><span data-de="&Auml;nderungen der Bedingungen" data-en="Changes to Terms">&Auml;nderungen der Bedingungen</span></a></li>
+      <li><a href="#acs6"><span class="ac-toc-num">&sect; 6</span><span data-de="Preisgestaltung" data-en="Pricing">Preisgestaltung</span></a></li>
+      <li><a href="#acs14"><span class="ac-toc-num">&sect; 14</span><span data-de="Haftung" data-en="Liability">Haftung</span></a></li>
+      <li><a href="#acs7"><span class="ac-toc-num">&sect; 7</span><span data-de="Ausstellungen und Veranstaltungen" data-en="Exhibitions and Events">Ausstellungen und Veranstaltungen</span></a></li>
+      <li><a href="#acs15"><span class="ac-toc-num">&sect; 15</span><span data-de="Datenschutz" data-en="Data Protection">Datenschutz</span></a></li>
+      <li><a href="#acs8"><span class="ac-toc-num">&sect; 8</span><span data-de="Marketing und Bildrechte" data-en="Marketing and Image Rights">Marketing und Bildrechte</span></a></li>
+      <li><a href="#acs16"><span class="ac-toc-num">&sect; 16</span><span data-de="Schlussbestimmungen" data-en="Final Provisions">Schlussbestimmungen</span></a></li>
+    </ul>
+  </div>
+
+  <!-- ── FULL TERMS ── -->
+
+  <div class="ac-section" id="acs1">
+    <div class="ac-section-head"><span class="ac-s-num">&sect; 1</span><span class="ac-s-title" data-de="Gegenstand und Geltungsbereich" data-en="Subject and Scope">Gegenstand und Geltungsbereich</span></div>
+    <div class="ac-clause"><span class="ac-c-num">1.1</span><span class="ac-c-text" data-de="Diese Zusammenarbeitsbedingungen regeln die vertragliche Beziehung zwischen der Artclub Mixed Media GmbH (nachfolgend &bdquo;ARTCLUB&ldquo;) und K&uuml;nstlerinnen und K&uuml;nstlern (nachfolgend &bdquo;K&uuml;nstler&ldquo;), die ARTCLUB Werke zur Ausstellung, Vermarktung, zum Verkauf und/oder zur Vermietung &uuml;berlassen." data-en="These terms of collaboration govern the contractual relationship between Artclub Mixed Media GmbH (hereinafter &ldquo;ARTCLUB&rdquo;) and artists (hereinafter &ldquo;Artist&rdquo;) who provide ARTCLUB with works for exhibition, promotion, sale and/or rental.">Diese Zusammenarbeitsbedingungen regeln die vertragliche Beziehung zwischen der Artclub Mixed Media GmbH (nachfolgend &bdquo;ARTCLUB&ldquo;) und K&uuml;nstlerinnen und K&uuml;nstlern (nachfolgend &bdquo;K&uuml;nstler&ldquo;), die ARTCLUB Werke zur Ausstellung, Vermarktung, zum Verkauf und/oder zur Vermietung &uuml;berlassen.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">1.2</span><span class="ac-c-text" data-de="Die Bedingungen gelten f&uuml;r alle gegenw&auml;rtigen und zuk&uuml;nftigen Leistungen im Rahmen der Zusammenarbeit, sofern nicht im Einzelfall schriftlich abweichend vereinbart." data-en="These terms apply to all present and future services within the scope of the collaboration, unless otherwise agreed in writing in individual cases.">Die Bedingungen gelten f&uuml;r alle gegenw&auml;rtigen und zuk&uuml;nftigen Leistungen im Rahmen der Zusammenarbeit, sofern nicht im Einzelfall schriftlich abweichend vereinbart.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">1.3</span><span class="ac-c-text" data-de="Die Vereinbarung gilt f&uuml;r die Werkkategorien sowie Leistungsarten, die der K&uuml;nstler im Zustimmungsformular verbindlich ausgew&auml;hlt hat. Die Auswahl ist Bestandteil dieser Vereinbarung und kann nur durch eine neue schriftliche Erkl&auml;rung ge&auml;ndert werden." data-en="The agreement applies to the work categories and service types that the Artist has bindingly selected in the consent form. The selection forms part of this agreement and may only be changed by a new written declaration.">Die Vereinbarung gilt f&uuml;r die Werkkategorien sowie Leistungsarten, die der K&uuml;nstler im Zustimmungsformular verbindlich ausgew&auml;hlt hat. Die Auswahl ist Bestandteil dieser Vereinbarung und kann nur durch eine neue schriftliche Erkl&auml;rung ge&auml;ndert werden.</span></div>
+  </div>
+
+  <div class="ac-section" id="acs2">
+    <div class="ac-section-head"><span class="ac-s-num">&sect; 2</span><span class="ac-s-title" data-de="&Uuml;berlassung der Werke" data-en="Provision of Works">&Uuml;berlassung der Werke</span></div>
+    <div class="ac-clause"><span class="ac-c-num">2.1</span><span class="ac-c-text" data-de="Der K&uuml;nstler &uuml;berl&auml;sst ARTCLUB die im Zustimmungsformular ausgew&auml;hlten Werkkategorien zur Ausstellung, zum Verkauf und/oder zur Vermietung. Art, Anzahl und Format der Werke werden in gegenseitiger Absprache festgelegt und in einer separaten Werkliste dokumentiert." data-en="The Artist provides ARTCLUB with the work categories selected in the consent form for exhibition, sale and/or rental. The type, number and format of the works are agreed upon mutually and documented in a separate works list.">Der K&uuml;nstler &uuml;berl&auml;sst ARTCLUB die im Zustimmungsformular ausgew&auml;hlten Werkkategorien zur Ausstellung, zum Verkauf und/oder zur Vermietung. Art, Anzahl und Format der Werke werden in gegenseitiger Absprache festgelegt und in einer separaten Werkliste dokumentiert.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">2.2</span><span class="ac-c-text" data-de="Die &Uuml;berlassung erfolgt als Kommissionsvereinbarung. Eigentumsrechte verbleiben bis zum vollst&auml;ndigen Kaufpreiseingang beim K&uuml;nstler. Bei Vermietung verbleiben die Eigentumsrechte dauerhaft beim K&uuml;nstler." data-en="The provision is made as a consignment arrangement. Ownership remains with the Artist until full payment is received. In the case of rental, ownership remains permanently with the Artist.">Die &Uuml;berlassung erfolgt als Kommissionsvereinbarung. Eigentumsrechte verbleiben bis zum vollst&auml;ndigen Kaufpreiseingang beim K&uuml;nstler. Bei Vermietung verbleiben die Eigentumsrechte dauerhaft beim K&uuml;nstler.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">2.3</span><span class="ac-c-text" data-de="Der K&uuml;nstler sichert zu, dass er &uuml;ber alle notwendigen Rechte verf&uuml;gt und die Werke frei von Rechten Dritter sind." data-en="The Artist warrants that they hold all necessary rights and that the works are free from third-party rights.">Der K&uuml;nstler sichert zu, dass er &uuml;ber alle notwendigen Rechte verf&uuml;gt und die Werke frei von Rechten Dritter sind.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">2.4</span><span class="ac-c-text" data-de="ARTCLUB ist nicht verpflichtet, alle &uuml;berlassenen Werke auszustellen oder aktiv zu vermarkten. Eine Ausstellungs-, Verkaufs- oder Vermietungsgarantie besteht nicht." data-en="ARTCLUB is not obligated to exhibit or actively market all works provided. No guarantee of exhibition, sale or rental is given.">ARTCLUB ist nicht verpflichtet, alle &uuml;berlassenen Werke auszustellen oder aktiv zu vermarkten. Eine Ausstellungs-, Verkaufs- oder Vermietungsgarantie besteht nicht.</span></div>
+  </div>
+
+  <div class="ac-section" id="acs3">
+    <div class="ac-section-head"><span class="ac-s-num">&sect; 3</span><span class="ac-s-title" data-de="Transport und Gefahrtragung" data-en="Transport and Risk">Transport und Gefahrtragung</span></div>
+    <div class="ac-clause"><span class="ac-c-num">3.1</span><span class="ac-c-text" data-de="Der Transport der Werke zu ARTCLUB liegt grunds&auml;tzlich in der Verantwortung des K&uuml;nstlers. Transportkosten tr&auml;gt der K&uuml;nstler, sofern nicht schriftlich anders vereinbart." data-en="Transport of the works to ARTCLUB is generally the Artist's responsibility. Transport costs are borne by the Artist unless otherwise agreed in writing.">Der Transport der Werke zu ARTCLUB liegt grunds&auml;tzlich in der Verantwortung des K&uuml;nstlers. Transportkosten tr&auml;gt der K&uuml;nstler, sofern nicht schriftlich anders vereinbart.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">3.2</span><span class="ac-c-text" data-de="Die Lieferung zu Mietkunden sowie der Versand verkaufter Werke werden vollst&auml;ndig von ARTCLUB organisiert und getragen. Der K&uuml;nstler tr&auml;gt keine Transport- oder Versandkosten." data-en="Delivery to rental clients and shipment of sold works is fully organised and funded by ARTCLUB. The Artist bears no transport or shipping costs.">Die Lieferung zu Mietkunden sowie der Versand verkaufter Werke werden vollst&auml;ndig von ARTCLUB organisiert und getragen. Der K&uuml;nstler tr&auml;gt keine Transport- oder Versandkosten.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">3.3</span><span class="ac-c-text" data-de="Mit &Uuml;bergabe geht die Obhutspflicht auf ARTCLUB &uuml;ber. ARTCLUB behandelt und lagert die Werke mit der Sorgfalt eines ordentlichen Kaufmanns." data-en="Upon handover, the duty of care passes to ARTCLUB. ARTCLUB handles and stores the works with the care of a prudent businessperson.">Mit &Uuml;bergabe geht die Obhutspflicht auf ARTCLUB &uuml;ber. ARTCLUB behandelt und lagert die Werke mit der Sorgfalt eines ordentlichen Kaufmanns.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">3.4</span><span class="ac-c-text" data-de="ARTCLUB haftet f&uuml;r Sch&auml;den durch nachweisliches Verschulden bis zur H&ouml;he des dokumentierten Sch&auml;tzwerts. Weitergehende Haftung ist ausgeschlossen, sofern keine grobe Fahrl&auml;ssigkeit oder Vorsatz vorliegt." data-en="ARTCLUB is liable for damage caused by proven fault up to the documented estimated value. Further liability is excluded unless gross negligence or intent is involved.">ARTCLUB haftet f&uuml;r Sch&auml;den durch nachweisliches Verschulden bis zur H&ouml;he des dokumentierten Sch&auml;tzwerts. Weitergehende Haftung ist ausgeschlossen, sofern keine grobe Fahrl&auml;ssigkeit oder Vorsatz vorliegt.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">3.5</span><span class="ac-c-text" data-de="Dem K&uuml;nstler wird empfohlen, die Werke auf eigene Kosten zu versichern. ARTCLUB schlie&szlig;t keine gesonderte Transportversicherung ab, sofern nicht schriftlich vereinbart." data-en="The Artist is advised to insure the works at their own expense. ARTCLUB does not take out separate transport insurance unless agreed in writing.">Dem K&uuml;nstler wird empfohlen, die Werke auf eigene Kosten zu versichern. ARTCLUB schlie&szlig;t keine gesonderte Transportversicherung ab, sofern nicht schriftlich vereinbart.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">3.6</span><span class="ac-c-text" data-de="Der R&uuml;cktransport nicht verkaufter oder vermieteter Werke nach Beendigung erfolgt auf Kosten und Risiko des K&uuml;nstlers." data-en="Return transport of unsold or unrented works upon termination is at the Artist's cost and risk.">Der R&uuml;cktransport nicht verkaufter oder vermieteter Werke nach Beendigung erfolgt auf Kosten und Risiko des K&uuml;nstlers.</span></div>
+  </div>
+
+  <div class="ac-section" id="acs4">
+    <div class="ac-section-head"><span class="ac-s-num">&sect; 4</span><span class="ac-s-title" data-de="Verkauf und Kommission" data-en="Sale and Commission">Verkauf und Kommission</span></div>
+    <div class="ac-clause"><span class="ac-c-num">4.1</span><span class="ac-c-text" data-de="ARTCLUB ist berechtigt, die Werke im Namen und auf Rechnung des K&uuml;nstlers zu verkaufen. ARTCLUB handelt als Kommission&auml;r im Sinne des &sect; 383 HGB." data-en="ARTCLUB is authorised to sell the works in the name and on account of the Artist. ARTCLUB acts as commission agent within the meaning of &sect; 383 HGB.">ARTCLUB ist berechtigt, die Werke im Namen und auf Rechnung des K&uuml;nstlers zu verkaufen. ARTCLUB handelt als Kommission&auml;r im Sinne des &sect; 383 HGB.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">4.2</span><span class="ac-c-text">
+      <strong data-de="Originalwerke (sofern ausgew&auml;hlt):" data-en="Original Works (if selected):">Originalwerke (sofern ausgew&auml;hlt):</strong>
+      <span data-de="ARTCLUB erh&auml;lt 30 % des Nettoverkaufspreises. Der K&uuml;nstler erh&auml;lt 70 % des Nettoverkaufspreises." data-en="ARTCLUB receives 30% of the net sale price. The Artist receives 70% of the net sale price.">ARTCLUB erh&auml;lt 30 % des Nettoverkaufspreises. Der K&uuml;nstler erh&auml;lt 70 % des Nettoverkaufspreises.</span>
+      <strong data-de="Drucke / Reproduktionen (sofern ausgew&auml;hlt):" data-en="Prints / Reproductions (if selected):">Drucke / Reproduktionen (sofern ausgew&auml;hlt):</strong>
+      <span data-de="Der K&uuml;nstler erh&auml;lt 40 % des Nettoverkaufspreises. ARTCLUB beh&auml;lt 60 %. Kosten f&uuml;r Produktion, Druck und Versand tr&auml;gt vollst&auml;ndig ARTCLUB. Dem K&uuml;nstler entstehen keine Kosten." data-en="The Artist receives 40% of the net sale price. ARTCLUB retains 60%. All production, printing and shipping costs are borne by ARTCLUB. No costs are incurred by the Artist.">Der K&uuml;nstler erh&auml;lt 40 % des Nettoverkaufspreises. ARTCLUB beh&auml;lt 60 %. Kosten f&uuml;r Produktion, Druck und Versand tr&auml;gt vollst&auml;ndig ARTCLUB. Dem K&uuml;nstler entstehen keine Kosten.</span>
+    </span></div>
+    <div class="ac-clause"><span class="ac-c-num">4.3</span><span class="ac-c-text" data-de="Nettoverkaufspreis ist der vom K&auml;ufer gezahlte Betrag abz&uuml;glich gesetzlicher Mehrwertsteuer und nachgewiesener Transaktionskosten." data-en="Net sale price is the amount paid by the buyer, less statutory VAT and documented transaction costs.">Nettoverkaufspreis ist der vom K&auml;ufer gezahlte Betrag abz&uuml;glich gesetzlicher Mehrwertsteuer und nachgewiesener Transaktionskosten.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">4.4</span><span class="ac-c-text" data-de="Rabatte von mehr als 15 % auf den festgelegten Preis werden dem K&uuml;nstler vorab mitgeteilt." data-en="Discounts exceeding 15% of the agreed price will be communicated to the Artist in advance.">Rabatte von mehr als 15 % auf den festgelegten Preis werden dem K&uuml;nstler vorab mitgeteilt.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">4.5</span><span class="ac-c-text" data-de="Die Auszahlung erfolgt innerhalb von 30 Kalendertagen nach vollst&auml;ndigem Zahlungseingang auf dem Konto von ARTCLUB." data-en="Payment is made within 30 calendar days of full receipt of the purchase price in ARTCLUB's account.">Die Auszahlung erfolgt innerhalb von 30 Kalendertagen nach vollst&auml;ndigem Zahlungseingang auf dem Konto von ARTCLUB.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">4.6</span><span class="ac-c-text" data-de="Zahlungen erfolgen per Bank&uuml;berweisung. &Auml;nderungen der Bankverbindung sind unverz&uuml;glich mitzuteilen." data-en="Payments are made by bank transfer. Changes to bank details must be communicated immediately.">Zahlungen erfolgen per Bank&uuml;berweisung. &Auml;nderungen der Bankverbindung sind unverz&uuml;glich mitzuteilen.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">4.7</span><span class="ac-c-text" data-de="Auf Wunsch stellt ARTCLUB einen monatlichen Verkaufsbericht zur Verf&uuml;gung." data-en="Upon request, ARTCLUB provides a monthly sales report.">Auf Wunsch stellt ARTCLUB einen monatlichen Verkaufsbericht zur Verf&uuml;gung.</span></div>
+  </div>
+
+  <div class="ac-section" id="acs5">
+    <div class="ac-section-head"><span class="ac-s-num">&sect; 5</span><span class="ac-s-title" data-de="Vermietung von Kunstwerken" data-en="Rental of Artworks">Vermietung von Kunstwerken</span></div>
+    <div class="ac-clause"><span class="ac-c-num">5.1</span><span class="ac-c-text" data-de="ARTCLUB ist berechtigt, freigegebene Werke an Dritte zu vermieten. Die Freigabe erfolgt im Zustimmungsformular und der Werkliste." data-en="ARTCLUB is authorised to rent released works to third parties. The release is made in the consent form and works list.">ARTCLUB ist berechtigt, freigegebene Werke an Dritte zu vermieten. Die Freigabe erfolgt im Zustimmungsformular und der Werkliste.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">5.2</span><span class="ac-c-text" data-de="Sofern keine abweichende Absprache getroffen wurde, betr&auml;gt die monatliche Kunstvermietungsgeb&uuml;hr 1/36 des dokumentierten Verkaufspreises. Dies entspricht einer kalkulatorischen Amortisationsdauer von 36 Monaten. Abweichende Mietpreise k&ouml;nnen jederzeit schriftlich vereinbart werden." data-en="Unless otherwise agreed, the monthly art rental fee is 1/36 of the documented sales price. This corresponds to a calculated amortisation period of 36 months. Different rental prices may be agreed in writing at any time.">Sofern keine abweichende Absprache getroffen wurde, betr&auml;gt die monatliche Kunstvermietungsgeb&uuml;hr 1/36 des dokumentierten Verkaufspreises. Dies entspricht einer kalkulatorischen Amortisationsdauer von 36 Monaten. Abweichende Mietpreise k&ouml;nnen jederzeit schriftlich vereinbart werden.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">5.3</span><span class="ac-c-text">
+      <strong data-de="Originalwerke (sofern zur Vermietung freigegeben):" data-en="Original Works (if released for rental):">Originalwerke (sofern zur Vermietung freigegeben):</strong>
+      <span data-de="Der K&uuml;nstler erh&auml;lt 70 % der Kunstvermietungsgeb&uuml;hr. Die Kunstvermietungsgeb&uuml;hr ist der auf die Bereitstellung des Kunstwerks entfallende Anteil der Gesamtmiete und wird im Mietangebot ausgewiesen." data-en="The Artist receives 70% of the art rental fee. The art rental fee is the portion of the total rent attributable to the artwork and is shown in the rental offer.">Der K&uuml;nstler erh&auml;lt 70 % der Kunstvermietungsgeb&uuml;hr. Die Kunstvermietungsgeb&uuml;hr ist der auf die Bereitstellung des Kunstwerks entfallende Anteil der Gesamtmiete und wird im Mietangebot ausgewiesen.</span>
+      <strong data-de="Drucke / Reproduktionen (sofern zur Vermietung freigegeben):" data-en="Prints / Reproductions (if released for rental):">Drucke / Reproduktionen (sofern zur Vermietung freigegeben):</strong>
+      <span data-de="Der K&uuml;nstler erh&auml;lt 50 % der Kunstvermietungsgeb&uuml;hr." data-en="The Artist receives 50% of the art rental fee.">Der K&uuml;nstler erh&auml;lt 50 % der Kunstvermietungsgeb&uuml;hr.</span>
+    </span></div>
+    <div class="ac-clause"><span class="ac-c-num">5.4</span><span class="ac-c-text" data-de="Anlieferung und Abholung beim Mieter werden vollst&auml;ndig von ARTCLUB organisiert und getragen. Dem K&uuml;nstler entstehen keine Kosten." data-en="Delivery and collection at the Tenant's premises are fully organised and funded by ARTCLUB. No costs are incurred by the Artist.">Anlieferung und Abholung beim Mieter werden vollst&auml;ndig von ARTCLUB organisiert und getragen. Dem K&uuml;nstler entstehen keine Kosten.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">5.5</span><span class="ac-c-text" data-de="ARTCLUB informiert den K&uuml;nstler &uuml;ber laufende Mietverh&auml;ltnisse auf Anfrage und stellt sicher, dass Werke nach Mietende zur&uuml;ckgef&uuml;hrt werden." data-en="ARTCLUB informs the Artist about ongoing rentals upon request and ensures works are returned after the rental period.">ARTCLUB informiert den K&uuml;nstler &uuml;ber laufende Mietverh&auml;ltnisse auf Anfrage und stellt sicher, dass Werke nach Mietende zur&uuml;ckgef&uuml;hrt werden.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">5.6</span><span class="ac-c-text" data-de="W&auml;hrend der Mietdauer tr&auml;gt ARTCLUB die Obhutspflicht. &sect; 3.4 gilt entsprechend." data-en="During the rental period, ARTCLUB bears the duty of care. &sect; 3.4 applies accordingly.">W&auml;hrend der Mietdauer tr&auml;gt ARTCLUB die Obhutspflicht. &sect; 3.4 gilt entsprechend.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">5.7</span><span class="ac-c-text" data-de="Die Auszahlung der Mietverg&uuml;tung erfolgt innerhalb von 30 Kalendertagen nach Zahlungseingang durch den Mieter." data-en="Payment of the rental remuneration is made within 30 calendar days of receipt from the Tenant.">Die Auszahlung der Mietverg&uuml;tung erfolgt innerhalb von 30 Kalendertagen nach Zahlungseingang durch den Mieter.</span></div>
+  </div>
+
+  <div class="ac-section" id="acs6">
+    <div class="ac-section-head"><span class="ac-s-num">&sect; 6</span><span class="ac-s-title" data-de="Preisgestaltung" data-en="Pricing">Preisgestaltung</span></div>
+    <div class="ac-clause"><span class="ac-c-num">6.1</span><span class="ac-c-text" data-de="Verkaufspreise und Vermietungsgeb&uuml;hren werden gemeinsam festgelegt und in der Werkliste dokumentiert." data-en="Sales prices and rental fees are determined jointly and documented in the works list.">Verkaufspreise und Vermietungsgeb&uuml;hren werden gemeinsam festgelegt und in der Werkliste dokumentiert.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">6.2</span><span class="ac-c-text" data-de="Tempor&auml;re Preisanpassungen im Rahmen von Ausstellungen oder Kooperationen bed&uuml;rfen der vorherigen schriftlichen Zustimmung des K&uuml;nstlers." data-en="Temporary price adjustments require the Artist's prior written consent.">Tempor&auml;re Preisanpassungen im Rahmen von Ausstellungen oder Kooperationen bed&uuml;rfen der vorherigen schriftlichen Zustimmung des K&uuml;nstlers.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">6.3</span><span class="ac-c-text" data-de="Ohne Zustimmung des K&uuml;nstlers darf ARTCLUB Preise weder dauerhaft senken noch erh&ouml;hen." data-en="Without the Artist's consent, ARTCLUB may neither permanently reduce nor increase prices.">Ohne Zustimmung des K&uuml;nstlers darf ARTCLUB Preise weder dauerhaft senken noch erh&ouml;hen.</span></div>
+  </div>
+
+  <div class="ac-section" id="acs7">
+    <div class="ac-section-head"><span class="ac-s-num">&sect; 7</span><span class="ac-s-title" data-de="Ausstellungen und Veranstaltungen" data-en="Exhibitions and Events">Ausstellungen und Veranstaltungen</span></div>
+    <div class="ac-clause"><span class="ac-c-num">7.1</span><span class="ac-c-text" data-de="Der K&uuml;nstler w&auml;hlt im Zustimmungsformular aus, ob er grunds&auml;tzlich an Ausstellungen und Veranstaltungen teilnehmen m&ouml;chte. Diese Auswahl kann jederzeit schriftlich angepasst werden und ersetzt keine Einzelabsprache." data-en="The Artist selects in the consent form whether they wish to participate in exhibitions and events in principle. This can be amended in writing at any time and does not replace individual arrangements.">Der K&uuml;nstler w&auml;hlt im Zustimmungsformular aus, ob er grunds&auml;tzlich an Ausstellungen und Veranstaltungen teilnehmen m&ouml;chte. Diese Auswahl kann jederzeit schriftlich angepasst werden und ersetzt keine Einzelabsprache.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">7.2</span><span class="ac-c-text" data-de="ARTCLUB informiert den K&uuml;nstler in der Regel mindestens 14 Tage im Voraus &uuml;ber geplante Veranstaltungen." data-en="ARTCLUB generally informs the Artist at least 14 days in advance about planned events.">ARTCLUB informiert den K&uuml;nstler in der Regel mindestens 14 Tage im Voraus &uuml;ber geplante Veranstaltungen.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">7.3</span><span class="ac-c-text" data-de="Konkrete Teilnahme und Werkauswahl werden f&uuml;r jede Veranstaltung individuell vereinbart." data-en="Specific participation and selection of works are determined individually for each event.">Konkrete Teilnahme und Werkauswahl werden f&uuml;r jede Veranstaltung individuell vereinbart.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">7.4</span><span class="ac-c-text" data-de="Bringt der K&uuml;nstler seine Werke zum vereinbarten Termin und Ort, &uuml;bernimmt ARTCLUB 50 % der belegten Transportkosten. Erstattung erfolgt nach Einreichung der Belege innerhalb von 30 Tagen. Nicht belegte Kosten werden nicht erstattet." data-en="If the Artist delivers their works at the agreed time and location, ARTCLUB covers 50% of documented transport costs. Reimbursement is made within 30 days of submitting receipts. Undocumented costs will not be reimbursed.">Bringt der K&uuml;nstler seine Werke zum vereinbarten Termin und Ort, &uuml;bernimmt ARTCLUB 50 % der belegten Transportkosten. Erstattung erfolgt nach Einreichung der Belege innerhalb von 30 Tagen. Nicht belegte Kosten werden nicht erstattet.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">7.5</span><span class="ac-c-text" data-de="Nach Beendigung einer Ausstellung sind alle Werke sp&auml;testens innerhalb von 7 Kalendertagen abzuholen, in der Regel im B&uuml;ro von ARTCLUB." data-en="After an exhibition ends, all works must be collected within 7 calendar days, generally at ARTCLUB's office.">Nach Beendigung einer Ausstellung sind alle Werke sp&auml;testens innerhalb von 7 Kalendertagen abzuholen, in der Regel im B&uuml;ro von ARTCLUB.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">7.6</span><span class="ac-c-text" data-de="Werden Werke nicht innerhalb von 7 Tagen abgeholt, mahnt ARTCLUB schriftlich ab. Ab dem ersten Tag nach Fristablauf werden Lagerkosten von 10,00 &euro; pro Werk und angefangener Woche berechnet. Diese werden mit ausstehenden Auszahlungen verrechnet oder gesondert in Rechnung gestellt." data-en="If works are not collected within 7 days, ARTCLUB will issue a written warning. From the first day after the deadline, storage costs of &euro;10.00 per work per commenced week will be charged, offset against outstanding payments or invoiced separately.">Werden Werke nicht innerhalb von 7 Tagen abgeholt, mahnt ARTCLUB schriftlich ab. Ab dem ersten Tag nach Fristablauf werden Lagerkosten von 10,00 &euro; pro Werk und angefangener Woche berechnet. Diese werden mit ausstehenden Auszahlungen verrechnet oder gesondert in Rechnung gestellt.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">7.7</span><span class="ac-c-text" data-de="Die Teilnahme ist freiwillig. Eine Pflicht zur pers&ouml;nlichen Anwesenheit besteht nicht, sofern nicht gesondert vereinbart. Verg&uuml;tungen f&uuml;r pers&ouml;nliche Auftritte werden separat vereinbart." data-en="Participation is voluntary. Personal attendance is not required unless separately agreed. Remuneration for personal appearances is agreed separately.">Die Teilnahme ist freiwillig. Eine Pflicht zur pers&ouml;nlichen Anwesenheit besteht nicht, sofern nicht gesondert vereinbart. Verg&uuml;tungen f&uuml;r pers&ouml;nliche Auftritte werden separat vereinbart.</span></div>
+  </div>
+
+  <div class="ac-section" id="acs8">
+    <div class="ac-section-head"><span class="ac-s-num">&sect; 8</span><span class="ac-s-title" data-de="Marketing, Werbung und Bildrechte" data-en="Marketing, Promotion and Image Rights">Marketing, Werbung und Bildrechte</span></div>
+    <div class="ac-clause"><span class="ac-c-num">8.1</span><span class="ac-c-text" data-de="ARTCLUB f&uuml;hrt im Rahmen seiner M&ouml;glichkeiten Werbema&szlig;nahmen durch. Ein bestimmter Werbeerfolg wird nicht geschuldet." data-en="ARTCLUB carries out promotional activities within its means. No specific promotional success is owed.">ARTCLUB f&uuml;hrt im Rahmen seiner M&ouml;glichkeiten Werbema&szlig;nahmen durch. Ein bestimmter Werbeerfolg wird nicht geschuldet.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">8.2</span><span class="ac-c-text" data-de="Der K&uuml;nstler r&auml;umt ARTCLUB ein einfaches, nicht &uuml;bertragbares Nutzungsrecht an Abbildungen seiner Werke ein &ndash; f&uuml;r Werbung, Social Media, Pressearbeit und Dokumentation." data-en="The Artist grants ARTCLUB a simple, non-transferable right of use for images of their works &ndash; for promotion, social media, press work and documentation.">Der K&uuml;nstler r&auml;umt ARTCLUB ein einfaches, nicht &uuml;bertragbares Nutzungsrecht an Abbildungen seiner Werke ein &ndash; f&uuml;r Werbung, Social Media, Pressearbeit und Dokumentation.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">8.3</span><span class="ac-c-text" data-de="Das Nutzungsrecht erlischt mit Beendigung der Vereinbarung. Eine Weiterlizenzierung ist ohne Zustimmung nicht gestattet." data-en="The right of use expires upon termination. Sub-licensing is not permitted without consent.">Das Nutzungsrecht erlischt mit Beendigung der Vereinbarung. Eine Weiterlizenzierung ist ohne Zustimmung nicht gestattet.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">8.4</span><span class="ac-c-text" data-de="Bei jeder &ouml;ffentlichen Verwendung wird der Name des K&uuml;nstlers in angemessener Form genannt." data-en="The Artist's name will be credited appropriately in every public use.">Bei jeder &ouml;ffentlichen Verwendung wird der Name des K&uuml;nstlers in angemessener Form genannt.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">8.5</span><span class="ac-c-text" data-de="Nutzung f&uuml;r Zwecke au&szlig;erhalb der ARTCLUB-T&auml;tigkeit ist ausdr&uuml;cklich untersagt." data-en="Use for purposes outside of ARTCLUB's activities is expressly prohibited.">Nutzung f&uuml;r Zwecke au&szlig;erhalb der ARTCLUB-T&auml;tigkeit ist ausdr&uuml;cklich untersagt.</span></div>
+  </div>
+
+  <div class="ac-section" id="acs9">
+    <div class="ac-section-head"><span class="ac-s-num">&sect; 9</span><span class="ac-s-title" data-de="Stil, Qualit&auml;t und Werkauswahl" data-en="Style, Quality and Selection">Stil, Qualit&auml;t und Werkauswahl</span></div>
+    <div class="ac-clause"><span class="ac-c-num">9.1</span><span class="ac-c-text" data-de="Der K&uuml;nstler garantiert, dass alle Werke originell sind, seiner eigenen Urheberschaft entstammen und seine k&uuml;nstlerische Identit&auml;t widerspiegeln." data-en="The Artist guarantees that all works are original, derive from their own authorship and reflect their artistic identity.">Der K&uuml;nstler garantiert, dass alle Werke originell sind, seiner eigenen Urheberschaft entstammen und seine k&uuml;nstlerische Identit&auml;t widerspiegeln.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">9.2</span><span class="ac-c-text" data-de="Die Werkauswahl erfolgt gemeinsam auf Basis k&uuml;nstlerischer Qualit&auml;t und Eignung f&uuml;r die Zielgruppe von ARTCLUB." data-en="The selection of works is made jointly on the basis of artistic quality and suitability for ARTCLUB's target audience.">Die Werkauswahl erfolgt gemeinsam auf Basis k&uuml;nstlerischer Qualit&auml;t und Eignung f&uuml;r die Zielgruppe von ARTCLUB.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">9.3</span><span class="ac-c-text" data-de="ARTCLUB beh&auml;lt sich vor, Werke abzulehnen, die nicht den Galeriestandards entsprechen oder rechtliche Bedenken aufwerfen." data-en="ARTCLUB reserves the right to reject works that do not meet gallery standards or raise legal concerns.">ARTCLUB beh&auml;lt sich vor, Werke abzulehnen, die nicht den Galeriestandards entsprechen oder rechtliche Bedenken aufwerfen.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">9.4</span><span class="ac-c-text" data-de="Der K&uuml;nstler hat das Recht, die Pr&auml;sentation seiner Werke zu pr&uuml;fen und Anpassungen zu verlangen." data-en="The Artist has the right to review the presentation of their works and to request adjustments.">Der K&uuml;nstler hat das Recht, die Pr&auml;sentation seiner Werke zu pr&uuml;fen und Anpassungen zu verlangen.</span></div>
+  </div>
+
+  <div class="ac-section" id="acs10">
+    <div class="ac-section-head"><span class="ac-s-num">&sect; 10</span><span class="ac-s-title" data-de="Urheberrecht und Nutzungsrechte" data-en="Copyright and Usage Rights">Urheberrecht und Nutzungsrechte</span></div>
+    <div class="ac-clause"><span class="ac-c-num">10.1</span><span class="ac-c-text" data-de="Der K&uuml;nstler beh&auml;lt s&auml;mtliche Urheberrechte. Diese Vereinbarung &uuml;bertr&auml;gt keinerlei geistige Eigentumsrechte auf ARTCLUB." data-en="The Artist retains all copyrights. This agreement does not transfer any intellectual property rights to ARTCLUB.">Der K&uuml;nstler beh&auml;lt s&auml;mtliche Urheberrechte. Diese Vereinbarung &uuml;bertr&auml;gt keinerlei geistige Eigentumsrechte auf ARTCLUB.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">10.2</span><span class="ac-c-text" data-de="ARTCLUB erh&auml;lt ausschlie&szlig;lich die zur Vertragserf&uuml;llung notwendigen Nutzungsrechte: Ausstellung, Verkauf, Vermietung, Dokumentation und Bewerbung." data-en="ARTCLUB receives only the usage rights necessary for contract fulfilment: exhibition, sale, rental, documentation and promotion.">ARTCLUB erh&auml;lt ausschlie&szlig;lich die zur Vertragserf&uuml;llung notwendigen Nutzungsrechte: Ausstellung, Verkauf, Vermietung, Dokumentation und Bewerbung.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">10.3</span><span class="ac-c-text" data-de="Ver&auml;nderungen, Bearbeitungen oder Reproduktionen sind ohne ausdr&uuml;ckliche schriftliche Zustimmung nicht gestattet." data-en="Alterations, adaptations or reproductions are not permitted without express written consent.">Ver&auml;nderungen, Bearbeitungen oder Reproduktionen sind ohne ausdr&uuml;ckliche schriftliche Zustimmung nicht gestattet.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">10.4</span><span class="ac-c-text" data-de="Der K&uuml;nstler sichert zu, dass keine Rechte Dritter verletzt werden, und stellt ARTCLUB von entsprechenden Anspr&uuml;chen frei." data-en="The Artist warrants that no third-party rights are infringed and indemnifies ARTCLUB against corresponding claims.">Der K&uuml;nstler sichert zu, dass keine Rechte Dritter verletzt werden, und stellt ARTCLUB von entsprechenden Anspr&uuml;chen frei.</span></div>
+  </div>
+
+  <div class="ac-section" id="acs11">
+    <div class="ac-section-head"><span class="ac-s-num">&sect; 11</span><span class="ac-s-title" data-de="Verwendung der K&uuml;nstlerunterschrift" data-en="Use of the Artist's Signature">Verwendung der K&uuml;nstlerunterschrift</span></div>
+    <div class="ac-clause"><span class="ac-c-num">11.1</span><span class="ac-c-text" data-de="Die Unterschrift darf ausschlie&szlig;lich f&uuml;r Echtheitszertifikate zu Werken verwendet werden, die vom K&uuml;nstler stammen und durch ARTCLUB verkauft werden." data-en="The signature may only be used for certificates of authenticity for works created by the Artist and sold by ARTCLUB.">Die Unterschrift darf ausschlie&szlig;lich f&uuml;r Echtheitszertifikate zu Werken verwendet werden, die vom K&uuml;nstler stammen und durch ARTCLUB verkauft werden.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">11.2</span><span class="ac-c-text" data-de="Jede weitere Verwendung bed&auml;rf der vorherigen schriftlichen Zustimmung des K&uuml;nstlers." data-en="Any further use requires the Artist's prior written consent.">Jede weitere Verwendung bed&auml;rf der vorherigen schriftlichen Zustimmung des K&uuml;nstlers.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">11.3</span><span class="ac-c-text" data-de="ARTCLUB verpflichtet sich, die Unterschrift nicht zu ver&auml;ndern oder dem Ansehen des K&uuml;nstlers zu schaden." data-en="ARTCLUB undertakes not to alter the signature or damage the Artist's reputation.">ARTCLUB verpflichtet sich, die Unterschrift nicht zu ver&auml;ndern oder dem Ansehen des K&uuml;nstlers zu schaden.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">11.4</span><span class="ac-c-text" data-de="Der K&uuml;nstler best&auml;tigt, alleiniger Rechteinhaber seiner Unterschrift zu sein." data-en="The Artist confirms that they are the sole rights holder of their signature.">Der K&uuml;nstler best&auml;tigt, alleiniger Rechteinhaber seiner Unterschrift zu sein.</span></div>
+  </div>
+
+  <div class="ac-section" id="acs12">
+    <div class="ac-section-head"><span class="ac-s-num">&sect; 12</span><span class="ac-s-title" data-de="Laufzeit und K&uuml;ndigung" data-en="Duration and Termination">Laufzeit und K&uuml;ndigung</span></div>
+    <div class="ac-clause"><span class="ac-c-num">12.1</span><span class="ac-c-text" data-de="Die Vereinbarung tritt mit Zustimmung in Kraft und gilt auf unbestimmte Zeit." data-en="The agreement enters into force upon consent and is valid for an indefinite period.">Die Vereinbarung tritt mit Zustimmung in Kraft und gilt auf unbestimmte Zeit.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">12.2</span><span class="ac-c-text" data-de="Beide Parteien k&ouml;nnen mit 45 Kalendertagen Frist in Textform k&uuml;ndigen. E-Mail gen&uuml;gt." data-en="Either party may terminate with 45 calendar days' notice in text form. Email is sufficient.">Beide Parteien k&ouml;nnen mit 45 Kalendertagen Frist in Textform k&uuml;ndigen. E-Mail gen&uuml;gt.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">12.3</span><span class="ac-c-text" data-de="Das Recht zur au&szlig;erordentlichen K&uuml;ndigung bleibt unber&uuml;hrt. Ein wichtiger Grund liegt insbesondere bei schwerwiegenden Verst&ouml;&szlig;en, Zahlungsverzug &uuml;ber 60 Tage oder Insolvenz vor." data-en="The right to extraordinary termination remains unaffected. Good cause includes serious breaches, payment default exceeding 60 days or insolvency.">Das Recht zur au&szlig;erordentlichen K&uuml;ndigung bleibt unber&uuml;hrt. Ein wichtiger Grund liegt insbesondere bei schwerwiegenden Verst&ouml;&szlig;en, Zahlungsverzug &uuml;ber 60 Tage oder Insolvenz vor.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">12.4</span><span class="ac-c-text" data-de="Nach K&uuml;ndigung stellt ARTCLUB alle Werke innerhalb von 14 Tagen zur Abholung bereit. Nicht abgeholte Werke k&ouml;nnen nach 30 weiteren Tagen auf Kosten des K&uuml;nstlers eingelagert oder zur&uuml;ckgesandt werden." data-en="After termination, ARTCLUB makes all works available for collection within 14 days. Works not collected may be stored or returned at the Artist's expense after a further 30 days.">Nach K&uuml;ndigung stellt ARTCLUB alle Werke innerhalb von 14 Tagen zur Abholung bereit. Nicht abgeholte Werke k&ouml;nnen nach 30 weiteren Tagen auf Kosten des K&uuml;nstlers eingelagert oder zur&uuml;ckgesandt werden.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">12.5</span><span class="ac-c-text" data-de="Alle offenen Zahlungen sind innerhalb von 30 Tagen nach Vertragsende zu begleichen." data-en="All outstanding payments must be settled within 30 days of the end of the agreement.">Alle offenen Zahlungen sind innerhalb von 30 Tagen nach Vertragsende zu begleichen.</span></div>
+  </div>
+
+  <div class="ac-section" id="acs13">
+    <div class="ac-section-head"><span class="ac-s-num">&sect; 13</span><span class="ac-s-title" data-de="&Auml;nderungen dieser Bedingungen" data-en="Changes to These Terms">&Auml;nderungen dieser Bedingungen</span></div>
+    <div class="ac-clause"><span class="ac-c-num">13.1</span><span class="ac-c-text" data-de="ARTCLUB beh&auml;lt sich vor, diese Bedingungen anzupassen. &Auml;nderungen werden in Textform mitgeteilt, sp&auml;testens 30 Tage vor Inkrafttreten." data-en="ARTCLUB reserves the right to amend these terms. Changes will be communicated in text form at least 30 days before taking effect.">ARTCLUB beh&auml;lt sich vor, diese Bedingungen anzupassen. &Auml;nderungen werden in Textform mitgeteilt, sp&auml;testens 30 Tage vor Inkrafttreten.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">13.2</span><span class="ac-c-text" data-de="Die Mitteilung enth&auml;lt eine Gegen&uuml;berstellung der bisherigen und neuen Regelungen sowie den Zeitpunkt des Inkrafttretens." data-en="The notification will include a comparison of existing and new provisions and the date of entry into force.">Die Mitteilung enth&auml;lt eine Gegen&uuml;berstellung der bisherigen und neuen Regelungen sowie den Zeitpunkt des Inkrafttretens.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">13.3</span><span class="ac-c-text" data-de="&Auml;nderungen treten nur in Kraft, wenn der K&uuml;nstler ausdr&uuml;cklich zugestimmt hat. Zustimmung durch Schweigen ist ausgeschlossen." data-en="Changes only take effect when the Artist has expressly consented. Consent by silence is excluded.">&Auml;nderungen treten nur in Kraft, wenn der K&uuml;nstler ausdr&uuml;cklich zugestimmt hat. Zustimmung durch Schweigen ist ausgeschlossen.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">13.4</span><span class="ac-c-text" data-de="Bei Ablehnung gelten die bisherigen Bedingungen bis Vertragsende fort. Der K&uuml;nstler kann gem&auml;&szlig; &sect; 12 k&uuml;ndigen." data-en="If rejected, existing terms continue until the end of the agreement. The Artist may terminate pursuant to &sect; 12.">Bei Ablehnung gelten die bisherigen Bedingungen bis Vertragsende fort. Der K&uuml;nstler kann gem&auml;&szlig; &sect; 12 k&uuml;ndigen.</span></div>
+  </div>
+
+  <div class="ac-section" id="acs14">
+    <div class="ac-section-head"><span class="ac-s-num">&sect; 14</span><span class="ac-s-title" data-de="Haftung" data-en="Liability">Haftung</span></div>
+    <div class="ac-clause"><span class="ac-c-num">14.1</span><span class="ac-c-text" data-de="ARTCLUB haftet unbeschr&auml;nkt bei Vorsatz und grober Fahrl&auml;ssigkeit sowie bei Verletzung von Leben, K&ouml;rper und Gesundheit." data-en="ARTCLUB is liable without limitation for intent and gross negligence and for injury to life, body or health.">ARTCLUB haftet unbeschr&auml;nkt bei Vorsatz und grober Fahrl&auml;ssigkeit sowie bei Verletzung von Leben, K&ouml;rper und Gesundheit.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">14.2</span><span class="ac-c-text" data-de="Bei leichter Fahrl&auml;ssigkeit haftet ARTCLUB nur bei Verletzung wesentlicher Vertragspflichten, begrenzt auf den vorhersehbaren, vertragstypischen Schaden." data-en="For slight negligence, ARTCLUB is only liable for breach of material obligations, limited to foreseeable, contract-typical damage.">Bei leichter Fahrl&auml;ssigkeit haftet ARTCLUB nur bei Verletzung wesentlicher Vertragspflichten, begrenzt auf den vorhersehbaren, vertragstypischen Schaden.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">14.3</span><span class="ac-c-text" data-de="Eine weitergehende Haftung ist ausgeschlossen, insbesondere f&uuml;r entgangenen Gewinn, mittelbare Sch&auml;den oder Sch&auml;den durch h&ouml;here Gewalt oder Dritte." data-en="Further liability is excluded, in particular for loss of profit, indirect damage or damage caused by force majeure or third parties.">Eine weitergehende Haftung ist ausgeschlossen, insbesondere f&uuml;r entgangenen Gewinn, mittelbare Sch&auml;den oder Sch&auml;den durch h&ouml;here Gewalt oder Dritte.</span></div>
+  </div>
+
+  <div class="ac-section" id="acs15">
+    <div class="ac-section-head"><span class="ac-s-num">&sect; 15</span><span class="ac-s-title" data-de="Datenschutz" data-en="Data Protection">Datenschutz</span></div>
+    <div class="ac-clause"><span class="ac-c-num">15.1</span><span class="ac-c-text" data-de="ARTCLUB verarbeitet personenbezogene Daten ausschlie&szlig;lich zur Vertragserf&uuml;llung und gesetzlichen Pflichten (Art. 6 Abs. 1 lit. b und c DSGVO)." data-en="ARTCLUB processes personal data exclusively for contract fulfilment and legal obligations (Art. 6(1)(b) and (c) GDPR).">ARTCLUB verarbeitet personenbezogene Daten ausschlie&szlig;lich zur Vertragserf&uuml;llung und gesetzlichen Pflichten (Art. 6 Abs. 1 lit. b und c DSGVO).</span></div>
+    <div class="ac-clause"><span class="ac-c-num">15.2</span><span class="ac-c-text" data-de="Weitergabe an Dritte erfolgt nur zur Vertragserf&uuml;llung oder soweit gesetzlich vorgeschrieben." data-en="Data is passed to third parties only as necessary for contract fulfilment or as required by law.">Weitergabe an Dritte erfolgt nur zur Vertragserf&uuml;llung oder soweit gesetzlich vorgeschrieben.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">15.3</span><span class="ac-c-text" data-de="Der K&uuml;nstler hat das Recht auf Auskunft, Berichtigung, L&ouml;schung und Einschr&auml;nkung. Anfragen: datenschutz@artclub.wtf" data-en="The Artist has the right to access, rectification, erasure and restriction of processing. Requests: datenschutz@artclub.wtf">Der K&uuml;nstler hat das Recht auf Auskunft, Berichtigung, L&ouml;schung und Einschr&auml;nkung. Anfragen: datenschutz@artclub.wtf</span></div>
+  </div>
+
+  <div class="ac-section" id="acs16">
+    <div class="ac-section-head"><span class="ac-s-num">&sect; 16</span><span class="ac-s-title" data-de="Schlussbestimmungen" data-en="Final Provisions">Schlussbestimmungen</span></div>
+    <div class="ac-clause"><span class="ac-c-num">16.1</span><span class="ac-c-text" data-de="Es gilt deutsches Recht. Das UN-Kaufrecht (CISG) findet keine Anwendung." data-en="German law applies. The UN Convention on Contracts for the International Sale of Goods (CISG) does not apply.">Es gilt deutsches Recht. Das UN-Kaufrecht (CISG) findet keine Anwendung.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">16.2</span><span class="ac-c-text" data-de="Gerichtsstand ist Berlin, sofern der K&uuml;nstler Kaufmann oder juristische Person des &ouml;ffentlichen Rechts ist. Im &Uuml;brigen gelten die gesetzlichen Gerichtsst&auml;nde." data-en="The place of jurisdiction is Berlin if the Artist is a merchant or legal entity under public law. Otherwise statutory places of jurisdiction apply.">Gerichtsstand ist Berlin, sofern der K&uuml;nstler Kaufmann oder juristische Person des &ouml;ffentlichen Rechts ist. Im &Uuml;brigen gelten die gesetzlichen Gerichtsst&auml;nde.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">16.3</span><span class="ac-c-text" data-de="&Auml;nderungen bed&uuml;rfen der Schriftform. Dies gilt auch f&uuml;r die Aufhebung dieses Erfordernisses." data-en="Amendments must be in writing. This also applies to waiving this requirement.">&Auml;nderungen bed&uuml;rfen der Schriftform. Dies gilt auch f&uuml;r die Aufhebung dieses Erfordernisses.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">16.4</span><span class="ac-c-text" data-de="Sollten einzelne Bestimmungen unwirksam sein, bleibt die Vereinbarung im &Uuml;brigen wirksam. Die unwirksame Bestimmung wird durch eine wirtschaftlich &auml;quivalente Regelung ersetzt." data-en="If individual provisions are invalid, the remainder stays in effect. The invalid provision is replaced by an economically equivalent one.">Sollten einzelne Bestimmungen unwirksam sein, bleibt die Vereinbarung im &Uuml;brigen wirksam. Die unwirksame Bestimmung wird durch eine wirtschaftlich &auml;quivalente Regelung ersetzt.</span></div>
+    <div class="ac-clause"><span class="ac-c-num">16.5</span><span class="ac-c-text" data-de="Diese Vereinbarung ersetzt alle vorherigen Absprachen zum selben Gegenstand." data-en="This agreement supersedes all prior arrangements on the same subject matter.">Diese Vereinbarung ersetzt alle vorherigen Absprachen zum selben Gegenstand.</span></div>
+  </div>
+
+  <div class="ac-footer">
+    artclub&reg; &middot; Artclub Mixed Media GmbH &middot; Friedrichsruherstr. 37, 14193 Berlin &middot; datenschutz@artclub.wtf
+  </div>
+
+</div>
+
+<script>
+  function acSetLang(lang) {
+    document.querySelectorAll('#ac-wrap [data-de]').forEach(function(el) {
+      var text = el.getAttribute('data-' + lang);
+      if (text) el.innerHTML = text;
+    });
+    document.getElementById('ac-btn-de').classList.toggle('active', lang === 'de');
+    document.getElementById('ac-btn-en').classList.toggle('active', lang === 'en');
+  }
+</script>
+
+{% schema %}
+{
+  "name": "AC Terms",
+  "tag": "section",
+  "presets": [
+    { "name": "AC Terms", "category": "ARTCLUB" }
+  ]
+}
+{% endschema %}

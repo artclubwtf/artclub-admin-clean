@@ -1,0 +1,177 @@
+{% comment %} sections/kunstler-uebersicht.liquid — Künstlerübersicht mit A–Z Navigation und zweistufigem Newsletter-Popup {% endcomment %}
+
+<style>
+  .artists-section { padding: 2rem 1rem; font-family: sans-serif; }
+  .artists-header { text-align: center; margin-bottom: 1rem; }
+  .artists-header h2 { font-size: 2rem; letter-spacing: 1px; }
+
+  /* A–Z Navigation */
+  .alphabet-nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin: 1.5rem 0; }
+  .alphabet-nav button { background: transparent; border: none; font-size: 0.9rem; color: #666; cursor: pointer; padding: 0.3rem 0.6rem; transition: color 0.2s, background 0.2s; border-radius: 4px; }
+  .alphabet-nav button:hover { background: #f0f0f0; }
+  .alphabet-nav button.active { color: #333; background: #e5e5e5; }
+
+  /* Artist Grid */
+  .artists-grid { display: grid; grid-template-columns: repeat({{ section.settings.columns_desktop }}, 1fr); gap: 1.5rem; }
+  @media (max-width: 768px) { .artists-grid { grid-template-columns: repeat({{ section.settings.columns_mobile }}, 1fr); } }
+  .artist-card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); transition: transform 0.3s, box-shadow 0.3s; }
+  .artist-card:hover { transform: translateY(-5px); box-shadow: 0 8px 30px rgba(0,0,0,0.12); }
+  .artist-image { width: 100%; height: {{ section.settings.image_height }}px; object-fit: cover; }
+  .artist-details { padding: 1rem; text-align: center; }
+  .artist-name { font-size: 1.2rem; margin: 0.5rem 0 0.3rem; color: #222; }
+  .artist-meta { font-size: 0.9rem; color: #777; margin-bottom: 0.8rem; }
+  .follow-button { background: {{ section.settings.button_bg_color }}; color: {{ section.settings.button_text_color }}; border: none; border-radius: 24px; padding: 0.5rem 1rem; font-size: 0.9rem; cursor: pointer; transition: background 0.3s; }
+  .follow-button:hover { background: {{ section.settings.button_hover_color }}; }
+
+  /* Modal Overlay */
+  #newsletter-modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); justify-content:center; align-items:center; z-index:1000; }
+  /* Modal Box */
+  #newsletter-modal .modal-content { background:#fff; padding:2.5rem; border-radius:12px; width:90%; max-width:400px; text-align:center; position:relative; box-shadow: 0 8px 24px rgba(0,0,0,0.16); animation: fadeInZoom 0.4s ease-in-out; overflow:hidden; }
+  /* Close Button */
+  #newsletter-modal .modal-content button#modal-close { position:absolute; top:1rem; right:1rem; background:none; border:none; font-size:1.2rem; color:#555; cursor:pointer; transition: color 0.2s; }
+  #newsletter-modal .modal-content button#modal-close:hover { color:#000; }
+
+  /* Slides */
+  .modal-slide { display: none; }
+  .modal-slide.active { display: block; }
+  .modal-content h3 { margin-top:0; font-size:1.5rem; color:#333; }
+  .modal-content p { font-size:1rem; color:#555; margin:1rem 0; line-height:1.4; }
+
+  /* Form */
+  .modal-content form input[type="email"] { width:100%; padding:0.75rem 1rem; border:1px solid #ddd; border-radius:6px; font-size:1rem; margin-bottom:1rem; }
+  .modal-content form button[type="submit"],
+  .modal-content .next-button,
+  .modal-content .back-button { width:100%; padding:0.75rem 1rem; background:{{ section.settings.button_bg_color }}; color:{{ section.settings.button_text_color }}; border:none; border-radius:6px; font-size:1rem; cursor:pointer; transition: background 0.3s; }
+  .modal-content form button[type="submit"]:hover,
+  .modal-content .next-button:hover,
+  .modal-content .back-button:hover { background:{{ section.settings.button_hover_color }}; }
+
+  @keyframes fadeInZoom { 0% { opacity:0; transform: scale(0.8);} 100% { opacity:1; transform: scale(1);} }
+</style>
+
+<section class="artists-section">
+  <div class="artists-header">
+    <h2>{{ section.settings.heading_text }}</h2>
+  </div>
+
+  <div class="alphabet-nav">
+    {% assign letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' | split: '' %}
+    <button data-letter="all" class="active">ALL</button>
+    {% for letter in letters -%}
+      <button data-letter="{{ letter }}">{{ letter }}</button>
+    {%- endfor %}
+  </div>
+
+  {% assign all_artists = metaobjects.kunstler.values %}
+  {% assign excluded_ids = section.blocks | map: 'settings.kunstler_object.id' %}
+  <div class="artists-grid">
+    {% for artist in all_artists -%}
+      {%- unless excluded_ids contains artist.id %}
+        {% assign name = artist.name | strip %}
+
+        <div class="artist-card" data-first-letter="{{ name | slice: 0,1 }}">
+          <a href="{{ artist.system.url }}">
+            {%- assign img = artist.bilder | img_url: 'large' %}
+            {% if img == blank and artist.bild_1 != blank -%}
+              {%- assign img = artist.bild_1 | img_url: 'large' -%}
+            {%- endif %}
+            {% if img %}
+              <img src="{{ img }}" alt="{{ name }}" class="artist-image" loading="lazy">
+            {% endif -%}
+            </a>
+          <div class="artist-details">
+            <a style="text-decoration: none!important" href="{{ artist.system.url }}">
+              <h3 class="artist-name">{{ name }}</h3>
+              <p class="artist-meta">
+                {% if artist.kuenstler_typ %}{{ artist.kuenstler_typ }}{% endif %}
+              </p>
+            </a>
+            {% if section.settings.show_button -%}
+              <button class="follow-button">{{ section.settings.button_text }}</button>
+            {%- endif %}
+          </div>
+        </div>
+      {% endunless -%}
+    {%- endfor %}
+  </div>
+</section>
+
+<!-- Newsletter-Popup -->
+<div id="newsletter-modal">
+  <div class="modal-content">
+    <button id="modal-close">&times;</button>
+    <!-- Slide 1: Signup -->
+    <div class="modal-slide active" data-step="1">
+      <h3>{{ section.settings.popup_heading }}</h3>
+      <p>{{ section.settings.popup_text }}</p>
+      <form id="modal-form" action="/contact" method="post">
+        <input type="hidden" name="form_type" value="customer">
+        <input type="hidden" name="utf8" value="✓">
+        <input type="email" name="contact[email]" placeholder="{{ section.settings.email_placeholder }}" required>
+      </form>
+      <button type="button" class="next-button" style="margin-top:0.5rem;">{{ section.settings.submit_text }}</button>
+    </div>
+    <!-- Slide 2: Confirmation Info -->
+    <div class="modal-slide" data-step="2">
+      <h3>Fast fertig!</h3>
+      <p>Bitte bestätige deine Anmeldung per E-Mail. Erst nach Bestätigung erhältst du alle Meldungen.</p>
+      <button type="button" class="back-button" style="margin-top:0.5rem;">{{ section.settings.submit_text_2 }}</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    /* A–Z Filter */
+    var cards = Array.from(document.querySelectorAll('.artist-card'));
+    var letterButtons = Array.from(document.querySelectorAll('.alphabet-nav button'));
+    function filterByLetter(letter) {
+      cards.forEach(function(card) {
+        var first = card.dataset.firstLetter.toUpperCase();
+        card.style.display = (letter==='all'||first===letter)?'':'none';
+      });
+    }
+    letterButtons.forEach(function(btn){btn.addEventListener('click',function(){letterButtons.forEach(b=>b.classList.remove('active'));this.classList.add('active');filterByLetter(this.dataset.letter);});}); filterByLetter('all');
+
+    /* Modal & Slides */
+    var modal = document.getElementById('newsletter-modal');
+    var closeBtn = document.getElementById('modal-close');
+    var nextBtn = modal.querySelector('.next-button');
+    var backBtn = modal.querySelector('.back-button');
+    var slides = modal.querySelectorAll('.modal-slide');
+    function showStep(step) {
+      slides.forEach(function(s){s.classList.toggle('active',s.dataset.step==step);});
+    }
+    document.querySelectorAll('.follow-button').forEach(function(btn){btn.addEventListener('click',function(e){e.preventDefault();modal.style.display='flex';showStep(1);});});
+    closeBtn.addEventListener('click',function(){modal.style.display='none'});
+    nextBtn.addEventListener('click',function(){showStep(2)});
+    backBtn.addEventListener('click',function(){modal.style.display='none'});
+  });
+</script>
+
+{% schema %}
+{
+  "name": "Künstler Übersicht",
+  "settings": [
+    {"type":"text","id":"heading_text","label":"Überschrift","default":"All Our Artists"},
+    {"type":"range","id":"columns_desktop","label":"Spalten Desktop","min":2,"max":6,"step":1,"default":4},
+    {"type":"range","id":"columns_mobile","label":"Spalten Mobil","min":1,"max":3,"step":1,"default":1},
+    {"type":"range","id":"image_height","label":"Bildhöhe (px)","min":100,"max":600,"step":10,"default":200},
+    {"type":"checkbox","id":"show_button","label":"Follow-Button anzeigen","default":true},
+    {"type":"text","id":"button_text","label":"Button-Text","default":"Follow"},
+    {"type":"color","id":"button_bg_color","label":"Button Hintergrundfarbe","default":"#0055ff"},
+    {"type":"color","id":"button_text_color","label":"Button Textfarbe","default":"#ffffff"},
+    {"type":"color","id":"button_hover_color","label":"Button Hover-Hintergrund","default":"#0033aa"},
+    {"type":"text","id":"email_placeholder","label":"E-Mail Placeholder","default":"Your email"},
+    {"type":"text","id":"submit_text","label":"Submit-Button-Text","default":"Subscribe"},
+    {"type":"text","id":"submit_text_2","label":"Submit-Button-Text","default":"Finish"},
+    {"type":"text","id":"popup_heading","label":"Popup-Überschrift","default":"Bleib auf dem Laufenden!"},
+    {"type":"text","id":"popup_text","label":"Popup-Text","default":"Abonniere unseren Newsletter, um keine Neuigkeiten mehr zu verpassen."}
+  ],
+  "blocks": [
+    {"type":"exclude_artist","name":"Künstler ausschließen","settings":[{"type":"metaobject","id":"kunstler_object","label":"Künstler auswählen","metaobject_type":"kunstler"}]}
+  ],
+  "max_blocks":50,
+  "presets":[{"name":"Künstler Übersicht (ohne Filter)","category":"Custom"}]
+}
+{% endschema %}

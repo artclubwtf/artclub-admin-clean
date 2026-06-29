@@ -1,0 +1,549 @@
+{% comment %}
+AC Event (Single) — Apple-like stacked layout (v5, polished)
+- ALEA: CTA -> alea_url
+- ARTCLUB: RSVP in modal via Shopify contact form + tags
+
+Metaobject fields (per your screenshot):
+- alea_artclub (select: "alea" / "artclub")
+- alea_url (url)
+- beginn (date+time)
+- ende (date+time)
+- titel (single line)
+- beschreibung (multi-line)
+- kuenstler (list of metaobject references: @kuenstler)
+- newsletter_tag (single line)
+- cover (image)
+{% endcomment %}
+
+{%- assign e = metaobject -%}
+
+{%- if e == blank -%}
+  <section style="padding:64px 0;">
+    <div style="max-width:1040px;margin:0 auto;padding:0 20px;">
+      <a href="/pages/events" style="text-decoration:none;">‹ Back to events</a>
+      <h1 style="margin:16px 0 0;">Event not found</h1>
+      <p style="opacity:.7;margin:8px 0 0;">This event metaobject is missing or not published.</p>
+    </div>
+  </section>
+{%- else -%}
+
+{%- assign kind_raw = e.alea_artclub.value | default: 'artclub' -%}
+{%- assign kind = kind_raw | downcase | strip -%}
+{%- assign is_alea = false -%}
+{%- if kind contains 'alea' -%}{%- assign is_alea = true -%}{%- endif -%}
+
+{%- assign title = e.titel.value | default: e.system.title | default: e.system.handle | default: 'Event' -%}
+
+{%- assign starts_at = e.beginn.value -%}
+{%- assign ends_at   = e.ende.value -%}
+
+{%- assign cover = e.cover.value -%}
+{%- assign alea_url = e.alea_url.value | default: '' -%}
+{%- assign newsletter_tag = e.newsletter_tag.value | default: '' -%}
+
+{%- assign artists = e.kuenstler.value | default: e.kunstler.value -%}
+
+{%- assign uid = e.system.id | default: e.system.handle | default: title | handleize -%}
+
+{%- assign is_de = false -%}
+{%- if request.locale.iso_code contains 'de' -%}{%- assign is_de = true -%}{%- endif -%}
+
+{%- capture L_back -%}{% if is_de %}Zurück zu Events{% else %}Back to events{% endif %}{%- endcapture -%}
+{%- capture L_when -%}{% if is_de %}Wann{% else %}When{% endif %}{%- endcapture -%}
+{%- capture L_rsvp -%}{% if is_de %}Anmelden{% else %}RSVP{% endif %}{%- endcapture -%}
+{%- capture L_rsvp_title -%}{% if is_de %}RSVP{% else %}RSVP{% endif %}{%- endcapture -%}
+{%- capture L_ticket -%}{% if is_de %}Tickets{% else %}Tickets{% endif %}{%- endcapture -%}
+{%- capture L_open_alea -%}{% if is_de %}Zur ALÉA Seite{% else %}Open ALÉA page{% endif %}{%- endcapture -%}
+{%- capture L_name -%}{% if is_de %}Name{% else %}Name{% endif %}{%- endcapture -%}
+{%- capture L_email -%}{% if is_de %}E-Mail{% else %}Email{% endif %}{%- endcapture -%}
+{%- capture L_ig -%}{% if is_de %}Instagram (optional){% else %}Instagram (optional){% endif %}{%- endcapture -%}
+{%- capture L_confirm -%}{% if is_de %}RSVP bestätigen{% else %}Confirm RSVP{% endif %}{%- endcapture -%}
+{%- capture L_success -%}{% if is_de %}Danke! Du stehst auf der RSVP-Liste.{% else %}Thanks! You’re on the RSVP list.{% endif %}{%- endcapture -%}
+{%- capture L_privacy -%}{% if is_de %}Free Event. Nur zur Organisation. Abmeldung jederzeit möglich.{% else %}Free event. Only for managing attendance. Unsubscribe anytime.{% endif %}{%- endcapture -%}
+{%- capture L_lineup -%}{% if is_de %}Künstler:innen{% else %}Artists{% endif %}{%- endcapture -%}
+{%- capture L_view_profile -%}{% if is_de %}Profil ansehen{% else %}View profile{% endif %}{%- endcapture -%}
+
+<section id="ac-event-{{ uid | escape }}" class="ac-e">
+  <style>
+    /* ===== Scoped (beats theme) ===== */
+    #ac-event-{{ uid | escape }}{background:#fff;color:#111;padding:34px 0 104px;}
+    #ac-event-{{ uid | escape }} *{box-sizing:border-box;}
+    #ac-event-{{ uid | escape }} a{color:inherit;}
+    #ac-event-{{ uid | escape }} .ac-wrap{max-width:1040px;margin:0 auto;padding:0 20px;}
+
+    /* Top */
+    #ac-event-{{ uid | escape }} .ac-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;}
+    #ac-event-{{ uid | escape }} .ac-back{
+      display:inline-flex;align-items:center;gap:8px;
+      border:1px solid rgba(17,17,17,.12);
+      background:#fff;border-radius:999px;padding:9px 12px;
+      font-size:12px;font-weight:650;text-decoration:none;
+      transition:transform .18s ease, border-color .18s ease, background .18s ease;
+    }
+    #ac-event-{{ uid | escape }} .ac-back:hover{transform:translateY(-1px);border-color:rgba(17,17,17,.18);background:rgba(17,17,17,.02);}
+    #ac-event-{{ uid | escape }} .ac-kicker{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#6b6b70;}
+
+    /* Hero */
+    #ac-event-{{ uid | escape }} .ac-hero{
+      position:relative;
+      border-radius:32px;overflow:hidden;
+      background:#f5f5f7;border:1px solid rgba(17,17,17,.10);
+      aspect-ratio:16/9;
+    }
+    #ac-event-{{ uid | escape }} .ac-hero__img{
+      position:absolute;inset:0;
+      width:100%;height:100%;
+      object-fit:cover;display:block;
+    }
+    #ac-event-{{ uid | escape }} .ac-hero__fade{
+      position:absolute;inset:0;
+      background:linear-gradient(to bottom, rgba(0,0,0,.00) 40%, rgba(0,0,0,.30) 100%);
+      pointer-events:none;
+    }
+    #ac-event-{{ uid | escape }} .ac-hero__badge{
+      position:absolute;left:16px;bottom:16px;
+      display:inline-flex;align-items:center;gap:8px;
+      padding:10px 12px;border-radius:999px;
+      background:rgba(255,255,255,.88);
+      border:1px solid rgba(255,255,255,.50);
+      backdrop-filter:saturate(140%) blur(10px);
+      font-size:12px;font-weight:850;
+    }
+    #ac-event-{{ uid | escape }} .ac-hero__badge i{font-style:normal;opacity:.65;font-weight:800;}
+    @media(max-width:768px){
+      #ac-event-{{ uid | escape }} .ac-hero{aspect-ratio:4/5;border-radius:24px;}
+      #ac-event-{{ uid | escape }} .ac-hero__badge{left:12px;bottom:12px;}
+    }
+
+    /* Header */
+    #ac-event-{{ uid | escape }} .ac-head{padding:20px 0 10px;}
+    #ac-event-{{ uid | escape }} .ac-title{
+      font-size:64px;line-height:1.02;margin:0;
+      font-weight:900;letter-spacing:-.035em;
+    }
+    @media(max-width:900px){#ac-event-{{ uid | escape }} .ac-title{font-size:44px;}}
+    @media(max-width:560px){#ac-event-{{ uid | escape }} .ac-title{font-size:36px;}}
+
+    #ac-event-{{ uid | escape }} .ac-meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;}
+    #ac-event-{{ uid | escape }} .ac-pill{
+      display:inline-flex;align-items:center;gap:8px;
+      border:1px solid rgba(17,17,17,.12);
+      border-radius:999px;padding:8px 12px;
+      background:rgba(17,17,17,.03);
+      font-size:12px;
+    }
+    #ac-event-{{ uid | escape }} .ac-pill b{font-weight:900;}
+
+    /* CTA */
+    #ac-event-{{ uid | escape }} .ac-cta{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 6px;}
+    #ac-event-{{ uid | escape }} .ac-btn{
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      border-radius:999px;padding:12px 16px;
+      font-size:13px;font-weight:900;text-decoration:none;cursor:pointer;
+      border:1px solid rgba(17,17,17,.18);
+      background:#fff;color:#111;
+      transition:transform .18s ease, filter .18s ease, background .18s ease, border-color .18s ease;
+      user-select:none;
+    }
+    #ac-event-{{ uid | escape }} .ac-btn:hover{transform:translateY(-1px);border-color:rgba(17,17,17,.24);background:rgba(17,17,17,.02);}
+    #ac-event-{{ uid | escape }} .ac-btn--primary{background:#111;color:#fff;border-color:#111;}
+    #ac-event-{{ uid | escape }} .ac-btn--primary:hover{filter:brightness(1.06);}
+    #ac-event-{{ uid | escape }} .ac-btn:active{transform:scale(.99);}
+
+    #ac-event-{{ uid | escape }} .ac-help{font-size:12px;color:#6b6b70;line-height:1.45;margin:0;}
+
+    /* Body */
+    #ac-event-{{ uid | escape }} .ac-body{
+      font-size:15px;line-height:1.8;color:#1c1c1f;
+      padding-top:12px;
+    }
+    #ac-event-{{ uid | escape }} .ac-body p{margin:0 0 16px;}
+    #ac-event-{{ uid | escape }} .ac-divider{height:1px;background:rgba(17,17,17,.10);margin:28px 0;}
+
+    /* Artists */
+    #ac-event-{{ uid | escape }} .ac-section-title{
+      font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+      color:#6b6b70;margin:0 0 12px;font-weight:900;
+    }
+    #ac-event-{{ uid | escape }} .ac-artgrid{
+      display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;
+    }
+    @media(max-width:900px){#ac-event-{{ uid | escape }} .ac-artgrid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+    @media(max-width:560px){#ac-event-{{ uid | escape }} .ac-artgrid{grid-template-columns:minmax(0,1fr);}}
+
+    #ac-event-{{ uid | escape }} .ac-acard{
+      display:flex;align-items:center;gap:12px;
+      border:1px solid rgba(17,17,17,.10);
+      background:rgba(17,17,17,.02);
+      border-radius:20px;padding:14px 14px;
+      text-decoration:none;
+      transition:transform .18s ease, background .18s ease, border-color .18s ease;
+      min-height:70px;
+    }
+    #ac-event-{{ uid | escape }} .ac-acard:hover{
+      transform:translateY(-1px);
+      background:rgba(17,17,17,.03);
+      border-color:rgba(17,17,17,.16);
+    }
+    #ac-event-{{ uid | escape }} .ac-ava{
+      width:44px;height:44px;border-radius:14px;overflow:hidden;
+      background:#fff;border:1px solid rgba(17,17,17,.10);flex:0 0 auto;
+    }
+    #ac-event-{{ uid | escape }} .ac-ava img{width:100%;height:100%;object-fit:cover;display:block;}
+    #ac-event-{{ uid | escape }} .ac-ava--ph{
+      display:flex;align-items:center;justify-content:center;
+      font-weight:900;color:#111;background:rgba(17,17,17,.05);
+    }
+    #ac-event-{{ uid | escape }} .ac-acard__name{font-size:14px;font-weight:900;line-height:1.2;margin:0;}
+    #ac-event-{{ uid | escape }} .ac-acard__sub{font-size:12px;color:#6b6b70;margin-top:2px;display:flex;align-items:center;gap:6px;}
+    #ac-event-{{ uid | escape }} .ac-acard__sub span{opacity:.75;}
+    #ac-event-{{ uid | escape }} .ac-arrow{font-weight:900;}
+
+    /* Modal */
+    #ac-event-{{ uid | escape }} .ac-modal[hidden]{display:none !important;}
+    #ac-event-{{ uid | escape }} .ac-modal{
+      position:fixed;inset:0;z-index:9999;
+      display:flex;align-items:center;justify-content:center;
+      padding:18px;
+    }
+    #ac-event-{{ uid | escape }} .ac-modal__bg{
+      position:absolute;inset:0;background:rgba(0,0,0,.46);
+      backdrop-filter:saturate(140%) blur(10px);
+    }
+    #ac-event-{{ uid | escape }} .ac-modal__panel{
+      position:relative;z-index:1;width:min(560px,100%);
+      background:#fff;border-radius:24px;
+      border:1px solid rgba(255,255,255,.18);
+      box-shadow:0 22px 90px rgba(0,0,0,.30);
+      overflow:hidden;
+    }
+    #ac-event-{{ uid | escape }} .ac-modal__in{padding:18px 18px 16px;}
+    #ac-event-{{ uid | escape }} .ac-modal__top{
+      display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;
+    }
+    #ac-event-{{ uid | escape }} .ac-modal__h{
+      margin:0;font-size:15px;font-weight:950;letter-spacing:-.01em;
+    }
+    #ac-event-{{ uid | escape }} .ac-x{
+      width:38px;height:38px;border-radius:999px;
+      border:1px solid rgba(17,17,17,.12);
+      background:rgba(17,17,17,.03);
+      display:inline-flex;align-items:center;justify-content:center;
+      cursor:pointer;font-weight:950;
+      transition:transform .15s ease, background .15s ease;
+    }
+    #ac-event-{{ uid | escape }} .ac-x:hover{background:rgba(17,17,17,.06);transform:translateY(-1px);}
+
+    /* Form (force-override theme inputs) */
+    #ac-event-{{ uid | escape }} .ac-form{display:flex;flex-direction:column;gap:10px;margin-top:10px;}
+    #ac-event-{{ uid | escape }} .ac-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    @media(max-width:560px){#ac-event-{{ uid | escape }} .ac-row{grid-template-columns:1fr;}}
+    #ac-event-{{ uid | escape }} .ac-field{display:flex;flex-direction:column;gap:6px;}
+    #ac-event-{{ uid | escape }} .ac-label{font-size:12px;color:#6b6b70;}
+
+    #ac-event-{{ uid | escape }} input.ac-input,
+    #ac-event-{{ uid | escape }} textarea.ac-input{
+      display:block !important;
+      width:100% !important;
+      height:44px !important;
+      min-height:44px !important;
+      max-height:44px !important;
+      border-radius:14px !important;
+      border:1px solid rgba(17,17,17,.12) !important;
+      padding:0 12px !important;
+      font-size:14px !important;
+      line-height:1.2 !important;
+      outline:none !important;
+      background:rgba(17,17,17,.03) !important;
+      box-shadow:none !important;
+      -webkit-appearance:none !important;
+      appearance:none !important;
+    }
+    #ac-event-{{ uid | escape }} input.ac-input:focus,
+    #ac-event-{{ uid | escape }} textarea.ac-input:focus{
+      background:#fff !important;
+      border-color:rgba(17,17,17,.35) !important;
+    }
+    #ac-event-{{ uid | escape }} .ac-note{
+      border:1px solid rgba(17,17,17,.10);background:rgba(17,17,17,.03);
+      border-radius:16px;padding:12px;font-size:13px;
+    }
+
+    @media (prefers-reduced-motion: reduce){
+      #ac-event-{{ uid | escape }} .ac-btn,
+      #ac-event-{{ uid | escape }} .ac-acard,
+      #ac-event-{{ uid | escape }} .ac-back,
+      #ac-event-{{ uid | escape }} .ac-x{transition:none !important;}
+    }
+  </style>
+
+  <div class="ac-wrap">
+    <div class="ac-top">
+      <a class="ac-back" href="/pages/events">‹ {{ L_back }}</a>
+      <div class="ac-kicker">{% if is_alea %}ALÉA{% else %}ARTCLUB{% endif %} EVENT</div>
+    </div>
+
+    {% if cover != blank %}
+      <div class="ac-hero">
+        <img class="ac-hero__img" src="{{ cover | image_url: width: 2400 }}" alt="{{ title | escape }}" loading="lazy">
+        <div class="ac-hero__fade"></div>
+        <div class="ac-hero__badge">
+          <i>{{ L_when }}</i>
+          {% if starts_at != blank %}
+            {% if is_de %}
+              {{ starts_at | date: "%d.%m.%Y" }} · {{ starts_at | date: "%H:%M" }}
+            {% else %}
+              {{ starts_at | date: "%b %d, %Y" }} · {{ starts_at | date: "%H:%M" }}
+            {% endif %}
+          {% else %}
+            {{ title }}
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+
+    <div class="ac-head">
+      <h1 class="ac-title">{{ title }}</h1>
+
+      <div class="ac-meta">
+        {% if starts_at != blank %}
+          <span class="ac-pill">
+            <b>{% if is_de %}Start{% else %}Start{% endif %}</b>
+            {% if is_de %}
+              {{ starts_at | date: "%d.%m.%Y" }} · {{ starts_at | date: "%H:%M" }}
+            {% else %}
+              {{ starts_at | date: "%b %d, %Y" }} · {{ starts_at | date: "%H:%M" }}
+            {% endif %}
+          </span>
+        {% endif %}
+        {% if ends_at != blank %}
+          <span class="ac-pill">
+            <b>{% if is_de %}Ende{% else %}End{% endif %}</b>
+            {% if is_de %}
+              {{ ends_at | date: "%d.%m.%Y" }} · {{ ends_at | date: "%H:%M" }}
+            {% else %}
+              {{ ends_at | date: "%b %d, %Y" }} · {{ ends_at | date: "%H:%M" }}
+            {% endif %}
+          </span>
+        {% endif %}
+        {% if artists != blank %}
+          <span class="ac-pill"><b>{{ L_lineup }}</b> {{ artists.size }}</span>
+        {% endif %}
+      </div>
+
+      <div class="ac-cta">
+        {% if is_alea %}
+          {% if alea_url != blank %}
+            <a class="ac-btn ac-btn--primary" href="{{ alea_url }}">{{ L_open_alea }} →</a>
+          {% else %}
+            <span class="ac-btn" style="cursor:default;opacity:.65;">{{ L_ticket }}: missing alea_url</span>
+          {% endif %}
+        {% else %}
+          <button class="ac-btn ac-btn--primary" type="button" data-ac-rsvp-open>{{ L_rsvp }} →</button>
+        {% endif %}
+      </div>
+
+      {% if starts_at != blank or ends_at != blank %}
+        <p class="ac-help">
+          <b>{{ L_when }}:</b>
+          {% if starts_at != blank %}
+            {% if is_de %}
+              {{ starts_at | date: "%A, %d.%m.%Y" }} · {{ starts_at | date: "%H:%M" }}
+            {% else %}
+              {{ starts_at | date: "%A, %b %d, %Y" }} · {{ starts_at | date: "%H:%M" }}
+            {% endif %}
+          {% endif %}
+          {% if ends_at != blank %}
+            — 
+            {% if is_de %}
+              {{ ends_at | date: "%A, %d.%m.%Y" }} · {{ ends_at | date: "%H:%M" }}
+            {% else %}
+              {{ ends_at | date: "%A, %b %d, %Y" }} · {{ ends_at | date: "%H:%M" }}
+            {% endif %}
+          {% endif %}
+        </p>
+      {% endif %}
+    </div>
+
+    {% if e.beschreibung != blank %}
+      <div class="ac-body">
+        {{ e.beschreibung.value | newline_to_br }}
+      </div>
+    {% endif %}
+
+    {% if artists != blank %}
+      <div class="ac-divider"></div>
+      <p class="ac-section-title">{{ L_lineup }}</p>
+
+      <div class="ac-artgrid">
+        {% for a in artists %}
+          {%- assign a_name = a.name.value | default: a.titel.value | default: a.system.title | default: a.system.handle | default: 'Artist' -%}
+          {%- assign a_url = a.system.url | default: a.url.value | default: '' -%}
+
+          {%- assign a_avatar = a.avatar.value
+            | default: a.image.value
+            | default: a.portrait.value
+            | default: a.cover.value
+            | default: a.bild.value
+            | default: blank
+          -%}
+
+          <a class="ac-acard" href="{{ a_url }}" {% if a_url == blank %}style="pointer-events:none;opacity:.7;"{% endif %}>
+            {% if a_avatar != blank %}
+              <span class="ac-ava">
+                <img src="{{ a_avatar | image_url: width: 400 }}" alt="{{ a_name | escape }}" loading="lazy">
+              </span>
+            {% else %}
+              <span class="ac-ava ac-ava--ph">{{ a_name | slice: 0, 1 | upcase }}</span>
+            {% endif %}
+
+            <span style="min-width:0;">
+              <p class="ac-acard__name">{{ a_name }}</p>
+              <div class="ac-acard__sub"><span>{{ L_view_profile }}</span> <span class="ac-arrow">→</span></div>
+            </span>
+          </a>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  {% unless is_alea %}
+    {%- assign event_handle = e.system.handle | default: title | handleize -%}
+    {%- capture tag_value -%}rsvp{% if newsletter_tag != blank %},{{ newsletter_tag | strip }}{% endif %},event_{{ event_handle }}{%- endcapture -%}
+    {%- assign form_id = 'ac_rsvp_form_' | append: uid -%}
+
+    <div class="ac-modal" data-ac-rsvp-modal hidden>
+      <div class="ac-modal__bg" data-ac-rsvp-close></div>
+      <div class="ac-modal__panel" role="dialog" aria-modal="true" aria-label="RSVP">
+        <div class="ac-modal__in">
+          <div class="ac-modal__top">
+            <h3 class="ac-modal__h">{{ L_rsvp_title }}</h3>
+            <button class="ac-x" type="button" aria-label="Close" data-ac-rsvp-close>×</button>
+          </div>
+
+          {%- assign event_handle = e.system.handle | default: title | handleize -%}
+{%- capture base_tags -%}rsvp,event_{{ event_handle }}{% if newsletter_tag != blank %},{{ newsletter_tag | strip }}{% endif %}{%- endcapture -%}
+{%- assign form_id = 'ac_rsvp_form_' | append: uid -%}
+
+{% form 'customer', id: form_id, class: 'ac-form', novalidate: 'novalidate' %}
+  {% if form.posted_successfully? %}
+    <div class="ac-note" aria-live="polite">{{ L_success }}</div>
+  {% endif %}
+
+  {% if form.errors %}
+    <div class="ac-note" aria-live="polite">
+      {{ form.errors | default_errors }}
+    </div>
+  {% endif %}
+
+  <!-- IMPORTANT: tags must be INSIDE the customer form -->
+  <input
+    type="hidden"
+    id="ac_rsvp_tags_{{ uid }}"
+    name="contact[tags]"
+    value="{{ base_tags | strip }}"
+  >
+
+  <div class="ac-row">
+    <div class="ac-field">
+      <label class="ac-label" for="ac_rsvp_name_{{ uid }}">{{ L_name }}</label>
+      <!-- newsletter/customer form: store name as first_name -->
+      <input
+        id="ac_rsvp_name_{{ uid }}"
+        class="ac-input"
+        name="contact[first_name]"
+        required
+        autocomplete="name"
+      >
+    </div>
+
+    <div class="ac-field">
+      <label class="ac-label" for="ac_rsvp_email_{{ uid }}">{{ L_email }}</label>
+      <!-- REQUIRED for customer form -->
+      <input
+        id="ac_rsvp_email_{{ uid }}"
+        class="ac-input"
+        name="contact[email]"
+        type="email"
+        required
+        autocomplete="email"
+      >
+    </div>
+  </div>
+
+  <div class="ac-field">
+    <label class="ac-label" for="ac_rsvp_ig_{{ uid }}">{{ L_ig }}</label>
+    <!-- no "name" needed; we append to tags via JS -->
+    <input
+      id="ac_rsvp_ig_{{ uid }}"
+      class="ac-input"
+      placeholder="@username"
+      autocomplete="off"
+    >
+  </div>
+
+  <button class="ac-btn ac-btn--primary" type="submit" style="width:100%;justify-content:center;">
+    {{ L_confirm }}
+  </button>
+
+  <p class="ac-help">{{ L_privacy }}</p>
+{% endform %}
+
+        </div>
+      </div>
+    </div>
+
+    <script>
+  (function(){
+    var root = document.getElementById('ac-event-{{ uid | escape }}');
+    if(!root) return;
+
+    var modal = root.querySelector('[data-ac-rsvp-modal]');
+    var openBtn = root.querySelector('[data-ac-rsvp-open]');
+    var closeEls = root.querySelectorAll('[data-ac-rsvp-close]');
+
+    function openModal(){
+      if(!modal) return;
+      modal.hidden = false;
+      document.documentElement.style.overflow = 'hidden';
+    }
+    function closeModal(){
+      if(!modal) return;
+      modal.hidden = true;
+      document.documentElement.style.overflow = '';
+    }
+
+    if(openBtn) openBtn.addEventListener('click', openModal);
+    closeEls.forEach(function(el){ el.addEventListener('click', closeModal); });
+    document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeModal(); });
+
+    // Tags sync (base tags + optional instagram)
+    var baseTags = {{ base_tags | strip | json }};
+    var igEl = document.getElementById('ac_rsvp_ig_{{ uid }}');
+    var tagsEl = document.getElementById('ac_rsvp_tags_{{ uid }}');
+
+    function cleanIg(v){
+      return (v || "")
+        .trim()
+        .replace(/^@+/, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, "");
+    }
+
+    function syncTags(){
+      if(!tagsEl) return;
+      var tags = baseTags;
+      var ig = igEl ? cleanIg(igEl.value) : "";
+      if(ig) tags += ",ig_" + ig;
+      tagsEl.value = tags;
+    }
+
+    if(igEl) igEl.addEventListener('input', syncTags);
+    syncTags();
+  })();
+</script>
+
+  {% endunless %}
+</section>
+
+{%- endif -%}

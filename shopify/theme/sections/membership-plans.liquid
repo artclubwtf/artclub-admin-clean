@@ -1,0 +1,336 @@
+{% schema %}
+{
+  "name": "Mitgliedschaftspläne",
+  "settings": [
+    { "type": "text", "id": "headline", "label": "Titel", "default": "Plans to suit you" },
+    { "type": "text", "id": "subtext", "label": "Untertitel", "default": "Get access to the best tools and services with flexible pricing plans" },
+    { "type": "richtext", "id": "footnote_text", "label": "Fußnote", "default": "<p>✓ 10x more visitors per artist than our competitors<br>✓ 150 Artists sell for the first time each month<br>✓ Application process ensures quality</p>" }
+  ],
+  "blocks": [
+    {
+      "type": "plan",
+      "name": "Plan",
+      "settings": [
+        { "type": "text", "id": "title", "label": "Planname", "default": "Gold" },
+        { "type": "text", "id": "price_month", "label": "Monatspreis", "default": "$53" },
+        { "type": "text", "id": "price_year", "label": "Jahrespreis", "default": "$699 / year - billed yearly" },
+        { "type": "textarea", "id": "features", "label": "Features (eine pro Zeile)", "default": "👁️ Enhanced visibility to collectors\n📞 Dedicated Artist Liaison\n🏛️ Exposure to trusted galleries" },
+        { "type": "checkbox", "id": "highlight", "label": "Als 'Most Popular' hervorheben", "default": false }
+      ]
+    }
+  ],
+  "presets": [{ "name": "Mitgliedschaftspläne" }]
+}
+{% endschema %}
+
+<style>
+.membership-section {
+  font-family: sans-serif;
+  padding: 4rem 1rem;
+  text-align: center;
+}
+.membership-section h2 {
+  font-size: 2rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+.membership-section p {
+  color: #666;
+}
+.plan-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin: 2rem 0;
+}
+.plan-toggle button {
+  padding: 0.6rem 1.5rem;
+  border-radius: 999px;
+  border: 1px solid #ccc;
+  background: white;
+  cursor: pointer;
+  font-weight: 500;
+}
+.plan-toggle button.active {
+  background: #1a1aff;
+  color: white;
+  border-color: #1a1aff;
+}
+.plans-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2rem;
+}
+.plan-card {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 300px;
+  min-width: 280px;
+  position: relative;
+  text-align: left;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+.plan-card.highlight {
+  border: 1px solid #1a1aff;
+}
+.plan-card.selected {
+  box-shadow: 0 0 0 1px #1a1aff;
+}
+.plan-card .badge {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: #ffcc00;
+  color: black;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+.plan-card h3 {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+.plan-price {
+  font-size: 1.8rem;
+  font-weight: bold;
+}
+.plan-sub {
+  font-size: 0.9rem;
+  color: #777;
+  margin-bottom: 1rem;
+}
+.feature-list {
+  margin: 1rem 0;
+  padding: 0;
+  list-style: none;
+}
+.feature-list li {
+  margin: 0.5rem 0;
+  font-size: 0.95rem;
+}
+.apply-btn {
+  display: inline-block;
+  background: #1a1aff;
+  color: white;
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 8px;
+  text-align: center;
+  cursor: pointer;
+  font-weight: 500;
+}
+.footnote {
+  margin-top: 2rem;
+  font-size: 0.9rem;
+  color: #444;
+}
+dialog::backdrop {
+  background: rgba(0,0,0,0.2);
+  backdrop-filter: blur(1rem);
+  transition: 1000ms;
+}
+
+#membershipModal {
+  border: none;
+  border-radius: 16px;
+  padding: 2.5rem;
+  max-width: 500px;
+  width: 90%;
+  background: white;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  font-family: sans-serif;
+}
+
+#membershipModal h2 {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 2rem;
+}
+
+#membershipModal form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+#membershipModal label {
+  font-size: 0.95rem;
+  color: #333;
+  font-weight: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+#membershipModal input,
+#membershipModal textarea {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+  transition: border 0.2s ease;
+}
+
+#membershipModal input:focus,
+#membershipModal textarea:focus {
+  border-color: #1a1aff;
+  outline: none;
+}
+
+#membershipModal textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+#membershipModal .form-buttons {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+#membershipModal .form-buttons button {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.2s ease;
+}
+
+#membershipModal .form-buttons .submit {
+  background: #1a1aff;
+  color: white;
+}
+
+#membershipModal .form-buttons .submit:hover {
+  background: #0000cc;
+}
+
+#membershipModal .form-buttons .cancel {
+  background: #f5f5f5;
+  color: #333;
+}
+
+#membershipModal .form-buttons .cancel:hover {
+  background: #e0e0e0;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const buttons = document.querySelectorAll('.plan-toggle button');
+  const cards = document.querySelectorAll('.plan-card');
+
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      buttons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const mode = btn.dataset.mode;
+      cards.forEach(card => {
+        const price = card.querySelector(`.price-${mode}`);
+        const priceBox = card.querySelector('.plan-price');
+        if (price && priceBox) {
+          priceBox.innerHTML = price.innerHTML;
+        }
+      });
+    });
+  });
+
+  document.querySelector('[data-mode="year"]').click(); // Default mode
+
+  window.selectPlan = function (el, planName) {
+    document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
+    el.closest('.plan-card').classList.add('selected');
+    window.selectedPlanName = planName;
+  };
+
+  window.openApplyModal = function () {
+    if (!window.selectedPlanName) {
+      alert('Please select a plan first.');
+      return;
+    }
+    document.querySelector('#form-title').textContent = `Apply for Plan "${window.selectedPlanName}"`;
+    document.querySelector('#contact_plan').value = window.selectedPlanName;
+    document.querySelector('#membershipModal').showModal();
+  };
+});
+</script>
+
+<div class="membership-section">
+  <h2>{{ section.settings.headline }}</h2>
+  <p>{{ section.settings.subtext }}</p>
+
+  <div class="plan-toggle">
+    <button data-mode="month">Pay Monthly</button>
+    <button data-mode="year">Pay Yearly</button>
+  </div>
+
+  <div class="plans-grid">
+    {% for block in section.blocks %}
+      <div class="plan-card{% if block.settings.highlight %} highlight{% endif %}" onclick="selectPlan(this, '{{ block.settings.title }}')">
+        {% if block.settings.highlight %}
+          <div class="badge">Most Popular</div>
+        {% endif %}
+        <h3>{{ block.settings.title }}</h3>
+        <div class="plan-price"></div>
+        <div class="plan-sub price-month" style="display:none;">{{ block.settings.price_month }} / month</div>
+        <div class="plan-sub price-year" style="display:none;">{{ block.settings.price_year }}</div>
+        <ul class="feature-list">
+          {% assign items = block.settings.features | newline_to_br | split: "<br />" %}
+          {% for item in items %}
+            <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endfor %}
+  </div>
+
+  <button class="apply-btn global" onclick="openApplyModal()">Apply</button>
+
+  <div class="footnote">{{ section.settings.footnote_text }}</div>
+</div>
+
+<dialog id="membershipModal" style="padding:2rem; border:none; border-radius:12px; max-width:500px; width:100%;">
+  <form method="post" action="/contact" accept-charset="UTF-8" class="form" style="display:flex; flex-direction:column; gap:1rem;">
+    <h2 id="form-title">Apply for Plan</h2>
+    <input type="hidden" name="form_type" value="contact" />
+    <input type="hidden" name="utf8" value="✓" />
+    <input type="hidden" name="contact[Plan]" id="contact_plan" value="">
+
+    <label>Name
+      <input type="text" name="contact[name]" required>
+    </label>
+
+    <label>Email
+      <input type="email" name="contact[email]" required>
+    </label>
+
+    <label>Instagram Handle
+      <input type="text" name="contact[instagram]" placeholder="@deinname">
+    </label>
+
+    <label>Link zu Portfolio / Website
+      <input type="url" name="contact[portfolio]" placeholder="https://">
+    </label>
+
+    <label>Warum möchtest du bei uns ausstellen?
+      <textarea name="contact[body]" rows="4" placeholder="Optional..."></textarea>
+    </label>
+
+    <div style="display:flex; gap:1rem;">
+      <button type="submit" class="apply-btn" style="flex:1;">Absenden</button>
+      <button type="button" onclick="document.querySelector('#membershipModal').close();" style="flex:1;">Abbrechen</button>
+    </div>
+  </form>
+</dialog>

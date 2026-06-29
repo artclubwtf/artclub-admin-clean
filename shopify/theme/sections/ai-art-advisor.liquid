@@ -1,0 +1,1932 @@
+{% comment %}
+  ACAI – ARTCLUB AI Art Advisor (Popup / Fullscreen)
+  - Launcher-Leiste auf der Seite
+  - Klick öffnet ein fullscreen Overlay mit Chat
+  - Light Mode only, eigenständiges Design
+{% endcomment %}
+
+<section id="acai-chat-{{ section.id }}" class="acai-section">
+  <div class="page-width acai-launcher-shell">
+    <button type="button" class="acai-launcher" data-acai-open>
+      <div class="acai-launcher__orb"></div>
+      <div class="acai-launcher__text">
+        <span class="acai-launcher__label">ACAI · beta</span>
+        <span class="acai-launcher__placeholder">
+          {{ section.settings.launcher_placeholder | default: "Frag ACAI nach Kunst für deinen Raum…" }}
+        </span>
+      </div>
+      <span class="acai-launcher__cta">Öffnen</span>
+    </button>
+  </div>
+
+  <!-- Fullscreen Overlay -->
+  <div class="acai-overlay" data-acai-overlay aria-hidden="true">
+    <div class="acai-overlay__backdrop" data-acai-close></div>
+
+    <div class="acai-shell" role="dialog" aria-modal="true" aria-label="ACAI – AI Art Advisor">
+      <header class="acai-shell__header">
+        <div class="acai-brand">
+          <div class="acai-brand__orb"></div>
+          <div class="acai-brand__text">
+            <span class="acai-brand__name">ACAI</span>
+            <span class="acai-brand__tag">beta · ARTCLUB</span>
+          </div>
+        </div>
+        <button type="button" class="acai-overlay__close" data-acai-close aria-label="Chat schließen">
+          ✕
+        </button>
+      </header>
+
+      <main class="acai-shell__body">
+        <div class="acai-greeting">
+          <h2 class="acai-greeting__headline">
+            {{ section.settings.heading | default: "Was kann ich heute für dich finden?" }}
+          </h2>
+          <p class="acai-greeting__subline">
+            {{ section.settings.subheading | default: "Beschreib kurz Raum, Stil oder Budget – ACAI filtert Kunstwerke aus dem ARTCLUB-Katalog." }}
+          </p>
+        </div>
+
+        <div class="acai-chat-wrap">
+          <div class="acai-chat-thread">
+            <div class="acai-message acai-message--assistant acai-message--enter">
+              <div class="acai-avatar acai-avatar--assistant">AC</div>
+              <div class="acai-bubble">
+                <p>
+                  Hey, ich bin ACAI – dein AI Art Advisor von ARTCLUB. Erzähl mir kurz,
+                  für welchen Raum du Kunst suchst und wie dein Stil & Budget aussehen –
+                  ich stelle dir eine Auswahl zusammen.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+            <footer class="acai-shell__footer">
+
+        <div class="acai-input-shell">
+          <div class="acai-input-main">
+            <textarea
+              id="acai-input-{{ section.id }}"
+              class="acai-input"
+              rows="1"
+              placeholder="{{ section.settings.placeholder | default: 'Frag ACAI nach Kunst für deinen Raum…' }}"
+            ></textarea>
+
+
+          </div>
+
+          <div class="acai-input-actions">
+            <button
+              type="button"
+              class="acai-icon-button"
+              id="acai-image-button-{{ section.id }}"
+              aria-label="Bild anhängen"
+            >
+              📷
+            </button>
+            <input
+              type="file"
+              id="acai-image-input-{{ section.id }}"
+              accept="image/*"
+              style="display:none"
+            >
+                        <button
+              type="button"
+              class="acai-submit"
+              id="acai-submit-{{ section.id }}"
+            >
+              {{ section.settings.button_label | default: "AI-Kurator fragen" }}
+            </button>
+          </div>
+        </div>
+          <div class="acai-input-meta">
+            <span class="acai-input-meta__hint">
+              ACAI ist in der Beta. Empfehlungen sind Vorschläge und ersetzen keine persönliche Beratung.
+            </span>
+          </div>
+        
+      </footer>
+
+    </div>
+  </div>
+
+  <style>
+  #acai-chat-{{ section.id }} {
+    padding-top: {{ section.settings.padding_top | default: 80 }}px !important;
+    padding-bottom: {{ section.settings.padding_bottom | default: 80 }}px !important;
+  }
+
+  .acai-no-scroll {
+    overflow: hidden !important;
+  }
+
+  .acai-launcher-shell {
+    display: flex !important;
+    justify-content: center !important;
+  }
+
+  .acai-launcher {
+    margin: 0 auto !important;
+    border-radius: 999px !important;
+    background: #ffffff !important;
+    padding: 8px 12px 8px 10px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    box-shadow: 0 14px 40px rgba(15, 23, 42, 0.08) !important;
+    cursor: pointer !important;
+    width: min(520px, 100%) !important;
+    text-align: left !important;
+    transition: transform 0.16s ease, box-shadow 0.16s ease !important;
+  }
+
+  .acai-launcher:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 18px 55px rgba(15, 23, 42, 0.12) !important;
+  }
+
+  .acai-launcher__orb {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 999px !important;
+    background: radial-gradient(circle at 30% 0%, #a7f3d0, #22c55e, #15803d) !important;
+    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.15) !important;
+    flex-shrink: 0 !important;
+  }
+
+  .acai-launcher__text {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+    flex: 1 !important;
+    min-width: 0 !important;
+  }
+
+  .acai-launcher__label {
+    font-size: 12px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.09em !important;
+    opacity: 0.7 !important;
+  }
+
+  .acai-launcher__placeholder {
+    font-size: 14px !important;
+    white-space: nowrap !important;
+    text-overflow: ellipsis !important;
+    overflow: hidden !important;
+  }
+
+  .acai-launcher__cta {
+    font-size: 13px !important;
+    padding: 4px 10px !important;
+    border-radius: 999px !important;
+    background: #111827 !important;
+    color: #ffffff !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Overlay */
+
+  .acai-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 60 !important;
+    display: flex !important;
+    align-items: stretch !important; /* wichtig für volle Höhe */
+    justify-content: center !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    transform: scale(0.98) translateY(6px) !important;
+    transition: opacity 0.18s ease, transform 0.2s ease !important;
+  }
+
+  .acai-overlay--visible {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    transform: scale(1) translateY(0) !important;
+  }
+
+  .acai-overlay__backdrop {
+    position: absolute !important;
+    inset: 0 !important;
+    background: rgba(15, 23, 42, 0.28) !important;
+    backdrop-filter: blur(18px) saturate(1.3) !important;
+  }
+
+  .acai-shell {
+    position: relative !important;
+    width: 100% !important;
+    max-width: 1040px !important;
+    margin: 0 auto !important;
+    height: 100vh !important;          /* volle Viewport-Höhe */
+    max-height: 100vh !important;
+    border-radius: 0 !important;
+    overflow: hidden !important;
+    background: radial-gradient(circle at top left, #ecfdf5, #f9fafb) !important;
+    box-shadow: 0 24px 80px rgba(15, 23, 42, 0.35) !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  @media screen and (min-width: 900px) {
+    .acai-shell {
+      border-radius: 24px !important;
+      height: calc(100vh - 48px) !important;
+      max-height: calc(100vh - 48px) !important;
+    }
+  }
+
+  .acai-shell__header {
+    padding: 16px 22px 10px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    flex-shrink: 0 !important;
+  }
+
+  .acai-brand {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+  }
+
+  .acai-brand__orb {
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 999px !important;
+    background: radial-gradient(circle at 30% 0%, #bbf7d0, #22c55e, #166534) !important;
+    box-shadow: 0 0 30px rgba(34, 197, 94, 0.45) !important;
+  }
+
+  .acai-brand__text {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+  }
+
+  .acai-brand__name {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+  }
+
+  .acai-brand__tag {
+    font-size: 11px !important;
+    opacity: 0.7 !important;
+  }
+
+  .acai-overlay__close {
+    width: 30px !important;
+    height: 30px !important;
+    border-radius: 999px !important;
+    background: rgba(255, 255, 255, 0.9) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    font-size: 14px !important;
+  }
+
+  .acai-shell__body {
+    padding: 4px 22px 6px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    min-height: 0 !important;     /* wichtig für flex + scroll */
+    flex: 1 1 auto !important;
+  }
+
+  .acai-greeting {
+    padding-bottom: 4px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .acai-greeting__headline {
+    font-size: 20px !important;
+    font-weight: 600 !important;
+    margin-bottom: 4px !important;
+  }
+
+  .acai-greeting__subline {
+    font-size: 14px !important;
+    opacity: 0.8 !important;
+    max-width: 620px !important;
+  }
+
+  .acai-chat-wrap {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;   /* erlaubt dem Thread zu schrumpfen */
+    padding-top: 4px !important;
+  }
+
+  .acai-chat-thread {
+    border-radius: 18px !important;
+    background: rgba(255, 255, 255, 0.9) !important;
+    padding: 12px 12px 10px !important;
+    height: 100% !important;
+    overflow-y: auto !important;               /* HIER wird gescrollt */
+    -webkit-overflow-scrolling: touch !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  .acai-message {
+    display: flex !important;
+    gap: 10px !important;
+    align-items: flex-start !important;
+  }
+
+  .acai-message--user {
+    flex-direction: row-reverse !important;
+  }
+
+  .acai-avatar {
+    width: 26px !important;
+    height: 26px !important;
+    border-radius: 999px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    flex-shrink: 0 !important;
+  }
+
+  .acai-avatar--assistant {
+    background: #111827 !important;
+    color: #ffffff !important;
+  }
+
+  .acai-avatar--user {
+    background: #e5e7eb !important;
+    color: #111827 !important;
+  }
+
+  .acai-bubble {
+    border-radius: 16px !important;
+    padding: 8px 11px !important;
+    font-size: 14px !important;
+    line-height: 1.5 !important;
+    max-width: 78% !important;
+  }
+
+  .acai-message--assistant .acai-bubble {
+    background: #f9fafb !important;
+  }
+
+  .acai-message--user .acai-bubble {
+    background: #111827 !important;
+    color: #ffffff !important;
+  }
+
+  .acai-bubble img.acai-user-image {
+    margin-top: 8px !important;
+    border-radius: 12px !important;
+    max-width: 180px !important;
+    width: 100% !important;
+    display: block !important;
+  }
+
+  .acai-products {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+    margin-top: 8px !important;
+  }
+
+  .acai-product-card {
+    width: 160px !important;
+    text-decoration: none !important;
+    color: inherit !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    background: #ffffff !important;
+    display: flex !important;
+    flex-direction: column !important;
+    transition: transform 0.16s ease, box-shadow 0.16s ease !important;
+  }
+
+  .acai-product-card:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2) !important;
+  }
+
+  .acai-product-card__image-wrap {
+    position: relative !important;
+    width: 100% !important;
+    padding-bottom: 125% !important;
+    overflow: hidden !important;
+  }
+
+  .acai-product-card__image {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+  }
+
+  .acai-product-card__body {
+    padding: 8px 10px 9px !important;
+  }
+
+  .acai-product-card__title {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    margin-bottom: 2px !important;
+  }
+
+  .acai-product-card__artist {
+    font-size: 11px !important;
+    opacity: 0.7 !important;
+    margin-bottom: 4px !important;
+  }
+
+  .acai-product-card__reason {
+    font-size: 11px !important;
+    opacity: 0.85 !important;
+  }
+
+  .acai-shell__footer {
+    padding: 8px 22px 14px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+    background: linear-gradient(to top, #ffffff, rgba(255, 255, 255, 0.85)) !important;
+    flex-shrink: 0 !important;
+  }
+
+  .acai-footer__examples {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+
+  .acai-example-btn {
+    font-size: 11px !important;
+    padding: 4px 9px !important;
+    border-radius: 999px !important;
+    background: #ffffff !important;
+    cursor: pointer !important;
+  }
+
+  .acai-input-row {
+    display: flex !important;
+    align-items: flex-end !important;
+    gap: 8px !important;  }
+
+  .acai-icon-button {
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 999px !important;
+    background: #ffffff !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    font-size: 16px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .acai-input {
+    flex: 1 !important;
+    border-radius: 999px !important;
+    padding: 8px 12px !important;
+    font: inherit !important;
+    resize: none !important;
+    max-height: 350px !important;
+    background: #ffffff !important;
+  }
+
+  .acai-input:focus {
+    outline: none !important;
+  }
+
+  .acai-submit {
+    border-radius: 999px !important;
+    padding: 8px 16px !important;
+    border: none !important;
+    background: #111827 !important;
+    color: #ffffff !important;
+    font-size: 13px !important;
+    cursor: pointer !important;
+    flex-shrink: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+  }
+
+  .acai-submit--loading {
+    opacity: 0.7 !important;
+    cursor: default !important;
+  }
+
+  .acai-input-meta {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+  }
+
+  .acai-input-meta__hint {
+    font-size: 10px !important;
+    opacity: 0.7 !important;
+  }
+
+  /* Loading dots */
+
+  .acai-loading {
+    display: inline-flex !important;
+    gap: 3px !important;
+    align-items: center !important;
+    font-size: 12px !important;
+    opacity: 0.8 !important;
+  }
+
+  .acai-dot {
+    width: 4px !important;
+    height: 4px !important;
+    border-radius: 999px !important;
+    background: #111827 !important;
+    animation: acai-dot 1s infinite ease-in-out !important;
+  }
+
+  .acai-dot:nth-child(2) {
+    animation-delay: 0.15s !important;
+  }
+  .acai-dot:nth-child(3) {
+    animation-delay: 0.3s !important;
+  }
+
+  @keyframes acai-dot {
+    0%, 80%, 100% { transform: translateY(0); opacity: 0.3; }
+    40% { transform: translateY(-3px); opacity: 1; }
+  }
+
+  /* Message enter animation */
+
+  .acai-message--enter {
+    animation: acai-message-in 0.18s ease-out;
+  }
+
+  @keyframes acai-message-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Mobile */
+
+  @media screen and (max-width: 749px) {
+    .acai-shell {
+      width: 100% !important;
+      max-width: 100% !important;
+      border-radius: 0 !important;
+    }
+
+    .acai-shell__header,
+    .acai-shell__body,
+    .acai-shell__footer {
+      padding-inline: 16px !important;
+    }
+
+    .acai-chat-thread {
+      padding-inline: 10px !important;
+    }
+
+    .acai-bubble {
+      max-width: 100% !important;
+    }
+
+    .acai-launcher {
+      width: 100% !important;
+    }
+
+      .acai-input {
+      flex: 1 !important;
+      border-radius: 999px !important;
+      padding: 8px 12px !important;
+      font: inherit !important;
+      resize: none !important;
+      background: #ffffff !important;
+      font-size: 16px!important;
+    }
+  }
+
+  /* ============= Utility-Klassen für Mobile-Cleanup ============= */
+
+.acai-mobile-hidden {
+  /* Standard: sichtbar */
+}
+
+.acai-mobile-only {
+  display: none;
+}
+
+@media screen and (max-width: 749px) {
+  .acai-mobile-hidden {
+    display: none !important;
+  }
+  .acai-mobile-only {
+    display: block !important;
+  }
+}
+
+/* Beispiel:
+   <p class="acai-greeting__subline acai-mobile-hidden">…</p>
+   → Desktop sichtbar, auf Handy ausgeblendet
+*/
+
+
+/* ============= Allgemeine Verbesserungen ============= */
+
+/* Footer sitzt sauber über der Home-Leiste auf iOS */
+.acai-shell__footer {
+  padding-bottom: calc(0.6rem + env(safe-area-inset-bottom)) !important;
+}
+
+/* Scroll-Verhalten weicher, auch wenn viel Content da ist */
+.acai-chat-thread {
+  -webkit-overflow-scrolling: touch !important;
+}
+
+
+/* ============= Mobile-Layout „entschlacken“ ============= */
+
+@media screen and (max-width: 749px) {
+  /* Fullscreen, kein Card-Look */
+  .acai-shell {
+    width: 100% !important;
+    height: 100% !important;
+    max-height: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .acai-shell__header {
+    padding: 0.9rem 1rem 0.35rem !important;
+  }
+
+  .acai-brand__name {
+    font-size: 14px !important;
+  }
+
+  .acai-brand__tag {
+    font-size: 11px !important;
+    opacity: 0.65 !important;
+  }
+
+  /* Headline etwas kleiner, Subline optional ausblenden */
+  .acai-greeting {
+    padding: 0 1rem 0.25rem !important;
+  }
+
+  .acai-greeting__headline {
+    font-size: 20px !important;
+    line-height: 1.25 !important;
+  }
+
+  .acai-greeting__subline {
+    font-size: 13px !important;
+    opacity: 0.72 !important;
+  }
+  /* Wenn du sie komplett weg haben willst:
+     .acai-greeting__subline { display:none !important; } */
+
+  /* Chat-Karte schlanker, näher an iMessage */
+  .acai-shell__body {
+    padding: 0.25rem 0.9rem 0.4rem !important;
+  }
+
+  .acai-chat-wrap {
+    padding-top: 0.25rem !important;
+  }
+
+  .acai-chat-thread {
+    border-radius: 18px !important;
+    padding: 0.8rem 0.8rem 0.7rem !important;
+  }
+
+  .acai-message {
+    gap: 0.5rem !important;
+  }
+
+  .acai-bubble {
+    max-width: 85% !important;
+    font-size: 14px !important;
+    border-radius: 14px !important;
+    padding: 0.6rem 0.8rem !important;
+  }
+
+  /* Produkte: horizontal scrollbare „Cards“, nicht alles in einem Grid */
+  .acai-products {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    margin-inline: -0.3rem !important;
+    padding-inline: 0.3rem !important;
+  }
+
+  .acai-product-card {
+    min-width: 68% !important;
+    max-width: 78% !important;
+  }
+
+  /* Footer / Input-Zeile kompakter */
+  .acai-shell__footer {
+    padding: 0.35rem 0.9rem calc(0.6rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  .acai-footer__examples {
+    gap: 0.3rem !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .acai-example-btn {
+    font-size: 12px !important;
+    padding: 0.25rem 0.6rem !important;
+    white-space: nowrap !important;
+  }
+
+  .acai-input-row {
+    gap: 0.4rem !important;
+    align-items: center !important;
+  }
+
+  .acai-icon-button {
+    width: 30px !important;
+    height: 30px !important;
+  }
+
+  .acai-input {
+    border-radius: 999px !important;
+    padding: 0.5rem 0.8rem !important;
+    font-size: 14px !important;
+  }
+
+  .acai-submit {
+    padding: 0.5rem 0.9rem !important;
+    font-size: 13px !important;
+  }
+
+  .acai-input-meta__hint {
+    font-size: 11px !important;
+    opacity: 0.65 !important;
+  }
+}
+
+  /* Basis: innerhalb der Section eigener Typo-Context */
+  #acai-chat-{{ section.id }} {
+    padding-top: {{ section.settings.padding_top | default: 80 }}px !important;
+    padding-bottom: {{ section.settings.padding_bottom | default: 80 }}px !important;
+    font-size: 16px; /* verhindert iOS-Zoom */
+  }
+
+  /* Scroll-Lock nur auf großen Screens, auf Mobile frei scrollen lassen */
+  @media screen and (min-width: 900px) {
+    .acai-no-scroll {
+      overflow: hidden !important;
+    }
+  }
+
+  .acai-launcher-shell {
+    display: flex !important;
+    justify-content: center !important;
+  }
+
+  .acai-launcher {
+    margin: 0 auto !important;
+    border-radius: 999px !important;
+    background: #ffffff !important;
+    padding: 8px 14px 8px 10px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    box-shadow: 0 14px 40px rgba(15, 23, 42, 0.08) !important;
+    cursor: pointer !important;
+    width: min(520px, 100%) !important;
+    text-align: left !important;
+    border: 1px solid rgba(15, 23, 42, 0.06) !important;
+    transition: transform 0.16s ease, box-shadow 0.16s ease !important;
+  }
+
+  .acai-launcher:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 18px 55px rgba(15, 23, 42, 0.14) !important;
+  }
+
+  .acai-launcher__orb {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 999px !important;
+    background: radial-gradient(circle at 30% 0%, #a7f3d0, #22c55e, #15803d) !important;
+    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.18) !important;
+    flex-shrink: 0 !important;
+  }
+
+  .acai-launcher__text {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+    flex: 1 !important;
+    min-width: 0 !important;
+  }
+
+  .acai-launcher__label {
+    font-size: 12px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.12em !important;
+    opacity: 0.65 !important;
+  }
+
+  .acai-launcher__placeholder {
+    font-size: 14px !important;
+    white-space: nowrap !important;
+    text-overflow: ellipsis !important;
+    overflow: hidden !important;
+  }
+
+  .acai-launcher__cta {
+    font-size: 14px !important;
+    padding: 4px 10px !important;
+    border-radius: 999px !important;
+    background: #111827 !important;
+    color: #ffffff !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* ===== Overlay: wie ChatGPT, 100% Screen, kein Seiten-Through ===== */
+
+  .acai-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 60 !important;
+    display: flex !important;
+    align-items: stretch !important;
+    justify-content: center !important;
+    background: #f8fafc !important; /* eigener Hintergrund, Website ist weg */
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transition: opacity 0.18s ease !important;
+  }
+
+  .acai-overlay--visible {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  /* Backdrop nur als Klickfläche, ohne Blur/Transparenz */
+  .acai-overlay__backdrop {
+    position: absolute !important;
+    inset: 0 !important;
+  }
+
+  .acai-shell {
+    position: relative !important;
+    z-index: 1 !important;
+    width: 100% !important;
+    max-width: 960px !important;
+    height: 100% !important;
+    padding: 18px 20px 10px !important;
+    margin: 0 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: #f8fafc !important;
+  }
+
+  .acai-shell__header {
+    padding: 0 0 12px 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+
+  .acai-brand {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+  }
+
+  .acai-brand__orb {
+    width: 30px !important;
+    height: 30px !important;
+    border-radius: 999px !important;
+    background: radial-gradient(circle at 30% 0%, #bbf7d0, #22c55e, #166534) !important;
+  }
+
+  .acai-brand__text {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+  }
+
+  .acai-brand__name {
+    font-size: 15px !important;
+    font-weight: 600 !important;
+  }
+
+  .acai-brand__tag {
+    font-size: 12px !important;
+    opacity: 0.7 !important;
+  }
+
+  .acai-overlay__close {
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 999px !important;
+    background: #ffffff !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    font-size: 16px !important;
+    border: 1px solid rgba(15, 23, 42, 0.06) !important;
+  }
+
+  .acai-shell__body {
+    flex: 1 !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .acai-greeting {
+    padding-bottom: 4px !important;
+  }
+
+  .acai-greeting__headline {
+    font-size: 24px !important;
+    font-weight: 600 !important;
+    margin-bottom: 4px !important;
+  }
+
+  .acai-greeting__subline {
+    font-size: 14px !important;
+    opacity: 0.8 !important;
+    max-width: 620px !important;
+  }
+
+  .acai-chat-wrap {
+    flex: 1 !important;
+    min-height: 0 !important;
+    padding-top: 6px !important;
+  }
+
+  .acai-chat-thread {
+    height: 100% !important;
+    overflow-y: auto !important;
+    padding: 14px 16px 14px !important;
+    border-radius: 24px !important;
+    background: #ffffff !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  .acai-message {
+    display: flex !important;
+    gap: 8px !important;
+    align-items: flex-start !important;
+  }
+
+  .acai-message--user {
+    flex-direction: row-reverse !important;
+  }
+
+  .acai-avatar {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 999px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    flex-shrink: 0 !important;
+  }
+
+  .acai-avatar--assistant {
+    background: #111827 !important;
+    color: #ffffff !important;
+  }
+
+  .acai-avatar--user {
+    background: #e5e7eb !important;
+    color: #111827 !important;
+  }
+
+  .acai-bubble {
+    border-radius: 18px !important;
+    padding: 8px 11px !important;
+    font-size: 14px !important;
+    line-height: 1.5 !important;
+    max-width: 78% !important;
+  }
+
+  .acai-message--assistant .acai-bubble {
+    background: #f9fafb !important;
+  }
+
+  .acai-message--user .acai-bubble {
+    background: #111827 !important;
+    color: #ffffff !important;
+  }
+
+  .acai-bubble img.acai-user-image {
+    margin-top: 8px !important;
+    border-radius: 12px !important;
+    max-width: 180px !important;
+    width: 100% !important;
+    display: block !important;
+  }
+
+  .acai-products {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 12px !important;
+    margin-top: 8px !important;
+  }
+
+  .acai-product-card {
+    width: 160px !important;
+    text-decoration: none !important;
+    color: inherit !important;
+    border-radius: 14px !important;
+    overflow: hidden !important;
+    background: #ffffff !important;
+    display: flex !important;
+    flex-direction: column !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease !important;
+  }
+
+  .acai-product-card:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16) !important;
+    border-color: rgba(15, 23, 42, 0.4) !important;
+  }
+
+  .acai-product-card__image-wrap {
+    position: relative !important;
+    width: 100% !important;
+    padding-bottom: 125% !important;
+    overflow: hidden !important;
+  }
+
+  .acai-product-card__image {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+  }
+
+  .acai-product-card__body {
+    padding: 8px 9px 10px !important;
+  }
+
+  .acai-product-card__title {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    margin-bottom: 2px !important;
+  }
+
+  .acai-product-card__artist {
+    font-size: 11px !important;
+    opacity: 0.7 !important;
+    margin-bottom: 4px !important;
+  }
+
+  .acai-product-card__reason {
+    font-size: 11px !important;
+    opacity: 0.85 !important;
+  }
+
+  .acai-shell__footer {
+    padding: 8px 20px 14px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+    background: #f8fafc !important;
+  }
+
+  .acai-footer__examples {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 6px !important;
+    overflow-x: auto !important;
+    padding-bottom: 2px !important;
+  }
+
+  .acai-example-btn {
+    font-size: 12px !important;
+    padding: 4px 10px !important;
+    border-radius: 999px !important;
+    background: #ffffff !important;
+    white-space: nowrap !important;
+    cursor: pointer !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  }
+
+  .acai-input-row {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+
+  .acai-icon-button {
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 999px !important;
+    background: #ffffff !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    font-size: 18px !important;
+    flex-shrink: 0 !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  }
+
+  .acai-input {
+    flex: 1 !important;
+    border-radius: 999px !important;
+    padding: 10px 14px !important;
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.12) !important;
+    resize: none !important;
+    font-size: 16px !important; /* wichtig: kein iOS Zoom */
+    line-height: 1.4 !important;
+  }
+
+  .acai-input:focus {
+    outline: none !important;
+    border-color: #111827 !important;
+  }
+
+  .acai-submit {
+    border-radius: 999px !important;
+    padding: 10px 16px !important;
+    border: none !important;
+    background: #111827 !important;
+    color: #ffffff !important;
+    font-size: 14px !important;
+    cursor: pointer !important;
+    flex-shrink: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+  }
+
+  .acai-submit--loading {
+    opacity: 0.7 !important;
+    cursor: default !important;
+  }
+
+  .acai-input-meta {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+  }
+
+  .acai-input-meta__hint {
+    font-size: 11px !important;
+    opacity: 0.7 !important;
+  }
+
+  /* Loading dots */
+
+  .acai-loading {
+    display: inline-flex !important;
+    gap: 3px !important;
+    align-items: center !important;
+    font-size: 12px !important;
+    opacity: 0.8 !important;
+  }
+
+  .acai-dot {
+    width: 4px !important;
+    height: 4px !important;
+    border-radius: 999px !important;
+    background: #111827 !important;
+    animation: acai-dot 1s infinite ease-in-out !important;
+  }
+
+  .acai-dot:nth-child(2) { animation-delay: 0.15s !important; }
+  .acai-dot:nth-child(3) { animation-delay: 0.3s !important; }
+
+  @keyframes acai-dot {
+    0%, 80%, 100% { transform: translateY(0); opacity: 0.3; }
+    40% { transform: translateY(-3px); opacity: 1; }
+  }
+
+  .acai-message--enter {
+    animation: acai-message-in 0.18s ease-out;
+  }
+
+  @keyframes acai-message-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ===== Mobile Tweaks: weniger Overload, mehr ChatGPT-Vibe ===== */
+
+  @media screen and (max-width: 749px) {
+    .acai-shell {
+      max-width: 100% !important;
+      padding: 14px 14px 8px !important;
+    }
+
+    .acai-shell__header {
+      padding-bottom: 8px !important;
+    }
+
+    .acai-greeting__headline {
+      font-size: 20px !important;
+    }
+
+    .acai-greeting__subline {
+      display: none !important; /* Beschreibung auf Mobile ausblenden */
+    }
+
+    .acai-chat-thread {
+      padding: 0 !important;
+      background: transparent !important;
+    }
+
+    .acai-bubble {
+      max-width: 86% !important;
+    }
+
+    .acai-footer__examples {
+      display: none !important; /* Chips weg auf Mobile = weniger Clutter */
+    }
+
+    .acai-shell__footer {
+      padding: 6px 14px 10px !important;
+    }
+
+    .acai-input-row {
+      gap: 6px !important;
+    }
+
+    .acai-input-meta__hint {
+      font-size: 10px !important;
+    }
+  }
+
+      .acai-shell__footer {
+      padding: 0.75rem 1.4rem 1rem !important;
+      background: #f9fafb !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 0.45rem !important;
+      border-top: 1px solid rgba(15, 23, 42, 0.04) !important;
+    }
+
+    .acai-footer__examples {
+      display: flex !important;
+      flex-wrap: wrap !important;
+      gap: 0.4rem !important;
+    }
+
+    .acai-example-btn {
+      font-size: 13px !important;
+      padding: 0.3rem 0.7rem !important;
+      border-radius: 999px !important;
+      background: #ffffff !important;
+      cursor: pointer !important;
+      border: 1px solid rgba(15, 23, 42, 0.06) !important;
+    }
+
+    /* neue ChatGPT-ähnliche Input-Shell */
+
+    .acai-input-shell {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 0.45rem !important;
+    }
+
+    .acai-input-main {
+      display: flex !important;
+      align-items: center !important;
+      gap: 0.5rem !important;
+      border-radius: 999px !important;
+      background: #ffffff !important;
+      padding: 0.5rem 0.6rem 0.5rem 1rem !important;
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08) !important;
+    }
+
+    .acai-input {
+      flex: 1 !important;
+      border: none !important;
+      background: transparent !important;
+      padding: 0.2rem 0 !important;
+      resize: none !important;
+      font: inherit !important;
+      font-size: 16px !important; /* verhindert Zoom auf iOS */
+      line-height: 1.4 !important;
+    }
+
+    .acai-input:focus {
+      outline: none !important;
+    }
+
+    .acai-submit {
+      border-radius: 999px !important;
+      padding: 0.5rem 0.95rem !important;
+      border: none !important;
+      background: #020617 !important;
+      color: #ffffff !important;
+      font-size: 14px !important;
+      cursor: pointer !important;
+      flex-shrink: 0 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      white-space: nowrap !important;
+    }
+
+    .acai-submit--loading {
+      opacity: 0.7 !important;
+      cursor: default !important;
+    }
+
+    .acai-input-actions {
+      display: flex !important;
+      align-items: center !important;
+      gap: 0.4rem !important;
+      padding-left: 0.1rem !important;
+    }
+
+    .acai-icon-button {
+      width: 34px !important;
+      height: 34px !important;
+      border-radius: 999px !important;
+      background: #e5e7eb !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      cursor: pointer !important;
+      font-size: 16px !important;
+      flex-shrink: 0 !important;
+    }
+
+    .acai-input-meta {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+    }
+
+    .acai-input-meta__hint {
+      font-size: 11px !important;
+      opacity: 0.7 !important;
+    }
+
+
+      @media screen and (max-width: 749px) {
+      .acai-overlay {
+        align-items: stretch !important;
+        justify-content: stretch !important;
+      }
+
+      .acai-overlay__backdrop {
+        background: #f9fafb !important; /* statt halbtransparent – wirkt wie eigene Seite */
+        backdrop-filter: none !important;
+      }
+
+      .acai-shell {
+        width: 100% !important;
+        height: 100% !important;
+        max-height: none !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+      }
+
+      .acai-shell__header,
+      .acai-shell__body,
+      .acai-shell__footer {
+        padding-inline: 1rem !important;
+      }
+
+      .acai-chat-thread {
+        padding-inline: 0.9rem !important;
+      }
+
+      .acai-bubble {
+        max-width: 100% !important;
+      }
+
+      .acai-input-shell {
+        padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
+      }
+    }
+
+    .acai-input {
+  /* … deine bisherigen Regeln … */
+  overflow-y: hidden !important;  /* keine Scrollbar, stattdessen Höhe anpassen */
+      border-radius: 0 !important;
+
+}
+
+.acai-input-main {
+    border-radius: 20px !important;
+}
+
+.acai-input-shell {
+    background: white;
+    border-radius: 30px !important;
+    padding: 15px;
+    border: 1px solid #ececec;
+}
+
+.acai-input-main {
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    margin-bottom: 5px!important;
+}
+
+
+.acai-input{
+  box-shadow: 0!important;
+  border: 0!important;
+  border: none !important;
+  outline: 1px solid white !important;
+}
+
+.acai-input:target, .acai-input:active,.acai-input:focus,.acai-input:focus-visible,.acai-input:hover,.acai-input:focus-within{
+    box-shadow: 0!important;
+  border: 0!important;
+  border: none !important;
+  outline: 1px solid white !important;
+box-shadow: none!important;
+border: 1px solid white!important;
+    outline-offset: 0;
+}
+
+.acai-input-actions{
+    justify-content: space-between !important;
+    align-items: stretch !important;
+}
+
+
+.acai-input{
+  font-size: 1.3rem!important;
+}
+
+.acai-shell{
+max-width: 650px!important;
+}
+
+.acai-overlay.acai-overlay--visible, .acai-overlay.acai-overlay--visible .acai-shell, .acai-shell__footer{
+background: white!important;
+}
+
+main.acai-shell__body {
+    padding: 0 !important;
+    border: white !important;
+}
+
+.acai-greeting{
+display:none!important}
+
+.acai-chat-thread {
+    padding: 2rem 0 !important;
+}
+
+.acai-avatar.acai-avatar--assistant {
+    display: none !important;
+}
+
+
+.acai-message.acai-message--assistant.acai-message--enter .acai-bubble {
+    background: white !important;
+    padding: 0!important
+}
+
+.acai-avatar.acai-avatar--user {
+    display: none !important;
+}
+
+.acai-message.acai-message--user.acai-message--enter .acai-bubble{
+    background: #0000fb !important;
+    padding: 0px 20px !important;
+    color: #ffffff !important;
+}
+
+
+@media (max-width: 760px){
+.acai-input{
+  font-size: 16px!important;
+}
+}
+
+
+</style>
+
+
+
+
+  <script>
+    (function() {
+      const sectionId = "{{ section.id }}";
+      const root = document.getElementById("acai-chat-" + sectionId);
+      if (!root) return;
+
+      const endpoint = "{{ section.settings.ai_endpoint | escape }}";
+
+      const launcher = root.querySelector("[data-acai-open]");
+      const overlay = root.querySelector("[data-acai-overlay]");
+      const closeButtons = root.querySelectorAll("[data-acai-close]");
+      const chatThread = root.querySelector(".acai-chat-thread");
+      const inputEl = root.querySelector("#acai-input-" + sectionId);
+      const submitBtn = root.querySelector("#acai-submit-" + sectionId);
+      const exampleBtns = root.querySelectorAll(".acai-example-btn");
+
+      const imageBtn = root.querySelector("#acai-image-button-" + sectionId);
+      const imageInput = root.querySelector("#acai-image-input-" + sectionId);
+
+      let isOpen = false;
+      let isSending = false;
+      let chatHistory = [];
+      let selectedImageDataUrl = null;
+
+      function lockScroll(lock) {
+        const method = lock ? "add" : "remove";
+        document.documentElement.classList[method]("acai-no-scroll");
+        document.body.classList[method]("acai-no-scroll");
+      }
+
+      function openOverlay() {
+        if (isOpen) return;
+        isOpen = true;
+        overlay.classList.add("acai-overlay--visible");
+        overlay.setAttribute("aria-hidden", "false");
+        lockScroll(true);
+        window.setTimeout(function() {
+          if (inputEl) inputEl.focus();
+        }, 50);
+      }
+
+      function closeOverlay() {
+        if (!isOpen) return;
+        isOpen = false;
+        overlay.classList.remove("acai-overlay--visible");
+        overlay.setAttribute("aria-hidden", "true");
+        lockScroll(false);
+      }
+
+      function escapeHtml(str) {
+        if (typeof str !== "string") return "";
+        return str
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      function appendUserMessage(text, imageUrl) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "acai-message acai-message--user acai-message--enter";
+
+        const safeText = escapeHtml(text);
+
+        wrapper.innerHTML = `
+          <div class="acai-avatar acai-avatar--user">DU</div>
+          <div class="acai-bubble">
+            <p>${safeText}</p>
+            ${imageUrl ? `<img src="${imageUrl}" alt="Dein Bild" class="acai-user-image">` : ""}
+          </div>
+        `;
+        chatThread.appendChild(wrapper);
+        chatThread.scrollTop = chatThread.scrollHeight;
+      }
+
+      function appendAssistantLoading() {
+        const wrapper = document.createElement("div");
+        wrapper.className = "acai-message acai-message--assistant acai-message--loading acai-message--enter";
+        wrapper.innerHTML = `
+          <div class="acai-avatar acai-avatar--assistant">AC</div>
+          <div class="acai-bubble">
+            <div class="acai-loading">
+              <span>Denke nach</span>
+              <span class="acai-dot"></span>
+              <span class="acai-dot"></span>
+              <span class="acai-dot"></span>
+            </div>
+          </div>
+        `;
+        chatThread.appendChild(wrapper);
+        chatThread.scrollTop = chatThread.scrollHeight;
+        return wrapper;
+      }
+
+      function appendAssistantMessage(data) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "acai-message acai-message--assistant acai-message--enter";
+
+        const explanation = data && data.explanation
+          ? data.explanation
+          : "Hier sind einige Werke, die zu deiner Beschreibung passen könnten:";
+
+        let productsHtml = "";
+        if (data && Array.isArray(data.products) && data.products.length > 0) {
+          const cards = data.products.map(function(p) {
+            const handle = p.handle || "";
+            const title = p.title || "";
+            const artist = p.artist || "";
+            const reason = p.reason || "";
+            const imageUrl = p.imageUrl || "";
+            const href = handle ? "/products/" + encodeURIComponent(handle) : "#";
+
+            return `
+              <a class="acai-product-card" href="${href}">
+                <div class="acai-product-card__image-wrap">
+                  ${imageUrl ? `<img class="acai-product-card__image" src="${imageUrl}" alt="${escapeHtml(title)}" loading="lazy">` : ""}
+                </div>
+                <div class="acai-product-card__body">
+                  <div class="acai-product-card__title">${escapeHtml(title)}</div>
+                  ${artist ? `<div class="acai-product-card__artist">${escapeHtml(artist)}</div>` : ""}
+                  ${reason ? `<div class="acai-product-card__reason">${escapeHtml(reason)}</div>` : ""}
+                </div>
+              </a>
+            `;
+          }).join("");
+
+          productsHtml = `<div class="acai-products">${cards}</div>`;
+        }
+
+        wrapper.innerHTML = `
+          <div class="acai-avatar acai-avatar--assistant">AC</div>
+          <div class="acai-bubble">
+            <p>${escapeHtml(explanation)}</p>
+            ${productsHtml}
+          </div>
+        `;
+
+        chatThread.appendChild(wrapper);
+        chatThread.scrollTop = chatThread.scrollHeight;
+      }
+
+      function handleImageFile(file) {
+        if (!file) {
+          selectedImageDataUrl = null;
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          selectedImageDataUrl = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+
+      async function handleSend(query) {
+        const trimmed = (query || "").trim();
+        if (!trimmed || !endpoint || isSending) return;
+
+        openOverlay();
+        isSending = true;
+        submitBtn.classList.add("acai-submit--loading");
+
+        // Snapshot des aktuell ausgewählten Bildes – nur für diese Nachricht
+        const imageForThisMessage = selectedImageDataUrl;
+
+        appendUserMessage(trimmed, imageForThisMessage);
+        chatHistory.push({ role: "user", content: trimmed });
+
+        const loadingMessage = appendAssistantLoading();
+
+        try {
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              query: trimmed,
+              history: chatHistory.slice(-6),
+              imageDataUrl: imageForThisMessage || null
+            })
+          });
+
+          const data = await res.json().catch(function() { return null; });
+
+          if (loadingMessage && loadingMessage.parentNode) {
+            loadingMessage.parentNode.removeChild(loadingMessage);
+          }
+
+          if (!res.ok || !data) {
+            const fallback = {
+              explanation: "Es ist ein Fehler aufgetreten. Versuch es bitte später erneut oder formuliere deine Anfrage etwas kürzer.",
+              products: []
+            };
+            appendAssistantMessage(fallback);
+            chatHistory.push({ role: "assistant", content: fallback.explanation });
+          } else {
+            appendAssistantMessage(data);
+
+            let summary = "";
+            if (data.explanation) {
+              summary = data.explanation;
+            } else if (Array.isArray(data.products) && data.products.length > 0) {
+              const titles = data.products
+                .map(function(p) { return p && p.title ? String(p.title) : ""; })
+                .filter(Boolean)
+                .join(", ");
+              if (titles) {
+                summary = "Empfohlene Werke: " + titles;
+              }
+            }
+            if (summary) {
+              chatHistory.push({ role: "assistant", content: summary });
+            }
+          }
+        } catch (err) {
+          console.error("ACAI error", err);
+          if (loadingMessage && loadingMessage.parentNode) {
+            loadingMessage.parentNode.removeChild(loadingMessage);
+          }
+          const fallback = {
+            explanation: "Ich konnte gerade keine Empfehlung laden. Bitte versuch es gleich noch einmal.",
+            products: []
+          };
+          appendAssistantMessage(fallback);
+          chatHistory.push({ role: "assistant", content: fallback.explanation });
+        } finally {
+          isSending = false;
+          submitBtn.classList.remove("acai-submit--loading");
+          // Bild nur für diese Nachricht nutzen, danach zurücksetzen
+          selectedImageDataUrl = null;
+        }
+      }
+
+      /* Event wiring */
+
+      if (launcher) {
+        launcher.addEventListener("click", function() {
+          openOverlay();
+        });
+      }
+
+      closeButtons.forEach(function(btn) {
+        btn.addEventListener("click", function() {
+          closeOverlay();
+        });
+      });
+
+      overlay.addEventListener("click", function(e) {
+        if (e.target === overlay || e.target.classList.contains("acai-overlay__backdrop")) {
+          closeOverlay();
+        }
+      });
+
+      document.addEventListener("keydown", function(e) {
+        if (e.key === "Escape") {
+          closeOverlay();
+        }
+      });
+
+      if (submitBtn && inputEl) {
+        submitBtn.addEventListener("click", function() {
+          const value = inputEl.value;
+          inputEl.value = "";
+          handleSend(value);
+        });
+
+        inputEl.addEventListener("keydown", function(e) {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            const value = inputEl.value;
+            inputEl.value = "";
+            handleSend(value);
+          }
+        });
+
+        if (inputEl) {
+          // Höhe automatisch an Text anpassen
+          const autoResize = function () {
+            inputEl.style.height = "auto";
+            inputEl.style.height = inputEl.scrollHeight + "px";
+            chatThread.scrollTop = chatThread.scrollHeight;
+          };
+
+          inputEl.addEventListener("input", autoResize);
+          // einmal initial
+          autoResize();
+        }
+
+      }
+
+      if (exampleBtns && exampleBtns.length) {
+        exampleBtns.forEach(function(btn) {
+          btn.addEventListener("click", function() {
+            const text = btn.getAttribute("data-example") || "";
+            if (inputEl) {
+              inputEl.value = text;
+              inputEl.focus();
+            }
+          });
+        });
+      }
+
+      if (imageBtn && imageInput) {
+        imageBtn.addEventListener("click", function() {
+          imageInput.click();
+        });
+
+        imageInput.addEventListener("change", function() {
+          const file = imageInput.files && imageInput.files[0];
+          handleImageFile(file);
+        });
+      }
+    })();
+  </script>
+
+  {% schema %}
+  {
+    "name": "ACAI – AI Art Advisor",
+    "settings": [
+      {
+        "type": "text",
+        "id": "launcher_placeholder",
+        "label": "Launcher-Text",
+        "default": "Frag ACAI nach Kunst für deinen Raum…"
+      },
+      {
+        "type": "text",
+        "id": "heading",
+        "label": "Überschrift im Overlay",
+        "default": "Was kann ich heute für dich finden?"
+      },
+      {
+        "type": "textarea",
+        "id": "subheading",
+        "label": "Unterzeile im Overlay",
+        "default": "Beschreib kurz Raum, Stil oder Budget – ACAI filtert Kunstwerke aus dem ARTCLUB-Katalog."
+      },
+      {
+        "type": "text",
+        "id": "placeholder",
+        "label": "Platzhalter im Eingabefeld",
+        "default": "Zum Beispiel: Zwei Werke fürs Wohnzimmer, Beige-Töne, minimalistisch, max. 300 € pro Werk …"
+      },
+      {
+        "type": "text",
+        "id": "button_label",
+        "label": "Button-Beschriftung",
+        "default": "Senden"
+      },
+      {
+        "type": "url",
+        "id": "ai_endpoint",
+        "label": "AI Endpoint URL",
+        "info": "URL deines Cloudflare Workers, z. B. https://artclub-ai-search.deinname.workers.dev"
+      },
+      {
+        "type": "checkbox",
+        "id": "show_example_prompts",
+        "label": "Beispiel-Prompts anzeigen",
+        "default": true
+      },
+      {
+        "type": "range",
+        "id": "padding_top",
+        "label": "Abstand oben",
+        "min": 0,
+        "max": 160,
+        "step": 4,
+        "unit": "px",
+        "default": 80
+      },
+      {
+        "type": "range",
+        "id": "padding_bottom",
+        "label": "Abstand unten",
+        "min": 0,
+        "max": 160,
+        "step": 4,
+        "unit": "px",
+        "default": 80
+      }
+    ],
+    "presets": [
+      {
+        "name": "ACAI – AI Art Advisor (Popup)",
+        "category": "Apps"
+      }
+    ]
+  }
+  {% endschema %}
+</section>

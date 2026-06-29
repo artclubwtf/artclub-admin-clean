@@ -1,0 +1,1415 @@
+{% comment %}
+  AC Apple Navbar – Artclub (v2)
+  - Desktop: wie gehabt (Mega Dropdowns)
+  - Mobile: Apple-clean Fullscreen Menu (Root + Subpanels + Back)
+  - Cart: Apple-clean Drawer + intercept Add-to-cart (AJAX) to prevent /cart redirect
+{% endcomment %}
+
+<header id="ac-nav-{{ section.id }}" class="ac-nav" role="banner">
+  <style>
+    /* ===== Base ===== */
+    #ac-nav-{{ section.id }}{
+      position: fixed !important;
+      top:0 !important; left:0 !important;
+      width:100% !important;
+      z-index: 80 !important;
+      background:#fff !important;
+      border-bottom: 1px solid rgba(0,0,0,0.06) !important;
+      font-size: 13px !important;
+      line-height: 1 !important;
+    }
+    #ac-nav-{{ section.id }} *{ box-sizing:border-box !important; }
+    #ac-nav-{{ section.id }} a{ color:inherit !important; text-decoration:none !important; }
+
+    :root { --ac-nav-h: 52px; }
+
+    .ac-nav-spacer-{{ section.id }}{
+      height: var(--ac-nav-h) !important;
+    }
+
+    /* ===== Desktop bar ===== */
+    #ac-nav-{{ section.id }} .ac-desk{
+      max-width: 980px !important;
+      margin: 0 auto !important;
+      padding: 12px 24px !important;
+      display: grid !important;
+      grid-template-columns: auto 1fr auto !important;
+      align-items: center !important;
+      gap: 24px !important;
+    }
+
+    #ac-nav-{{ section.id }} .ac-logo{
+      display:flex !important;
+      align-items:center !important;
+      gap:8px !important;
+      min-width: 90px !important;
+    }
+    #ac-nav-{{ section.id }} .ac-logo img{
+      width: 82px !important;
+      height: auto !important;
+      display:block !important;
+      object-fit:contain !important;
+    }
+    #ac-nav-{{ section.id }} .ac-logo .ac-logo-fallback{
+      font-size: 13px !important;
+      font-weight: 650 !important;
+      letter-spacing: .06em !important;
+      text-transform: lowercase !important;
+    }
+
+    #ac-nav-{{ section.id }} .ac-menu{
+      display:flex !important;
+      align-items:center !important;
+      justify-content:center !important;
+      gap: 24px !important;
+    }
+    #ac-nav-{{ section.id }} .ac-item{ position: relative !important; }
+    #ac-nav-{{ section.id }} .ac-link{
+      display:inline-flex !important;
+      align-items:center !important;
+      gap:8px !important;
+      padding: 4px 0 !important;
+      opacity:.9 !important;
+      cursor:pointer !important;
+      white-space:nowrap !important;
+      transition: opacity .16s ease !important;
+    }
+    #ac-nav-{{ section.id }} .ac-link:hover,
+    #ac-nav-{{ section.id }} .ac-link:focus{ opacity:1 !important; }
+
+    #ac-nav-{{ section.id }} .ac-actions{
+      display:flex !important;
+      align-items:center !important;
+      gap: 16px !important;
+      justify-content:flex-end !important;
+      min-width: 90px !important;
+    }
+    #ac-nav-{{ section.id }} .ac-iconbtn{
+      border:0 !important; background:transparent !important;
+      padding:0 !important; margin:0 !important;
+      cursor:pointer !important;
+      display:inline-flex !important;
+      align-items:center !important;
+      justify-content:center !important;
+    }
+    #ac-nav-{{ section.id }} .ac-ic{
+      width: 16px !important;
+      height: 16px !important;
+      display:block !important;
+    }
+    #ac-nav-{{ section.id }} .ac-badge{
+      display:inline-flex !important;
+      align-items:center !important;
+      justify-content:center !important;
+      min-width: 17px !important;
+      height: 17px !important;
+      padding: 0 5px !important;
+      border-radius: 999px !important;
+      background:#111 !important;
+      color:#fff !important;
+      font-size:10px !important;
+      margin-left: 6px !important;
+      transform: translateY(-1px) !important;
+    }
+
+    /* ===== Desktop Mega ===== */
+    #ac-nav-{{ section.id }} .ac-item--has-children{ position: static !important; }
+
+    #ac-nav-{{ section.id }} .ac-mega{
+      display:none !important;
+      position:absolute !important;
+      top:100% !important;
+      left:50% !important;
+      transform: translateX(-50%) !important;
+      width: 100vw !important;
+      max-width: 100vw !important;
+      background: #f5f5f7 !important;
+      padding: 26px 0 34px 0 !important;
+      z-index: 70 !important;
+      border-bottom: 1px solid rgba(0,0,0,0.06) !important;
+    }
+    #ac-nav-{{ section.id }} .ac-item--has-children.is-open .ac-mega{ display:block !important; }
+
+    #ac-nav-{{ section.id }} .ac-mega-in{
+      max-width: 980px !important;
+      margin:0 auto !important;
+      padding: 0 24px !important;
+      display:grid !important;
+      grid-template-columns: minmax(0,1.2fr) minmax(0,2fr) !important;
+      gap: 22px !important;
+      align-items:start !important;
+    }
+    #ac-nav-{{ section.id }} .ac-mega-h{
+      font-size: 11px !important;
+      text-transform: uppercase !important;
+      letter-spacing: .12em !important;
+      opacity:.6 !important;
+      margin: 0 0 10px 0 !important;
+    }
+
+    /* A–Z + list */
+    #ac-nav-{{ section.id }} .ac-alpha{
+      display:flex !important;
+      flex-wrap:wrap !important;
+      gap:6px !important;
+      margin-bottom: 10px !important;
+    }
+    #ac-nav-{{ section.id }} .ac-alpha button{
+      border:0 !important;
+      background:transparent !important;
+      padding: 0 2px !important;
+      font-size: 11px !important;
+      cursor:pointer !important;
+      opacity:.6 !important;
+    }
+    #ac-nav-{{ section.id }} .ac-alpha button.is-active{
+      opacity:1 !important;
+      text-decoration: underline !important;
+    }
+    #ac-nav-{{ section.id }} .ac-items{
+      max-height: 280px !important;
+      overflow:auto !important;
+      padding-right: 6px !important;
+    }
+    #ac-nav-{{ section.id }} .ac-items a{
+      display:block !important;
+      font-size:13px !important;
+      opacity:.86 !important;
+      padding: 4px 0 !important;
+    }
+    #ac-nav-{{ section.id }} .ac-items a:hover{ opacity:1 !important; }
+
+    /* ===== Mobile bar (Apple clean) ===== */
+    #ac-nav-{{ section.id }} .ac-mob{
+      display:none !important;
+      padding: 10px 14px !important;
+      align-items:center !important;
+      justify-content:space-between !important;
+      gap: 10px !important;
+    }
+    #ac-nav-{{ section.id }} .ac-mob-left{
+      display:flex !important;
+      align-items:center !important;
+      gap: 10px !important;
+      min-width: 40px !important;
+    }
+    #ac-nav-{{ section.id }} .ac-mob-mid{
+      display:flex !important;
+      align-items:center !important;
+      justify-content:center !important;
+      flex:1 !important;
+    }
+    #ac-nav-{{ section.id }} .ac-mob-mid img{
+      width: 76px !important;
+      height:auto !important;
+      display:block !important;
+    }
+    #ac-nav-{{ section.id }} .ac-mob-right{
+      display:flex !important;
+      align-items:center !important;
+      justify-content:flex-end !important;
+      gap: 16px !important;
+      min-width: 90px !important;
+    }
+
+    /* ===== Mobile full-screen menu ===== */
+    #ac-nav-{{ section.id }} .ac-mmenu[hidden]{ display:none !important; }
+    #ac-nav-{{ section.id }} .ac-mmenu{
+      position: fixed !important;
+      inset: 0 !important;
+      background:#fff !important;
+      z-index: 9999 !important;
+      display:flex !important;
+      flex-direction:column !important;
+      padding: 14px 14px 26px 14px !important;
+    }
+    #ac-nav-{{ section.id }} .ac-mtop{
+      display:flex !important;
+      align-items:center !important;
+      justify-content:space-between !important;
+      gap: 10px !important;
+      padding-top: 4px !important;
+    }
+    #ac-nav-{{ section.id }} .ac-mbtn{
+      width: 40px !important;
+      height: 40px !important;
+      border-radius: 999px !important;
+      border: 0 !important;
+      background: transparent !important;
+      display:inline-flex !important;
+      align-items:center !important;
+      justify-content:center !important;
+      cursor:pointer !important;
+    }
+    #ac-nav-{{ section.id }} .ac-mtitle{
+      font-size: 13px !important;
+      opacity: .7 !important;
+      letter-spacing:.02em !important;
+    }
+
+    #ac-nav-{{ section.id }} .ac-mpanel{
+      display:none !important;
+      margin-top: 14px !important;
+      overflow:auto !important;
+      -webkit-overflow-scrolling: touch !important;
+      padding-bottom: 40px !important;
+    }
+    #ac-nav-{{ section.id }} .ac-mpanel.is-active{ display:block !important; }
+
+    #ac-nav-{{ section.id }} .ac-mlist{
+      display:flex !important;
+      flex-direction:column !important;
+      gap: 12px !important;
+      padding: 16px 2px 0 2px !important;
+    }
+    #ac-nav-{{ section.id }} .ac-mlink,
+    #ac-nav-{{ section.id }} .ac-mnext{
+      display:flex !important;
+      align-items:center !important;
+      justify-content:space-between !important;
+      gap: 14px !important;
+      font-size: 34px !important;
+      line-height: 1.08 !important;
+      font-weight: 650 !important;
+      letter-spacing: -.02em !important;
+      border:0 !important;
+      background:transparent !important;
+      padding: 6px 0 !important;
+      cursor:pointer !important;
+    }
+    #ac-nav-{{ section.id }} .ac-mnext span.chev{
+      font-size: 24px !important;
+      opacity:.45 !important;
+      transform: translateY(1px) !important;
+    }
+
+    #ac-nav-{{ section.id }} .ac-msubh{
+      margin: 16px 0 8px 0 !important;
+      font-size: 12px !important;
+      letter-spacing:.12em !important;
+      text-transform:uppercase !important;
+      opacity:.6 !important;
+    }
+    #ac-nav-{{ section.id }} .ac-msearch{
+      width: 100% !important;
+      height: 44px !important;
+      border-radius: 12px !important;
+      border: 1px solid rgba(0,0,0,0.10) !important;
+      background: rgba(0,0,0,0.03) !important;
+      padding: 0 12px !important;
+      font-size: 14px !important;
+      outline:none !important;
+    }
+    #ac-nav-{{ section.id }} .ac-msmall a{
+      display:block !important;
+      padding: 10px 0 !important;
+      font-size: 17px !important;
+      font-weight: 600 !important;
+      letter-spacing: -.01em !important;
+      border-bottom: 1px solid rgba(0,0,0,0.06) !important;
+    }
+
+    /* ===== Cart drawer (Apple clean) ===== */
+    #ac-nav-{{ section.id }} .ac-cart[hidden]{ display:none !important; }
+    #ac-nav-{{ section.id }} .ac-cart{
+      position: fixed !important;
+      inset: 0 !important;
+      z-index: 9998 !important;
+      display:flex !important;
+      justify-content:flex-end !important;
+    }
+    #ac-nav-{{ section.id }} .ac-cart-bg{
+      position:absolute !important;
+      inset:0 !important;
+      background: rgba(0,0,0,0.30) !important;
+      backdrop-filter: saturate(140%) blur(10px) !important;
+    }
+    #ac-nav-{{ section.id }} .ac-cart-panel{
+      position: relative !important;
+      width: min(420px, 92vw) !important;
+      height: 100% !important;
+      background:#fff !important;
+      border-left: 1px solid rgba(0,0,0,0.08) !important;
+      display:flex !important;
+      flex-direction:column !important;
+    }
+    #ac-nav-{{ section.id }} .ac-cart-top{
+      padding: 18px 18px 12px 18px !important;
+      display:flex !important;
+      align-items:flex-start !important;
+      justify-content:space-between !important;
+      gap: 12px !important;
+    }
+    #ac-nav-{{ section.id }} .ac-cart-h{
+      margin:0 !important;
+      font-size: 26px !important;
+      font-weight: 750 !important;
+      letter-spacing: -.02em !important;
+      line-height: 1.05 !important;
+    }
+    #ac-nav-{{ section.id }} .ac-cart-x{
+      width: 40px !important;height: 40px !important;
+      border-radius: 999px !important;
+      border: 1px solid rgba(0,0,0,0.10) !important;
+      background: rgba(0,0,0,0.03) !important;
+      cursor:pointer !important;
+      font-weight: 900 !important;
+    }
+    #ac-nav-{{ section.id }} .ac-cart-body{
+      padding: 0 18px 18px 18px !important;
+      overflow:auto !important;
+      -webkit-overflow-scrolling: touch !important;
+      flex: 1 1 auto !important;
+    }
+    #ac-nav-{{ section.id }} .ac-cart-item{
+      display:grid !important;
+      grid-template-columns: 56px 1fr auto !important;
+      gap: 12px !important;
+      padding: 14px 0 !important;
+      border-bottom: 1px solid rgba(0,0,0,0.06) !important;
+      align-items:center !important;
+    }
+    #ac-nav-{{ section.id }} .ac-cart-img{
+      width:56px !important;height:56px !important;
+      border-radius: 14px !important;
+      background: rgba(0,0,0,0.03) !important;
+      overflow:hidden !important;
+      border: 1px solid rgba(0,0,0,0.08) !important;
+    }
+    #ac-nav-{{ section.id }} .ac-cart-img img{ width:100% !important; height:100% !important; object-fit:cover !important; display:block !important; }
+    #ac-nav-{{ section.id }} .ac-cart-name{
+      font-size: 14px !important;
+      font-weight: 700 !important;
+      margin:0 !important;
+      line-height: 1.2 !important;
+    }
+    #ac-nav-{{ section.id }} .ac-cart-sub{
+      font-size: 12px !important;
+      opacity:.7 !important;
+      margin-top: 4px !important;
+    }
+    #ac-nav-{{ section.id }} .ac-cart-price{
+      font-size: 13px !important;
+      font-weight: 700 !important;
+      white-space:nowrap !important;
+      margin-left: 10px !important;
+    }
+    #ac-nav-{{ section.id }} .ac-cart-foot{
+      padding: 14px 18px 18px 18px !important;
+      border-top: 1px solid rgba(0,0,0,0.06) !important;
+    }
+    #ac-nav-{{ section.id }} .ac-cart-btn{
+      width:100% !important;
+      height: 46px !important;
+      border-radius: 999px !important;
+      border: 1px solid rgba(0,0,0,0.14) !important;
+      background:#fff !important;
+      font-weight: 800 !important;
+      cursor:pointer !important;
+      display:flex !important;
+      align-items:center !important;
+      justify-content:center !important;
+      gap: 10px !important;
+    }
+    #ac-nav-{{ section.id }} .ac-cart-btn--primary{
+      background:#0071e3 !important;
+      border-color:#0071e3 !important;
+      color:#fff !important;
+    }
+    #ac-nav-{{ section.id }} .ac-cart-total{
+      display:flex !important;
+      align-items:center !important;
+      justify-content:space-between !important;
+      font-size: 13px !important;
+      font-weight: 750 !important;
+      padding: 6px 2px 12px 2px !important;
+    }
+
+    /* ===== Responsive switches ===== */
+    @media (max-width: 960px){
+      #ac-nav-{{ section.id }} .ac-desk{ display:none !important; }
+      #ac-nav-{{ section.id }} .ac-mob{ display:flex !important; }
+      .ac-nav-spacer-{{ section.id }}{
+  height: var(--ac-nav-h) !important;
+}
+    }
+
+    .ac-menu{
+  z-index: 2147483647 !important;   /* maximal oben */
+  background: rgba(255,255,255,.98) !important;
+  transform: translateZ(0);          /* eigener Layer */
+}
+
+/* --- HARD FIX: Header IMMER über allem --- */
+#shopify-section-{{ section.id }}{
+  position: relative !important;
+  z-index: 2147483646 !important;
+  isolation: isolate !important; /* eigener Stacking Context, sauber */
+}
+
+#ac-nav-{{ section.id }}{
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 2147483647 !important; /* max safe int */
+  isolation: isolate !important;
+}
+
+
+#MainContent,
+main#MainContent,
+.main-content,
+#main,
+main{
+  position: relative !important;
+  z-index: 0 !important;
+}
+
+  </style>
+
+  {%- comment -%} ===== Desktop ===== {%- endcomment -%}
+  <div class="ac-desk">
+    <div class="ac-logo">
+      {% if section.settings.logo_image != blank %}
+        <a href="/" aria-label="Home">
+          <img src="{{ section.settings.logo_image | image_url: width: 160 }}" alt="artclub" />
+        </a>
+      {% else %}
+        <a class="ac-logo-fallback" href="/">artclub</a>
+      {% endif %}
+    </div>
+
+    <nav class="ac-menu" aria-label="Hauptnavigation">
+      {%- if section.settings.artworks_label != blank and section.settings.artworks_url != blank -%}
+        <div class="ac-item">
+          <a href="{{ section.settings.artworks_url }}" class="ac-link">{{ section.settings.artworks_label }}</a>
+        </div>
+      {%- endif -%}
+
+      {%- for block in section.blocks -%}
+        {% case block.type %}
+
+          {%- when 'meta_list' -%}
+            <div class="ac-item ac-item--has-children" {{ block.shopify_attributes }}>
+              <span class="ac-link" data-ac-desk-open>{{ block.settings.label | default: block.settings.heading }}</span>
+
+              <div class="ac-mega" aria-hidden="true">
+                <div class="ac-mega-in">
+                  <div>
+                    {% if block.settings.heading != blank %}
+                      <p class="ac-mega-h">{{ block.settings.heading }}</p>
+                    {% endif %}
+                    {% if block.settings.description != blank %}
+                      <p style="margin:0;font-size:13px;opacity:.8;line-height:1.5;">{{ block.settings.description }}</p>
+                    {% endif %}
+                  </div>
+
+                  <div>
+                    {%- assign def_handle = block.settings.meta_definition_handle -%}
+                    {%- if def_handle != blank -%}
+                      {%- assign items = shop.metaobjects[def_handle].values -%}
+
+                      {%- if block.settings.show_alpha -%}
+                        {%- assign letters = 'A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z' | split: ',' -%}
+                        <div class="ac-alpha" data-meta-list="{{ block.id }}">
+                          <button type="button" class="is-active" data-letter="all">Alle</button>
+                          {%- for letter in letters -%}
+                            <button type="button" data-letter="{{ letter }}">{{ letter }}</button>
+                          {%- endfor -%}
+                        </div>
+                      {%- endif -%}
+
+                      <div class="ac-items" data-meta-list="{{ block.id }}">
+                        {%- assign label_field = block.settings.label_field | default: 'name' -%}
+                        {%- for item in items -%}
+                          {%- assign label = item[label_field] | default: item.title | default: item.system.title | default: item.system.handle -%}
+                          {%- assign first_letter = label | slice: 0, 1 | upcase -%}
+                          <div class="ac-it" data-letter="{{ first_letter }}">
+                            <a href="{{ item.system.url }}">{{ label }}</a>
+                          </div>
+                        {%- endfor -%}
+                      </div>
+                    {%- endif -%}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          {%- when 'simple_link' -%}
+            <div class="ac-item" {{ block.shopify_attributes }}>
+              {% if block.settings.url != blank %}
+                <a href="{{ block.settings.url }}" class="ac-link">{{ block.settings.label }}</a>
+              {% else %}
+                <span class="ac-link">{{ block.settings.label }}</span>
+              {% endif %}
+            </div>
+
+          {%- when 'links_mega' -%}
+            <div class="ac-item ac-item--has-children" {{ block.shopify_attributes }}>
+              <span class="ac-link" data-ac-desk-open>{{ block.settings.label }}</span>
+
+              <div class="ac-mega" aria-hidden="true">
+                <div class="ac-mega-in">
+                  <div>
+                    {% if block.settings.heading != blank %}
+                      <p class="ac-mega-h">{{ block.settings.heading }}</p>
+                    {% endif %}
+                    {% if block.settings.description != blank %}
+                      <p style="margin:0;font-size:13px;opacity:.8;line-height:1.5;">{{ block.settings.description }}</p>
+                    {% endif %}
+                  </div>
+                  <div class="ac-items">
+                    {%- for i in (1..10) -%}
+                      {%- assign lk = 'link_' | append: i | append: '_label' -%}
+                      {%- assign uk = 'link_' | append: i | append: '_url' -%}
+                      {%- assign lab = block.settings[lk] -%}
+                      {%- assign url = block.settings[uk] -%}
+                      {%- if lab != blank -%}
+                        <a href="{{ url | default: '#' }}">{{ lab }}</a>
+                      {%- endif -%}
+                    {%- endfor -%}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+        {% endcase %}
+      {%- endfor -%}
+
+      {%- if section.settings.about_label != blank and section.settings.about_url != blank -%}
+        <div class="ac-item">
+          <a href="{{ section.settings.about_url }}" class="ac-link">{{ section.settings.about_label }}</a>
+        </div>
+      {%- endif -%}
+    </nav>
+
+    <div class="ac-actions">
+      {% if section.settings.show_search %}
+        <a href="/search"  class="ac-iconbtn" aria-label="Search" data-ac-searc>
+      
+          <svg class="ac-ic" viewBox="0 0 17 17" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.5" stroke="currentColor" fill="none" stroke-width="1.2"/>
+            <line x1="10.5" y1="10.5" x2="15" y2="15" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+      </a>
+      {% endif %}
+
+      {% if section.settings.show_cart %}
+        <button type="button" class="ac-iconbtn" aria-label="Bag" data-ac-cart-open>
+<svg height="44" viewBox="0 0 14 44" width="18" xmlns="http://www.w3.org/2000/svg" style="
+    margin-bottom: -4px;
+"><path d="m11.3535 16.0283h-1.0205a3.4229 3.4229 0 0 0 -3.333-2.9648 3.4229 3.4229 0 0 0 -3.333 2.9648h-1.02a2.1184 2.1184 0 0 0 -2.117 2.1162v7.7155a2.1186 2.1186 0 0 0 2.1162 2.1167h8.707a2.1186 2.1186 0 0 0 2.1168-2.1167v-7.7155a2.1184 2.1184 0 0 0 -2.1165-2.1162zm-4.3535-1.8652a2.3169 2.3169 0 0 1 2.2222 1.8652h-4.4444a2.3169 2.3169 0 0 1 2.2222-1.8652zm5.37 11.6969a1.0182 1.0182 0 0 1 -1.0166 1.0171h-8.7069a1.0182 1.0182 0 0 1 -1.0165-1.0171v-7.7155a1.0178 1.0178 0 0 1 1.0166-1.0166h8.707a1.0178 1.0178 0 0 1 1.0164 1.0166z"></path></svg>
+  <span class="ac-badge ac-cart-count" data-ac-cart-count
+    {% if cart.item_count == 0 %}style="display:none"{% endif %}>
+    {{ cart.item_count }}
+  </span>
+</button>
+
+      {% endif %}
+    </div>
+  </div>
+
+  {%- comment -%} ===== Mobile ===== {%- endcomment -%}
+  <div class="ac-mob">
+    <div class="ac-mob-left">
+      {% if section.settings.logo_image != blank %}
+        <a href="/" aria-label="Home">
+          <img src="{{ section.settings.logo_image | image_url: width: 160 }}" alt="artclub" />
+        </a>
+      {% else %}
+        <a href="/" class="ac-logo-fallback">artclub</a>
+      {% endif %}
+    </div>
+
+    <div class="ac-mob-right">
+      {% if section.settings.show_search %}
+                <a href="/search"  class="ac-iconbtn" aria-label="Search" data-ac-searc>
+      
+          <svg class="ac-ic" viewBox="0 0 17 17" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.5" stroke="currentColor" fill="none" stroke-width="1.2"/>
+            <line x1="10.5" y1="10.5" x2="15" y2="15" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+      </a>
+      {% endif %}
+
+      {% if section.settings.show_cart %}
+        <button type="button" class="ac-iconbtn" aria-label="Bag" data-ac-cart-open>
+<svg height="44" viewBox="0 0 14 44" width="18" xmlns="http://www.w3.org/2000/svg" style="
+    margin-bottom: -4px;
+"><path d="m11.3535 16.0283h-1.0205a3.4229 3.4229 0 0 0 -3.333-2.9648 3.4229 3.4229 0 0 0 -3.333 2.9648h-1.02a2.1184 2.1184 0 0 0 -2.117 2.1162v7.7155a2.1186 2.1186 0 0 0 2.1162 2.1167h8.707a2.1186 2.1186 0 0 0 2.1168-2.1167v-7.7155a2.1184 2.1184 0 0 0 -2.1165-2.1162zm-4.3535-1.8652a2.3169 2.3169 0 0 1 2.2222 1.8652h-4.4444a2.3169 2.3169 0 0 1 2.2222-1.8652zm5.37 11.6969a1.0182 1.0182 0 0 1 -1.0166 1.0171h-8.7069a1.0182 1.0182 0 0 1 -1.0165-1.0171v-7.7155a1.0178 1.0178 0 0 1 1.0166-1.0166h8.707a1.0178 1.0178 0 0 1 1.0164 1.0166z"></path></svg>
+  <span class="ac-badge ac-cart-count" data-ac-cart-count
+    {% if cart.item_count == 0 %}style="display:none"{% endif %}>
+    {{ cart.item_count }}
+  </span>
+</button>
+
+      {% endif %}
+
+      <button type="button" class="ac-iconbtn" aria-label="Menu" data-ac-mmenu-open>
+        <svg class="ac-ic" viewBox="0 0 20 20" aria-hidden="true">
+          <line x1="3" y1="6" x2="17" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="3" y1="10" x2="17" y2="10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="3" y1="14" x2="17" y2="14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  {%- comment -%} ===== Mobile Fullscreen Menu ===== {%- endcomment -%}
+  <div class="ac-mmenu" data-ac-mmenu hidden>
+    <div class="ac-mtop">
+      <button class="ac-mbtn" type="button" aria-label="Back" data-ac-mmenu-back style="visibility:hidden;">
+        <svg class="ac-ic" viewBox="0 0 18 18" aria-hidden="true">
+          <path d="M11.5 3.5 6.5 9l5 5.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div class="ac-mtitle" data-ac-mmenu-title>Menu</div>
+      <button class="ac-mbtn" type="button" aria-label="Close" data-ac-mmenu-close>
+        <svg class="ac-ic" viewBox="0 0 18 18" aria-hidden="true">
+          <path d="M4.5 4.5 13.5 13.5M13.5 4.5 4.5 13.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Root panel -->
+    <div class="ac-mpanel is-active" data-panel="root">
+      <div class="ac-mlist">
+        {% if section.settings.artworks_label != blank and section.settings.artworks_url != blank %}
+          <a class="ac-mlink" href="{{ section.settings.artworks_url }}">{{ section.settings.artworks_label }}</a>
+        {% endif %}
+
+        {%- for block in section.blocks -%}
+          {% case block.type %}
+
+            {% when 'simple_link' %}
+              {% if block.settings.url != blank %}
+                <a class="ac-mlink" href="{{ block.settings.url }}">{{ block.settings.label }}</a>
+              {% else %}
+                <span class="ac-mlink" style="opacity:.6;cursor:default;">{{ block.settings.label }}</span>
+              {% endif %}
+
+            {% when 'meta_list' %}
+              <button class="ac-mnext" type="button" data-open="panel-{{ block.id }}">
+                <span>{{ block.settings.label | default: block.settings.heading }}</span>
+                <span class="chev">›</span>
+              </button>
+
+            {% when 'links_mega' %}
+              <button class="ac-mnext" type="button" data-open="panel-{{ block.id }}">
+                <span>{{ block.settings.label }}</span>
+                <span class="chev">›</span>
+              </button>
+
+          {% endcase %}
+        {%- endfor -%}
+
+        {% if section.settings.about_label != blank and section.settings.about_url != blank %}
+          <a class="ac-mlink" href="{{ section.settings.about_url }}">{{ section.settings.about_label }}</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Sub panels -->
+    {%- for block in section.blocks -%}
+      {% if block.type == 'meta_list' %}
+        <div class="ac-mpanel" data-panel="panel-{{ block.id }}" data-panel-title="{{ block.settings.label | default: block.settings.heading | escape }}">
+          <p class="ac-msubh">{{ block.settings.heading | default: block.settings.label }}</p>
+          <input class="ac-msearch" type="search" placeholder="Search" data-ac-msearch>
+
+          <div class="ac-msmall" style="margin-top:10px;">
+            {%- assign def_handle = block.settings.meta_definition_handle -%}
+            {%- if def_handle != blank -%}
+              {%- assign items = shop.metaobjects[def_handle].values -%}
+              {%- assign label_field = block.settings.label_field | default: 'name' -%}
+              {%- for item in items -%}
+                {%- assign label = item[label_field] | default: item.title | default: item.system.title | default: item.system.handle -%}
+                <a href="{{ item.system.url }}" data-ac-mlabel="{{ label | escape }}">{{ label }}</a>
+              {%- endfor -%}
+            {%- endif -%}
+          </div>
+        </div>
+      {% endif %}
+
+      {% if block.type == 'links_mega' %}
+        <div class="ac-mpanel" data-panel="panel-{{ block.id }}" data-panel-title="{{ block.settings.label | escape }}">
+          <p class="ac-msubh">{{ block.settings.heading | default: block.settings.label }}</p>
+
+          <div class="ac-msmall" style="margin-top:8px;">
+            {%- for i in (1..10) -%}
+              {%- assign lk = 'link_' | append: i | append: '_label' -%}
+              {%- assign uk = 'link_' | append: i | append: '_url' -%}
+              {%- assign lab = block.settings[lk] -%}
+              {%- assign url = block.settings[uk] -%}
+              {%- if lab != blank -%}
+                <a href="{{ url | default: '#' }}">{{ lab }}</a>
+              {%- endif -%}
+            {%- endfor -%}
+          </div>
+        </div>
+      {% endif %}
+    {%- endfor -%}
+  </div>
+
+  {%- comment -%} ===== Cart Drawer ===== {%- endcomment -%}
+  <div class="ac-cart" data-ac-cart hidden>
+    <div class="ac-cart-bg" data-ac-cart-close></div>
+    <div class="ac-cart-panel" role="dialog" aria-modal="true" aria-label="Cart">
+      <div class="ac-cart-top">
+        <h3 class="ac-cart-h">Einkaufstasche</h3>
+        <button class="ac-cart-x" type="button" aria-label="Close" data-ac-cart-close>×</button>
+      </div>
+
+      <div class="ac-cart-body" data-ac-cart-body>
+        <div style="opacity:.7;font-size:14px;padding:8px 2px;">Loading…</div>
+      </div>
+
+      <div class="ac-cart-foot">
+        <div class="ac-cart-total">
+          <span>Gesamt</span>
+          <span data-ac-cart-total>—</span>
+        </div>
+        <a class="ac-cart-btn ac-cart-btn--primary" href="/checkout">Checkout</a>
+        <div style="height:10px"></div>
+        <a class="ac-cart-btn" href="{{ routes.cart_url }}">Einkaufstasche ansehen</a>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function(){
+      var root = document.getElementById('ac-nav-{{ section.id }}');
+      if(!root) return;
+
+      /* ===== Search trigger: reuse existing theme search button if available ===== */
+      root.querySelectorAll('[data-ac-search]').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          var themeTrigger = document.querySelector('[data-header-search-trigger]');
+          if(themeTrigger) themeTrigger.click();
+        });
+      });
+
+      /* ===== Desktop mega open/close ===== */
+      root.querySelectorAll('.ac-item--has-children').forEach(function(item){
+        var mega = item.querySelector('.ac-mega');
+        if(!mega) return;
+
+        function open(){ item.classList.add('is-open'); }
+        function closeWithDelay(){
+          setTimeout(function(){
+            if(!item.matches(':hover') && !mega.matches(':hover')){
+              item.classList.remove('is-open');
+            }
+          }, 80);
+        }
+
+        item.addEventListener('mouseenter', open);
+        item.addEventListener('mouseleave', closeWithDelay);
+        mega.addEventListener('mouseenter', open);
+        mega.addEventListener('mouseleave', closeWithDelay);
+
+        // Click toggle for touch devices
+        var trigger = item.querySelector('[data-ac-desk-open]');
+        if(trigger){
+          trigger.addEventListener('click', function(e){
+            e.preventDefault();
+            item.classList.toggle('is-open');
+          });
+        }
+      });
+
+      /* A–Z filter in desktop mega */
+      root.querySelectorAll('.ac-alpha').forEach(function(alphaWrap){
+        var listId = alphaWrap.getAttribute('data-meta-list');
+        var listEl = root.querySelector('.ac-items[data-meta-list="'+listId+'"]');
+        if(!listEl) return;
+
+        alphaWrap.querySelectorAll('button').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            var letter = btn.getAttribute('data-letter');
+            alphaWrap.querySelectorAll('button').forEach(function(b){
+              b.classList.toggle('is-active', b === btn);
+            });
+            listEl.querySelectorAll('.ac-it').forEach(function(it){
+              var itLetter = it.getAttribute('data-letter');
+              it.style.display = (letter === 'all' || itLetter === letter) ? '' : 'none';
+            });
+          });
+        });
+      });
+
+      /* ===== Mobile menu (Apple-like) ===== */
+      var mmenu = root.querySelector('[data-ac-mmenu]');
+      var openMenuBtn = root.querySelector('[data-ac-mmenu-open]');
+      var closeMenuBtn = root.querySelector('[data-ac-mmenu-close]');
+      var backBtn = root.querySelector('[data-ac-mmenu-back]');
+      var titleEl = root.querySelector('[data-ac-mmenu-title]');
+      var panels = root.querySelectorAll('.ac-mpanel');
+
+      var stack = ['root'];
+
+function showPanel(id, dir){
+  dir = dir || 'forward';
+
+  var current = root.querySelector('.ac-mpanel.is-active');
+  var next = root.querySelector('.ac-mpanel[data-panel="'+id+'"]');
+  if(!next) return;
+
+  // title + back visibility
+  var isRoot = (id === 'root');
+  backBtn.style.visibility = isRoot ? 'hidden' : 'visible';
+  var t = isRoot ? 'Menu' : (next.getAttribute('data-panel-title') || 'Menu');
+  if(titleEl) titleEl.textContent = t;
+
+  if(current === next) return;
+
+  // animate current out
+  if(current){
+    current.classList.remove('is-active');
+  }
+
+  // animate next in
+  next.classList.add('is-active');
+
+  // direction: forward/back (simple subtle push)
+  if(dir === 'back'){
+    next.style.transform = 'translateX(-10px)';
+    next.style.opacity = '0';
+    requestAnimationFrame(function(){
+      next.style.transform = '';
+      next.style.opacity = '';
+    });
+  } else {
+    next.style.transform = 'translateX(10px)';
+    next.style.opacity = '0';
+    requestAnimationFrame(function(){
+      next.style.transform = '';
+      next.style.opacity = '';
+    });
+  }
+}
+
+      function openMenu(){
+  if(!mmenu) return;
+  mmenu.hidden = false;
+  requestAnimationFrame(function(){
+    mmenu.classList.add('is-open');
+  });
+  document.documentElement.style.overflow = 'hidden';
+  stack = ['root'];
+  showPanel('root', 'forward');
+}
+
+function closeMenu(){
+  if(!mmenu) return;
+  mmenu.classList.remove('is-open');
+  document.documentElement.style.overflow = '';
+  setTimeout(function(){
+    mmenu.hidden = true;
+  }, 220);
+}
+
+
+      function back(){
+        if(stack.length <= 1) return;
+        stack.pop();
+showPanel(stack[stack.length - 1], 'back');
+      }
+
+      if(openMenuBtn) openMenuBtn.addEventListener('click', openMenu);
+      if(closeMenuBtn) closeMenuBtn.addEventListener('click', closeMenu);
+      if(backBtn) backBtn.addEventListener('click', back);
+
+      // Open subpanel
+      root.querySelectorAll('[data-open]').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          var id = btn.getAttribute('data-open');
+          stack.push(id);
+          showPanel(id);
+        });
+      });
+
+      // Search inside mobile meta panels
+      root.querySelectorAll('.ac-mpanel [data-ac-msearch]').forEach(function(inp){
+        inp.addEventListener('input', function(){
+          var val = (inp.value || '').trim().toLowerCase();
+          var panel = inp.closest('.ac-mpanel');
+          if(!panel) return;
+          panel.querySelectorAll('[data-ac-mlabel]').forEach(function(a){
+            var label = (a.getAttribute('data-ac-mlabel') || '').toLowerCase();
+            a.style.display = (!val || label.indexOf(val) !== -1) ? '' : 'none';
+          });
+        });
+      });
+
+      document.addEventListener('keydown', function(e){
+        if(e.key === 'Escape'){
+          closeMenu();
+          closeCart();
+        }
+      });
+
+      /* ===== Cart drawer ===== */
+      var cart = root.querySelector('[data-ac-cart]');
+      var cartBody = root.querySelector('[data-ac-cart-body]');
+      var cartTotalEl = root.querySelector('[data-ac-cart-total]');
+      var cartOpenBtns = root.querySelectorAll('[data-ac-cart-open]');
+      var cartCloseEls = root.querySelectorAll('[data-ac-cart-close]');
+      var cartCountEls = root.querySelectorAll('[data-ac-cart-count]');
+
+      function setCounts(count){
+        cartCountEls.forEach(function(el){
+          if(!el) return;
+          el.textContent = String(count || 0);
+          el.style.display = (count && count > 0) ? '' : 'none';
+        });
+      }
+
+      function money(cents){
+        try{
+          return (cents/100).toLocaleString(undefined, { style:'currency', currency: {{ cart.currency.iso_code | json }} });
+        }catch(e){
+          return (cents/100).toFixed(2);
+        }
+      }
+
+      function renderCart(data){
+        if(!cartBody) return;
+        if(!data || !data.items) return;
+
+        if(data.items.length === 0){
+          cartBody.innerHTML = '<div style="opacity:.7;font-size:14px;padding:8px 2px;">Deine Einkaufstasche ist leer.</div>';
+        }else{
+          cartBody.innerHTML = data.items.map(function(it){
+            var img = it.image ? ('<div class="ac-cart-img"><img src="'+it.image+'" alt=""></div>') : '<div class="ac-cart-img"></div>';
+            var line = (it.variant_title && it.variant_title !== 'Default Title') ? it.variant_title : '';
+            return '' +
+              '<div class="ac-cart-item">' +
+                img +
+                '<div>' +
+                  '<p class="ac-cart-name">'+(it.product_title || '')+'</p>' +
+                  (line ? '<div class="ac-cart-sub">'+line+'</div>' : '') +
+                  '<div class="ac-cart-sub">Qty '+it.quantity+'</div>' +
+                '</div>' +
+                '<div class="ac-cart-price">'+money(it.final_line_price)+'</div>' +
+              '</div>';
+          }).join('');
+        }
+
+        if(cartTotalEl) cartTotalEl.textContent = money(data.total_price || 0);
+        setCounts(data.item_count || 0);
+      }
+
+      function fetchCart(){
+        return fetch('/cart.js', { credentials:'same-origin' })
+          .then(function(r){ return r.json(); })
+          .then(function(data){ renderCart(data); return data; })
+          .catch(function(){
+            if(cartBody) cartBody.innerHTML = '<div style="opacity:.7;font-size:14px;padding:8px 2px;">Cart could not be loaded.</div>';
+          });
+      }
+
+function openCart(){
+  if(!cart) return;
+  cart.hidden = false;
+  requestAnimationFrame(function(){
+    cart.classList.add('is-open');
+  });
+  document.documentElement.style.overflow = 'hidden';
+  fetchCart();
+}
+
+function closeCart(){
+  if(!cart) return;
+  cart.classList.remove('is-open');
+  document.documentElement.style.overflow = '';
+  setTimeout(function(){
+    cart.hidden = true;
+  }, 260);
+}
+
+
+      cartOpenBtns.forEach(function(btn){
+        btn.addEventListener('click', function(e){
+          e.preventDefault();
+          openCart();
+        });
+      });
+      cartCloseEls.forEach(function(el){
+        el.addEventListener('click', function(){ closeCart(); });
+      });
+
+      /* ===== Intercept add-to-cart to prevent /cart redirect =====
+         - Works for standard forms posting to /cart/add
+         - Uses /cart/add.js + opens drawer
+      */
+      document.addEventListener('submit', function(e){
+        var form = e.target;
+        if(!form || !(form instanceof HTMLFormElement)) return;
+
+        var action = (form.getAttribute('action') || '').toLowerCase();
+        if(action.indexOf('/cart/add') === -1) return;
+
+        // Prevent theme redirect/handlers
+        e.preventDefault();
+        if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+
+        var fd = new FormData(form);
+
+        fetch('/cart/add.js', {
+          method:'POST',
+          credentials:'same-origin',
+          headers: { 'Accept':'application/json' },
+          body: fd
+        })
+        .then(function(r){
+          if(!r.ok) return r.json().then(function(err){ throw err; });
+          return r.json();
+        })
+        .then(function(){
+          openCart();
+          return fetchCart();
+        })
+        .catch(function(err){
+          console.error('Add-to-cart failed', err);
+          openCart();
+          if(cartBody){
+            cartBody.innerHTML = '<div style="opacity:.7;font-size:14px;padding:8px 2px;">Could not add to cart.</div>';
+          }
+        });
+      }, true);
+
+      // Initial count sync from Liquid
+      setCounts({{ cart.item_count | default: 0 | json }});
+    })();
+  </script>
+</header>
+<style>
+
+  /* ===== Desktop Mega (animated) ===== */
+#ac-nav-{{ section.id }} .ac-mega{
+  display:block !important;              /* wichtig: nicht mehr display:none */
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+
+  transform: translateX(-50%) translateY(-8px) !important;
+  transition:
+    opacity .18s ease,
+    transform .22s cubic-bezier(.2,.8,.2,1),
+    visibility 0s linear .22s !important;
+  will-change: opacity, transform !important;
+}
+
+#ac-nav-{{ section.id }} .ac-item--has-children.is-open .ac-mega{
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  transform: translateX(-50%) translateY(0) !important;
+  transition:
+    opacity .18s ease,
+    transform .22s cubic-bezier(.2,.8,.2,1),
+    visibility 0s linear 0s !important;
+}
+/* ===== Mobile full-screen menu (animated) ===== */
+#ac-nav-{{ section.id }} .ac-mmenu{
+  opacity: 0 !important;
+  transform: translateY(8px) !important;
+  transition: opacity .18s ease, transform .22s cubic-bezier(.2,.8,.2,1) !important;
+  pointer-events: none !important;
+}
+
+#ac-nav-{{ section.id }} .ac-mmenu.is-open{
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+  pointer-events: auto !important;
+}
+/* ===== Mobile panels (animated push) ===== */
+#ac-nav-{{ section.id }} .ac-mpanel{
+  display:block !important; /* nicht display:none */
+  opacity: 0 !important;
+  transform: translateX(10px) !important;
+  transition: opacity .16s ease, transform .22s cubic-bezier(.2,.8,.2,1) !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  left: 14px !important;
+  right: 14px !important;
+  top: 64px !important;     /* unter top bar */
+  bottom: 18px !important;
+  margin-top: 0 !important;
+}
+
+#ac-nav-{{ section.id }} .ac-mpanel.is-active{
+  opacity: 1 !important;
+  transform: translateX(0) !important;
+  pointer-events: auto !important;
+}
+
+#ac-nav-{{ section.id }} .ac-mmenu{
+  position: fixed !important;
+  inset: 0 !important;
+}
+
+/* Container für absolute Panels */
+#ac-nav-{{ section.id }} .ac-mmenu{ position: fixed !important; }
+/* ===== Cart drawer (animated) ===== */
+#ac-nav-{{ section.id }} .ac-cart{
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity .18s ease !important;
+}
+
+#ac-nav-{{ section.id }} .ac-cart.is-open{
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+#ac-nav-{{ section.id }} .ac-cart-bg{
+  opacity: 0 !important;
+  transition: opacity .18s ease !important;
+}
+
+#ac-nav-{{ section.id }} .ac-cart.is-open .ac-cart-bg{
+  opacity: 1 !important;
+}
+
+#ac-nav-{{ section.id }} .ac-cart-panel{
+  transform: translateX(18px) !important;
+  transition: transform .24s cubic-bezier(.2,.8,.2,1) !important;
+  will-change: transform !important;
+}
+
+#ac-nav-{{ section.id }} .ac-cart.is-open .ac-cart-panel{
+  transform: translateX(0) !important;
+}
+
+/* Reduce motion */
+@media (prefers-reduced-motion: reduce){
+  #ac-nav-{{ section.id }} .ac-mega,
+  #ac-nav-{{ section.id }} .ac-mmenu,
+  #ac-nav-{{ section.id }} .ac-mpanel,
+  #ac-nav-{{ section.id }} .ac-cart,
+  #ac-nav-{{ section.id }} .ac-cart-bg,
+  #ac-nav-{{ section.id }} .ac-cart-panel{
+    transition: none !important;
+  }
+}
+
+#ac-nav-{{ section.id }} .ac-ic{
+  width:17px !important;
+  height:17px !important;
+  display:block !important;
+}
+
+/* Make badge overlay the icon (Apple-like) */
+#ac-nav-{{ section.id }} .ac-iconbtn{
+  position: relative !important;
+  line-height: 0 !important;
+}
+
+/* overwrite your current badge styles */
+#ac-nav-{{ section.id }} .ac-badge{
+  position: absolute !important;
+  top: -7px !important;
+  right: -9px !important;
+
+  margin-left: 0 !important;
+  transform: none !important;
+
+  min-width: 18px !important;
+  height: 18px !important;
+  padding: 0 6px !important;
+
+  border-radius: 999px !important;
+  font-size: 10px !important;
+  line-height: 18px !important;
+}
+/* Make icon buttons a consistent square + allow badge overlay */
+#ac-nav-{{ section.id }} .ac-iconbtn{
+  position: relative !important;
+  width: 34px !important;
+  height: 34px !important;
+  line-height: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Slightly bigger icon, Apple-like */
+#ac-nav-{{ section.id }} .ac-ic{
+  width: 18px !important;
+  height: 18px !important;
+  display: block !important;
+}
+
+/* Badge overlay (no layout push) */
+ 
+#ac-nav-{{ section.id }} .ac-badge
+ {
+    position: absolute !important;
+    top: 18px !important;
+    right: 2px !important;
+    margin-left: 0 !important;
+    transform: none !important;
+    min-width: 8px !important;
+    max-width: 13px;
+    height: 13px !important;
+    padding: 0 6px !important;
+    font-size: 8px !important;
+}
+
+#ac-nav-{{ section.id }} .ac-desk {
+    max-width: 980px !important;
+    margin: 0 auto !important;
+    padding: 10px 24px !important;
+    grid-template-columns: auto 1fr auto !important;
+    align-items: center !important;
+    gap: 24px !important;
+}
+
+
+</style>
+
+<div class="ac-nav-spacer-{{ section.id }}"><br></div>
+<script>
+(function(){
+  var nav = document.getElementById('ac-nav-{{ section.id }}');
+  var spacer = document.querySelector('.ac-nav-spacer-{{ section.id }}');
+  if(!nav || !spacer) return;
+
+  var last = 0;
+  function sync(){
+    var h = Math.ceil(nav.getBoundingClientRect().height);
+    if(!h || h === last) return;
+    last = h;
+    spacer.style.height = h + 'px';
+    document.documentElement.style.setProperty('--ac-nav-h', h + 'px');
+  }
+
+  sync();
+
+  if (window.ResizeObserver) {
+    new ResizeObserver(sync).observe(nav);
+  }
+  window.addEventListener('resize', sync, { passive: true });
+
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(sync).catch(function(){});
+  }
+
+  setTimeout(sync, 250);
+})();
+</script>
+
+{% schema %}
+{
+  "name": "AC Apple Navbar",
+  "settings": [
+    {
+      "type": "image_picker",
+      "id": "logo_image",
+      "label": "Logo-Bild",
+      "info": "SVG, PNG oder WebP empfohlen"
+    },
+    {
+      "type": "text",
+      "id": "artworks_label",
+      "label": "Label für Artworks",
+      "default": "Artworks"
+    },
+    {
+      "type": "url",
+      "id": "artworks_url",
+      "label": "Link für Artworks (z. B. /collections/artworks)"
+    },
+    {
+      "type": "text",
+      "id": "about_label",
+      "label": "Label für About",
+      "default": "About"
+    },
+    {
+      "type": "url",
+      "id": "about_url",
+      "label": "Link für About-Seite"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_search",
+      "label": "Suche-Icon anzeigen",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_cart",
+      "label": "Warenkorb-Icon anzeigen",
+      "default": true
+    }
+  ],
+  "blocks": [
+    {
+      "type": "meta_list",
+      "name": "Meta-Menü (A–Z)",
+      "settings": [
+        { "type": "text", "id": "label", "label": "Titel in Navbar", "default": "Artists" },
+        { "type": "text", "id": "heading", "label": "Überschrift im Mega-Menü", "default": "Alle Artists" },
+        { "type": "textarea", "id": "description", "label": "Beschreibung im Mega-Menü", "default": "Beschreibung hier einfügen." },
+        { "type": "text", "id": "meta_definition_handle", "label": "Metaobject-Definition Handle (z. B. \"kunstler\")", "default": "kunstler" },
+        { "type": "text", "id": "label_field", "label": "Feldname für Titel (z. B. \"name\" oder \"title\")", "default": "name" },
+        { "type": "checkbox", "id": "show_alpha", "label": "Alphabetische Filter (A–Z) anzeigen", "default": true }
+      ]
+    },
+    {
+      "type": "simple_link",
+      "name": "Einfacher Link",
+      "settings": [
+        { "type": "text", "id": "label", "label": "Titel in Navbar", "default": "Blog" },
+        { "type": "url", "id": "url", "label": "Link-URL" }
+      ]
+    },
+    {
+      "type": "links_mega",
+      "name": "Custom Mega-Menü (Links)",
+      "settings": [
+        { "type": "text", "id": "label", "label": "Titel in Navbar", "default": "Stories" },
+        { "type": "text", "id": "heading", "label": "Überschrift im Mega-Menü", "default": "Stories & Formate" },
+        { "type": "textarea", "id": "description", "label": "Beschreibung im Mega-Menü", "default": "Beschreibung hier einfügen." },
+
+        { "type": "text", "id": "link_1_label", "label": "Link 1 – Label", "default": "Blog" },
+        { "type": "url",  "id": "link_1_url",   "label": "Link 1 – URL" },
+
+        { "type": "text", "id": "link_2_label", "label": "Link 2 – Label", "default": "Interviews" },
+        { "type": "url",  "id": "link_2_url",   "label": "Link 2 – URL" },
+
+        { "type": "text", "id": "link_3_label", "label": "Link 3 – Label", "default": "Behind the Scenes" },
+        { "type": "url",  "id": "link_3_url",   "label": "Link 3 – URL" },
+
+        { "type": "text", "id": "link_4_label", "label": "Link 4 – Label", "default": "Presse" },
+        { "type": "url",  "id": "link_4_url",   "label": "Link 4 – URL" },
+
+        { "type": "text", "id": "link_5_label", "label": "Link 5 – Label", "default": "Newsletter" },
+        { "type": "url",  "id": "link_5_url",   "label": "Link 5 – URL" },
+
+        { "type": "text", "id": "link_6_label", "label": "Link 6 – Label", "default": "Link 6" },
+        { "type": "url",  "id": "link_6_url",   "label": "Link 6 – URL" },
+
+        { "type": "text", "id": "link_7_label", "label": "Link 7 – Label", "default": "Link 7" },
+        { "type": "url",  "id": "link_7_url",   "label": "Link 7 – URL" },
+
+        { "type": "text", "id": "link_8_label", "label": "Link 8 – Label", "default": "Link 8" },
+        { "type": "url",  "id": "link_8_url",   "label": "Link 8 – URL" },
+
+        { "type": "text", "id": "link_9_label", "label": "Link 9 – Label", "default": "Link 9" },
+        { "type": "url",  "id": "link_9_url",   "label": "Link 9 – URL" },
+
+        { "type": "text", "id": "link_10_label", "label": "Link 10 – Label", "default": "Link 10" },
+        { "type": "url",  "id": "link_10_url",   "label": "Link 10 – URL" }
+      ]
+    }
+  ],
+  "max_blocks": 20,
+  "presets": [
+    { "name": "AC Apple Navbar – Artclub (v2)", "category": "ARTCLUB" }
+  ]
+}
+{% endschema %}
+

@@ -1,0 +1,26 @@
+{
+  "sections": {
+    "custom_liquid_bmAAzM": {
+      "type": "custom-liquid",
+      "name": "t:sections.custom-liquid.presets.name",
+      "settings": {
+        "custom_liquid": "{% assign artist_url = metaobject.app_url.value %}\n{% assign artist_slug = metaobject.system.handle | default: '' %}\n{% assign artist_page_handle = metaobject.system.handle | default: '' %}\n{% assign artist_metaobject_id = metaobject.system.id | default: '' %}\n{% assign artist_page_url = metaobject.system.url | default: request.path %}\n{% assign artist_name = metaobject.name | default: metaobject.system.title | default: 'Artist' %}\n{% assign artist_embed_key = artist_metaobject_id | default: artist_slug | default: artist_page_handle | default: 'artist-embed' %}\n{% assign artist_embed_key_encoded = artist_embed_key | url_encode %}\n{% assign artist_query = 'embed=1' %}\n{% if artist_embed_key != blank %}{% assign artist_query = artist_query | append: '&artclub_embed_key=' | append: artist_embed_key_encoded %}{% endif %}\n{% if artist_url contains '?' %}{% assign artist_iframe_url = artist_url | append: '&' | append: artist_query %}{% else %}{% assign artist_iframe_url = artist_url | append: '?' | append: artist_query %}{% endif %}\n\n<div class=\"artist-embed-wrap\"\n  data-artclub-track-impression=\"artist\"\n  data-artclub-track-view=\"artist\"\n  data-artclub-source=\"shopify_artist_embed\"\n  data-artclub-embed-key=\"{{ artist_embed_key | escape }}\"\n  data-artclub-page-url=\"{{ artist_page_url }}\"\n  {% if artist_page_handle != blank %}data-artclub-page-handle=\"{{ artist_page_handle }}\"{% endif %}\n  data-artclub-artist-name=\"{{ artist_name | escape }}\"\n  {% if artist_slug != blank %}data-artclub-artist-slug=\"{{ artist_slug }}\"{% endif %}\n  {% if artist_metaobject_id != blank %}data-artclub-artist-metaobject-id=\"{{ artist_metaobject_id }}\"{% endif %}>\n  <iframe\n    id=\"artist-embed\"\n    data-artclub-artist-embed=\"true\"\n    data-artclub-embed-key=\"{{ artist_embed_key | escape }}\"\n    src=\"{{ artist_iframe_url }}\"\n    loading=\"lazy\"\n    style=\"width: 100%; min-height: 900px; border: 0;\"\n    allow=\"clipboard-read; clipboard-write\">\n  </iframe>\n</div>\n\n<script>\n  window.addEventListener('message', function(event) {\n    if (!event.data || event.data.type !== 'artclub-artist-height') return;\n    var iframe = document.querySelector('iframe[data-artclub-artist-embed=\"true\"]');\n    if (!iframe || !event.data.height) return;\n    var embedKey = iframe.getAttribute('data-artclub-embed-key') || '';\n    if (event.data.embedKey && embedKey && embedKey !== event.data.embedKey) return;\n    iframe.style.height = event.data.height + 'px';\n  });\n</script>",
+        "color_scheme": "",
+        "padding_top": 0,
+        "padding_bottom": 0
+      }
+    },
+    "custom_liquid_84tbfa": {
+      "type": "custom-liquid",
+      "disabled": true,
+      "name": "t:sections.custom-liquid.presets.name",
+      "settings": {
+        "custom_liquid": "<style>\np{\nfont-size: 1.7rem!important;\nline-height: 1.6!important;\n}\n\nh4, .h4, h3, .h3, h2, .h2{\nfont-size: 1.8rem!important;\nline-height: 1.6!important;\n}\n\nh2, .h2{\nfont-size: 2.8rem!important;\nline-height: 1.6!important;\n}\n</style>",
+        "color_scheme": "",
+        "padding_top": 0,
+        "padding_bottom": 0
+      }
+    }
+  },
+  "order": ["custom_liquid_bmAAzM", "custom_liquid_84tbfa"]
+}

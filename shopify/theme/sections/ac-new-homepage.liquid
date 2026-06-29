@@ -1,0 +1,670 @@
+{% comment %}
+  AC Apple Style Home Grid – v2
+  - Hero im Apple-Stil (volle Breite innerhalb Container, viel Weißraum)
+  - Darunter 2-Spalten-Kachelgrid mit großen Tiles (Bild/Video + Text)
+{% endcomment %}
+
+<section id="ac-apple-home-{{ section.id }}" class="ac-apple-home">
+    <style>
+/* ===============================
+   AC Apple Style Home – FULL CSS
+   Hero 16:9 (Desktop) / 4:5 (Mobile)
+   =============================== */
+
+.ac-apple-home{
+  background: var(--ac-bg, #fff) !important;
+  padding: 0 0 80px !important;
+  width: 100% !important;
+}
+
+/* ---------- INNER ---------- */
+
+.ac-apple-home__inner{
+  margin: 0 auto !important;
+  padding: 0 10px !important;
+}
+
+/* ===============================
+   HERO
+   =============================== */
+
+.ac-apple-home__hero{
+  position: relative !important;
+  width: 100vw !important;
+  margin-left: -10px !important;
+  margin-bottom: 10px !important;
+  overflow: hidden !important;
+  background: var(--hero-bg, #eee) !important;
+
+  /* DESKTOP RATIO */
+  aspect-ratio: 21 / 9 !important;
+}
+
+@media (max-width: 768px){
+  .ac-apple-home__hero{
+    aspect-ratio: 4 / 5 !important;
+
+  }
+}
+
+/* ---------- HERO CONTENT ---------- */
+
+.ac-apple-home__hero-layer{
+  position: relative !important;
+  z-index: 2 !important;
+  height: 100% !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+
+  padding: 80px 56px !important;
+}
+
+@media (max-width: 768px){
+  .ac-apple-home__hero-layer{
+    padding: 60px 20px !important;
+  }
+}
+
+.ac-apple-home__hero--light{ color:#111 !important; }
+.ac-apple-home__hero--dark{ color:#fff !important; }
+
+/* ---------- HERO TEXT ---------- */
+
+.ac-apple-home__hero-text-eyebrow{
+  font-size:14px !important;
+  letter-spacing:.12em !important;
+  text-transform:uppercase !important;
+  opacity:.75 !important;
+  margin-bottom:12px !important;
+}
+
+.ac-apple-home__hero-title{
+  font-size:clamp(40px,4.5vw,56px) !important;
+  line-height:1.05 !important;
+  font-weight:600 !important;
+  margin:0 0 12px !important;
+}
+
+.ac-apple-home__hero-subtitle{
+  font-size:17px !important;
+  line-height:1.5 !important;
+  max-width:34rem !important;
+  margin:0 auto 26px !important;
+  opacity:.9 !important;
+}
+
+/* ---------- BUTTONS ---------- */
+
+.ac-apple-home__buttons{
+  display:inline-flex !important;
+  gap:10px !important;
+  flex-wrap:wrap !important;
+  justify-content:center !important;
+}
+
+.ac-apple-home__btn{
+  border-radius:999px !important;
+  padding:9px 20px !important;
+  font-size:14px !important;
+  border:1px solid currentColor !important;
+  background:transparent !important;
+  cursor:pointer !important;
+  transition:transform .18s ease, filter .18s ease !important;
+}
+
+.ac-apple-home__btn--filled{
+  background:currentColor !important;
+  color:#fff !important;
+}
+
+.ac-apple-home__btn:hover{
+  transform:translateY(-1px) !important;
+  filter:brightness(1.05) !important;
+}
+
+/* ===============================
+   HERO MEDIA (BACKGROUND)
+   =============================== */
+
+.ac-apple-home__hero-media-wrap{
+  position:absolute !important;
+  inset:0 !important;
+  z-index:1 !important;
+}
+
+.ac-apple-home__hero-media{
+  position:relative !important;
+  width:100vw !important;
+  height:100% !important;
+  overflow:hidden !important;
+}
+
+.ac-apple-home__hero-media img,
+.ac-apple-home__hero-media video{
+  position:absolute !important;
+  inset:0 !important;
+  width:100vw !important;
+  height:100% !important;
+  object-fit:cover !important;
+}
+
+/* ===============================
+   GRID
+   =============================== */
+
+.ac-apple-home__grid{
+  display:grid !important;
+  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  gap:10px !important;
+}
+
+@media (max-width:768px){
+  .ac-apple-home__grid{
+    grid-template-columns:1fr !important;
+    gap:16px !important;
+  }
+}
+
+/* ---------- TILE ---------- */
+
+.ac-apple-home__tile{
+  position:relative !important;
+  background:var(--tile-bg,#f5f5f7) !important;
+  min-height:360px !important;
+  padding:40px !important;
+  display:flex !important;
+  flex-direction:column !important;
+}
+
+.ac-apple-home__tile--full{
+  grid-column:span 2 !important;
+}
+
+@media (max-width:768px){
+  .ac-apple-home__tile,
+  .ac-apple-home__tile--full{
+    grid-column:span 1 !important;
+    padding:28px 20px !important;
+  }
+}
+
+/* ---------- TILE TEXT ---------- */
+
+.ac-apple-home__tile-header{
+  text-align:center !important;
+  margin-bottom:18px !important;
+}
+
+.ac-apple-home__tile-eyebrow{
+  font-size:13px !important;
+  text-transform:uppercase !important;
+  letter-spacing:.12em !important;
+  opacity:.8 !important;
+  margin-bottom:8px !important;
+}
+
+.ac-apple-home__tile-title{
+  font-size:26px !important;
+  font-weight:700 !important;
+  margin:0 0 8px !important;
+}
+
+.ac-apple-home__tile-subtitle{
+  font-size:15px !important;
+  line-height:1.5 !important;
+  opacity:.9 !important;
+  max-width:26rem !important;
+  margin:0 auto 18px !important;
+}
+
+/* ---------- TILE MEDIA ---------- */
+
+.ac-apple-home__tile-media{
+  margin-top:auto !important;
+}
+
+.ac-apple-home__tile-media img,
+.ac-apple-home__tile-media video{
+  width:100% !important;
+  height:auto !important;
+  display:block !important;
+}
+/* FIX: ensure text is above hero media */
+.ac-apple-home__hero-layer{
+  position: relative !important;
+  z-index: 0 !important;
+}
+
+.ac-apple-home__hero-text{
+  position: relative !important;
+  z-index: 3 !important;
+}
+
+.ac-apple-home__hero-media-wrap{
+  z-index: 1 !important;
+}
+
+.ac-apple-home__hero--dark h1,
+.ac-apple-home__hero--dark h2 {
+  color: white !important;
+}
+@media (max-width: 760px) {
+  .ac-apple-home__hero-subtitle {
+    font-size: 12px !important;
+  }
+  h1.ac-apple-home__hero-title {
+    font-size: 3.5rem !important;
+  }
+}
+h1.ac-apple-home__hero-title {
+  letter-spacing: -0.06em !important;
+  font-weight: 400 !important;
+  font-size: 3.5rem !important;
+}
+
+.ac-apple-home__btn--filled {
+  background: white !important;
+  color: black !important;
+  text-decoration: none !important;
+  border: 0 !important;
+}
+.ac-apple-home__tile-media {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 0;
+  height: 100% !important;
+}
+.ac-apple-home__tile-header {
+  z-index: 10 !important;
+}
+article {
+  overflow: hidden !important;
+}
+
+  </style>
+
+
+  <div class="ac-apple-home__inner">
+    {%- if section.settings.show_hero -%}
+      {% assign hero_scheme = section.settings.hero_color_scheme %}
+      <div class="ac-apple-home__hero ac-apple-home__hero--{{ hero_scheme }}">
+        <div class="ac-apple-home__hero-layer">
+          <div class="ac-apple-home__hero-text">
+            {%- if section.settings.hero_eyebrow != blank -%}
+              <div class="ac-apple-home__hero-text-eyebrow">
+                {{ section.settings.hero_eyebrow }}
+              </div>
+            {%- endif -%}
+
+            {%- if section.settings.hero_title != blank -%}
+              <h1 class="ac-apple-home__hero-title">
+                {{ section.settings.hero_title }}
+              </h1>
+            {%- endif -%}
+
+            {%- if section.settings.hero_subtitle != blank -%}
+              <p class="ac-apple-home__hero-subtitle">
+                {{ section.settings.hero_subtitle }}
+              </p>
+            {%- endif -%}
+
+            <div class="ac-apple-home__buttons">
+              {%- if section.settings.hero_primary_label != blank and section.settings.hero_primary_link != blank -%}
+                <a href="{{ section.settings.hero_primary_link }}"
+                   class="ac-apple-home__btn ac-apple-home__btn--filled">
+                  {{ section.settings.hero_primary_label }}
+                </a>
+              {%- endif -%}
+
+              {%- if section.settings.hero_secondary_label != blank and section.settings.hero_secondary_link != blank -%}
+                <a href="{{ section.settings.hero_secondary_link }}"
+                   class="ac-apple-home__btn ac-apple-home__btn--outline">
+                  {{ section.settings.hero_secondary_label }}
+                </a>
+              {%- endif -%}
+            </div>
+          </div>
+
+          <div class="ac-apple-home__hero-media-wrap">
+            <div class="ac-apple-home__hero-media">
+              {% case section.settings.hero_media_type %}
+                {% when 'image' %}
+                  {%- if section.settings.hero_image != blank -%}
+                    {{ section.settings.hero_image | image_url: width: 1400 | image_tag: loading: 'lazy', alt: section.settings.hero_title }}
+                  {%- endif -%}
+                {% when 'video_file' %}
+                  {%- if section.settings.hero_video != blank -%}
+                    <video autoplay muted loop playsinline>
+                      <source src="{{ section.settings.hero_video.sources[0].url }}" type="video/mp4">
+                    </video>
+                  {%- endif -%}
+                {% when 'video_external' %}
+                  {%- if section.settings.hero_video_url != blank -%}
+                    <video autoplay muted loop playsinline>
+                      <source src="{{ section.settings.hero_video_url }}" type="video/mp4">
+                    </video>
+                  {%- endif -%}
+                {% else %}
+                  {%- if section.settings.hero_image != blank -%}
+                    {{ section.settings.hero_image | image_url: width: 1400 | image_tag: loading: 'lazy', alt: section.settings.hero_title }}
+                  {%- endif -%}
+              {% endcase %}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ac-apple-home__divider"></div>
+    {%- endif -%}
+
+    {%- if section.blocks.size > 0 -%}
+      <div class="ac-apple-home__grid">
+        {%- for block in section.blocks -%}
+          {% assign tile_scheme = block.settings.color_scheme %}
+          {% assign tile_classes = 'ac-apple-home__tile ac-apple-home__tile--' | append: tile_scheme %}
+          {%- if block.settings.tile_width == 'full' -%}
+            {% assign tile_classes = tile_classes | append: ' ac-apple-home__tile--full' %}
+          {%- endif -%}
+
+          <article class="{{ tile_classes }}" style="--tile-bg: {{ block.settings.tile_background }};" {{ block.shopify_attributes }}>
+            <div class="ac-apple-home__tile-header">
+              {%- if block.settings.eyebrow != blank -%}
+                <div class="ac-apple-home__tile-eyebrow">{{ block.settings.eyebrow }}</div>
+              {%- endif -%}
+
+              {%- if block.settings.title != blank -%}
+                <h2 class="ac-apple-home__tile-title">{{ block.settings.title }}</h2>
+              {%- endif -%}
+
+              {%- if block.settings.subtitle != blank -%}
+                <p class="ac-apple-home__tile-subtitle">{{ block.settings.subtitle }}</p>
+              {%- endif -%}
+
+              <div class="ac-apple-home__buttons">
+                {%- if block.settings.primary_label != blank and block.settings.primary_link != blank -%}
+                  <a href="{{ block.settings.primary_link }}"
+                     class="ac-apple-home__btn ac-apple-home__btn--filled">
+                    {{ block.settings.primary_label }}
+                  </a>
+                {%- endif -%}
+                {%- if block.settings.secondary_label != blank and block.settings.secondary_link != blank -%}
+                  <a href="{{ block.settings.secondary_link }}"
+                     class="ac-apple-home__btn ac-apple-home__btn--outline">
+                    {{ block.settings.secondary_label }}
+                  </a>
+                {%- endif -%}
+              </div>
+            </div>
+
+            {%- if block.settings.media_type != 'none' -%}
+              <div class="ac-apple-home__tile-media">
+                {% case block.settings.media_type %}
+                  {% when 'image' %}
+                    {%- if block.settings.image != blank -%}
+                      {{ block.settings.image | image_url: width: 1200 | image_tag: loading: 'lazy', alt: block.settings.title }}
+                    {%- endif -%}
+                  {% when 'video_file' %}
+                    {%- if block.settings.video != blank -%}
+                      <video autoplay muted loop playsinline>
+                        <source src="{{ block.settings.video | file_url }}" type="video/mp4">
+                      </video>
+                    {%- endif -%}
+                  {% when 'video_external' %}
+                    {%- if block.settings.video_url != blank -%}
+                      <video autoplay muted loop playsinline>
+                        <source src="{{ block.settings.video_url }}" type="video/mp4">
+                      </video>
+                    {%- endif -%}
+                {% endcase %}
+              </div>
+            {%- endif -%}
+          </article>
+        {%- endfor -%}
+      </div>
+    {%- endif -%}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "AC Apple-Style Home Grid",
+  "tag": "section",
+  "class": "section",
+  "settings": [
+    {
+      "type": "color",
+      "id": "background_color",
+      "label": "Seitenhintergrund",
+      "default": "#ffffff"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_hero",
+      "label": "Hero anzeigen",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "hero_eyebrow",
+      "label": "Hero Eyebrow / Label",
+      "default": "ARTCLUB"
+    },
+    {
+      "type": "text",
+      "id": "hero_title",
+      "label": "Hero Titel",
+      "default": "Art That Works."
+    },
+    {
+      "type": "textarea",
+      "id": "hero_subtitle",
+      "label": "Hero Untertitel",
+      "default": "Kunstplattform, Ausstellungen und App – gemacht für eine neue Generation von Künstler:innen und Sammler:innen."
+    },
+    {
+      "type": "select",
+      "id": "hero_color_scheme",
+      "label": "Hero Farbschema (Text)",
+      "options": [
+        { "value": "light", "label": "Hell (dunkler Text)" },
+        { "value": "dark", "label": "Dunkel (heller Text)" }
+      ],
+      "default": "light"
+    },
+    {
+      "type": "color",
+      "id": "hero_background",
+      "label": "Hero Hintergrund",
+      "default": "#d8e8ff"
+    },
+    {
+      "type": "color",
+      "id": "hero_button_text_on_filled",
+      "label": "Textfarbe auf gefüllten Buttons",
+      "default": "#ffffff"
+    },
+    {
+      "type": "text",
+      "id": "hero_primary_label",
+      "label": "Hero Button 1 – Label",
+      "default": "Mehr erfahren"
+    },
+    {
+      "type": "url",
+      "id": "hero_primary_link",
+      "label": "Hero Button 1 – Link"
+    },
+    {
+      "type": "text",
+      "id": "hero_secondary_label",
+      "label": "Hero Button 2 – Label",
+      "default": "Zur App"
+    },
+    {
+      "type": "url",
+      "id": "hero_secondary_link",
+      "label": "Hero Button 2 – Link"
+    },
+    {
+      "type": "select",
+      "id": "hero_media_type",
+      "label": "Hero-Medientyp",
+      "options": [
+        { "value": "image", "label": "Bild" },
+        { "value": "video_file", "label": "Video (Datei)" },
+        { "value": "video_external", "label": "Video (externe URL)" }
+      ],
+      "default": "image"
+    },
+    {
+      "type": "image_picker",
+      "id": "hero_image",
+      "label": "Hero Bild"
+    },
+    {
+      "type": "video",
+      "id": "hero_video",
+      "label": "Hero Video (Datei)"
+    },
+    {
+      "type": "text",
+      "id": "hero_video_url",
+      "label": "Hero Video (externe MP4-URL)"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "tile",
+      "name": "Kachel",
+      "settings": [
+        {
+          "type": "select",
+          "id": "tile_width",
+          "label": "Breite",
+          "options": [
+            { "value": "half", "label": "Halbe Breite" },
+            { "value": "full", "label": "Volle Breite (2 Spalten)" }
+          ],
+          "default": "half"
+        },
+        {
+          "type": "select",
+          "id": "color_scheme",
+          "label": "Farbschema (Text)",
+          "options": [
+            { "value": "light", "label": "Hell (dunkler Text)" },
+            { "value": "dark", "label": "Dunkel (heller Text)" }
+          ],
+          "default": "light"
+        },
+        {
+          "type": "color",
+          "id": "tile_background",
+          "label": "Kachel-Hintergrund",
+          "default": "#f5f5f7"
+        },
+        {
+          "type": "text",
+          "id": "eyebrow",
+          "label": "Eyebrow / Label",
+          "default": "Feature"
+        },
+        {
+          "type": "text",
+          "id": "title",
+          "label": "Titel",
+          "default": "ARTCLUB App"
+        },
+        {
+          "type": "textarea",
+          "id": "subtitle",
+          "label": "Untertitel",
+          "default": "Entdecke Kunst, Events und Künstler:innen in einer App."
+        },
+        {
+          "type": "text",
+          "id": "primary_label",
+          "label": "Button 1 – Label",
+          "default": "Weitere Infos"
+        },
+        {
+          "type": "url",
+          "id": "primary_link",
+          "label": "Button 1 – Link"
+        },
+        {
+          "type": "text",
+          "id": "secondary_label",
+          "label": "Button 2 – Label",
+          "default": "Jetzt entdecken"
+        },
+        {
+          "type": "url",
+          "id": "secondary_link",
+          "label": "Button 2 – Link"
+        },
+        {
+          "type": "select",
+          "id": "media_type",
+          "label": "Medientyp",
+          "options": [
+            { "value": "none", "label": "Kein Medium" },
+            { "value": "image", "label": "Bild" },
+            { "value": "video_file", "label": "Video (Datei)" },
+            { "value": "video_external", "label": "Video (externe URL)" }
+          ],
+          "default": "image"
+        },
+        {
+          "type": "image_picker",
+          "id": "image",
+          "label": "Bild"
+        },
+        {
+          "type": "video",
+          "id": "video",
+          "label": "Video (Datei)"
+        },
+        {
+          "type": "text",
+          "id": "video_url",
+          "label": "Video (externe MP4-URL)"
+        }
+      ]
+    }
+  ],
+  "max_blocks": 8,
+  "presets": [
+    {
+      "name": "AC Apple-Style Home",
+      "category": "ARTCLUB",
+      "blocks": [
+        {
+          "type": "tile",
+          "settings": {
+            "eyebrow": "APP",
+            "title": "ARTCLUB App",
+            "subtitle": "Social Commerce für Kunst – bald verfügbar.",
+            "primary_label": "Mehr erfahren"
+          }
+        },
+        {
+          "type": "tile",
+          "settings": {
+            "eyebrow": "EVENTS",
+            "title": "Ausstellungen & Pop-ups",
+            "subtitle": "Kuratiertes Programm in Berlin und darüber hinaus.",
+            "primary_label": "Eventformate",
+            "tile_background": "#050507",
+            "color_scheme": "dark"
+          }
+        }
+      ]
+    }
+  ]
+}
+{% endschema %}

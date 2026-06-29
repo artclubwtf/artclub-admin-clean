@@ -85,7 +85,10 @@ export async function loadPublicArtistPageBySlug(rawSlug: string): Promise<Publi
     })
       .sort({ updatedAt: -1, createdAt: -1 })
       .select({
+        _id: 1,
         productKey: 1,
+        handle: 1,
+        shopifyProductId: 1,
         title: 1,
         description: 1,
         year: 1,
@@ -159,8 +162,13 @@ export async function loadPublicArtistPageBySlug(rawSlug: string): Promise<Publi
     .map((item) => {
       const galleryUrls = Array.isArray(item.images?.galleryUrls) ? item.images.galleryUrls.filter(Boolean) : [];
       const variantsForProduct = variantsByProduct[item.productKey] || [];
+      const productHandle = item.handle || "";
       return {
+        canonicalProductId: item._id.toString(),
         productKey: item.productKey,
+        productHandle,
+        shopifyProductId: item.shopifyProductId || "",
+        shopifyProductUrl: productHandle ? `https://${artist.shopDomain}/products/${productHandle}` : "",
         title: item.title,
         year: item.year ?? null,
         description: item.description || "",
@@ -179,6 +187,7 @@ export async function loadPublicArtistPageBySlug(rawSlug: string): Promise<Publi
     });
 
   const result = {
+    canonicalArtistId: artist._id.toString(),
     slug: profile.handle || slug,
     displayName: profile.displayName,
     bio: profile.bio,

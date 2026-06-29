@@ -152,7 +152,11 @@ export type ArtistFeaturedWorkItem = {
 };
 
 export type PublicArtistArtworkItem = {
+  canonicalProductId?: string;
   productKey: string;
+  productHandle?: string;
+  shopifyProductId?: string;
+  shopifyProductUrl?: string;
   title: string;
   year: number | null;
   description: string;
@@ -165,6 +169,7 @@ export type PublicArtistArtworkItem = {
 };
 
 export type PublicArtistProfilePageData = {
+  canonicalArtistId: string;
   slug: string;
   displayName: string;
   bio: string;

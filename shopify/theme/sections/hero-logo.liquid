@@ -1,0 +1,91 @@
+{% comment %}
+  File: sections/hero-logo.liquid
+  Hero-Header mit variablem Logo und Text.
+  Solange diese Section im Viewport ist, wird das Nav-Logo ausgeblendet.
+  Beim Hochscrollen erscheint es wieder – gesteuert von assets/hero-logo.js.
+{% endcomment %}
+
+<section 
+  id="hero-logo-{{ section.id }}" 
+  class="hero-logo-section"
+  data-nav-selector="{{ section.settings.nav_logo_selector }}"
+  data-offset="{{ section.settings.offset_threshold }}"
+>
+  <div class="hero-logo-wrapper">
+    {% if section.settings.logo_asset %}
+      <img 
+        src="{{ section.settings.logo_asset | asset_url }}" 
+        alt="Hero-Logo" 
+        class="hero-logo"
+      >
+    {% endif %}
+    <p class="hero-text">{{ section.settings.hero_text }}</p>
+  </div>
+</section>
+
+<style>
+  /* Hero-Section Styles */
+  #hero-logo-{{ section.id }} {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 6rem 1rem 4rem;
+    background: #fff;
+    text-align: center;
+  }
+  #hero-logo-{{ section.id }} .hero-logo {
+    max-width: 220px;
+    transition: opacity 0.4s ease;
+  }
+  #hero-logo-{{ section.id }} .hero-text {
+    margin-top: 1rem;
+    font-size: 1.2rem;
+    font-weight: 500;
+  }
+  /* Hidden-Klasse für Navbar-Logo */
+  .hidden {
+    opacity: 0 !important;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+  }
+</style>
+
+<script src="{{ 'hero-logo.js' | asset_url }}"></script>
+
+{% schema %}
+{
+  "name": "Hero mit Logo",
+  "settings": [
+    {
+      "type": "image_picker",
+      "id": "logo_asset",
+      "label": "Logo für Hero"
+    },
+    {
+      "type": "text",
+      "id": "hero_text",
+      "label": "Text unter dem Logo",
+      "default": "Willkommen bei ARTCLUB"
+    },
+    {
+      "type": "text",
+      "id": "nav_logo_selector",
+      "label": "CSS-Selector Navbar-Logo",
+      "default": ".header__heading-logo"
+    },
+    {
+      "type": "number",
+      "id": "offset_threshold",
+      "label": "Scroll-Offset (px)",
+      "default": 80
+    }
+  ],
+  "presets": [
+    {
+      "name": "Hero mit Logo",
+      "category": "Hero"
+    }
+  ]
+}
+{% endschema %}

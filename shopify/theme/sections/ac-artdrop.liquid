@@ -1,0 +1,492 @@
+{% comment %}
+  Art Drop Landingpage
+  Nutzt Metaobject-Felder:
+  - titel (Text)
+  - subtitle (Text)
+  - titelvideo (File – Video)
+  - titelbild (File – Bild)
+  - datum_anfang (DateTime)
+  - datum_ende (DateTime)
+  - produkt (Product-Referenz)
+  - kuenstler (Metaobject-Referenz, optional)
+{% endcomment %}
+
+{% assign product = metaobject.produkt.value %}
+{% assign artist  = metaobject.kuenstler.value %}
+
+{% assign drop_start_ms = metaobject.datum_anfang.value | date: "%s" | times: 1000 %}
+{% assign drop_end_ms   = metaobject.datum_ende.value   | date: "%s" | times: 1000 %}
+
+
+
+
+
+<section
+  class="art-drop"
+  id="art-drop-{{ section.id }}"
+  data-drop-start="{{ drop_start_ms }}"
+  data-drop-end="{{ drop_end_ms }}"
+>
+
+
+
+  <style>
+
+#art-drop-{{ section.id }} { background: {{ section.settings.background_color }}; color: #111111; padding: 64px 16px 80px; font-family: inherit; } #art-drop-{{ section.id }} .art-drop__inner { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 48px; align-items: center; } #art-drop-{{ section.id }}.art-drop--stacked .art-drop__inner { grid-template-columns: minmax(0, 1fr); } @media screen and (max-width: 900px) { #art-drop-{{ section.id }} { padding: 40px 16px 64px; } #art-drop-{{ section.id }} .art-drop__inner { grid-template-columns: minmax(0, 1fr); gap: 32px; } } #art-drop-{{ section.id }} .art-drop__label { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 16px; opacity: 0.7; } #art-drop-{{ section.id }} .art-drop__title { font-size: clamp(32px, 5vw, 52px); line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 16px; } #art-drop-{{ section.id }} .art-drop__subtitle { font-size: 16px; line-height: 1.6; max-width: 34rem; opacity: 0.85; margin-bottom: 24px; } #art-drop-{{ section.id }} .art-drop__meta { display: flex; flex-wrap: wrap; gap: 12px 20px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 20px; opacity: 0.75; } #art-drop-{{ section.id }} .art-drop__meta span::before { content: "•"; margin-right: 6px; } #art-drop-{{ section.id }} .art-drop__meta span:first-child::before { content: ""; margin-right: 0; } #art-drop-{{ section.id }} .art-drop__cta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-bottom: 24px; } #art-drop-{{ section.id }} .art-drop__btn { display: inline-flex; align-items: center; justify-content: center; padding: 12px 26px; border-radius: 999px; border: 1px solid {{ section.settings.accent_color }}; background: {{ section.settings.accent_color }}; color: #ffffff; font-size: 14px; text-transform: uppercase; letter-spacing: 0.12em; text-decoration: none; transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.14); cursor: pointer; } #art-drop-{{ section.id }} .art-drop__btn:hover { transform: translateY(-1px); box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18); } #art-drop-{{ section.id }} .art-drop__btn--ghost { background: transparent; color: #111111; box-shadow: none; } #art-drop-{{ section.id }} .art-drop__small-note { font-size: 12px; opacity: 0.7; } /* Countdown + Newsletter */ #art-drop-{{ section.id }} .art-drop__countdown-wrapper { margin-bottom: 24px; } #art-drop-{{ section.id }} .art-drop__countdown-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.16em; opacity: 0.7; margin-bottom: 6px; } #art-drop-{{ section.id }} .art-drop__countdown { display: flex; gap: 16px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; } #art-drop-{{ section.id }} .art-drop__countdown-item { padding: 8px 10px; border-radius: 999px; border: 1px solid rgba(0, 0, 0, 0.08); background: #ffffff; min-width: 72px; text-align: center; } #art-drop-{{ section.id }} .art-drop__countdown-number { display: block; font-size: 18px; letter-spacing: 0; margin-bottom: 2px; } #art-drop-{{ section.id }} .art-drop__newsletter { display: none; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 999px; background: #ffffff; box-shadow: 0 14px 35px rgba(0, 0, 0, 0.08); max-width: 480px; margin-bottom: 12px; } #art-drop-{{ section.id }} .art-drop__newsletter--visible { display: flex; } #art-drop-{{ section.id }} .art-drop__newsletter-label { font-size: 12px; opacity: 0.7; white-space: nowrap; } #art-drop-{{ section.id }} .art-drop__newsletter-input-wrap { flex: 1; display: flex; gap: 8px; align-items: center; } #art-drop-{{ section.id }} .art-drop__newsletter-input { width: 100%; border-radius: 999px; border: 1px solid rgba(0, 0, 0, 0.12); padding: 8px 12px; font-size: 13px; } #art-drop-{{ section.id }} .art-drop__newsletter-btn { border-radius: 999px; border: none; padding: 8px 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; background: #111111; color: #ffffff; cursor: pointer; white-space: nowrap; } @media screen and (max-width: 900px) { #art-drop-{{ section.id }} .art-drop__countdown { gap: 8px; } #art-drop-{{ section.id }} .art-drop__newsletter { flex-direction: column; align-items: stretch; border-radius: 18px; padding: 14px 14px 12px; } #art-drop-{{ section.id }} .art-drop__newsletter-label { white-space: normal; } } /* Media Card */ #art-drop-{{ section.id }} .art-drop__media { position: relative; border-radius: 32px; overflow: hidden; background: #111111; min-height: 320px; display: flex; align-items: stretch; justify-content: stretch; } #art-drop-{{ section.id }} .art-drop__media::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 0 0, rgba(255,255,255,0.12), transparent 55%), radial-gradient(circle at 100% 100%, rgba(0,0,0,0.6), transparent 55%); mix-blend-mode: screen; pointer-events: none; } #art-drop-{{ section.id }} .art-drop__media-inner { position: relative; width: 100%; overflow: hidden; } #art-drop-{{ section.id }} .art-drop__image { width: 100%; height: 100%; object-fit: cover; display: block; transform: scale(1.02); } #art-drop-{{ section.id }} .art-drop__video video { width: 100%; height: 100%; object-fit: cover; } #art-drop-{{ section.id }} .art-drop__tag-pill { position: absolute; left: 20px; top: 20px; padding: 6px 14px; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; border-radius: 999px; background: rgba(255, 255, 255, 0.16); color: #ffffff; backdrop-filter: blur(10px); } #art-drop-{{ section.id }} .art-drop__product-card { position: absolute; right: 18px; bottom: 18px; max-width: 220px; background: rgba(255, 255, 255, 0.96); border-radius: 18px; padding: 12px 14px; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.3); font-size: 12px; } #art-drop-{{ section.id }} .art-drop__product-title { font-size: 12px; margin: 0 0 4px; font-weight: 500; } #art-drop-{{ section.id }} .art-drop__product-price { font-size: 13px; font-weight: 500; margin-bottom: 6px; } #art-drop-{{ section.id }} .art-drop__product-link { font-size: 11px; text-transform: uppercase; letter-spacing: 0.16em; text-decoration: none; } @media screen and (max-width: 900px) { #art-drop-{{ section.id }} .art-drop__media { order: -1; border-radius: 24px; min-height: 260px; } #art-drop-{{ section.id }} .art-drop__product-card { max-width: 70%; } } /* Details Section – macht die Seite länger/editorial */ #art-drop-{{ section.id }} .art-drop__details { max-width: 1120px; margin: 64px auto 0; } #art-drop-{{ section.id }} .art-drop__details-inner { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; padding: 32px 0 8px; border-top: 1px solid rgba(0,0,0,0.06); border-bottom: 1px solid rgba(0,0,0,0.06); } #art-drop-{{ section.id }} .art-drop__details-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.16em; opacity: 0.65; margin-bottom: 8px; } #art-drop-{{ section.id }} .art-drop__details-body { font-size: 14px; line-height: 1.7; opacity: 0.9; } @media screen and (max-width: 900px) { #art-drop-{{ section.id }} .art-drop__details-inner { grid-template-columns: minmax(0, 1fr); gap: 24px; } } #art-drop-{{ section.id }} .art-drop__process { max-width: 1120px; margin: 40px auto 0; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 40px; } #art-drop-{{ section.id }} .art-drop__process-heading { font-size: 20px; letter-spacing: -0.01em; margin: 0 0 8px; } #art-drop-{{ section.id }} .art-drop__process-text { font-size: 14px; line-height: 1.7; opacity: 0.9; } #art-drop-{{ section.id }} .art-drop__copy-extra { font-size: 14px; line-height: 1.7; opacity: 0.9; } #art-drop-{{ section.id }} .art-drop__copy-extra p { margin-bottom: 12px; } #art-drop-{{ section.id }} .art-drop__copy-extra hr { border: none; border-bottom: 1px solid rgba(0,0,0,0.08); margin: 18px 0; } @media screen and (max-width: 900px) { #art-drop-{{ section.id }} .art-drop__process { grid-template-columns: minmax(0, 1fr); } } /* Countdown + Newsletter */ #art-drop-{{ section.id }} .art-drop__countdown-wrapper { margin: 28px 0 24px; } #art-drop-{{ section.id }} .art-drop__countdown-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.18em; opacity: 0.7; margin-bottom: 10px; } #art-drop-{{ section.id }} .art-drop__countdown { display: inline-flex; gap: 12px; } #art-drop-{{ section.id }} .art-drop__countdown-item { padding: 10px 18px; border-radius: 999px; background: #ffffff; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08); min-width: 90px; text-align: center; } #art-drop-{{ section.id }} .art-drop__countdown-number { display: block; font-size: 20px; letter-spacing: 0; margin-bottom: 2px; font-weight: 500; } #art-drop-{{ section.id }} .art-drop__countdown-item span + span { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; opacity: 0.7; } /* Newsletter */ #art-drop-{{ section.id }} .art-drop__newsletter { display: none; flex-direction: column; gap: 12px; padding: 18px 20px 16px; border-radius: 24px; background: #ffffff; box-shadow: 0 18px 45px rgba(0, 0, 0, 0.08); max-width: 520px; margin-bottom: 16px; } #art-drop-{{ section.id }} .art-drop__newsletter--visible { display: flex; } #art-drop-{{ section.id }} .art-drop__newsletter-header { display: flex; flex-direction: column; gap: 4px; } #art-drop-{{ section.id }} .art-drop__newsletter-kicker { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.7; } #art-drop-{{ section.id }} .art-drop__newsletter-text { font-size: 14px; line-height: 1.6; opacity: 0.9; } #art-drop-{{ section.id }} .art-drop__newsletter-fields { display: flex; gap: 10px; align-items: center; margin-top: 6px; } #art-drop-{{ section.id }} .art-drop__newsletter-input { width: 100%; border-radius: 999px; border: 1px solid rgba(0, 0, 0, 0.12); padding: 8px 12px; font-size: 13px; } #art-drop-{{ section.id }} .art-drop__newsletter-btn { border-radius: 999px; border: none; padding: 9px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.16em; background: #111111; color: #ffffff; cursor: pointer; white-space: nowrap; } #art-drop-{{ section.id }} .art-drop__newsletter-success { font-size: 12px; line-height: 1.5; opacity: 0.7; margin-top: 4px; } @media screen and (max-width: 700px) { #art-drop-{{ section.id }} .art-drop__countdown { display: flex; width: 100%; justify-content: flex-start; } #art-drop-{{ section.id }} .art-drop__countdown-item { min-width: 0; flex: 1; padding-inline: 10px; } #art-drop-{{ section.id }} .art-drop__newsletter { border-radius: 20px; padding: 16px 14px 14px; } #art-drop-{{ section.id }} .art-drop__newsletter-fields { flex-direction: column; align-items: stretch; } #art-drop-{{ section.id }} .art-drop__newsletter-btn { width: 100%; text-align: center; } }
+
+
+/* Countdown – Typo & Cards */
+
+#art-drop-{{ section.id }} .art-drop__countdown-wrapper {
+  margin: 32px 0 26px;
+}
+
+#art-drop-{{ section.id }} .art-drop__countdown-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  opacity: 0.6;
+  margin-bottom: 12px;
+}
+
+#art-drop-{{ section.id }} .art-drop__countdown {
+  display: inline-flex;
+  gap: 14px;
+}
+
+#art-drop-{{ section.id }} .art-drop__countdown-item {
+  padding: 12px 20px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.08);
+  min-width: 96px;
+  text-align: center;
+}
+
+#art-drop-{{ section.id }} .art-drop__countdown-number {
+  display: block;
+  font-size: 22px;
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 3px;
+}
+
+#art-drop-{{ section.id }} .art-drop__countdown-item span + span {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+@media screen and (max-width: 700px) {
+  #art-drop-{{ section.id }} .art-drop__countdown {
+    display: flex;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  #art-drop-{{ section.id }} .art-drop__countdown-item {
+    flex: 1;
+    min-width: 0;
+    padding-inline: 12px;
+  }
+}
+
+
+  </style>
+
+  <div class="art-drop__inner">
+    <div class="art-drop__content">
+      {% if section.settings.eyebrow_label != blank %}
+        <div class="art-drop__label">
+          {{ section.settings.eyebrow_label }}
+        </div>
+      {% endif %}
+
+      {% if metaobject.titel.value != blank %}
+        <h1 class="art-drop__title">
+          {{ metaobject.titel.value }}
+        </h1>
+      {% endif %}
+
+      {% if metaobject.subtitle.value != blank %}
+        <p class="art-drop__subtitle">
+          {{ metaobject.subtitle.value }}
+        </p>
+      {% endif %}
+
+      <div class="art-drop__meta">
+        {% if metaobject.datum_anfang.value and metaobject.datum_ende.value %}
+            <span>
+            {{ metaobject.datum_anfang.value | date: "%d.%m.%Y, %H:%M" }} Uhr
+            &nbsp;–&nbsp;
+            {{ metaobject.datum_ende.value   | date: "%d.%m.%Y, %H:%M" }} Uhr
+            </span>
+        {% elsif metaobject.datum_anfang.value %}
+            <span>
+            Ab {{ metaobject.datum_anfang.value | date: "%d.%m.%Y, %H:%M" }} Uhr
+            </span>
+        {% endif %}
+
+        {% if artist %}
+            {% if artist.titel %}
+            <span>Artist: {{ artist.titel }}</span>
+            {% elsif artist.name %}
+            <span>Artist: {{ artist.name }}</span>
+            {% endif %}
+        {% endif %}
+        </div>
+
+
+      {% if product %}
+        <div class="art-drop__cta-row">
+          <a href="{{ product.url }}" class="art-drop__btn">
+            {{ section.settings.cta_label | default: 'Jetzt sichern' }}
+          </a>
+
+          <span class="art-drop__small-note">
+            Limitierte Stückzahl – solange der Drop live ist.
+          </span>
+        </div>
+      {% endif %}
+
+      <div class="art-drop__countdown-wrapper">
+        <div class="art-drop__countdown-label" data-role="countdown-label"></div>
+        <div class="art-drop__countdown" data-role="countdown">
+          <div class="art-drop__countdown-item">
+            <span class="art-drop__countdown-number" data-unit="days">00</span>
+            Tage
+          </div>
+          <div class="art-drop__countdown-item">
+            <span class="art-drop__countdown-number" data-unit="hours">00</span>
+            Stunden
+          </div>
+          <div class="art-drop__countdown-item">
+            <span class="art-drop__countdown-number" data-unit="minutes">00</span>
+            Minuten
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="art-drop__media">
+      <div class="art-drop__media-inner">
+        {% if metaobject.titelvideo.value %}
+          <div class="art-drop__video">
+            {{ metaobject.titelvideo.value
+              | video_tag:
+                autoplay: true,
+                loop: true,
+                muted: true,
+                playsinline: true,
+                controls: false }}
+          </div>
+        {% elsif metaobject.titelbild.value %}
+          {{ metaobject.titelbild.value
+            | image_url: width: 1600
+            | image_tag:
+              class: 'art-drop__image',
+              alt: metaobject.titel.value }}
+        {% elsif product and product.featured_image %}
+          {{ product.featured_image
+            | image_url: width: 1600
+            | image_tag:
+              class: 'art-drop__image',
+              alt: product.title }}
+        {% else %}
+          <div class="art-drop__image" style="background: radial-gradient(circle at 0 0, #ffffff 0, #111111 55%);"></div>
+        {% endif %}
+
+        <div class="art-drop__tag-pill">
+          Limited Release
+        </div>
+
+        {% if product %}
+          <div class="art-drop__product-card">
+            <p class="art-drop__product-title">{{ product.title }}</p>
+            <p class="art-drop__product-price">
+              {% if product.compare_at_price_max > product.price %}
+                <span>{{ product.price | money }}</span>
+                <span style="text-decoration:line-through;opacity:0.6;margin-left:6px;">
+                  {{ product.compare_at_price_max | money }}
+                </span>
+              {% else %}
+                {{ product.price | money }}
+              {% endif %}
+            </p>
+            <a class="art-drop__product-link" href="{{ product.url }}">
+              Zum Artwork →
+            </a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Längerer, editorialer Teil -->
+
+  <div class="art-drop__details">
+    <div class="art-drop__details-inner">
+      <div class="art-drop__details-col">
+        <div class="art-drop__details-label">
+          {{ section.settings.details_heading_left }}
+        </div>
+        <div class="art-drop__details-body">
+          {{ section.settings.details_text_left }}
+        </div>
+      </div>
+
+      <div class="art-drop__details-col">
+        <div class="art-drop__details-label">
+          {{ section.settings.details_heading_center }}
+        </div>
+        <div class="art-drop__details-body">
+          {{ section.settings.details_text_center }}
+        </div>
+      </div>
+
+      <div class="art-drop__details-col">
+        <div class="art-drop__details-label">
+          {{ section.settings.details_heading_right }}
+        </div>
+        <div class="art-drop__details-body">
+          {{ section.settings.details_text_right }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="art-drop__process">
+    <div>
+      <h2 class="art-drop__process-heading">
+        {{ section.settings.process_heading }}
+      </h2>
+      <div class="art-drop__process-text">
+        {{ section.settings.process_text }}
+      </div>
+    </div>
+
+    {% if section.blocks.size > 0 %}
+      <div class="art-drop__copy-extra">
+        {% for block in section.blocks %}
+          {% case block.type %}
+            {% when 'text' %}
+              {{ block.settings.text }}
+            {% when 'divider' %}
+              <hr>
+          {% endcase %}
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Art Drop Landing",
+  "settings": [
+    {
+      "type": "text",
+      "id": "eyebrow_label",
+      "label": "Label über dem Titel",
+      "default": "ART DROP"
+    },
+    {
+      "type": "text",
+      "id": "cta_label",
+      "label": "CTA-Text",
+      "default": "Jetzt sichern"
+    },
+    {
+      "type": "color",
+      "id": "background_color",
+      "label": "Hintergrundfarbe",
+      "default": "#f5f5f5"
+    },
+    {
+      "type": "color",
+      "id": "accent_color",
+      "label": "Akzentfarbe (Button)",
+      "default": "#000000"
+    },
+    {
+      "type": "select",
+      "id": "layout_style",
+      "label": "Layout-Variante",
+      "options": [
+        { "value": "full", "label": "Bild/Video rechts (Standard)" },
+        { "value": "stacked", "label": "Gestapelt (Bild über Text)" }
+      ],
+      "default": "full"
+    },
+    {
+      "type": "text",
+      "id": "details_heading_left",
+      "label": "Details – Spalte links, Überschrift",
+      "default": "Edition"
+    },
+    {
+      "type": "richtext",
+      "id": "details_text_left",
+      "label": "Details – Spalte links, Text",
+      "default": "<p>Limitierte Auflage, signiert vom Artist. Zertifikat und Edition Number inklusive.</p>"
+    },
+    {
+      "type": "text",
+      "id": "details_heading_center",
+      "label": "Details – Spalte Mitte, Überschrift",
+      "default": "Production"
+    },
+    {
+      "type": "richtext",
+      "id": "details_text_center",
+      "label": "Details – Spalte Mitte, Text",
+      "default": "<p>Archival Fine Art Print auf hochwertigem Papier. Produziert in Deutschland.</p>"
+    },
+    {
+      "type": "text",
+      "id": "details_heading_right",
+      "label": "Details – Spalte rechts, Überschrift",
+      "default": "Shipping & Framing"
+    },
+    {
+      "type": "richtext",
+      "id": "details_text_right",
+      "label": "Details – Spalte rechts, Text",
+      "default": "<p>Weltweiter Versand. Rahmung optional – auf Anfrage oder als Add-on im Checkout.</p>"
+    },
+    {
+      "type": "text",
+      "id": "process_heading",
+      "label": "How it works – Überschrift",
+      "default": "Wie der Drop funktioniert"
+    },
+    {
+      "type": "richtext",
+      "id": "process_text",
+      "label": "How it works – Text",
+      "default": "<p>1. Sicher dir dein Artwork während der Drop-Phase.<br>2. Nach Ende des Drops geht das Artwork in die Produktion.<br>3. Wir prüfen jedes Werk von Hand und senden es dir sicher verpackt zu.<br>4. Du erhältst zusätzlich Zugang zu zukünftigen ARTCLUB Drops & Einladungen.</p>"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "text",
+      "name": "Zusatztext",
+      "settings": [
+        {
+          "type": "richtext",
+          "id": "text",
+          "label": "Text",
+          "default": "<p>Nutze diesen Bereich für ein kurzes Artist Statement, Kontext zum Motiv oder eine kleine Story rund um den Drop.</p>"
+        }
+      ]
+    },
+    {
+      "type": "divider",
+      "name": "Trennlinie",
+      "settings": []
+    }
+  ],
+  "presets": [
+    {
+      "name": "Art Drop Landing"
+    }
+  ]
+}
+{% endschema %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var root = document.getElementById('art-drop-{{ section.id }}');
+  if (!root) return;
+
+  // Layout-Klasse
+  {% if section.settings.layout_style == 'stacked' %}
+  root.classList.add('art-drop--stacked');
+  {% endif %}
+
+  var startMs = parseInt(root.dataset.dropStart || "", 10);
+  var endMs   = parseInt(root.dataset.dropEnd   || "", 10);
+
+  var start = isFinite(startMs) ? new Date(startMs) : null;
+  var end   = isFinite(endMs)   ? new Date(endMs)   : null;
+
+  var countdownEl = root.querySelector('[data-role="countdown"]');
+  var labelEl     = root.querySelector('[data-role="countdown-label"]');
+  var newsletter  = root.querySelector('[data-role="newsletter"]');
+
+  if (!start && !end) {
+    if (countdownEl) countdownEl.style.display = 'none';
+    if (labelEl) labelEl.style.display = 'none';
+    if (newsletter) newsletter.classList.add('art-drop__newsletter--visible');
+    return;
+  }
+
+  function update() {
+    var now = new Date();
+    var target = null;
+    var mode = null;
+
+    if (start && now < start) {
+      mode = 'upcoming';
+      target = start;
+    } else if (end && now < end) {
+      mode = 'live';
+      target = end;
+    } else if (end) {
+      mode = 'ended';
+    }
+
+    root.classList.remove('is-upcoming', 'is-live', 'is-ended');
+    if (mode) root.classList.add('is-' + mode);
+
+    if (!countdownEl || !target || mode === 'ended') {
+      if (countdownEl) countdownEl.style.display = 'none';
+      if (labelEl) labelEl.style.display = 'none';
+      if (newsletter) newsletter.classList.add('art-drop__newsletter--visible');
+      return;
+    }
+
+    var diff = target.getTime() - now.getTime();
+    if (diff <= 0) {
+      // nochmal prüfen – dann springt er automatisch in den nächsten Mode
+      setTimeout(update, 1000);
+      return;
+    }
+
+    var totalSeconds = Math.floor(diff / 1000);
+    var days    = Math.floor(totalSeconds / 86400);
+    var hours   = Math.floor((totalSeconds % 86400) / 3600);
+    var minutes = Math.floor((totalSeconds % 3600) / 60);
+
+    var dEl = countdownEl.querySelector('[data-unit="days"]');
+    var hEl = countdownEl.querySelector('[data-unit="hours"]');
+    var mEl = countdownEl.querySelector('[data-unit="minutes"]');
+
+    if (dEl) dEl.textContent = String(days).padStart(2, '0');
+    if (hEl) hEl.textContent = String(hours).padStart(2, '0');
+    if (mEl) mEl.textContent = String(minutes).padStart(2, '0');
+
+    if (labelEl) {
+      if (mode === 'upcoming') labelEl.textContent = "Drop startet in";
+      if (mode === 'live')     labelEl.textContent = "Drop endet in";
+    }
+
+    if (newsletter) {
+      if (mode === 'upcoming') {
+        newsletter.classList.add('art-drop__newsletter--visible');
+      } else {
+        newsletter.classList.remove('art-drop__newsletter--visible');
+      }
+    }
+
+    setTimeout(update, 60000);
+  }
+
+  update();
+});
+</script>
+

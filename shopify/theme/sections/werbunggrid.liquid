@@ -1,0 +1,110 @@
+{%- style -%}
+    .section-{{ section.id }}-padding {
+      padding: 1rem;
+    }
+
+  .block-grid {
+    display: grid;
+    grid-template-columns: repeat(2, calc(50% - 0.5rem));
+    grid-column-gap: 1rem;
+    grid-row-gap: 1rem;
+    width: 100%;
+ }
+
+  .block-of-grid{
+    width: 100%;
+  }
+
+  .block-of-grid img{
+    aspect-ratio: 5 / 4;
+    object-fit: cover; 
+    width: 100%;
+  }
+
+  @media (max-width: 760px){
+
+
+      .block-grid {
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    grid-column-gap: 1rem;
+    grid-row-gap: 1rem;
+ }
+  }
+
+{%- endstyle -%}
+
+<section class="color-{{ section.settings.color_scheme }} gradient">
+    <div class="section-{{ section.id }}-padding">
+      <div class="block-grid">
+        {%- for block in section.blocks -%}
+          <div class="block-of-grid">
+            <a href="{{ block.settings.link }}">
+              <img src="{{ block.settings.image | img_url: '1024x' }}" width="auto" height="auto">
+            </a>
+          </div>
+        {%- endfor -%}
+      </div>
+    </div>
+</section>
+
+{% schema %}
+{
+  "name": "werbegrid",
+  "class": "section",
+  "settings": [
+  {
+    "type": "color_scheme",
+    "id": "color_scheme",
+    "label": "t:sections.all.colors.label",
+    "default": "scheme-1"
+  },
+  {
+    "type": "range",
+    "id": "padding_top",
+    "min": 0,
+    "max": 100,
+    "step": 4,
+    "unit": "px",
+    "label": "t:sections.all.padding.padding_top",
+    "default": 40
+  },
+  {
+    "type": "range",
+    "id": "padding_bottom",
+    "min": 0,
+    "max": 100,
+    "step": 4,
+    "unit": "px",
+    "label": "t:sections.all.padding.padding_bottom",
+    "default": 52
+  }
+  ],
+  "blocks": 
+  [
+    {
+      "type": "announcement",
+      "name": "Gridblock",
+      "settings": 
+      [
+        {
+          "type": "image_picker",
+          "id": "image",
+          "label": "Bild"
+        },
+
+        {
+          "type": "url",
+          "id": "link",
+          "label": "url button link"
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "werbegrid"
+    }
+  ]
+}
+{% endschema %}

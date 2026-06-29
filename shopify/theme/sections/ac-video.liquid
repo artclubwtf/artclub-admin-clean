@@ -1,0 +1,543 @@
+{% comment %}
+AC Video Interview – Netflix/YouTube Style
+- basiert auf Metaobject "Video" (metaobject.*)
+- Custom Player UI
+- Kapitelmarker in Timeline + Kapitelrail
+- Related Rails: Artists, Artworks, + beliebige Links (Blog, Videos, etc.) via Blocks
+{% endcomment %}
+
+{% assign v = metaobject %}
+
+<section class="acv" data-acv>
+  <!-- HERO -->
+  <div class="acv-hero">
+    <div class="acv-player" data-player>
+      <video
+        class="acv-video"
+        data-video
+        playsinline
+        preload="metadata"
+        {% if v.hero_cover_image %}poster="{{ v.hero_cover_image | image_url: width: 2000 }}"{% endif %}
+      >
+        {% if v.video %}
+          <source src="{{ v.video | file_url }}" type="video/mp4">
+        {% endif %}
+      </video>
+
+      <!-- Overlay UI -->
+      <div class="acv-ui" data-ui>
+        <div class="acv-top">
+          <div class="acv-badges">
+            {% if v.dauer != blank %}
+              <span class="acv-pill">{{ v.dauer }}</span>
+            {% endif %}
+            <span class="acv-pill acv-pill--soft">Interview</span>
+          </div>
+          <button class="acv-iconbtn" type="button" data-fullscreen aria-label="Fullscreen">
+            ⤢
+          </button>
+        </div>
+
+        <div class="acv-center" data-center>
+          <button class="acv-playbig" type="button" data-toggle aria-label="Play/Pause">
+            ▶
+          </button>
+        </div>
+
+        <div class="acv-bottom">
+          <!-- Progress with chapter markers -->
+          <div class="acv-progress" data-progress>
+            <div class="acv-progress__track" data-track>
+              <div class="acv-progress__fill" data-fill></div>
+              <div class="acv-progress__markers" data-markers></div>
+            </div>
+            <div class="acv-progress__meta">
+              <span data-time>0:00</span>
+              <span class="acv-dot">•</span>
+              <span data-duration>0:00</span>
+            </div>
+          </div>
+
+          <div class="acv-controls">
+            <button class="acv-btn" type="button" data-toggle>Play</button>
+            <button class="acv-btn" type="button" data-mute>Mute</button>
+            <div class="acv-vol">
+              <input type="range" min="0" max="1" step="0.01" value="1" data-volume aria-label="Volume">
+            </div>
+            <div class="acv-spacer"></div>
+            <button class="acv-btn acv-btn--ghost" type="button" data-skip="-10">-10s</button>
+            <button class="acv-btn acv-btn--ghost" type="button" data-skip="30">+30s</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Title gradient -->
+      <div class="acv-gradient"></div>
+
+      <div class="acv-heroText">
+        <h1 class="acv-title">{{ v.titel }}</h1>
+        {% if v.untertitel_kurzbeschreibung %}
+          <p class="acv-sub">{{ v.untertitel_kurzbeschreibung }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div class="acv-wrap">
+    <!-- Chapters -->
+    {% if v.kapitelnamen and v.kapitelnamen.size > 0 %}
+      <section class="acv-section">
+        <div class="acv-sectionHead">
+          <h2>Kapitel</h2>
+          <p>Spring direkt zu den wichtigsten Stellen.</p>
+        </div>
+
+        <div class="acv-chapters" data-chapters>
+          {% for name in v.kapitelnamen %}
+            {% assign i = forloop.index0 %}
+            {% assign t = v.kapitel_dauer[i] %}
+            <button class="acv-chapterCard" type="button" data-chapter data-time="{{ t | escape }}">
+              <div class="acv-chapterCard__name">{{ name }}</div>
+              <div class="acv-chapterCard__time">{{ t }}</div>
+            </button>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+
+    <!-- Artists rail -->
+    {% if v.kuenstler and v.kuenstler.size > 0 %}
+      <section class="acv-section">
+        <div class="acv-sectionHead">
+          <h2>Mit</h2>
+          <p>Die Künstler:innen aus dem Interview.</p>
+        </div>
+
+        <div class="acv-rail" role="list">
+          {% for artist in v.kuenstler %}
+            <a class="acv-card" role="listitem" href="{{ artist.url }}">
+              <div class="acv-card__thumb acv-card__thumb--text">
+                <span>{{ artist.name }}</span>
+              </div>
+              <div class="acv-card__meta">
+                <div class="acv-card__title">{{ artist.name }}</div>
+                <div class="acv-card__sub">Profil öffnen</div>
+              </div>
+            </a>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+
+    <!-- Artworks rail -->
+    {% if v.kunstwerke and v.kunstwerke.size > 0 %}
+      <section class="acv-section">
+        <div class="acv-sectionHead">
+          <h2>Gezeigte Werke</h2>
+          <p>Direkt verlinkt aus dem Interview.</p>
+        </div>
+
+        <div class="acv-rail" role="list">
+          {% for p in v.kunstwerke %}
+            <a class="acv-card" role="listitem" href="{{ p.url }}">
+              <div class="acv-card__thumb">
+                {% if p.featured_image %}
+                  {{ p.featured_image | image_url: width: 900 | image_tag: loading: 'lazy', alt: p.title }}
+                {% else %}
+                  <div class="acv-card__thumbFallback"></div>
+                {% endif %}
+              </div>
+              <div class="acv-card__meta">
+                <div class="acv-card__title">{{ p.title }}</div>
+                <div class="acv-card__sub">{{ p.price | money }}</div>
+              </div>
+            </a>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+
+    <!-- Related links rail (Blogartikel / YouTube / weitere Interviews / etc.) -->
+    {% if section.blocks.size > 0 %}
+      <section class="acv-section">
+        <div class="acv-sectionHead">
+          <h2>Mehr dazu</h2>
+          <p>Weitere Inhalte, die du kuratierst.</p>
+        </div>
+
+        <div class="acv-rail" role="list">
+          {% for block in section.blocks %}
+            {% if block.type == 'link' %}
+              <a class="acv-card" role="listitem" href="{{ block.settings.url }}" {% if block.settings.new_tab %}target="_blank" rel="noopener"{% endif %}>
+                <div class="acv-card__thumb">
+                  {% if block.settings.image %}
+                    {{ block.settings.image | image_url: width: 900 | image_tag: loading: 'lazy', alt: block.settings.title }}
+                  {% else %}
+                    <div class="acv-card__thumbFallback"></div>
+                  {% endif %}
+                </div>
+                <div class="acv-card__meta">
+                  <div class="acv-card__title">{{ block.settings.title }}</div>
+                  {% if block.settings.subtitle != blank %}
+                    <div class="acv-card__sub">{{ block.settings.subtitle }}</div>
+                  {% endif %}
+                </div>
+              </a>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+  </div>
+
+  <!-- Data (chapters) -->
+  <script type="application/json" data-chapter-json>
+    {
+      "names": [{% if v.kapitelnamen %}{% for n in v.kapitelnamen %}{% if forloop.first == false %},{% endif %}{{ n | json }}{% endfor %}{% else %}{% endif %}],
+      "times": [{% if v.kapitel_dauer %}{% for t in v.kapitel_dauer %}{% if forloop.first == false %},{% endif %}{{ t | json }}{% endfor %}{% else %}{% endif %}]
+    }
+  </script>
+
+  <style>
+    .acv{ --bg:#070708; --panel:#0E0E10; --line:rgba(255,255,255,.10); --muted:rgba(255,255,255,.68); --muted2:rgba(255,255,255,.48); --white:#fff; color:#fff; background:var(--bg); }
+    .acv-hero{ padding: 18px; }
+    .acv-player{ position:relative; border-radius: 18px; overflow:hidden; background:#000; border:1px solid var(--line); }
+    .acv-video{ width:100%; height:min(78vh, 860px); display:block; object-fit:cover; background:#000; }
+    .acv-gradient{ position:absolute; inset:0; background: linear-gradient(180deg, rgba(0,0,0,.40) 0%, rgba(0,0,0,.20) 45%, rgba(0,0,0,.76) 100%); pointer-events:none; }
+    .acv-heroText{ position:absolute; left:18px; right:18px; bottom:18px; z-index:2; max-width: 980px; }
+    .acv-title{ margin:0 0 8px; font: 780 clamp(28px, 4vw, 46px)/1.05 system-ui; letter-spacing:-0.02em; }
+    .acv-sub{ margin:0; color:var(--muted); font: 520 15px/1.5 system-ui; max-width: 760px; }
+
+    .acv-ui{ position:absolute; inset:0; z-index:3; display:flex; flex-direction:column; justify-content:space-between; padding:14px; }
+    .acv-top{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .acv-badges{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .acv-pill{ display:inline-flex; align-items:center; gap:8px; padding:7px 10px; border-radius:999px; background:rgba(0,0,0,.45); border:1px solid rgba(255,255,255,.14); color:#fff; font:650 12px/1 system-ui; backdrop-filter: blur(8px); }
+    .acv-pill--soft{ opacity:.85; }
+    .acv-iconbtn{ border:1px solid rgba(255,255,255,.14); background:rgba(0,0,0,.40); color:#fff; border-radius:12px; width:42px; height:42px; cursor:pointer; backdrop-filter: blur(8px); }
+
+    .acv-center{ display:flex; align-items:center; justify-content:center; }
+    .acv-playbig{
+      width:78px; height:78px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.16);
+      background:rgba(0,0,0,.35);
+      color:#fff; font-size:24px; cursor:pointer;
+      backdrop-filter: blur(10px);
+      transition: transform .18s ease, background .18s ease;
+    }
+    .acv-playbig:hover{ transform: scale(1.03); background:rgba(0,0,0,.45); }
+
+    .acv-bottom{ display:flex; flex-direction:column; gap:10px; }
+    .acv-progress{ background:rgba(0,0,0,.42); border:1px solid rgba(255,255,255,.14); border-radius:14px; padding:10px 10px 8px; backdrop-filter: blur(10px); }
+    .acv-progress__track{ position:relative; height:10px; border-radius:999px; background:rgba(255,255,255,.12); overflow:hidden; cursor:pointer; }
+    .acv-progress__fill{ position:absolute; left:0; top:0; bottom:0; width:0%; background:#fff; opacity:.92; }
+    .acv-progress__markers{ position:absolute; inset:0; pointer-events:none; }
+    .acv-marker{
+      position:absolute; top:50%; transform:translate(-50%,-50%);
+      width:4px; height:16px; border-radius:999px;
+      background:rgba(255,255,255,.95);
+      box-shadow:0 0 0 3px rgba(0,0,0,.35);
+      pointer-events:auto;
+    }
+    .acv-marker:hover::after{
+      content: attr(data-label);
+      position:absolute; left:50%; bottom:24px; transform:translateX(-50%);
+      white-space:nowrap; max-width:280px;
+      padding:6px 8px; border-radius:10px;
+      background:rgba(0,0,0,.80); border:1px solid rgba(255,255,255,.14);
+      color:#fff; font:650 12px/1.2 system-ui;
+    }
+
+    .acv-progress__meta{ margin-top:8px; display:flex; gap:8px; justify-content:flex-end; color:rgba(255,255,255,.75); font:650 12px/1 system-ui; }
+    .acv-dot{ opacity:.6; }
+
+    .acv-controls{ display:flex; gap:8px; align-items:center; }
+    .acv-btn{ border:1px solid rgba(255,255,255,.14); background:rgba(0,0,0,.40); color:#fff; border-radius:12px; padding:10px 12px; cursor:pointer; font:650 12px/1 system-ui; backdrop-filter: blur(10px); }
+    .acv-btn--ghost{ opacity:.85; }
+    .acv-vol input{ width:120px; }
+    .acv-spacer{ flex:1; }
+
+    .acv-wrap{ max-width: 1180px; margin:0 auto; padding: 24px 18px 64px; }
+    .acv-section{ margin-top: 26px; }
+    .acv-sectionHead h2{ margin:0; font:780 18px/1.15 system-ui; letter-spacing:-0.01em; }
+    .acv-sectionHead p{ margin:6px 0 0; color:var(--muted2); font:520 13px/1.5 system-ui; }
+
+    .acv-chapters{
+      margin-top:14px;
+      display:grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    @media (max-width: 980px){ .acv-chapters{ grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 520px){ .acv-chapters{ grid-template-columns: 1fr; } }
+
+    .acv-chapterCard{
+      border:1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border-radius:14px;
+      padding:14px;
+      text-align:left;
+      cursor:pointer;
+      color:#fff;
+      transition: transform .15s ease, border-color .15s ease;
+    }
+    .acv-chapterCard:hover{ transform: translateY(-1px); border-color: rgba(255,255,255,.22); }
+    .acv-chapterCard__name{ font:760 14px/1.25 system-ui; letter-spacing:-0.01em; }
+    .acv-chapterCard__time{ margin-top:8px; color:var(--muted2); font:650 12px/1 system-ui; }
+
+    .acv-rail{
+      margin-top:14px;
+      display:flex; gap:12px;
+      overflow-x:auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 6px;
+      scroll-snap-type: x proximity;
+    }
+    .acv-card{
+      flex:0 0 220px;
+      scroll-snap-align: start;
+      text-decoration:none;
+      color:#fff;
+    }
+    .acv-card__thumb{
+      border-radius:16px;
+      overflow:hidden;
+      border:1px solid var(--line);
+      background:#0b0b0c;
+      aspect-ratio: 16 / 10;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .acv-card__thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+    .acv-card__thumbFallback{ width:100%; height:100%; background: linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.02)); }
+    .acv-card__thumb--text{ padding:18px; text-align:left; }
+    .acv-card__thumb--text span{ font:760 16px/1.2 system-ui; letter-spacing:-0.01em; color:#fff; opacity:.92; }
+    .acv-card__meta{ padding:10px 2px 0; }
+    .acv-card__title{ font:760 13px/1.2 system-ui; }
+    .acv-card__sub{ margin-top:5px; color:var(--muted2); font:620 12px/1.2 system-ui; }
+
+    /* Mobile UI */
+    @media (max-width: 760px){
+      .acv-video{ height: min(62vh, 520px); }
+      .acv-heroText{ bottom: 14px; }
+      .acv-vol{ display:none; }
+      .acv-playbig{ width:64px; height:64px; }
+    }
+  </style>
+
+  <script>
+  (function(){
+    const root = document.querySelector('[data-acv]');
+    if(!root) return;
+
+    const video = root.querySelector('[data-video]');
+    const ui = root.querySelector('[data-ui]');
+    const toggleBtn = root.querySelectorAll('[data-toggle]');
+    const muteBtn = root.querySelector('[data-mute]');
+    const vol = root.querySelector('[data-volume]');
+    const fsBtn = root.querySelector('[data-fullscreen]');
+    const track = root.querySelector('[data-track]');
+    const fill = root.querySelector('[data-fill]');
+    const timeEl = root.querySelector('[data-time]');
+    const durEl = root.querySelector('[data-duration]');
+    const markersWrap = root.querySelector('[data-markers]');
+    const chapterBtns = root.querySelectorAll('[data-chapter]');
+    const jsonEl = root.querySelector('[data-chapter-json]');
+    const skipBtns = root.querySelectorAll('[data-skip]');
+
+    const pad2 = (n)=> String(n).padStart(2,'0');
+    const fmt = (s)=>{
+      s = Math.max(0, Math.floor(s || 0));
+      const h = Math.floor(s/3600);
+      const m = Math.floor((s%3600)/60);
+      const sec = Math.floor(s%60);
+      if(h>0) return `${h}:${pad2(m)}:${pad2(sec)}`;
+      return `${m}:${pad2(sec)}`;
+    };
+
+    const parseTime = (str)=>{
+      const t = String(str||'').trim();
+      if(!t) return null;
+      const parts = t.split(':').map(x=>Number(x));
+      if(parts.some(x=>Number.isNaN(x))) return null;
+      if(parts.length === 3) return parts[0]*3600 + parts[1]*60 + parts[2];
+      if(parts.length === 2) return parts[0]*60 + parts[1];
+      if(parts.length === 1) return parts[0];
+      return null;
+    };
+
+    const setPlayUI = ()=>{
+      const playing = !video.paused && !video.ended;
+      toggleBtn.forEach(b => b.textContent = playing ? 'Pause' : 'Play');
+      const big = root.querySelector('.acv-playbig');
+      if(big) big.textContent = playing ? '❚❚' : '▶';
+    };
+
+    const setMuteUI = ()=>{
+      if(!muteBtn) return;
+      muteBtn.textContent = video.muted ? 'Unmute' : 'Mute';
+    };
+
+    // Click to seek on progress track
+    const seekFromClientX = (clientX)=>{
+      const r = track.getBoundingClientRect();
+      const pct = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+      video.currentTime = pct * (video.duration || 0);
+    };
+
+    // Build chapter markers once duration is known
+    const buildMarkers = ()=>{
+      if(!markersWrap || !jsonEl) return;
+      markersWrap.innerHTML = '';
+
+      let data = null;
+      try { data = JSON.parse(jsonEl.textContent || '{}'); } catch(e) {}
+      const names = (data && data.names) || [];
+      const times = (data && data.times) || [];
+      if(!video.duration || !times.length) return;
+
+      times.forEach((t, i)=>{
+        const sec = parseTime(t);
+        if(sec === null) return;
+        const pct = (sec / video.duration) * 100;
+        if(pct < 0 || pct > 100) return;
+
+        const m = document.createElement('button');
+        m.type = 'button';
+        m.className = 'acv-marker';
+        m.style.left = pct + '%';
+        m.setAttribute('data-label', (names[i] ? `${names[i]} • ${t}` : `${t}`));
+        m.addEventListener('click', (ev)=>{
+          ev.stopPropagation();
+          video.currentTime = sec;
+          video.play();
+        });
+        markersWrap.appendChild(m);
+      });
+    };
+
+    // Events
+    toggleBtn.forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        if(video.paused) video.play(); else video.pause();
+      });
+    });
+
+    if(muteBtn){
+      muteBtn.addEventListener('click', ()=>{
+        video.muted = !video.muted;
+        setMuteUI();
+      });
+    }
+
+    if(vol){
+      vol.addEventListener('input', ()=>{
+        video.volume = Number(vol.value);
+        if(video.volume === 0) video.muted = true;
+        else video.muted = false;
+        setMuteUI();
+      });
+    }
+
+    skipBtns.forEach(b=>{
+      b.addEventListener('click', ()=>{
+        const delta = Number(b.getAttribute('data-skip') || 0);
+        video.currentTime = Math.max(0, Math.min((video.duration||0), (video.currentTime||0) + delta));
+      });
+    });
+
+    if(fsBtn){
+      fsBtn.addEventListener('click', async ()=>{
+        const el = root.querySelector('[data-player]');
+        if(!el) return;
+        try{
+          if(document.fullscreenElement) await document.exitFullscreen();
+          else await el.requestFullscreen();
+        }catch(e){}
+      });
+    }
+
+    if(track){
+      track.addEventListener('click', (e)=> seekFromClientX(e.clientX));
+    }
+
+    // Chapter cards -> seek
+    chapterBtns.forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const sec = parseTime(btn.getAttribute('data-time'));
+        if(sec === null) return;
+        video.currentTime = sec;
+        video.play();
+      });
+    });
+
+    // Video time update
+    video.addEventListener('timeupdate', ()=>{
+      const d = video.duration || 0;
+      const t = video.currentTime || 0;
+      if(fill && d>0) fill.style.width = ((t/d)*100).toFixed(3) + '%';
+      if(timeEl) timeEl.textContent = fmt(t);
+      setPlayUI();
+    });
+
+    video.addEventListener('play', setPlayUI);
+    video.addEventListener('pause', setPlayUI);
+    video.addEventListener('volumechange', setMuteUI);
+
+    video.addEventListener('loadedmetadata', ()=>{
+      if(durEl) durEl.textContent = fmt(video.duration || 0);
+      setMuteUI();
+      setPlayUI();
+      buildMarkers();
+    });
+
+    // “Netflix feel”: UI blendet leicht aus, wenn man nicht interagiert
+    let uiTimer = null;
+    const showUI = ()=>{
+      ui.style.opacity = '1';
+      ui.style.pointerEvents = 'auto';
+      clearTimeout(uiTimer);
+      uiTimer = setTimeout(()=>{
+        if(!video.paused){
+          ui.style.opacity = '.18';
+          ui.style.pointerEvents = 'none';
+        }
+      }, 2200);
+    };
+    ['mousemove','pointermove','touchstart'].forEach(ev=>{
+      root.addEventListener(ev, showUI, {passive:true});
+    });
+    root.addEventListener('click', showUI);
+    showUI();
+
+    // Rebuild markers on resize (when duration exists)
+    window.addEventListener('resize', ()=>{
+      if(video.duration) buildMarkers();
+    });
+  })();
+  </script>
+
+  {% schema %}
+  {
+    "name": "AC Vide",
+    "tag": "section",
+    "blocks": [
+      {
+        "type": "link",
+        "name": "Related Link (Blog/Video)",
+        "settings": [
+          { "type": "text", "id": "title", "label": "Titel", "default": "Weiterer Artikel" },
+          { "type": "text", "id": "subtitle", "label": "Untertitel", "default": "Kurzbeschreibung" },
+          { "type": "url", "id": "url", "label": "Link" },
+          { "type": "image_picker", "id": "image", "label": "Bild (optional)" },
+          { "type": "checkbox", "id": "new_tab", "label": "In neuem Tab öffnen", "default": false }
+        ]
+      }
+    ],
+    "presets": [
+      { "name": "Video Interview – Netflix Style", "category": "ARTCLUB" }
+    ]
+  }
+  {% endschema %}
+</section>

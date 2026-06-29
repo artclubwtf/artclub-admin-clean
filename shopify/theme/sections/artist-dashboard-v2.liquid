@@ -1,0 +1,371 @@
+{% if customer and customer.metafields.custom.role == "artist" %}
+<section class="artist-dashboard">
+  <div class="dashboard-container">
+
+    <!-- Header -->
+    <header class="dashboard-header">
+      <h1 class="dashboard-title">
+        {{ section.settings.title | default: "Künstler Dashboard" }}
+      </h1>
+      <p class="dashboard-subtitle">
+        {{ section.settings.subtitle | default: "Verwalte dein Künstlerprofil und deine Daten" }}
+      </p>
+    </header>
+
+    {% form 'customer', customer, class: 'artist-form' %}
+
+      {%- comment -%} STAMMDATEN {%- endcomment -%}
+      <div class="dashboard-section">
+        <div class="section-header">
+          <h2>Stammdaten</h2>
+          <button type="button" class="btn-toggle" data-target="edit-stammdaten">Bearbeiten</button>
+        </div>
+        <div class="section-content">
+          <div class="field">
+            <label>Artist Token</label>
+            <div class="field-value">{{ customer.metafields.custom.artist_token }}</div>
+          </div>
+          <div class="field">
+            <label>Biografie</label>
+            <div class="field-value">
+              {% if customer.metafields.custom.biography %}
+                {{ customer.metafields.custom.biography | metafield_tag }}
+              {% else %}
+                <em>Keine Biografie hinterlegt</em>
+              {% endif %}
+            </div>
+          </div>
+          <div class="field">
+            <label>Social Links</label>
+            {% if customer.metafields.custom.social_links %}
+              <ul class="link-list">
+                {% for link in customer.metafields.custom.social_links %}
+                  <li><a href="{{ link.url }}" target="_blank">{{ link.text | default: link.url }}</a></li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <em>Keine Social Links hinterlegt</em>
+            {% endif %}
+          </div>
+        </div>
+        <div class="edit-block" id="edit-stammdaten">
+          <div class="form-group">
+            <label for="biography">Biografie</label>
+            <textarea id="biography"
+                      name="customer[metafields][custom][biography]"
+                      rows="5">{{ customer.metafields.custom.biography }}</textarea>
+          </div>
+          <div class="form-group">
+            <label for="social_links">Social Links (je Zeile eine URL)</label>
+            <textarea id="social_links"
+                      name="customer[metafields][custom][social_links]"
+                      rows="3">{% for link in customer.metafields.custom.social_links %}{{ link.url }}{% unless forloop.last %}\n{% endunless %}{% endfor %}</textarea>
+          </div>
+        </div>
+      </div>
+
+      {%- comment -%} KÜNSTLERISCHE INFOS {%- endcomment -%}
+      <div class="dashboard-section">
+        <div class="section-header">
+          <h2>Künstlerische Informationen</h2>
+          <button type="button" class="btn-toggle" data-target="edit-onboarding">Bearbeiten</button>
+        </div>
+        <div class="section-content">
+          <div class="field">
+            <label>Stil</label>
+            <div class="field-value">{{ customer.metafields.custom.kunstler_fragen_stil | newline_to_br | default: "–" }}</div>
+          </div>
+          <div class="field">
+            <label>Kunstart</label>
+            <div class="field-value">{{ customer.metafields.custom.kunstler_fragen_kunstart | newline_to_br | default: "–" }}</div>
+          </div>
+          <div class="field">
+            <label>Medien</label>
+            <div class="field-value">{{ customer.metafields.custom.kunstler_kunstmedien | newline_to_br | default: "–" }}</div>
+          </div>
+          <div class="field">
+            <label>Management Notes</label>
+            {% if customer.metafields.custom.kunstler_management_notes %}
+              <ul class="notes-list">
+                {% for note in customer.metafields.custom.kunstler_management_notes %}
+                  <li>{{ note }}</li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <em>Keine Notes</em>
+            {% endif %}
+          </div>
+          <div class="field">
+            <label>Marketing Bilder</label>
+            {% if customer.metafields.custom.kunstler_bilder_fur_marketing_co %}
+              <div class="image-grid">
+                {% for img in customer.metafields.custom.kunstler_bilder_fur_marketing_co %}
+                  <img src="{{ img | file_url }}" alt="" class="thumb"/>
+                {% endfor %}
+              </div>
+            {% else %}
+              <em>Keine Marketing-Bilder</em>
+            {% endif %}
+          </div>
+          <div class="field">
+            <label>Profil-Collection</label>
+            <div class="field-value">
+              {{ customer.metafields.custom.kunstler_collection | metafield_tag }}
+            </div>
+          </div>
+        </div>
+        <div class="edit-block" id="edit-onboarding">
+          <div class="form-group">
+            <label for="kuenstler_fragen_stil">Stil</label>
+            <textarea id="kuenstler_fragen_stil"
+                      name="customer[metafields][custom][kuenstler_fragen_stil]"
+                      rows="3">{{ customer.metafields.custom.kunstler_fragen_stil }}</textarea>
+          </div>
+          <div class="form-group">
+            <label for="kuenstler_fragen_kunstart">Kunstart</label>
+            <textarea id="kuenstler_fragen_kunstart"
+                      name="customer[metafields][custom][kuenstler_fragen_kunstart]"
+                      rows="3">{{ customer.metafields.custom.kunstler_fragen_kunstart }}</textarea>
+          </div>
+          <div class="form-group">
+            <label for="kuenstler_kunstmedien">Medien</label>
+            <textarea id="kuenstler_kunstmedien"
+                      name="customer[metafields][custom][kuenstler_kunstmedien]"
+                      rows="3">{{ customer.metafields.custom.kunstler_kunstmedien }}</textarea>
+          </div>
+          <div class="form-group">
+            <label for="kunstler_fragen_kunstuploads">Werk-Upload</label>
+            <input id="kunstler_fragen_kunstuploads"
+                   type="file"
+                   name="customer[metafields][custom][kunstler_fragen_kunstuploads]"
+                   accept="image/*,video/*"/>
+          </div>
+        </div>
+      </div>
+
+      {%- comment -%} VERTRAG & AUSZAHLUNG {%- endcomment -%}
+      <div class="dashboard-section">
+        <div class="section-header">
+          <h2>Vertrag &amp; Auszahlung</h2>
+          <button type="button" class="btn-toggle" data-target="edit-vertrag">Bearbeiten</button>
+        </div>
+        <div class="section-content">
+          <div class="field">
+            <label>Originalwerke-Anteil</label>
+            <div class="field-value">{{ customer.metafields.custom.kunstleranteil_originalwerke | default: "–" }} %</div>
+          </div>
+          <div class="field">
+            <label>Drucke-Anteil</label>
+            <div class="field-value">{{ customer.metafields.custom.kunstleranteil_drucke | default: "–" }} %</div>
+          </div>
+          <div class="field">
+            <label>Bankdaten</label>
+            <div class="field-value">
+              <p><strong>Name:</strong> {{ customer.metafields.custom.bankdaten_name | default: "–" }}</p>
+              <p><strong>IBAN:</strong> {{ customer.metafields.custom.bankdaten_iban | default: "–" }}</p>
+              <p><strong>Steuernr.:</strong> {{ customer.metafields.custom.bankdaten_steuernummer | default: "–" }}</p>
+            </div>
+          </div>
+          <div class="field">
+            <label>Verträge</label>
+            <div class="field-value">
+              {% comment %}
+                1. Wenn es ein Datei-Array (File List) ist:
+              {% endcomment %}
+              {% if customer.metafields.custom.vertrage.references %}
+                <ul class="contract-list">
+                  {% for file in customer.metafields.custom.vertrage.references %}
+                    <li class="contract-item">
+                      <a href="{{ file | file_url }}" download target="_blank" rel="noopener">
+                        📄 {{ file.filename }}
+                      </a>
+                    </li>
+                  {% endfor %}
+                </ul>
+
+              {% comment %}
+                2. Single-File-Fall:
+              {% endcomment %}
+              {% elsif customer.metafields.custom.vertrage.url %}
+                <p>
+                  <a href="{{ customer.metafields.custom.vertrage.url }}" download target="_blank" rel="noopener">
+                    📄 {{ customer.metafields.custom.vertrage.filename | default: "Vertrag herunterladen" }}
+                  </a>
+                </p>
+
+              {% else %}
+                <em>Keine Verträge verfügbar</em>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="edit-block" id="edit-vertrag">
+          <div class="form-group">
+            <label for="bankdaten_name">Kontoinhaber</label>
+            <input id="bankdaten_name" class="input-text"
+                   type="text"
+                   name="customer[metafields][custom][bankdaten_name]"
+                   value="{{ customer.metafields.custom.bankdaten_name }}"/>
+          </div>
+          <div class="form-group">
+            <label for="bankdaten_iban">IBAN</label>
+            <input id="bankdaten_iban" class="input-text"
+                   type="text"
+                   name="customer[metafields][custom][bankdaten_iban]"
+                   value="{{ customer.metafields.custom.bankdaten_iban }}"/>
+          </div>
+          <div class="form-group">
+            <label for="bankdaten_steuernummer">Steuernummer</label>
+            <input id="bankdaten_steuernummer" class="input-text"
+                   type="text"
+                   name="customer[metafields][custom][bankdaten_steuernummer]"
+                   value="{{ customer.metafields.custom.bankdaten_steuernummer }}"/>
+          </div>
+        </div>
+      </div>
+
+      {%- comment -%} STATUS & METAOBJEKTE {%- endcomment -%}
+      <div class="dashboard-section no-edit">
+        <div class="section-header">
+          <h2>Status &amp; Links</h2>
+        </div>
+        <div class="section-content">
+          <div class="field">
+            <label>Status</label>
+            <div class="status-badge status-{{ customer.metafields.custom.kunstler_status | downcase }}">
+              {{ customer.metafields.custom.kunstler_status | capitalize }}
+            </div>
+          </div>
+          <div class="field">
+            <label>Profil-Objekt</label>
+            <div class="field-value">
+              {{ customer.metafields.custom.kunstlerprofil | metafield_tag }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Save -->
+      <div class="form-actions">
+        <button type="submit" class="btn-save">Alle Änderungen speichern</button>
+      </div>
+
+    {% endform %}
+  </div>
+</section>
+
+<style>
+/* Basis */
+.artist-dashboard { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f2f2f5; padding: 2rem 1rem; color: #1d1d1f; }
+.dashboard-container { max-width: 800px; margin: 0 auto; }
+
+/* Header */
+.dashboard-header { text-align: center; margin-bottom: 2rem; }
+.dashboard-title { font-size: 2.5rem; margin: 0; font-weight: 600; }
+.dashboard-subtitle { color: #48484a; margin-top: 0.5rem; }
+
+/* Sections */
+.dashboard-section { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); margin-bottom: 1.5rem; overflow: hidden; }
+.no-edit .btn-toggle { display: none; }
+
+/* Section Header */
+.section-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid #e5e5ea; }
+.section-header h2 { margin: 0; font-size: 1.25rem; font-weight: 500; }
+.btn-toggle { background: transparent; border: none; color: #0a84ff; cursor: pointer; font-size: 0.9rem; }
+.btn-toggle:hover { text-decoration: underline; }
+
+/* Content */
+.section-content { padding: 1rem 1.5rem 1.5rem; }
+.field { margin-bottom: 1rem; }
+.field label { display: block; font-size: 0.875rem; font-weight: 500; color: #48484a; }
+.field-value { margin-top: 0.25rem; font-size: 1rem; }
+
+/* Lists */
+.link-list, .notes-list, .contract-list { list-style: none; margin: 0.5rem 0 0; padding: 0; }
+.link-list li, .notes-list li, .contract-list li { margin-bottom: 0.5rem; }
+.link-list a { color: #0a84ff; text-decoration: none; }
+.link-list a:hover { text-decoration: underline; }
+.notes-list li { padding-left: 1rem; position: relative; }
+.notes-list li::before { content: "•"; position: absolute; left: 0; color: #0a84ff; }
+.contract-list a { color: #1d1d1f; text-decoration: none; display: inline-flex; align-items: center; }
+.contract-list a::before { content: "📄"; margin-right: 0.5rem; }
+
+/* Image Grid */
+.image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px,1fr)); gap: 0.5rem; margin-top: 0.5rem; }
+.thumb { width: 100%; border-radius: 6px; }
+
+/* Status Badge */
+.status-badge { display: inline-block; padding: 0.4rem 1rem; border-radius: 16px; font-size: 0.875rem; font-weight: 500; }
+.status-aktiv { background: #d4f7e5; color: #0a3f2e; }
+.status-inaktiv { background: #fdecea; color: #4a1f1d; }
+.status-pending { background: #fff4e5; color: #4a3f1d; }
+.status-unbekannt { background: #e5ecea; color: #48484a; }
+
+/* Edit Blocks */
+.edit-block { display: none; border-top: 1px solid #e5e5ea; padding: 1rem 1.5rem; }
+.form-group { margin-bottom: 1rem; }
+.form-group label { display: block; font-size: 0.875rem; margin-bottom: 0.25rem; }
+.input-text, textarea { width: 100%; font-size: 1rem; padding: 0.5rem; border: 1px solid #c7c7cc; border-radius: 6px; }
+.input-text:focus, textarea:focus { outline: none; border-color: #0a84ff; box-shadow: 0 0 0 2px rgba(10,132,255,0.2); }
+
+/* Save Button */
+.form-actions { text-align: center; padding: 1rem 0; }
+.btn-save { background: #0a84ff; color: #fff; border: none; font-size: 1rem; font-weight: 600; padding: 0.75rem 2rem; border-radius: 8px; cursor: pointer; }
+.btn-save:hover { background: #006ecc; }
+
+/* Responsive */
+@media (max-width: 600px) {
+  .dashboard-title { font-size: 2rem; }
+  .section-header h2 { font-size: 1.1rem; }
+
+
+  .contract-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+.contract-item {
+  margin-bottom: 0.5rem;
+}
+.contract-item a {
+  color: #1d1d1f;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.contract-item a:hover {
+  text-decoration: underline;
+}
+.contract-item a::before {
+  content: "📄";
+  margin-right: 0.5rem;
+}
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.btn-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = document.getElementById(btn.dataset.target);
+      const open = target.style.display === 'block';
+      target.style.display = open ? 'none' : 'block';
+      btn.textContent = open ? 'Bearbeiten' : 'Schließen';
+    });
+  });
+});
+</script>
+{% endif %}
+{% schema %}
+{
+  "name": "Artist Dashboard",
+  "tag": "section",
+  "settings": [
+    { "type": "text", "id": "title",    "label": "Titel",     "default": "Künstler Dashboard"    },
+    { "type": "text", "id": "subtitle", "label": "Untertitel","default": "Verwalte dein Künstlerprofil und deine Daten" }
+  ],
+  "presets": [
+    { "name": "Artist Dashboard" }
+  ]
+}
+{% endschema %}

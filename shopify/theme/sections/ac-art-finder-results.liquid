@@ -1,0 +1,365 @@
+{% comment %}
+  ARTCLUB Art Finder — Ergebnisseite
+  sections/art-finder-results.liquid
+
+  Setup:
+  1. Admin > Seiten > Neue Seite: Titel "Art Finder Ergebnisse", Handle "art-finder-results"
+  2. templates/page.art-finder-results.json erstellen (siehe separate Datei)
+  3. Im Customizer: Collection auswählen, die alle Kunstwerke enthält
+
+  URL ist teilbar: /pages/art-finder-results?style=gestural&color=cool&mood=energetic&budget=mid
+{% endcomment %}
+
+{%- assign af_col = collections[section.settings.collection] -%}
+
+<div id="afr-root">
+
+  <a href="{{ section.settings.quiz_page | default: '/' }}" class="afr-back">&#8592; Neues Quiz</a>
+
+  <div class="afr-hero">
+    <h1 class="afr-persona-name" id="afr-pname">Deine Auswahl</h1>
+    <p class="afr-persona-desc" id="afr-pdesc"></p>
+  </div>
+
+  <div class="afr-controls">
+    <div class="afr-sr">
+      <span class="afr-sl">Abstrakt</span>
+      <input type="range" id="afr-abs" min="0" max="100" step="1" value="30" oninput="afrUpdate()">
+      <span class="afr-sl afr-sl-r">Figurativ</span>
+    </div>
+    <div class="afr-sr">
+      <span class="afr-sl">Subtil</span>
+      <input type="range" id="afr-int" min="0" max="100" step="1" value="40" oninput="afrUpdate()">
+      <span class="afr-sl afr-sl-r">Intensiv</span>
+    </div>
+    <div class="afr-meta">
+      <span id="afr-count"></span>
+      <span class="afr-dot">·</span>
+      <button class="afr-mlink" onclick="afrShare('link',this)">Link kopieren</button>
+      <span class="afr-dot">·</span>
+      <button class="afr-mlink" onclick="afrShare('wa',this)">WhatsApp</button>
+      <span class="afr-dot">·</span>
+      <button class="afr-mlink" onclick="afrShare('mail',this)">Mail</button>
+    </div>
+  </div>
+
+  <div class="afr-grid-wrap">
+    <div class="afr-grid" id="afr-grid"></div>
+  </div>
+
+</div>
+
+<style>
+#afr-root{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;color:#111;background:#fff;min-height:80vh}
+#afr-root *{box-sizing:border-box}
+.afr-back{display:block;text-align:right;padding:18px 32px 0;font-size:12px;color:#bbb;text-decoration:none;transition:color .15s}
+.afr-back:hover{color:#111}
+.afr-hero{text-align:center;padding:52px 32px 40px}
+.afr-persona-name{font-size:56px;font-weight:700;letter-spacing:-.05em;line-height:.95;color:#111;margin:0 0 16px}
+.afr-persona-desc{font-size:15px;color:#999;line-height:1.7;max-width:380px;margin:0 auto;font-weight:400}
+.afr-controls{text-align:center;padding:0 32px 40px;max-width:480px;margin:0 auto}
+.afr-sr{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.afr-sl{font-size:11px;color:#ccc;width:52px;flex-shrink:0}
+.afr-sl-r{text-align:right}
+.afr-sr input[type=range]{flex:1;accent-color:#111;cursor:pointer}
+.afr-meta{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:18px;flex-wrap:wrap}
+.afr-meta #afr-count{font-size:12px;color:#bbb}
+.afr-dot{color:#ddd;font-size:12px}
+.afr-mlink{background:none;border:none;font-size:12px;color:#bbb;cursor:pointer;padding:0;transition:color .15s;font-family:inherit}
+.afr-mlink:hover{color:#111}
+@media(max-width:600px){
+  .afr-persona-name{font-size:38px}
+  .afr-hero{padding:40px 20px 32px}
+  .afr-controls{padding:0 20px 32px}
+  .afr-back{padding-right:20px}
+}
+.afr-grid-wrap{max-width:1400px;margin:0 auto;padding:8px 32px 48px}
+.afr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:36px 20px}
+@media(max-width:600px){.afr-grid{grid-template-columns:repeat(2,1fr);gap:24px 12px}}
+@media(min-width:1200px){.afr-grid{grid-template-columns:repeat(5,1fr)}}
+.afr-card{display:block;text-decoration:none;color:inherit}
+.afr-img-wrap{aspect-ratio:1/1;overflow:hidden;background:#f5f4f2;margin-bottom:12px;position:relative;border-radius:14px;transition:transform .25s}
+.afr-card:hover .afr-img-wrap{transform:translateY(-3px)}
+.afr-cimg{width:100%;height:100%;object-fit:cover;display:block;transition:transform .4s cubic-bezier(.4,0,.2,1)}
+.afr-card:hover .afr-cimg{transform:scale(1.05)}
+.afr-badge-wrap{position:absolute;bottom:10px;left:10px;display:flex;gap:4px;flex-wrap:wrap}
+.afr-badge{font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:4px 8px;border-radius:50px;line-height:1.3}
+.afr-badge-o{background:rgba(17,17,17,.72);color:#fff}
+.afr-badge-p{background:rgba(255,255,255,.88);color:#555}
+.afr-artist{font-size:12px;color:#bbb;margin:0 0 3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.afr-title{font-size:14px;font-weight:500;margin:0 0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#111;letter-spacing:-.01em}
+.afr-dim{font-size:11px;color:#ccc;margin:0 0 6px}
+.afr-price-wrap{display:flex;flex-direction:column;gap:1px}
+.afr-price{font-size:13px;font-weight:600;color:#111}
+.afr-price-sub{font-size:11px;color:#ccc}
+.afr-empty{grid-column:1/-1;padding:80px 20px;text-align:center;color:#ccc;font-size:14px}
+</style>
+
+<script>
+(function(){
+
+// ─── Produktdaten live aus Shopify Collection ───────────────────────────────
+var P = [
+  {%- if af_col != blank -%}
+    {%- for product in af_col.products limit: 250 -%}
+      {%- unless product.available == false and section.settings.hide_unavailable -%}
+
+      {%- comment -%} Varianten analysieren: Original vs. Print {%- endcomment -%}
+      {%- assign af_has_orig = false -%}
+      {%- assign af_has_print = false -%}
+      {%- assign af_price_orig = 0 -%}
+      {%- for v in product.variants -%}
+        {%- assign vt = v.title | downcase -%}
+        {%- if vt contains 'original' -%}
+          {%- assign af_has_orig = true -%}
+          {%- assign af_price_orig = v.price | divided_by: 100 -%}
+        {%- endif -%}
+        {%- if vt contains 'print' or vt contains 'edition' or vt contains 'poster' or vt contains 'acryl' or vt contains 'frame' -%}
+          {%- assign af_has_print = true -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- comment -%} Default Title = nur Original, keine Varianten {%- endcomment -%}
+      {%- if product.variants.size == 1 and product.variants.first.title == 'Default Title' -%}
+        {%- assign af_has_orig = true -%}
+        {%- assign af_price_orig = product.price_min | divided_by: 100 -%}
+      {%- endif -%}
+      {%- assign af_ty = 'o' -%}
+      {%- if af_has_orig and af_has_print -%}{%- assign af_ty = 'op' -%}
+      {%- elsif af_has_print -%}{%- assign af_ty = 'p' -%}
+      {%- endif -%}
+
+      {%- comment -%} Maße aus Metafields {%- endcomment -%}
+      {%- assign af_w = product.metafields.custom.breite_cm_ | remove: "'" | floor -%}
+      {%- assign af_h = product.metafields.custom.height | remove: "'" | floor -%}
+
+      {%- comment -%} Hauptpreis: Original-Preis wenn vorhanden, sonst günstigste Variante {%- endcomment -%}
+      {%- if af_price_orig > 0 -%}
+        {%- assign af_main_price = af_price_orig -%}
+      {%- else -%}
+        {%- assign af_main_price = product.price_min | divided_by: 100 -%}
+      {%- endif -%}
+
+      {%- comment -%} Günstigste Variante für Budget-Filter {%- endcomment -%}
+      {%- assign af_min_price = product.price_min | divided_by: 100 -%}
+
+      {
+        h:{{ product.handle | json }},
+        t:{{ product.title | json }},
+        p:{{ af_main_price }},
+        pm:{{ af_min_price }},
+        i:{{ product.featured_image | img_url: '600x600' | json }},
+        ar:{{ product.vendor | json }},
+        tags:{{ product.tags | join: ',' | downcase | json }},
+        ty:{{ af_ty | json }},
+        dim:{% if af_w > 0 and af_h > 0 %}"{{ af_w }}x{{ af_h }} cm"{% else %}""{% endif %}
+      }{% unless forloop.last %},{% endunless %}
+
+      {%- endunless -%}
+    {%- endfor -%}
+  {%- endif -%}
+];
+
+// ─── Tag-basiertes Scoring (gleiche Logik wie vorher, jetzt client-seitig) ──
+function scoreFromTags(tagStr){
+  var ts = tagStr ? tagStr.split(',').map(function(t){return t.trim();}) : [];
+  var s = {};
+  ts.forEach(function(t){s[t]=1;});
+  function has(){for(var i=0;i<arguments.length;i++){if(s[arguments[i]])return true;}return false;}
+
+  // abstractness 0=abstrakt, 100=figurativ
+  var ab=[];
+  if(has('abstract'))ab.push(5);
+  if(has('minimalist','minimal palette'))ab.push(10);
+  if(has('biomorphic','organic forms'))ab.push(20);
+  if(has('abstract organic'))ab.push(25);
+  if(has('abstract figurative','abstract figuration'))ab.push(50);
+  if(has('abstract figure'))ab.push(55);
+  if(has('figurative'))ab.push(75);
+  if(has('portrait','contemporary portrait'))ab.push(85);
+  if(has('figure study','contemporary figurative'))ab.push(80);
+  if(has('expressionist','expressionism'))ab.push(60);
+  if(has('pop surreal','pop surrealism'))ab.push(55);
+  var a=ab.length?Math.round(ab.reduce(function(x,y){return x+y;},0)/ab.length):50;
+
+  // intensity 0=subtil, 100=intensiv
+  var nt=[];
+  if(has('atmospheric','quiet mood'))nt.push(15);
+  if(has('quiet tension','calm tension'))nt.push(20);
+  if(has('muted palette','minimal palette','minimalist'))nt.push(20);
+  if(has('gestural'))nt.push(60);
+  if(has('painterly'))nt.push(55);
+  if(has('high contrast'))nt.push(80);
+  if(has('bold color','bold brushwork'))nt.push(85);
+  if(has('neon palette'))nt.push(90);
+  if(has('expressionist','expressionism'))nt.push(75);
+  if(has('street art','graffiti style'))nt.push(80);
+  var n=nt.length?Math.round(nt.reduce(function(x,y){return x+y;},0)/nt.length):45;
+
+  // color temp 0=kühl, 100=warm/bold
+  var ct=[];
+  if(has('monochrome','greyscale'))ct.push(15);
+  if(has('cool palette','cool tones','cool blues'))ct.push(20);
+  if(has('blue palette'))ct.push(25);
+  if(has('muted palette','neutral palette'))ct.push(35);
+  if(has('blush tones','blush pink','dusty rose'))ct.push(55);
+  if(has('earth tones','warm palette'))ct.push(70);
+  if(has('ochre','warm ground'))ct.push(75);
+  if(has('neon palette','bold color'))ct.push(90);
+  var c=ct.length?Math.round(ct.reduce(function(x,y){return x+y;},0)/ct.length):50;
+
+  // urban 0=organisch, 100=urban
+  var ub=[];
+  if(has('organic forms','biomorphic'))ub.push(10);
+  if(has('atmospheric'))ub.push(20);
+  if(has('contemporary'))ub.push(45);
+  if(has('street art','street culture'))ub.push(90);
+  if(has('graffiti style','graffiti marks'))ub.push(90);
+  if(has('cityscape','urban night','urban scene'))ub.push(85);
+  if(has('street pop'))ub.push(85);
+  var u=ub.length?Math.round(ub.reduce(function(x,y){return x+y;},0)/ub.length):40;
+
+  var su=has('surreal','surreal mood','pop surreal','pop surrealism','dreamlike');
+
+  return{a:a,n:n,c:c,u:u,s:su};
+}
+
+// Scores berechnen
+P=P.map(function(p){return Object.assign({},p,scoreFromTags(p.tags));});
+
+// ─── Quiz-Antworten aus URL ──────────────────────────────────────────────────
+var PERSONAS={
+  minimal:{n:'Der Minimalist',d:'Deine W\u00e4nde atmen. Du willst kein Bild \u2014 du willst einen Raum. Stille ist keine Leere, sie ist Entscheidung.'},
+  gestural:{n:'Der Expressivist',d:'Energie schl\u00e4gt Eleganz. Du willst Werke, die zur\u00fcckschauen. Kunst als k\u00f6rperliche Aussage.'},
+  urban:{n:'Der Urbanist',d:'Rohe Materialien, grafische Linien, urbane Energie. Die Stadt lebt auf deiner Wand.'},
+  surreal:{n:'Der Tr\u00e4umer',d:'Du sammelst keine Bilder \u2014 du sammelst Gef\u00fchle. Figur, Poesie, das Unterbewusstsein in Farbe.'}
+};
+var BUDGET_RANGES={entry:[0,200],mid:[200,1500],high:[1500,3500],premium:[3500,99999]};
+
+function getParams(){
+  var p=new URLSearchParams(window.location.search);
+  return{style:p.get('style')||'minimal',color:p.get('color')||'neutral',mood:p.get('mood')||'quiet',budget:p.get('budget')||'mid'};
+}
+function getTargets(ans){
+  var ab=50,nt=50,ct=50,ub=false,sb=false;
+  switch(ans.style){case'minimal':ab=15;nt=25;break;case'gestural':nt=70;ab=25;break;case'urban':ub=true;nt=68;ab=40;break;case'surreal':ab=62;sb=true;break;}
+  switch(ans.color){case'neutral':ct=35;break;case'cool':ct=20;break;case'warm':ct=68;break;case'bold':ct=88;break;case'blush':ct=52;break;case'mono':ct=18;break;}
+  switch(ans.mood){case'quiet':nt=Math.min(nt,30);break;case'energetic':nt=Math.max(nt,65);break;case'poetic':sb=true;break;}
+  return{ab:ab,nt:nt,ct:ct,ub:ub,sb:sb};
+}
+
+function cap(s){return(s||'').replace(/-/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});}
+function badges(ty){
+  var b='';
+  if(ty==='o'||ty==='op')b+='<span class="afr-badge afr-badge-o">Original</span>';
+  if(ty==='p'||ty==='op')b+='<span class="afr-badge afr-badge-p">Print verf\u00fcgbar</span>';
+  return b;
+}
+function priceHtml(p){
+  if(p.ty==='op')return'<div class="afr-price">\u20ac'+p.p.toLocaleString('de-DE')+'</div><div class="afr-price-sub">Prints ab \u20ac'+p.pm.toLocaleString('de-DE')+'</div>';
+  if(p.ty==='p')return'<div class="afr-price">\u20ac'+p.pm.toLocaleString('de-DE')+' <span style="font-weight:400;color:#ccc">Print</span></div>';
+  return'<div class="afr-price">\u20ac'+p.p.toLocaleString('de-DE')+' <span style="font-weight:400;color:#ccc">Original</span></div>';
+}
+
+var ans=getParams();
+var t=getTargets(ans);
+var br=BUDGET_RANGES[ans.budget]||[0,99999];
+
+document.getElementById('afr-pname').textContent=(PERSONAS[ans.style]||PERSONAS.minimal).n;
+document.getElementById('afr-pdesc').textContent=(PERSONAS[ans.style]||PERSONAS.minimal).d;
+document.getElementById('afr-abs').value=t.ab;
+document.getElementById('afr-int').value=t.nt;
+
+function getResults(av,nv){
+  // Budget-Filter: Original-Preis ODER günstigste Variante im Range
+  var pool=P.filter(function(p){
+    return(p.p>=br[0]&&p.p<=br[1])||(p.pm>=br[0]&&p.pm<=br[1]);
+  });
+  if(pool.length<4)pool=P;
+  return pool.map(function(p){
+    var sc=0;
+    sc-=Math.abs(p.a-av)*1.5;
+    sc-=Math.abs(p.n-nv)*1.0;
+    sc-=Math.abs(p.c-t.ct)*0.8;
+    if(t.ub)sc+=p.u*0.4;
+    if(t.sb&&p.s)sc+=20;
+    return Object.assign({},p,{_s:sc});
+  }).sort(function(a,b){return b._s-a._s;}).slice(0,20);
+}
+
+function renderGrid(){
+  var av=parseInt(document.getElementById('afr-abs').value);
+  var nv=parseInt(document.getElementById('afr-int').value);
+  var r=getResults(av,nv);
+  document.getElementById('afr-count').textContent=r.length+' Werke f\u00fcr dich';
+  document.getElementById('afr-grid').innerHTML=r.length===0
+    ?'<div class="afr-empty">Keine Werke in dieser Kombination.</div>'
+    :r.map(function(p){
+      return'<a class="afr-card" href="/products/'+p.h+'" target="_blank" rel="noopener">'+
+        '<div class="afr-img-wrap">'+
+          '<img class="afr-cimg" src="'+p.i+'" alt="'+p.t+'" loading="lazy" onerror="this.parentNode.style.background=\'#ece9e4\'">'+
+          '<div class="afr-badge-wrap">'+badges(p.ty)+'</div>'+
+        '</div>'+
+        '<div class="afr-artist">'+cap(p.ar)+'</div>'+
+        '<div class="afr-title">'+p.t+'</div>'+
+        (p.dim?'<div class="afr-dim">'+p.dim+'</div>':'')+
+        '<div class="afr-price-wrap">'+priceHtml(p)+'</div>'+
+      '</a>';
+    }).join('');
+}
+
+window.afrUpdate=function(){renderGrid();};
+window.afrShare=function(type,btn){
+  var url=window.location.href;
+  if(type==='link'){
+    if(navigator.clipboard&&window.isSecureContext){
+      navigator.clipboard.writeText(url).then(function(){
+        if(btn){btn.textContent='\u2713 Kopiert!';setTimeout(function(){btn.textContent='Link kopieren';},2000);}
+      });
+    }else{
+      var ta=document.createElement('textarea');
+      ta.value=url;ta.style.cssText='position:fixed;opacity:0;top:0;left:0';
+      document.body.appendChild(ta);ta.focus();ta.select();
+      try{document.execCommand('copy');if(btn){btn.textContent='\u2713 Kopiert!';setTimeout(function(){btn.textContent='Link kopieren';},2000);}}
+      catch(e){prompt('URL:',url);}
+      document.body.removeChild(ta);
+    }
+  }else if(type==='wa'){
+    window.open('https://wa.me/?text='+encodeURIComponent('Meine ARTCLUB Kunstauswahl: '+url),'_blank');
+  }else{
+    window.location.href='mailto:?subject='+encodeURIComponent('Meine ARTCLUB Kunstauswahl')+'&body='+encodeURIComponent('Schau dir meine Auswahl an:\n'+url);
+  }
+};
+
+renderGrid();
+})();
+</script>
+
+{% schema %}
+{
+  "name": "Art Finder — Ergebnisse",
+  "tag": "div",
+  "settings": [
+    {
+      "type": "collection",
+      "id": "collection",
+      "label": "Kunstwerke-Collection",
+      "info": "Collection mit allen Produkten, die im Art Finder erscheinen sollen."
+    },
+    {
+      "type": "text",
+      "id": "quiz_page",
+      "label": "Link zurueck zum Quiz",
+      "default": "/"
+    },
+    {
+      "type": "checkbox",
+      "id": "hide_unavailable",
+      "label": "Nicht verfuegbare Produkte ausblenden",
+      "default": false
+    }
+  ],
+  "presets": [
+    { "name": "Art Finder Ergebnisse" }
+  ]
+}
+{% endschema %}

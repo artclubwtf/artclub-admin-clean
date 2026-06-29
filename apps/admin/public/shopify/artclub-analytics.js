@@ -7,12 +7,10 @@
   var storageKey = config.storageKey || "artclub_visitor_id";
   var endpoint = typeof config.endpoint === "string" ? config.endpoint.trim() : "";
   var sentImpressions = new WeakSet();
+  var sentEventKeys = new Set();
+  var artistEmbedStates = {};
 
   if (!endpoint) return;
-
-  function toArray(value) {
-    return Array.isArray(value) ? value : [];
-  }
 
   function trim(value) {
     return typeof value === "string" ? value.trim() : "";
@@ -31,6 +29,10 @@
 
   function normalizeHandle(value) {
     return trim(value).replace(/^\/+|\/+$/g, "");
+  }
+
+  function normalizePageUrl(value) {
+    return normalizePath(value);
   }
 
   function getCookie(name) {
@@ -108,8 +110,12 @@
     return {
       path: path,
       referrer: trim(document.referrer || ""),
+      pageHandle: normalizeHandle(config.pageHandle || ""),
+      pageUrl: normalizePageUrl(config.pageUrl || path),
       canonicalArtistId: trim(config.canonicalArtistId || ""),
       artistSlug: normalizeHandle(config.artistSlug || (artistSlugMatch ? decodeURIComponent(artistSlugMatch[1]) : "")),
+      artistMetaobjectId: trim(config.artistMetaobjectId || ""),
+      artistName: trim(config.artistName || ""),
       canonicalProductId: trim(config.canonicalProductId || ""),
       productKey: trim(config.productKey || ""),
       shopifyProductId: trim(config.shopifyProductId || (jsonLdProduct && jsonLdProduct.shopifyProductId) || ""),
@@ -121,8 +127,14 @@
   function readDataset(target) {
     if (!target || !target.dataset) return {};
     return {
+      source: trim(target.dataset.artclubSource || ""),
+      embedKey: trim(target.dataset.artclubEmbedKey || ""),
+      pageHandle: normalizeHandle(target.dataset.artclubPageHandle || ""),
+      pageUrl: normalizePageUrl(target.dataset.artclubPageUrl || ""),
       canonicalArtistId: trim(target.dataset.artclubArtistId || ""),
       artistSlug: normalizeHandle(target.dataset.artclubArtistSlug || ""),
+      artistMetaobjectId: trim(target.dataset.artclubArtistMetaobjectId || ""),
+      artistName: trim(target.dataset.artclubArtistName || ""),
       canonicalProductId: trim(target.dataset.artclubProductId || ""),
       productKey: trim(target.dataset.artclubProductKey || ""),
       shopifyProductId: trim(target.dataset.artclubShopifyProductId || ""),
@@ -133,23 +145,32 @@
   function getClosestTrackElement(node) {
     if (!node || !node.closest) return null;
     return (
+      node.closest("[data-artclub-track-view]") ||
       node.closest("[data-artclub-track-impression]") ||
       node.closest("[data-artclub-track-click]") ||
-      node.closest("[data-artclub-artist-id], [data-artclub-artist-slug], [data-artclub-product-id], [data-artclub-product-key], [data-artclub-product-handle]")
+      node.closest(
+        "[data-artclub-source], [data-artclub-embed-key], [data-artclub-page-handle], [data-artclub-page-url], [data-artclub-artist-id], [data-artclub-artist-slug], [data-artclub-artist-metaobject-id], [data-artclub-artist-name], [data-artclub-product-id], [data-artclub-product-key], [data-artclub-product-handle]"
+      )
     );
   }
 
-  function payloadForEvent(eventType, sourceNode) {
+  function payloadForEvent(eventType, sourceNode, overrides) {
+    overrides = overrides || {};
+
     var base = pageContext();
     var element = getClosestTrackElement(sourceNode);
     var data = readDataset(element);
     var payload = {
       eventType: eventType,
-      source: "shopify",
+      source: trim(overrides.source || data.source || config.source || "shopify"),
       path: base.path,
       referrer: base.referrer,
+      pageHandle: data.pageHandle || base.pageHandle || undefined,
+      pageUrl: data.pageUrl || base.pageUrl || undefined,
       canonicalArtistId: data.canonicalArtistId || base.canonicalArtistId || undefined,
       artistSlug: data.artistSlug || base.artistSlug || undefined,
+      artistMetaobjectId: data.artistMetaobjectId || base.artistMetaobjectId || undefined,
+      artistName: data.artistName || base.artistName || undefined,
       canonicalProductId: data.canonicalProductId || base.canonicalProductId || undefined,
       productKey: data.productKey || base.productKey || undefined,
       shopifyProductId: data.shopifyProductId || base.shopifyProductId || undefined,
@@ -167,6 +188,13 @@
     return payload;
   }
 
+  function buildEventDedupKey(payload) {
+    if (!payload || (payload.eventType !== "artist_profile_view" && payload.eventType !== "artist_profile_impression")) return "";
+    var artistKey = trim(payload.artistMetaobjectId || payload.canonicalArtistId || payload.artistSlug || payload.pageHandle || payload.pageUrl || payload.path);
+    if (!artistKey) return "";
+    return payload.eventType + "|" + artistKey;
+  }
+
   function sendGaEvent(payload) {
     if (typeof window.gtag !== "function") return;
     if (!payload || !payload.eventType) return;
@@ -178,13 +206,19 @@
   }
 
   function sendPayload(payload) {
+    var dedupKey = buildEventDedupKey(payload);
+    if (dedupKey) {
+      if (sentEventKeys.has(dedupKey)) return false;
+      sentEventKeys.add(dedupKey);
+    }
+
     var body = JSON.stringify(payload);
     sendGaEvent(payload);
 
     if (navigator.sendBeacon) {
       try {
         var blob = new Blob([body], { type: "application/json" });
-        if (navigator.sendBeacon(endpoint, blob)) return;
+        if (navigator.sendBeacon(endpoint, blob)) return true;
       } catch (_error4) {
         void 0;
       }
@@ -200,15 +234,100 @@
     }).catch(function () {
       return null;
     });
+
+    return true;
+  }
+
+  function getArtistEmbedStateKey(target, iframe) {
+    var targetData = readDataset(target);
+    var iframeKey = iframe ? trim(iframe.getAttribute("data-artclub-embed-key") || "") : "";
+    return targetData.embedKey || iframeKey || "";
+  }
+
+  function clearArtistEmbedFallback(state) {
+    if (!state || !state.fallbackTimer) return;
+    window.clearTimeout(state.fallbackTimer);
+    state.fallbackTimer = 0;
+  }
+
+  function sendArtistEmbedFallbackView(state) {
+    if (!state || state.handled) return;
+    var didSend = sendPayload(payloadForEvent("artist_profile_view", state.target, { source: "shopify_artist_embed" }));
+    if (didSend) state.handled = true;
+  }
+
+  function markArtistEmbedHandled(embedKey) {
+    if (!embedKey) return;
+    var state = artistEmbedStates[embedKey];
+    if (!state) return;
+    state.handled = true;
+    clearArtistEmbedFallback(state);
+  }
+
+  function registerArtistEmbedView(target) {
+    var iframe = target.querySelector("iframe[data-artclub-artist-embed='true']") || target.querySelector("iframe");
+    if (!iframe) {
+      sendPayload(payloadForEvent("artist_profile_view", target));
+      return;
+    }
+
+    var embedKey = getArtistEmbedStateKey(target, iframe);
+    if (!embedKey) {
+      sendPayload(payloadForEvent("artist_profile_view", target, { source: "shopify_artist_embed" }));
+      return;
+    }
+    if (artistEmbedStates[embedKey]) return;
+
+    var state = {
+      target: target,
+      iframe: iframe,
+      embedKey: embedKey,
+      handled: false,
+      fallbackTimer: 0,
+    };
+    artistEmbedStates[embedKey] = state;
+
+    iframe.addEventListener("load", function () {
+      if (state.handled) return;
+      clearArtistEmbedFallback(state);
+      state.fallbackTimer = window.setTimeout(function () {
+        sendArtistEmbedFallbackView(state);
+      }, 1500);
+    });
+  }
+
+  function trackExplicitArtistViews() {
+    var artistTargets = document.querySelectorAll("[data-artclub-track-view='artist']");
+    if (!artistTargets.length) return false;
+
+    artistTargets.forEach(function (target) {
+      var iframe = target.querySelector("iframe[data-artclub-artist-embed='true']");
+      if (iframe) {
+        registerArtistEmbedView(target);
+        return;
+      }
+      sendPayload(payloadForEvent("artist_profile_view", target));
+    });
+
+    return true;
   }
 
   function trackPageViews() {
     var context = pageContext();
-    if (/^\/(?:pages\/kuenstler|artist)\//i.test(context.path)) {
-      sendPayload(payloadForEvent("artist_profile_view", document.body));
+    var artworkTarget = document.querySelector("[data-artclub-track-impression='artwork']");
+    var hasExplicitArtistView = trackExplicitArtistViews();
+
+    if (!hasExplicitArtistView) {
+      var artistTarget = document.querySelector("[data-artclub-track-impression='artist']");
+      if (artistTarget) {
+        sendPayload(payloadForEvent("artist_profile_view", artistTarget));
+      } else if (/^\/(?:pages\/kuenstler|artist)\//i.test(context.path)) {
+        sendPayload(payloadForEvent("artist_profile_view", document.body));
+      }
     }
-    if (context.productHandle && /^\/products\//i.test(context.path)) {
-      sendPayload(payloadForEvent("artwork_view", document.body));
+
+    if (/^\/products\//i.test(context.path) && (context.productHandle || artworkTarget)) {
+      sendPayload(payloadForEvent("artwork_view", artworkTarget || document.body));
     }
   }
 
@@ -269,6 +388,16 @@
     );
   }
 
+  function setupArtistEmbedMessaging() {
+    window.addEventListener("message", function (event) {
+      var data = event.data;
+      if (!data || typeof data !== "object") return;
+      if (data.type === "artclub-artist-analytics" && data.event === "artist_profile_view_handled") {
+        markArtistEmbedHandled(trim(data.embedKey || ""));
+      }
+    });
+  }
+
   function ready(callback) {
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", callback, { once: true });
@@ -278,6 +407,7 @@
   }
 
   ready(function () {
+    setupArtistEmbedMessaging();
     trackPageViews();
     setupImpressionTracking();
     setupClickTracking();

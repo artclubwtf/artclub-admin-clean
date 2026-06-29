@@ -1,0 +1,1215 @@
+{%- comment -%}
+ARTCLUB — Marketing Guide · Apple-like Tabs (single snippet)
+• Schlanke Breite (max 1060px), viel Luft, weiche Schatten, dezente Linien
+• Pill-Tabs mit sanftem Glow, Fade/Slide beim Wechsel
+• Inhalt oben, Mission/Tasks am Ende jedes Tabs (localStorage je Customer)
+• Alles in dieser Datei editierbar (EDIT-HERE Blöcke)
+{%- endcomment -%}
+
+<div id="mkGuide" data-customer="{{ customer.id | default: 'guest' }}">
+  <style>
+/* =========================================================
+  ARTCLUB — Marketing Guide (clean light, no duplicates)
+  Drop-in replacement – keeps your classes/IDs
+========================================================= */
+
+/* ---------- Tokens & Base ---------- */
+#mkGuide{
+  --bg:#f5f6f8; --card:#fff; --ink:#0b0c0f; --muted:#6b7280;
+  --line:#e6e8eb; --brand:#2ecc71; --brand2:#b5f5c9;
+  --r-lg:24px; --r-sm:14px; --shadow:0 12px 28px rgba(0,0,0,.06);
+  font:400 15px/1.6 -apple-system,BlinkMacSystemFont,"SF Pro Display",Inter,system-ui;
+  color:var(--ink); background:var(--bg); border-radius:var(--r-lg); padding:16px;
+}
+#mkGuide .wrap{ max-width:920px; margin:0 auto; }
+
+/* ---------- Hero ---------- */
+#mkGuide .hero{
+  background:#fff; border:1px solid var(--line); border-radius:30px;
+  padding:28px; box-shadow:var(--shadow);
+}
+.eyebrow{ text-transform:uppercase; letter-spacing:.12em; font-weight:900; font-size:12px; color:var(--muted) }
+.title{ font-weight:900; font-size:34px; line-height:1.1; margin:8px 0 6px; color:#0a0c0f }
+.title .accent{ background:linear-gradient(120deg,var(--brand),var(--brand2));
+  -webkit-background-clip:text; background-clip:text; color:transparent; }
+.sub,.lead{ color:var(--muted); }
+.lead{ font-size:16px; }
+
+/* ---------- Tabs (pills) ---------- */
+.tabs{ margin:18px 0 8px; display:flex; gap:8px; overflow-x:auto; padding:6px 0 }
+.tab{
+  appearance:none; border:1px solid var(--line); background:#fff; color:#111827;
+  border-radius:999px; padding:10px 14px; display:inline-flex; align-items:center; gap:8px;
+  font-weight:800; cursor:pointer; white-space:nowrap; box-shadow:inset 0 -1px 0 rgba(0,0,0,.03);
+}
+.tab[aria-selected="true"]{
+  background:linear-gradient(135deg,var(--brand),var(--brand2));
+  color:#06351a; border-color:transparent; box-shadow:0 8px 18px rgba(46,204,113,.18);
+}
+.tab .dot{ width:22px; height:22px; border-radius:10px; display:grid; place-items:center; background:#eef2f7; font-weight:900; font-size:12px }
+
+/* ---------- Panes ---------- */
+.pane{ display:none; }
+.pane.active{ display:block; animation:fadeSlide .28s ease both; }
+@keyframes fadeSlide{ from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:none} }
+
+/* ---------- Sections & Cards ---------- */
+.section{
+  margin:22px 0; background:#fff; border:1px solid var(--line);
+  border-radius:22px; box-shadow:0 10px 24px rgba(0,0,0,.05); overflow:hidden;
+}
+.section .head{
+  padding:16px 18px; font-weight:800; letter-spacing:.01em;
+  background:#fff; border-bottom:1px solid #eef1f2; color:#0b0c0f;
+}
+.section .body{ padding:18px }
+.grid{ display:block }                      /* einspaltig als Default */
+.card{
+  background:#fff; border:1px solid var(--line); border-radius:18px; padding:16px;
+  box-shadow:0 6px 16px rgba(0,0,0,.04); margin-bottom:14px;
+}
+.h{ font-weight:800; margin-bottom:8px; color:#0b0c0f }
+.p{ color:var(--muted) }
+.list{ margin:0; padding-left:18px } .list li{ margin:6px 0 }
+.divider{ height:1px; background:#e5e7eb; margin:12px 0 }
+
+/* ---------- Utilities ---------- */
+.badge,.pill,.kv .kv-row{
+  display:inline-flex; align-items:center; gap:8px; padding:6px 10px;
+  border-radius:999px; border:1px solid var(--line); background:#fafafa; font-weight:700; font-size:12px; color:#374151
+}
+.kv{ display:flex; gap:10px; align-items:center; flex-wrap:wrap }
+.kv .kv-row{ border-radius:12px }
+.mono, textarea.mono{
+  font:500 13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  background:#f7f8fa; border:1px solid var(--line); border-radius:12px; padding:10px; white-space:pre-wrap; color:#0b0c0f
+}
+.copybar,.f-copywrap{ display:flex; gap:8px; align-items:center; margin-top:8px }
+.copybar .mono,.f-copywrap .f-mono{ flex:1 }
+.seg,.f-seg{ display:inline-flex; gap:6px; padding:6px; border:1px solid var(--line); border-radius:14px; background:#fafafa }
+.seg button,.f-seg button{
+  appearance:none; border:0; background:transparent; padding:8px 12px; border-radius:10px; font-weight:800; color:#475467; cursor:pointer
+}
+.seg button[aria-pressed="true"], .f-seg button[aria-pressed="true"]{
+  background:linear-gradient(135deg,var(--brand),var(--brand2)); color:#06351a
+}
+.tasks .row,.f-task{
+  display:flex; align-items:center; gap:10px; background:#fff; border:1px solid var(--line);
+  border-radius:12px; padding:10px 12px; margin-bottom:8px
+}
+.tasks input[type="checkbox"], .f-tasks input[type="checkbox"]{ accent-color:var(--brand) }
+.btn{ appearance:none; border:1px solid var(--line); border-radius:14px; padding:10px 12px; font-weight:800; background:#fff; cursor:pointer }
+.btn.primary{ background:linear-gradient(135deg,var(--brand),var(--brand2)); color:#053317; border-color:transparent }
+.hint,.f-hint{ color:#8a94a6; font-size:12.5px }
+
+/* ---------- Responsive ---------- */
+@media (max-width:980px){ .title{ font-size:28px } }
+@media (min-width:960px){
+  /* optional zweispaltig, wenn sinnvoll: Container mit genau 2 .card-Kindern */
+  .grid.two-cols{ display:grid; grid-template-columns:1fr 1fr; gap:16px }
+}
+@media (min-width:1200px){ .section{ margin:18px 0 } .section .body{ padding:20px 22px } }
+
+/* =========================================================
+   Pane-Base (gilt für #pane-found, #pane-formats, #pane-copy)
+========================================================= */
+[id^="pane-"] .f-section{
+  background:#fff; border:1px solid var(--line); border-radius:16px;
+  box-shadow:0 10px 30px rgba(0,0,0,.05); margin:16px 0; overflow:hidden;
+}
+[id^="pane-"] .f-head{
+  display:flex; align-items:center; gap:10px; padding:14px 18px;
+  font-weight:700; letter-spacing:.2px; border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#fff,#fafafa);
+}
+[id^="pane-"] .f-body{ padding:18px }
+[id^="pane-"] .f-sub{ font-weight:700; margin:2px 0 6px }
+[id^="pane-"] .f-mini{ font-weight:700; font-size:13.5px; margin:0 0 6px }
+[id^="pane-"] p{ margin:0 0 10px }
+[id^="pane-"] .f-row{ display:grid; gap:12px; margin:8px 0 }
+[id^="pane-"] .f-row.two{ grid-template-columns:1fr }
+[id^="pane-"] .f-row.three{ grid-template-columns:1fr }
+@media (min-width:900px){
+  [id^="pane-"] .f-row.two{ grid-template-columns:1fr 1fr }
+  [id^="pane-"] .f-row.three{ grid-template-columns:repeat(3,1fr) }
+}
+/* Callouts & copyables (shared) */
+[id^="pane-"] .f-callout{ background:#f5f7fb; border:1px solid var(--line); border-radius:12px; padding:12px; margin:8px 0 }
+[id^="pane-"] .f-callout.example{ background:#f6f9ff }
+[id^="pane-"] .f-callout.calm{ background:#f6fff8 }
+[id^="pane-"] .f-callout.note{ background:#fffdf5 }
+[id^="pane-"] .f-callout-title{ font-weight:700; margin:0 0 6px }
+[id^="pane-"] .f-copywrap .f-mono{
+  font:500 13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  padding:10px; border:1px solid var(--line); border-radius:10px; background:#fff; resize:vertical; min-height:40px
+}
+[id^="pane-"] .f-btn{ appearance:none; border:1px solid var(--line); background:#fff; border-radius:10px; padding:8px 10px; cursor:pointer; font-weight:600 }
+[id^="pane-"] .f-btn:hover{ border-color:#cfd4d9 }
+[id^="pane-"] .f-btn:active{ transform:translateY(1px) }
+[id^="pane-"] .f-pane{ display:none; margin-top:6px }
+[id^="pane-"] .f-pane.active{ display:block }
+[id^="pane-"] .f-steps{ margin:6px 0 0 18px } [id^="pane-"] .f-steps li{ margin:5px 0 }
+[id^="pane-"] .f-tasks{ display:grid; gap:8px }
+
+/* =========================================================
+   Pane-Spezifika (nur Unterschiede)
+========================================================= */
+
+/* Tab 1: FOUNDATIONS – Nummernchips + sanfte Alternations */
+#pane-found{ counter-reset: fsec; }
+#pane-found .f-head{ position:relative; padding-left:58px; }
+#pane-found .f-head::before{
+  counter-increment:fsec; content:counter(fsec);
+  position:absolute; left:18px; top:12px; width:28px; height:28px; border-radius:999px;
+  display:grid; place-items:center; font-weight:800; font-size:13px; color:#06351a;
+  background:linear-gradient(135deg,var(--brand),var(--brand2)); box-shadow:0 6px 14px rgba(46,204,113,.22);
+}
+#pane-found .f-section:nth-of-type(even){ background:#fcfdfd }
+
+/* Tab 2: CONTENT-FORMATE – (keine Abweichungen nötig) */
+#pane-formats .f-lead{ font-size:16.5px; color:#374151 }
+
+/* Tab 3: STORYTELLING & COPY – nur kleine Tweaks */
+#pane-copy .f-lead{ font-size:16.5px; color:#374151 }
+#pane-copy .f-row.three{ grid-template-columns:1fr }
+@media (min-width:980px){ #pane-copy .f-row.three{ grid-template-columns:repeat(3,1fr) } }
+
+
+
+  </style>
+
+  <div class="wrap">
+    <!-- HERO -->
+    <div class="hero">
+      <div class="eyebrow">ARTCLUB · Marketing Guide</div>
+      <div class="title">Explore <span class="accent">capabilities</span> – klar & inspirierend</div>
+      <div class="sub">Tabs für Fokus. Inhalt zuerst. Am Ende jede Sektion: „Deine Mission“.</div>
+    </div>
+
+    <!-- TABS -->
+    <nav class="tabs" role="tablist" aria-label="Marketing Tabs">
+      {% assign tabs = "found|F|Grundlagen & Branding,formats|R|Content-Formate,copy|C|Storytelling & Copy" | split: "," %}
+    <!-- assign tabs = "found|F|Grundlagen & Branding,formats|R|Content-Formate,copy|C|Storytelling & Copy,plan|P|Planung,visuals|M|Visuals & Technik,analytics|A|Analyse & Wachstum,inspo|✦|Inspiration & Tools,sales|S|Sales & Launch,growth|⚡|Reichweiten-Booster,start|★|Start-Ideen,tenk|↑|0→10k" | split: "," -->
+
+      {% for t in tabs %}
+        {% assign x = t | strip | split: "|" %}
+        <button class="tab" role="tab" aria-selected="{{ forloop.first }}" aria-controls="pane-{{ x[0] }}" id="tab-{{ x[0] }}" data-tab="{{ x[0] }}">
+          <span class="dot">{{ x[1] }}</span> {{ x[2] }}
+        </button>
+      {% endfor %}
+    </nav>
+
+    <!-- ===== PANES (EDIT-HERE Inhalte je Tab) ===== -->
+
+    <!-- FOUNDATIONS — modern, readable -->
+    <section id="pane-found" class="pane active" role="tabpanel" aria-labelledby="tab-found">
+
+    <!-- Intro -->
+    <article class="f-section">
+        <header class="f-head"><span class="f-num"></span>Social Media Grundlagen – warum es zählt</header>
+        <div class="f-body">
+        <p class="f-lead">
+            Dein Social-Media-Profil ist oft der <strong>erste Kontaktpunkt</strong>. In wenigen Sekunden entscheidet sich,
+            ob Menschen bleiben, folgen oder weiter scrollen. Klarheit, Konsistenz und eine saubere Navigation machen den Unterschied.
+        </p>
+        <div class="f-labels">
+            <span class="f-label">Erster Eindruck</span>
+            <span class="f-label">Konsistentes Branding</span>
+            <span class="f-label">Klare Navigation</span>
+        </div>
+        </div>
+    </article>
+
+    <!-- Profil-Optimierung -->
+    <article class="f-section">
+        <header class="f-head"><span class="f-num"></span>Profil-Optimierung (Bio, Profilbild, Link in Bio)</header>
+        <div class="f-body">
+        <div class="f-row two">
+            <div class="f-col">
+            <h3 class="f-sub">So wirkt’s professionell</h3>
+            <p>
+                <strong>Bio:</strong> 1–2 Sätze, die <em>wer/was/warum</em> klar benennen.<br>
+                <strong>Profilbild:</strong> Portrait mit weichem Seitenlicht <em>oder</em> Key-Artwork, auch im Kreis gut erkennbar.<br>
+                <strong>Link in Bio:</strong> 3–5 priorisierte Ziele (Shop, Ausstellung, Newsletter).
+            </p>
+            <ul class="f-do">
+                <li>Gleiche Handles, Bildsprache & Tonalität über alle Plattformen.</li>
+                <li>Letzte 6 Posts zeigen Stil, Qualität und Bandbreite.</li>
+            </ul>
+
+            <h4 class="f-mini">Vermeide</h4>
+            <ul class="f-dont">
+                <li>Floskeln wie „Ich liebe Kunst“ ohne Aussage.</li>
+                <li>Link-Listen mit zu vielen Optionen (sinkende Klickrate).</li>
+            </ul>
+            </div>
+
+            <div class="f-col">
+            <div class="f-callout example">
+                <div class="f-callout-title">Beispiel-Bios (zum Anpassen)</div>
+                <div class="f-copywrap">
+                <textarea class="f-mono eg-bio-a" rows="3">Zeitgenössische Mixed-Media-Künstlerin aus Berlin – inspiriert von urbaner Architektur & digitaler Kultur. Werke & Prints → Link.</textarea>
+                <button class="f-btn ghost" data-copy=".eg-bio-a">Kopieren</button>
+                </div>
+                <div class="f-copywrap">
+                <textarea class="f-mono eg-bio-b" rows="3">Skulpturen & Installationen. Materialexperimente, klare Formen, leuchtende Kontraste. Ausstellung & Shop im Link.</textarea>
+                <button class="f-btn ghost" data-copy=".eg-bio-b">Kopieren</button>
+                </div>
+                <div class="f-pillrow">
+                <span class="f-pill">Shop</span><span class="f-pill">Aktuelle Serie</span><span class="f-pill">Newsletter</span>
+                </div>
+            </div>
+            </div>
+        </div>
+        </div>
+    </article>
+
+    <!-- Branding -->
+    <article class="f-section">
+        <header class="f-head"><span class="f-num"></span>Branding & Farbkonzept</header>
+        <div class="f-body">
+        <p>
+            Ein wiedererkennbares Profil entsteht aus <strong>2 Hauptfarben + 1 Akzent</strong>, einer klaren Headline-Schrift
+            und einer gut lesbaren Body-Schrift. Zieh diese Elemente durch Posts, Story-Grafiken und Website.
+        </p>
+
+        <div class="f-row two">
+            <div class="f-col">
+            <h3 class="f-sub">Empfehlung</h3>
+            <ul class="f-do">
+                <li>Palette aus eigenen Werken ableiten (Highlights/Schattierungen).</li>
+                <li>Wiederkehrende Bildsprache: Blickwinkel, Rahmenformat oder Preset.</li>
+            </ul>
+            </div>
+            <div class="f-col">
+            <div class="f-callout calm">
+                <div class="f-callout-title">Brandboard – Startpunkt</div>
+                <div class="f-kv"><strong>Headline</strong> SF Pro Display / Inter SemiBold</div>
+                <div class="f-kv"><strong>Body</strong> SF Pro Text / Inter Regular</div>
+                <div class="f-swatches">
+                <span class="f-swatch" style="--c:#1C2129" title="#1C2129"></span>
+                <span class="f-swatch" style="--c:#9FE870" title="#9FE870"></span>
+                <span class="f-swatch" style="--c:#D4F9FE" title="#D4F9FE"></span>
+                <span class="f-swatch" style="--c:#E7EBF2" title="#E7EBF2"></span>
+                </div>
+                <div class="f-copywrap">
+                <textarea class="f-mono eg-palette" rows="2">#1C2129, #9FE870, #D4F9FE, #E7EBF2</textarea>
+                <button class="f-btn ghost" data-copy=".eg-palette">Palette kopieren</button>
+                </div>
+            </div>
+            </div>
+        </div>
+
+        <p class="f-hint">Tipp: Brandboard als Template in Canva/Figma speichern und bei neuen Posts wiederverwenden.</p>
+        </div>
+    </article>
+
+    <!-- Hashtags -->
+    <article class="f-section">
+        <header class="f-head"><span class="f-num"></span>Hashtag-Strategien</header>
+        <div class="f-body">
+        <p class="f-lead">Mische pro Post drei Ebenen. Prüfe monatlich die Insights und rotiere Sets.</p>
+
+        <div class="f-row three">
+            <div class="f-col">
+            <h4 class="f-mini">Groß – Reichweite (&gt;1 Mio)</h4>
+            <textarea class="f-mono hs-big" rows="3">#art #painting #contemporaryart #artist</textarea>
+            </div>
+            <div class="f-col">
+            <h4 class="f-mini">Mittel – Szene (50k–500k)</h4>
+            <textarea class="f-mono hs-mid" rows="3">#berlinartist #urbanart #mixedmediaart #studiovibes</textarea>
+            </div>
+            <div class="f-col">
+            <h4 class="f-mini">Nische – Käufergruppen (&lt;50k)</h4>
+            <textarea class="f-mono hs-niche" rows="3">#acrylicabstract #minimalartprints #architecturalpainting</textarea>
+            </div>
+        </div>
+
+        <div class="f-copywrap">
+            <textarea class="f-mono hs-all" rows="3">#art #painting #contemporaryart #artist #berlinartist #urbanart #mixedmediaart #studiovibes #acrylicabstract #minimalartprints #architecturalpainting</textarea>
+            <button class="f-btn ghost" data-copy=".hs-all">Alle kopieren</button>
+        </div>
+
+        <div class="f-callout note">
+            <strong>Hinweis:</strong> Auf TikTok sind Hashtags zweitrangig – Trends/Sounds wichtiger. Auf Instagram bleiben sie relevant (Explore/Suche).
+            Spam-Tags wie #followforfollow vermeiden.
+        </div>
+        </div>
+    </article>
+
+    <!-- Plattformen -->
+    <article class="f-section">
+        <header class="f-head"><span class="f-num"></span>Plattform-spezifische Tipps</header>
+        <div class="f-body">
+        <div class="f-seg" id="fSeg">
+            <button type="button" data-p="ig" aria-pressed="true">Instagram</button>
+            <button type="button" data-p="tt">TikTok</button>
+            <button type="button" data-p="li">LinkedIn</button>
+            <button type="button" data-p="pi">Pinterest</button>
+        </div>
+
+        <div class="f-pane active" id="fp-ig">
+            <p><strong>Reichweite:</strong> Reels mit klarem Hook in 2–3 s, große Untertitel.</p>
+            <p><strong>Mehrwert:</strong> Karussells für How-tos/Storytelling – am Ende Interaktions-CTA.</p>
+            <p><strong>Nähe:</strong> Stories regelmäßig; Geotags nutzen; Kommentare beantworten.</p>
+        </div>
+
+        <div class="f-pane" id="fp-tt">
+            <p><strong>Tempo:</strong> Trend-Sounds nur, wenn sie zu dir passen; POV/Transformation/Timelapse.</p>
+            <p><strong>Persönlichkeit:</strong> Roh, sympathisch, schnell auf den Punkt.</p>
+        </div>
+
+        <div class="f-pane" id="fp-li">
+            <p><strong>B2B:</strong> Projekte, Kollaborationen, Auszeichnungen; sachlich mit persönlichem Ton.</p>
+            <p><strong>Formate:</strong> Case-Slides, kurze Stories, dokumentarische Fotos.</p>
+        </div>
+
+        <div class="f-pane" id="fp-pi">
+            <p><strong>Langfristig:</strong> Hochauflösende Pins &amp; Idea Pins; Moodboards, Studio, Step-by-Step.</p>
+            <p><strong>SEO:</strong> Titel &amp; Beschreibungen mit Keywords.</p>
+        </div>
+        </div>
+    </article>
+
+    <!-- Mission -->
+    <article class="f-section">
+        <header class="f-head"><span class="f-num"></span>Deine Mission (Grundlagen)</header>
+        <div class="f-body f-tasks">
+        <label class="f-task"><input type="checkbox"> Bio auf 1–2 Sätze + CTA schärfen</label>
+        <label class="f-task"><input type="checkbox"> Link-Landingpage mit 3 Kernlinks bauen</label>
+        <label class="f-task"><input type="checkbox"> Farbpalette &amp; Typo im Brandboard speichern</label>
+        <label class="f-task"><input type="checkbox"> 3×10 Hashtag-Sets vorbereiten</label>
+        <label class="f-task"><input type="checkbox"> Primär- &amp; Sekundärplattform festlegen</label>
+        <p class="f-hint">Bonus: In 3 Posts subtil @artclub.wtf erwähnen und #artclubofficial nutzen.</p>
+        </div>
+    </article>
+
+    </section>
+
+
+
+    <!-- FORMATS -->
+    <section id="pane-formats" class="pane" role="tabpanel" aria-labelledby="tab-formats">
+
+  <!-- Intro -->
+  <article class="f-section">
+    <header class="f-head"><span class="f-num"></span>Content-Formate – was sie leisten</header>
+    <div class="f-body">
+      <p class="f-lead">
+        Unterschiedliche Formate sorgen dafür, dass deine Kunst nicht nur gesehen, sondern auch verstanden und erinnert wird.
+        Kurzvideos liefern Reichweite, Foto- und Karussells vermitteln Tiefe, Stories & Lives bauen Nähe auf.
+      </p>
+    </div>
+  </article>
+
+  <!-- Reels & TikToks -->
+  <article class="f-section">
+    <header class="f-head"><span class="f-num"></span>Reels & TikToks – Hooks, Schnitte, Trends</header>
+    <div class="f-body">
+
+      <!-- Segmented: Hooks | Schnitt | Trends -->
+      <div class="f-seg" id="rSeg">
+        <button type="button" data-p="hook" aria-pressed="true">Hooks</button>
+        <button type="button" data-p="cut">Schnitt</button>
+        <button type="button" data-p="trend">Trends & Sounds</button>
+      </div>
+
+      <!-- Pane: Hooks -->
+      <div class="f-pane active" id="rp-hook">
+        <p>
+          Die ersten <strong>2–3 Sekunden</strong> entscheiden. Starte visuell oder mit einer präzisen Frage. Halte den Text groß
+          (mobil lesbar) und setze Untertitel.
+        </p>
+
+        <div class="f-row two">
+          <div class="f-col">
+            <div class="f-callout example">
+              <div class="f-callout-title">Hook-Vorlagen (zum Anpassen)</div>
+              <div class="f-copywrap">
+                <textarea class="f-mono eg-hook-a" rows="2">Aus dieser Skizze wird ein 2-Meter-Gemälde.</textarea>
+                <button class="f-btn ghost" data-copy=".eg-hook-a">Kopieren</button>
+              </div>
+              <div class="f-copywrap">
+                <textarea class="f-mono eg-hook-b" rows="2">So male ich Licht, das wirklich leuchtet.</textarea>
+                <button class="f-btn ghost" data-copy=".eg-hook-b">Kopieren</button>
+              </div>
+              <div class="f-copywrap">
+                <textarea class="f-mono eg-hook-c" rows="2">Von weißer Leinwand zum finalen Werk in 8 Schritten.</textarea>
+                <button class="f-btn ghost" data-copy=".eg-hook-c">Kopieren</button>
+              </div>
+            </div>
+          </div>
+          <div class="f-col">
+            <div class="f-callout calm">
+              <div class="f-callout-title">Best Practice</div>
+              <ul class="f-do">
+                <li>Hook sofort sichtbar (kein „Hi…“ am Anfang).</li>
+                <li>Große Untertitel (mind. 2 Zeilen, hoher Kontrast).</li>
+                <li>Thumbnail/Frame mit klarem Versprechen.</li>
+              </ul>
+              <p class="f-hint">Variante testen: emotional vs. informativ – was performt besser?</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pane: Schnitt -->
+      <div class="f-pane" id="rp-cut">
+        <p>
+          Schneide schnell, aber verständlich. Viele erfolgreiche Clips zeigen den gesamten Prozess in <strong>5–10 Sekunden</strong>.
+          Nutze POV, Transformation (Vorher/Nachher) oder Detail-Makros.
+        </p>
+        <div class="f-row two">
+          <div class="f-col">
+            <ul class="f-do">
+              <li><strong>Tempo:</strong> ca. 1–2 Sekunden pro Szene.</li>
+              <li><strong>Struktur:</strong> Intro-Hook → Prozess → Ergebnis → kurzer CTA.</li>
+              <li><strong>Rhythmus:</strong> Schnitte auf den Beat legen (Musik/Sound).</li>
+            </ul>
+          </div>
+          <div class="f-col">
+            <div class="f-callout note">
+              <strong>Setup-Quickies</strong>
+              <ul class="f-do">
+                <li>Stativ oder Phone-Clamp; leicht erhöhte Perspektive für Prozess.</li>
+                <li>Natürliches Seitenlicht oder Softbox, kein Mischlicht.</li>
+                <li>Export 9:16, 1080×1920 (oder 4K), Untertitel eingebrannt.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pane: Trends -->
+      <div class="f-pane" id="rp-trend">
+        <p>
+          Auf TikTok entscheidender als auf Instagram: <strong>aktuelle Sounds & Trends</strong>. Scanne täglich die FYP,
+          speichere passende Audios und adaptier sie mit deiner Handschrift.
+        </p>
+        <div class="f-callout example">
+          <div class="f-callout-title">Trend-Workflow (15 Minuten)</div>
+          <ol class="f-steps">
+            <li>3–5 Sounds speichern, die zu deinem Look passen.</li>
+            <li>1 Idee skizzieren (POV, Transformation, Reaction).</li>
+            <li>Direkt aufnehmen & posten – Trends leben nur kurz.</li>
+          </ol>
+        </div>
+        <p class="f-hint">Immer authentisch bleiben: Trend ja – Stilbruch nein.</p>
+      </div>
+    </div>
+  </article>
+
+  <!-- Foto-Posts -->
+  <article class="f-section">
+    <header class="f-head"><span class="f-num"></span>Foto-Posts – Komposition, Licht, Bearbeitung</header>
+    <div class="f-body">
+      <p>
+        Ziel: dein Werk so zeigen, dass es im Feed heraussticht und farbtreu wirkt. Komposition führt den Blick, Licht
+        macht Texturen sichtbar, Bearbeitung hält alles konsistent.
+      </p>
+      <div class="f-row two">
+        <div class="f-col">
+          <h3 class="f-sub">Komposition & Licht</h3>
+          <ul class="f-do">
+            <li><strong>Drittelregel</strong> für harmonische Platzierung.</li>
+            <li>Perspektiven mischen: Totale, Draufsicht, Textur-Makro.</li>
+            <li>Seitenlicht / Softbox; <em>kein</em> Mischlicht (farbtreu bleiben).</li>
+          </ul>
+        </div>
+        <div class="f-col">
+          <h3 class="f-sub">Bearbeitung</h3>
+          <ul class="f-do">
+            <li>Farben möglichst originalgetreu (keine harten Filter).</li>
+            <li>Presets in Lightroom/VSCO für konsistenten Look.</li>
+            <li>Einheitlicher Horizont / gerader Bildstand.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="f-callout note">
+        <strong>Tipp:</strong> Ein Shooting = 1 Werk (Totale + 3 Details). So hast du Material für Karussell & Story.
+      </div>
+    </div>
+  </article>
+
+  <!-- Karussell-Posts -->
+  <article class="f-section">
+    <header class="f-head"><span class="f-num"></span>Karussell-Posts – Storytelling & Mehrwert</header>
+    <div class="f-body">
+      <p>Karussells binden länger. Baue dramaturgisch: <em>Cover → Schritte / Insights → CTA</em>.</p>
+      <div class="f-row two">
+        <div class="f-col">
+          <div class="f-callout example">
+            <div class="f-callout-title">Beispiel-Cover-Zeilen</div>
+            <ul class="f-do">
+              <li>„Vom ersten Strich zum fertigen Werk“</li>
+              <li>„3 Dinge, die jede Leinwand haltbarer machen“</li>
+              <li>„So entsteht die Leuchtkraft in meinen Farben“</li>
+            </ul>
+          </div>
+        </div>
+        <div class="f-col">
+          <ul class="f-do">
+            <li>Text kurz & groß, hoher Kontrast.</li>
+            <li>Jede Folie ein klarer Schritt / ein Gedanke.</li>
+            <li>Am Ende: Interaktions-CTA (Frage, Speichern-Hinweis).</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- Live-Streams -->
+  <article class="f-section">
+    <header class="f-head"><span class="f-num"></span>Live-Streams – Setup, Themen, Interaktion</header>
+    <div class="f-body">
+      <p>Direkter Draht zur Community. Technisch simpel, aber stabil – und mit klarer Erwartung an das Thema.</p>
+      <div class="f-row two">
+        <div class="f-col">
+          <h3 class="f-sub">Setup-Check</h3>
+          <ul class="f-do">
+            <li>Stativ & ruhiger Bildausschnitt.</li>
+            <li>Softbox/Ringlicht; Test vorab (Ton & Verbindung).</li>
+            <li>Plan: Begrüßung → Thema → Q&A → CTA.</li>
+          </ul>
+        </div>
+        <div class="f-col">
+          <div class="f-callout calm">
+            <div class="f-callout-title">Themenideen</div>
+            <ul class="f-do">
+              <li>„Ich male ein Werk für die nächste Ausstellung“</li>
+              <li>Q&A zum Kunststudium / Materialkunde</li>
+              <li>Skizzenbuch-Einblicke, > Pre-Sale für Teilnehmende</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- Stories -->
+  <article class="f-section">
+    <header class="f-head"><span class="f-num"></span>Stories – Umfragen, Quiz, Behind the Scenes</header>
+    <div class="f-body">
+      <p>Spontan, nahbar, perfekt zum Testen. Nutze die Interaktionstools und archiviere Wichtiges als Highlights.</p>
+      <div class="f-row three">
+        <div class="f-col">
+          <h4 class="f-mini">Interaktion</h4>
+          <ul class="f-do">
+            <li>Umfrage: „Welches Werk als Nächstes?“</li>
+            <li>Quiz: „Wie lange habe ich hier gemalt?“</li>
+            <li>Slider: „Wie gefällt dir diese Palette?“</li>
+          </ul>
+        </div>
+        <div class="f-col">
+          <h4 class="f-mini">Behind the Scenes</h4>
+          <ul class="f-do">
+            <li>Atelier-Tour, Materialeinkauf, Farbtests, Missgeschicke.</li>
+            <li>Mini-Teaser für Shop/Events.</li>
+          </ul>
+        </div>
+        <div class="f-col">
+          <h4 class="f-mini">Highlights</h4>
+          <ul class="f-do">
+            <li>Serien wie „Prozess“, „Events“, „Presse“ dauerhaft sichern.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- Mission -->
+  <article class="f-section">
+    <header class="f-head"><span class="f-num"></span>Deine Mission (Formate)</header>
+    <div class="f-body f-tasks">
+      <label class="f-task"><input type="checkbox"> 2 Hooks aufnehmen & als Reel/TikTok testen</label>
+      <label class="f-task"><input type="checkbox"> 1 Foto-Shooting: Totale + 3 Detailshots</label>
+      <label class="f-task"><input type="checkbox"> 1 Karussell mit Cover & CTA erstellen</label>
+      <label class="f-task"><input type="checkbox"> Live-Termin planen (30–45 Min) + Thema festlegen</label>
+      <label class="f-task"><input type="checkbox"> 3 Story-Formate (Umfrage/Quiz/Teaser) diese Woche posten</label>
+    </div>
+  </article>
+
+</section>
+
+
+    <!-- COPY -->
+   <section id="pane-copy" class="pane" role="tabpanel" aria-labelledby="tab-copy">
+
+  <!-- Intro -->
+  <article class="f-section">
+    <header class="f-head"><span class="f-num"></span>Storytelling & Copy – Worte, die Bilder tragen</header>
+    <div class="f-body">
+      <p class="f-lead">
+        Gute Texte holen Menschen in deine Welt: <em>Hook</em> weckt Neugier, <em>Kontext</em> macht Sinn,
+        <em>Mehrwert</em> schafft Tiefe und der <em>CTA</em> führt zum nächsten Schritt.
+      </p>
+    </div>
+  </article>
+
+  <!-- Hooks & Captions -->
+  <article class="f-section">
+    <header class="f-head"><span class="f-num"></span>Hooks & Caption-Struktur</header>
+    <div class="f-body">
+
+      <!-- Segmented: Hooks / Struktur / Tone -->
+      <div class="f-seg" id="cSeg">
+        <button type="button" data-p="hooks" aria-pressed="true">Hook-Beispiele</button>
+        <button type="button" data-p="structure">Caption-Struktur</button>
+        <button type="button" data-p="tone">Ton & Stil</button>
+      </div>
+
+      <!-- Pane: Hooks -->
+      <div class="f-pane active" id="cp-hooks">
+        <p>Der Hook entscheidet in den ersten <strong>2–3 Sekunden</strong> bzw. Zeilen. Mach neugierig, sei konkret.</p>
+
+        <div class="f-row two">
+          <div class="f-col">
+            <div class="f-callout example">
+              <div class="f-callout-title">Hook-Vorlagen (kopierbar)</div>
+              <div class="f-copywrap">
+                <textarea class="f-mono ex-h1" rows="2">Aus diesen drei Linien entsteht ein ganzes Stadtbild.</textarea>
+                <button class="f-btn ghost" data-copy=".ex-h1">Kopieren</button>
+              </div>
+              <div class="f-copywrap">
+                <textarea class="f-mono ex-h2" rows="2">Warum ich dieses Gemälde fast zerstört hätte.</textarea>
+                <button class="f-btn ghost" data-copy=".ex-h2">Kopieren</button>
+              </div>
+              <div class="f-copywrap">
+                <textarea class="f-mono ex-h3" rows="2">Der Farbton hier existierte vorher nicht – so habe ich ihn gemischt.</textarea>
+                <button class="f-btn ghost" data-copy=".ex-h3">Kopieren</button>
+              </div>
+            </div>
+          </div>
+          <div class="f-col">
+            <div class="f-callout calm">
+              <div class="f-callout-title">Best Practice</div>
+              <ul class="f-do">
+                <li>Hook zuerst, keine Anrede/Einleitung.</li>
+                <li>Konkret statt generisch („3 Linien“ statt „ein paar Striche“).</li>
+                <li>Ein Versprechen andeuten (Geheimnis, Ergebnis, Konflikt).</li>
+              </ul>
+              <p class="f-hint">Teste 2 Varianten: emotional vs. fachlich.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pane: Struktur -->
+      <div class="f-pane" id="cp-structure">
+        <p>Die einfache 4-Schritt-Struktur hält Captions klar und scannbar:</p>
+        <ol class="f-steps">
+          <li><strong>Hook</strong> – Aufmerksamkeit wecken.</li>
+          <li><strong>Kontext</strong> – kurzer Hintergrund / Relevanz.</li>
+          <li><strong>Mehrwert</strong> – Technik, Gefühl, Geschichte.</li>
+          <li><strong>CTA</strong> – klare, machbare nächste Aktion.</li>
+        </ol>
+
+        <div class="f-callout example">
+          <div class="f-callout-title">Mini-Caption (Beispiel)</div>
+          <div class="f-copywrap">
+            <textarea class="f-mono ex-cap" rows="5">[Hook] Aus drei Linien wird eine Skyline.
+[Kontext] Ich skizziere zuerst nur mit Kohle – jede Kante sucht ihren Platz.
+[Mehrwert] Der Trick für Tiefe: kalte Schatten, warme Highlights.
+[CTA] Speichere die Schritte & sag mir: eher Abendrot oder Morgenlicht?</textarea>
+            <button class="f-btn ghost" data-copy=".ex-cap">Kopieren</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pane: Ton & Stil -->
+      <div class="f-pane" id="cp-tone">
+        <div class="f-row two">
+          <div class="f-col">
+            <h3 class="f-sub">Ton</h3>
+            <ul class="f-do">
+              <li>Schreibe <em>zu einer Person</em>, nicht zur Masse.</li>
+              <li>Emojis sparsam als Gliederung (z. B. ✅ ➜ Schritt, 💡 ➜ Tipp).</li>
+              <li>Kurzsätze für mobile Lesbarkeit.</li>
+            </ul>
+          </div>
+          <div class="f-col">
+            <h3 class="f-sub">Dos & Don’ts</h3>
+            <ul class="f-do">
+              <li><strong>Do:</strong> konkret, bildhaft, aktiv.</li>
+              <li><strong>Don’t:</strong> „Ich liebe Kunst“ / Floskeln / Clickbait.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </article>
+
+  <!-- Call-to-Action Beispiele -->
+  <article class="f-section">
+    <header class="f-head"><span class="f-num"></span>CTAs – klare nächste Schritte</header>
+    <div class="f-body">
+      <div class="f-row three">
+        <div class="f-col">
+          <div class="f-callout example">
+            <div class="f-callout-title">Engagement</div>
+            <div class="f-copywrap">
+              <textarea class="f-mono ex-cta-a" rows="2">Kommentiere, welches Detail dir zuerst aufgefallen ist.</textarea>
+              <button class="f-btn ghost" data-copy=".ex-cta-a">Kopieren</button>
+            </div>
+            <div class="f-copywrap">
+              <textarea class="f-mono ex-cta-b" rows="2">Speichere den Post, wenn du die Technik testen willst.</textarea>
+              <button class="f-btn ghost" data-copy=".ex-cta-b">Kopieren</button>
+            </div>
+          </div>
+        </div>
+        <div class="f-col">
+          <div class="f-callout example">
+            <div class="f-callout-title">Traffic</div>
+            <div class="f-copywrap">
+              <textarea class="f-mono ex-cta-c" rows="2">Sieh das Werk in voller Größe im Shop – Link in Bio.</textarea>
+              <button class="f-btn ghost" data-copy=".ex-cta-c">Kopieren</button>
+            </div>
+            <div class="f-copywrap">
+              <textarea class="f-mono ex-cta-d" rows="2">Hol dir das kostenlose Atelier-Magazin – jetzt über den Link in Bio.</textarea>
+              <button class="f-btn ghost" data-copy=".ex-cta-d">Kopieren</button>
+            </div>
+          </div>
+        </div>
+        <div class="f-col">
+          <div class="f-callout example">
+            <div class="f-callout-title">Sale</div>
+            <div class="f-copywrap">
+              <textarea class="f-mono ex-cta-e" rows="2">Dieses Werk ist ab sofort verfügbar – DM für Details.</textarea>
+              <button class="f-btn ghost" data-copy=".ex-cta-e">Kopieren</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="f-hint">CTAs immer konkret & erreichbar formulieren – keine vagen Aufforderungen.</p>
+    </div>
+  </article>
+
+  <!-- Storytelling Frameworks -->
+  <article class="f-section">
+    <header class="f-head"><span class="f-num"></span>Storytelling-Frameworks</header>
+    <div class="f-body">
+      <div class="f-row three">
+        <div class="f-col">
+          <h4 class="f-mini">Vorher → Problem → Lösung → Ergebnis</h4>
+          <div class="f-callout example">
+            <div class="f-callout-title">Werk-Story (Beispiel)</div>
+            <div class="f-copywrap">
+              <textarea class="f-mono ex-st-a" rows="5">Vorher: Die Fläche war zu kalt.
+Problem: Blau schluckte die Tiefe.
+Lösung: Warme Lasur + Messer-Kratzer.
+Ergebnis: Mehr Leuchten – und genau das suchte der Käufer.</textarea>
+              <button class="f-btn ghost" data-copy=".ex-st-a">Kopieren</button>
+            </div>
+          </div>
+        </div>
+        <div class="f-col">
+          <h4 class="f-mini">Heldenreise (mini)</h4>
+          <ul class="f-do">
+            <li>Ruf: Idee/Anlass</li>
+            <li>Prüfung: Hindernis/Misserfolg</li>
+            <li>Wendung: Fund/Lösung</li>
+            <li>Rückkehr: fertiges Werk/Erkenntnis</li>
+          </ul>
+        </div>
+        <div class="f-col">
+          <h4 class="f-mini">„Warum ich …“</h4>
+          <div class="f-callout example">
+            <div class="f-copywrap">
+              <textarea class="f-mono ex-st-b" rows="4">Ich wollte in Blau arbeiten, bis ein roter Farbsturz passierte – heute ist es mein bestverkauftes Werk.</textarea>
+              <button class="f-btn ghost" data-copy=".ex-st-b">Kopieren</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="f-hint">Nicht nur chronologisch erzählen – Emotionen, Wendepunkte, Entscheidungen in den Fokus.</p>
+    </div>
+  </article>
+
+  <!-- PR & Newsletter -->
+  <article class="f-section">
+    <header class="f-head"><span class="f-num"></span>PR-Text & Newsletter</header>
+    <div class="f-body">
+
+      <div class="f-row two">
+        <div class="f-col">
+          <h3 class="f-sub">Presse-Onepager (Struktur)</h3>
+          <ol class="f-steps">
+            <li><strong>Überschrift</strong> – präzise, neugierig.</li>
+            <li><strong>Lead</strong> – Wer? Was? Wann? Wo? Warum? Wie?</li>
+            <li><strong>Hintergrund</strong> – Werk(e), Technik, Inspiration.</li>
+            <li><strong>Zitat</strong> – Persönlichkeit/Perspektive.</li>
+            <li><strong>Kontakt</strong> – Mail, Bildmaterial (druckfähig, benannt „Nachname_Werktitel_Jahr.jpg“).</li>
+          </ol>
+          <div class="f-callout example">
+            <div class="f-callout-title">Lead-Beispiel</div>
+            <div class="f-copywrap">
+              <textarea class="f-mono ex-pr" rows="5">Die Berliner Künstlerin X zeigt ab 12.11. ihre Serie „Lichtkanten“ in der Galerie Y. Die Arbeiten verbinden Betontexturen mit fluoreszierenden Lasuren – ein Dialog zwischen Stadt und Leuchten.</textarea>
+              <button class="f-btn ghost" data-copy=".ex-pr">Kopieren</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="f-col">
+          <h3 class="f-sub">Newsletter-Template</h3>
+          <ul class="f-do">
+            <li><strong>Betreff:</strong> neugierig, nicht clickbaity.</li>
+            <li>Begrüßung (kurz & persönlich)</li>
+            <li>Hauptinhalt (z. B. neues Werk, Einladung)</li>
+            <li>Visueller Block (Bild/GIF)</li>
+            <li><strong>CTA</strong> (Shop/Anmeldung)</li>
+            <li>Footer (Socials, Impressum, Abmelden)</li>
+          </ul>
+
+          <div class="f-callout example">
+            <div class="f-callout-title">Betreff-Ideen</div>
+            <div class="f-copywrap">
+              <textarea class="f-mono ex-nl" rows="3">Mein neues Werk ist fertig – und eine Farbe hat mich überrascht.</textarea>
+              <button class="f-btn ghost" data-copy=".ex-nl">Kopieren</button>
+            </div>
+          </div>
+
+          <p class="f-hint">Frequenz: i. d. R. 1–2×/Monat. Personalisierung (Name) erhöht Öffnungen & Klicks.</p>
+        </div>
+      </div>
+
+    </div>
+  </article>
+
+  <!-- Mission -->
+  <article class="f-section">
+    <header class="f-head"><span class="f-num"></span>Deine Mission (Copy)</header>
+    <div class="f-body f-tasks">
+      <label class="f-task"><input type="checkbox"> 3 Hook-Varianten schreiben & je 1× posten</label>
+      <label class="f-task"><input type="checkbox"> 2 CTAs wählen und 2 Wochen konsequent testen</label>
+      <label class="f-task"><input type="checkbox"> 1 Werk-Story nach „Vorher/Problem/Lösung/Ergebnis“ verfassen</label>
+      <label class="f-task"><input type="checkbox"> Presse-Onepager + 3 druckfähige Fotos sammeln</label>
+      <label class="f-task"><input type="checkbox"> Newsletter-Tool einrichten (Liste + Template)</label>
+    </div>
+  </article>
+
+</section>
+
+
+
+<!--
+
+    ### PLAN ###
+    <section id="pane-plan" class="pane" role="tabpanel" aria-labelledby="tab-plan">
+      <div class="section">
+        <div class="head">Planung & Rhythmus</div>
+        <div class="body grid">
+          <div class="card"><div class="h">Redaktionsplan</div><div class="mono">Datum · Plattform · Format · Hook · CTA · Status · Asset-Link — mind. 2 Wochen vorplanen.</div></div>
+          <div class="card"><div class="h">30-Tage-Challenge</div><div class="p">Tag 1 Atelier • Tag 2 Material • Tag 3 WIP • …</div></div>
+          <div class="card"><div class="h">Kampagnen</div><div class="mono">Teaser → Hauptphase → Abschluss (klare Zeitfenster, Assets, Reminder)</div></div>
+          <div class="card"><div class="h">Evergreen-Pool</div><div class="p">≥20 zeitlose Ideen sammeln & rotieren</div></div>
+        </div>
+      </div>
+      <div class="section tasks">
+        <div class="head">Deine Mission (Planung)</div>
+        <div class="body">
+          <label class="row"><input type="checkbox" data-task="P_template"> Plan-Template (Sheet/Notion) bauen</label>
+          <label class="row"><input type="checkbox" data-task="P_block"> 30 Tage blocken</label>
+          <label class="row"><input type="checkbox" data-task="P_campaign"> Kampagnenziel + 3 Inhalte/Phase</label>
+          <label class="row"><input type="checkbox" data-task="P_evergreen"> 20 Evergreen-Ideen dokumentieren</label>
+        </div>
+      </div>
+    </section>
+
+    ### VISUALS ###
+    <section id="pane-visuals" class="pane" role="tabpanel" aria-labelledby="tab-visuals">
+      <div class="section">
+        <div class="head">Visuals & Technik</div>
+        <div class="body grid three">
+          <div class="card"><div class="h">Foto-Setup</div><ul class="list"><li>Fensterlicht/Softbox, neutraler Hintergrund</li><li>Detailshots, gerader Bildstand</li></ul></div>
+          <div class="card"><div class="h">Video-Setup</div><ul class="list"><li>Externes Mikro, Stativ</li><li>CapCut/VN · Export 9:16 1080×1920</li></ul></div>
+          <div class="card"><div class="h">Design & Export</div><ul class="list"><li>Canva/Figma Templates</li><li>JPEG 80–90 %, Reels H.264, HQ Upload</li></ul></div>
+        </div>
+      </div>
+      <div class="section tasks">
+        <div class="head">Deine Mission (Visuals)</div>
+        <div class="body">
+          <label class="row"><input type="checkbox" data-task="V_test"> Testshooting: 1 Werk + 3 Details</label>
+          <label class="row"><input type="checkbox" data-task="V_rig"> Einfaches Video-Rig definieren</label>
+          <label class="row"><input type="checkbox" data-task="V_tpl"> Template-Kit (Post/Story/Karussell)</label>
+        </div>
+      </div>
+    </section>
+
+    #### ANALYTICS ####
+    <section id="pane-analytics" class="pane" role="tabpanel" aria-labelledby="tab-analytics">
+      <div class="section">
+        <div class="head">Analyse & Wachstum</div>
+        <div class="body grid">
+          <div class="card"><div class="h">KPIs</div><ul class="list"><li>Reichweite · Engagement-Rate · CTR · Conversion · Wachstum</li></ul></div>
+          <div class="card"><div class="h">Growth-Hacks</div><ul class="list"><li>Regelmäßig posten · Trends · Kollabs</li></ul></div>
+          <div class="card"><div class="h">Pre-Post-Check</div><ul class="list"><li>Hook · Mehrwert · Qualität · Text · CTA · Format</li></ul></div>
+          <div class="card"><div class="h">A/B-Tests</div><ul class="list"><li>Nur 1 Variable ändern (Hook/Thumb/CTA)</li></ul></div>
+        </div>
+      </div>
+      <div class="section tasks">
+        <div class="head">Deine Mission (Analyse)</div>
+        <div class="body">
+          <label class="row"><input type="checkbox" data-task="A_kpi"> KPI-Sheet anlegen</label>
+          <label class="row"><input type="checkbox" data-task="A_collab"> 2 Collab-Ideen planen</label>
+          <label class="row"><input type="checkbox" data-task="A_check"> Pre-Post-Checklist drucken</label>
+          <label class="row"><input type="checkbox" data-task="A_ab"> 2 A/B-Tests definieren</label>
+        </div>
+      </div>
+    </section>
+
+    ### INSPO ####
+    <section id="pane-inspo" class="pane" role="tabpanel" aria-labelledby="tab-inspo">
+      <div class="section">
+        <div class="head">Inspiration & Tools</div>
+        <div class="body grid">
+          <div class="card"><div class="h">Best-Practice-Sammlung</div><div class="p">IG-Saves / Pinterest-Boards / private Linkliste.</div></div>
+          <div class="card"><div class="h">Trend-Quellen</div><div class="p">TikTok Creative Center · Pinterest Predicts · IG Trend Report</div></div>
+          <div class="card"><div class="h">Tool-Stack</div><div class="p">Lightroom/Snapseed · CapCut/VN · Canva/Figma · Notion/Later</div></div>
+        </div>
+      </div>
+      <div class="section tasks">
+        <div class="head">Deine Mission (Inspiration)</div>
+        <div class="body">
+          <label class="row"><input type="checkbox" data-task="I_board"> Private Sammlung starten</label>
+          <label class="row"><input type="checkbox" data-task="I_trend"> 10–15 Min/Tag Trend-Scan blocken</label>
+          <label class="row"><input type="checkbox" data-task="I_tools"> 1 Foto-, 1 Video-, 1 Planungs-Tool festlegen</label>
+        </div>
+      </div>
+    </section>
+
+    ### SALES ###
+    <section id="pane-sales" class="pane" role="tabpanel" aria-labelledby="tab-sales">
+      <div class="section">
+        <div class="head">Sales & Launch</div>
+        <div class="body grid">
+          <div class="card"><div class="h">Social Selling</div><div class="p">Wert kommunizieren, subtil CTAs, Community-Nähe.</div></div>
+          <div class="card"><div class="h">Preispsychologie</div><div class="p">Anker & Editionen; Mehrwert statt Dauer-Rabatt.</div></div>
+          <div class="card"><div class="h">Pre-Launch</div><div class="p">Ziel • Content • Tech • PR • Community</div></div>
+          <div class="card"><div class="h">Events</div><div class="p">6→0 Wochen Timeline, Live-Coverage, Recap</div></div>
+        </div>
+      </div>
+      <div class="section tasks">
+        <div class="head">Deine Mission (Sales)</div>
+        <div class="body">
+          <label class="row"><input type="checkbox" data-task="S_cta"> 3 Posts mit subtilen Verkaufs-CTAs</label>
+          <label class="row"><input type="checkbox" data-task="S_anchor"> Preisanker & Editionen definieren</label>
+          <label class="row"><input type="checkbox" data-task="S_pre"> Pre-Launch-Checkliste</label>
+          <label class="row"><input type="checkbox" data-task="S_event"> Event-Promo-Plan erstellen</label>
+        </div>
+      </div>
+    </section>
+
+    ### GROWTH ###
+    <section id="pane-growth" class="pane" role="tabpanel" aria-labelledby="tab-growth">
+      <div class="section">
+        <div class="head">Reichweiten-Booster</div>
+        <div class="body grid">
+          <div class="card"><div class="h">Trend-Hijacking</div><div class="p">Trend scannen → eigene Handschrift → sofort posten.</div></div>
+          <div class="card"><div class="h">Cross-Posting</div><div class="p">Reels → TikTok/Shorts/Pinterest Idea Pins</div></div>
+          <div class="card"><div class="h">Serienformat</div><div class="p">Name, Cover, Rhythmus definieren</div></div>
+          <div class="card"><div class="h">Speed-Iteration</div><div class="p">Top-Post binnen 48h variieren & nachschieben</div></div>
+        </div>
+      </div>
+      <div class="section tasks">
+        <div class="head">Deine Mission (Growth)</div>
+        <div class="body">
+          <label class="row"><input type="checkbox" data-task="G_trend"> 1 Trend in eigener Handschrift diese Woche</label>
+          <label class="row"><input type="checkbox" data-task="G_multi"> Multiposting aktivieren</label>
+          <label class="row"><input type="checkbox" data-task="G_series"> Serienformat starten</label>
+          <label class="row"><input type="checkbox" data-task="G_speed"> Wöchentlich Top-Post duplizieren</label>
+        </div>
+      </div>
+    </section>
+
+    ### START IDEAS ###
+    <section id="pane-start" class="pane" role="tabpanel" aria-labelledby="tab-start">
+      <div class="section">
+        <div class="head">Konkrete Start-Ideen</div>
+        <div class="body grid three">
+          <div class="card"><div class="h">Vorstellung</div><div class="p">Reel/Fotoset „Wer bin ich?“ – Atelier + 1 Fun-Fact.</div></div>
+          <div class="card"><div class="h">Werk im Fokus</div><div class="p">1 Werk + 3 Details + CTA (DM/Shop)</div></div>
+          <div class="card"><div class="h">Prozessvideo</div><div class="p">Timelapse oder Step-by-Step mit großem Hook-Text.</div></div>
+        </div>
+      </div>
+      <div class="section tasks">
+        <div class="head">Deine Mission (Start)</div>
+        <div class="body">
+          <label class="row"><input type="checkbox" data-task="ST_intro"> 1 Intro-Reel aufnehmen</label>
+          <label class="row"><input type="checkbox" data-task="ST_focus"> 1 „Werk im Fokus“ posten</label>
+          <label class="row"><input type="checkbox" data-task="ST_process"> 1 Prozess-Reel erstellen</label>
+        </div>
+      </div>
+    </section>
+
+    ### 0→10k ###
+    <section id="pane-tenk" class="pane" role="tabpanel" aria-labelledby="tab-tenk">
+      <div class="section">
+        <div class="head">Von 0 auf 10k in 3 Monaten</div>
+        <div class="body grid">
+          <div class="card"><div class="h">Monat 1 · Fundament</div><div class="p">Setup + 5–6 Posts/Woche (3 Reels, 1 Karussell, 1 Foto, 1 Community).</div></div>
+          <div class="card"><div class="h">Monat 2 · Skalierung</div><div class="p">Best-Performer verdoppeln, Serien starten, 2 Kollabs.</div></div>
+          <div class="card"><div class="h">Monat 3 · Umwandlung</div><div class="p">Kampagne + Paid Boosts; Multiposting; Gewinnspiel/Partner-Push.</div></div>
+        </div>
+      </div>
+      <div class="section tasks">
+        <div class="head">Deine Mission (0→10k)</div>
+        <div class="body">
+          <label class="row"><input type="checkbox" data-task="K_m1"> Monat-1-Plan fixieren</label>
+          <label class="row"><input type="checkbox" data-task="K_m2"> Monat-2-Plan fixieren</label>
+          <label class="row"><input type="checkbox" data-task="K_m3"> Monat-3-Plan fixieren</label>
+          <div class="hint">„5k-Challenge“ = Zielmarke/Motivation, kein Versprechen.</div>
+        </div>
+      </div>
+    </section>
+  </div> -->
+
+  <!-- JS: Tabs & Missions (✓-Badge je Tab via localStorage) -->
+  <script>
+    (function(){
+      const root = document.getElementById('mkGuide'); if(!root) return;
+      const cid = root.dataset.customer || 'guest';
+      const key = id => `ac_mk_${id}_${cid}`;
+
+      // Tab switch
+      root.querySelectorAll('.tab').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const id = btn.dataset.tab;
+          root.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-selected','false'));
+          btn.setAttribute('aria-selected','true');
+          root.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
+          const pane = root.querySelector(`#pane-${id}`);
+          pane?.classList.add('active');
+          pane?.scrollIntoView({behavior:'smooth', block:'start'});
+        });
+      });
+
+      // Load/save tasks per pane
+      root.querySelectorAll('.pane').forEach(pane=>{
+        const pid = pane.id.replace('pane-','');
+        const saved = load(pid);
+        pane.querySelectorAll('input[type="checkbox"][data-task]').forEach(cb=>{
+          cb.checked = !!saved[cb.dataset.task];
+          cb.addEventListener('change', ()=>{
+            const s = load(pid); s[cb.dataset.task] = cb.checked; save(pid, s);
+            updateTabDone(pid);
+          });
+        });
+        updateTabDone(pid);
+      });
+
+      function load(id){ try { return JSON.parse(localStorage.getItem(key(id))||'{}'); } catch(e){ return {}; } }
+      function save(id, obj){ localStorage.setItem(key(id), JSON.stringify(obj)); }
+      function updateTabDone(id){
+        const pane = root.querySelector(`#pane-${id}`);
+        const all = pane.querySelectorAll('input[type="checkbox"][data-task]');
+        const done = all.length>0 && [...all].every(c=>c.checked);
+        root.querySelector(`#tab-${id}`)?.classList.toggle('done', done);
+      }
+    })();
+  </script>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  // Copy buttons
+  document.querySelectorAll('#pane-found [data-copy]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const sel = btn.getAttribute('data-copy');
+      const el = document.querySelector('#pane-found ' + sel);
+      if (!el) return;
+      el.select(); document.execCommand('copy');
+      btn.textContent = 'Kopiert ✓'; setTimeout(()=>btn.textContent='Kopieren',1200);
+    });
+  });
+  // Platform segmented control
+  const seg = document.getElementById('fSeg');
+  if (seg){
+    const panes = { ig:'fp-ig', tt:'fp-tt', li:'fp-li', pi:'fp-pi' };
+    seg.querySelectorAll('button').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        seg.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed','false'));
+        b.setAttribute('aria-pressed','true');
+        Object.values(panes).forEach(id=>document.getElementById(id)?.classList.remove('active'));
+        document.getElementById(panes[b.dataset.p])?.classList.add('active');
+      });
+    });
+  }
+});
+</script>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  // Copy buttons (pane-agnostisch)
+  document.querySelectorAll('.pane [data-copy]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const pane = btn.closest('.pane');
+      const sel = btn.getAttribute('data-copy');
+      const el = pane.querySelector(sel);
+      if (!el) return;
+      el.select(); document.execCommand('copy');
+      const txt = btn.textContent;
+      btn.textContent = 'Kopiert ✓';
+      setTimeout(()=>btn.textContent = txt, 1200);
+    });
+  });
+
+  // Segmented controls (pane-agnostisch)
+  document.querySelectorAll('.pane .f-seg').forEach(seg=>{
+    const buttons = seg.querySelectorAll('button');
+    buttons.forEach(b=>{
+      b.addEventListener('click', ()=>{
+        buttons.forEach(x=>x.setAttribute('aria-pressed','false'));
+        b.setAttribute('aria-pressed','true');
+        // Panes in demselben Abschnitt schalten
+        const container = seg.closest('.f-body');
+        container.querySelectorAll('.f-pane').forEach(p=>p.classList.remove('active'));
+        const id = (seg.id === 'rSeg')
+          ? `rp-${b.dataset.p}`     // Reels-Panes
+          : b.dataset.target;       // generisch
+        container.querySelector(`#${id}`)?.classList.add('active');
+      });
+    });
+  });
+});
+</script>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const root = document.querySelector('#pane-copy');
+  if (!root) return;
+
+  // Copy-Buttons
+  root.querySelectorAll('[data-copy]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const sel = btn.getAttribute('data-copy');
+      const el = root.querySelector(sel);
+      if (!el) return;
+      el.select(); document.execCommand('copy');
+      btn.textContent = 'Kopiert ✓';
+      setTimeout(()=>btn.textContent='Kopieren',1000);
+    });
+  });
+
+  // Segmented Control
+  const seg = root.querySelector('#cSeg');
+  if (seg){
+    const panes = {
+      hooks: root.querySelector('#cp-hooks'),
+      structure: root.querySelector('#cp-structure'),
+      tone: root.querySelector('#cp-tone')
+    };
+    seg.querySelectorAll('button').forEach(b=>{
+      b.addEventListener('click',()=>{
+        seg.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed','false'));
+        b.setAttribute('aria-pressed','true');
+        const key = b.getAttribute('data-p');
+        Object.values(panes).forEach(p=>p&&p.classList.remove('active'));
+        panes[key]?.classList.add('active');
+      });
+    });
+  }
+});
+</script>

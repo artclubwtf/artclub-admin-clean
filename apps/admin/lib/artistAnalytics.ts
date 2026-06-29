@@ -23,17 +23,22 @@ import { CanonicalProductModel } from "@/models/CanonicalProduct";
 export const analyticsViewEventTypes = ["artist_profile_view", "artwork_view"] as const;
 export const analyticsImpressionEventTypes = ["artist_profile_impression", "artwork_impression"] as const;
 export const analyticsClickEventTypes = ["artwork_click", "shopify_product_click"] as const;
+export const analyticsSources = ["shopify", "shopify_artist_embed", "artist_app_embed", "artist_app"] as const;
 
 const analyticsEventTypeSet = new Set<string>(analyticsEventTypes);
 const analyticsProductEventTypeSet = new Set<string>(analyticsProductEventTypes);
 
 const incomingAnalyticsPayloadSchema = z.object({
   eventType: z.enum(analyticsEventTypes),
-  source: z.string().trim().optional().default("shopify"),
+  source: z.enum(analyticsSources).optional().default("shopify"),
   path: z.string().trim().max(1200).optional().default(""),
   referrer: z.string().trim().max(1200).optional().default(""),
+  pageHandle: z.string().trim().max(200).optional(),
+  pageUrl: z.string().trim().max(1200).optional(),
   canonicalArtistId: z.string().trim().max(120).optional(),
   artistSlug: z.string().trim().max(200).optional(),
+  artistMetaobjectId: z.string().trim().max(200).optional(),
+  artistName: z.string().trim().max(200).optional(),
   canonicalProductId: z.string().trim().max(120).optional(),
   productKey: z.string().trim().max(120).optional(),
   shopifyProductId: z.string().trim().max(120).optional(),
@@ -97,15 +102,7 @@ export async function ingestAnalyticsEvent(req: Request) {
       body: { ok: false, error: "invalid_payload", details: payloadResult.error.flatten() },
     };
   }
-
   const payload = normalizeIncomingPayload(payloadResult.data);
-  if (payload.source !== "shopify") {
-    return {
-      status: 400,
-      headers,
-      body: { ok: false, error: "invalid_source" },
-    };
-  }
 
   await connectMongo();
 
@@ -120,9 +117,13 @@ export async function ingestAnalyticsEvent(req: Request) {
     source: payload.source,
     path: payload.path || undefined,
     referrer: payload.referrer || undefined,
+    pageHandle: payload.pageHandle || undefined,
+    pageUrl: payload.pageUrl || undefined,
     visitorIdHash,
     canonicalArtistId: identity.canonicalArtistId || undefined,
     artistSlug: identity.artistSlug || payload.artistSlug || undefined,
+    artistMetaobjectId: payload.artistMetaobjectId || undefined,
+    artistName: payload.artistName || undefined,
     canonicalProductId: identity.canonicalProductId || undefined,
     productKey: identity.productKey || payload.productKey || undefined,
     shopifyProductId: identity.shopifyProductId || payload.shopifyProductId || undefined,
@@ -202,7 +203,11 @@ function normalizeIncomingPayload(payload: IncomingAnalyticsPayload): IncomingAn
     ...payload,
     path: normalizePath(payload.path),
     referrer: normalizeUrlPath(payload.referrer),
+    pageHandle: normalizeSlugLike(payload.pageHandle),
+    pageUrl: normalizePath(payload.pageUrl),
     artistSlug: normalizeSlugLike(payload.artistSlug),
+    artistMetaobjectId: payload.artistMetaobjectId?.trim() || undefined,
+    artistName: payload.artistName?.trim() || undefined,
     productHandle: normalizeSlugLike(payload.productHandle),
     productKey: payload.productKey?.trim() || undefined,
     shopifyProductId: payload.shopifyProductId?.trim() || undefined,
@@ -212,7 +217,11 @@ function normalizeIncomingPayload(payload: IncomingAnalyticsPayload): IncomingAn
 }
 
 async function resolveAnalyticsIdentity(shopDomain: string, payload: IncomingAnalyticsPayload): Promise<ResolvedAnalyticsIdentity> {
-  const artistSlugFromPath = extractArtistSlugFromPath(payload.path);
+  const artistSlugFromPath = firstTruthy([
+    extractArtistSlugFromPath(payload.path),
+    extractArtistSlugFromPath(payload.pageUrl || ""),
+  ]);
+  const artistSlugFromPageHandle = extractArtistSlugFromPageHandle(payload.pageHandle, payload.pageUrl);
   const productHandleFromPath = extractProductHandleFromPath(payload.path);
 
   let artist: null | {
@@ -269,7 +278,26 @@ async function resolveAnalyticsIdentity(shopDomain: string, payload: IncomingAna
       .lean();
   }
 
-  const artistSlugCandidates = [payload.artistSlug, artistSlugFromPath, product?.artistSlug].filter(Boolean) as string[];
+  if (!artist && payload.artistMetaobjectId) {
+    const mapped = await mapShopifyProductToCanonicalArtist({
+      shopDomain,
+      customKunstlerValue: payload.artistMetaobjectId,
+      customKunstlerHandle: payload.artistMetaobjectId,
+      customKunstlerDisplayName: payload.artistName,
+    });
+    if (mapped.selectedArtist?._id && Types.ObjectId.isValid(String(mapped.selectedArtist._id))) {
+      artist = await CanonicalArtistModel.findById(mapped.selectedArtist._id)
+        .select({ _id: 1, publicSlug: 1, handle: 1, artistKey: 1 })
+        .lean();
+    }
+  }
+
+  const artistSlugCandidates = [
+    payload.artistSlug,
+    artistSlugFromPageHandle,
+    artistSlugFromPath,
+    product?.artistSlug,
+  ].filter(Boolean) as string[];
   if (!artist) {
     for (const slugCandidate of artistSlugCandidates) {
       artist = await findArtistBySlug(shopDomain, slugCandidate);
@@ -278,12 +306,17 @@ async function resolveAnalyticsIdentity(shopDomain: string, payload: IncomingAna
   }
 
   if (!artist) {
-    for (const slugCandidate of artistSlugCandidates) {
+    const mappingCandidates = uniqStrings([
+      payload.artistMetaobjectId,
+      ...artistSlugCandidates,
+      payload.artistName,
+    ]);
+    for (const slugCandidate of mappingCandidates) {
       const mapped = await mapShopifyProductToCanonicalArtist({
         shopDomain,
         customKunstlerValue: slugCandidate,
         customKunstlerHandle: slugCandidate,
-        customKunstlerDisplayName: slugCandidate,
+        customKunstlerDisplayName: payload.artistName || slugCandidate,
       });
       if (mapped.selectedArtist?._id && Types.ObjectId.isValid(String(mapped.selectedArtist._id))) {
         artist = await CanonicalArtistModel.findById(mapped.selectedArtist._id)
@@ -314,6 +347,7 @@ async function resolveAnalyticsIdentity(shopDomain: string, payload: IncomingAna
       artist?.handle || undefined,
       artist?.artistKey || undefined,
       payload.artistSlug,
+      artistSlugFromPageHandle,
       artistSlugFromPath,
     ]),
     productKey: product?.productKey || payload.productKey || undefined,
@@ -345,8 +379,10 @@ function buildResolutionReason(input: {
     return "artist_only_product_event";
   }
   if (input.payload.canonicalProductId || input.payload.canonicalArtistId) return "resolved_from_canonical_ids";
+  if (input.payload.artistMetaobjectId) return "resolved_from_artist_metaobject";
   if (input.payload.shopifyProductId) return "resolved_from_shopify_product_id";
   if (input.payload.productHandle || input.productFromPath) return "resolved_from_product_handle";
+  if (input.payload.pageHandle || input.payload.pageUrl) return "resolved_from_page_context";
   if (input.payload.artistSlug || input.artistFromPath) return "resolved_from_artist_slug";
   return "resolved_from_fallback";
 }
@@ -645,6 +681,15 @@ function extractArtistSlugFromPath(path: string) {
   return match?.[1] ? decodeURIComponent(match[1]) : undefined;
 }
 
+function extractArtistSlugFromPageHandle(pageHandle?: string, pageUrl?: string) {
+  const pageSlugFromUrl = extractArtistSlugFromPath(pageUrl || "");
+  if (pageSlugFromUrl) return pageSlugFromUrl;
+  const normalizedHandle = normalizeSlugLike(pageHandle);
+  if (!normalizedHandle) return undefined;
+  if (normalizedHandle === "kunstler" || normalizedHandle.startsWith("kuenstler-")) return undefined;
+  return normalizedHandle;
+}
+
 function extractProductHandleFromPath(path: string) {
   const normalized = normalizePath(path);
   const match = normalized.match(/\/products\/([^/?#]+)/i);
@@ -666,6 +711,10 @@ function firstTruthy(values: Array<string | undefined>) {
     if (value && value.trim()) return value.trim();
   }
   return undefined;
+}
+
+function uniqStrings(values: Array<string | undefined>) {
+  return Array.from(new Set(values.filter((value): value is string => Boolean(value && value.trim())).map((value) => value.trim())));
 }
 
 function escapeRegex(value: string) {

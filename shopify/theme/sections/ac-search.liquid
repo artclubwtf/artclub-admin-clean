@@ -1,0 +1,928 @@
+{% comment %}
+  AC Search (Instagram-like)
+  Tabs: For you / Artists / Artworks / Magazine Articles
+  - Products + Articles via /search/suggest.json
+  - Artists via Metaobjects (client-side filter)
+  - Artworks tab uses Mosaic Grid (Pinterest columns)
+{% endcomment %}
+
+<section
+  id="ac-search-ig-{{ section.id }}"
+  class="ac-search-ig"
+  style="
+    --ac-cols-desktop: {{ section.settings.mosaic_columns_desktop }};
+    --ac-cols-mobile: {{ section.settings.mosaic_columns_mobile }};
+    --ac-mosaic-gap: {{ section.settings.mosaic_gap }}px;
+  "
+  data-artist-type="{{ section.settings.artist_metaobject_type | escape }}"
+>
+  <style>
+    .ac-search-ig {
+      background: #fff;
+      padding: 18px 0 80px;
+    }
+    .ac-search-ig__inner {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 0 14px;
+    }
+
+    /* Top bar */
+    .ac-search-ig__top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .ac-search-ig__back {
+      width: 38px;
+      height: 38px;
+      border-radius: 999px;
+      border: 1px solid rgba(17, 17, 17, 0.12);
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .ac-search-ig__back:active {
+      transform: scale(0.98);
+    }
+    .ac-search-ig__searchwrap {
+      position: relative;
+      flex: 1;
+    }
+    .ac-search-ig__input {
+      width: 100%;
+      height: 40px;
+      border-radius: 14px;
+      border: 1px solid rgba(17, 17, 17, 0.12);
+      padding: 0 12px 0 40px;
+      font-size: 14px;
+      outline: none;
+      background: rgba(17, 17, 17, 0.03);
+    }
+    .ac-search-ig__icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 14px;
+      opacity: 0.55;
+      pointer-events: none;
+    }
+
+    /* Tabs */
+    .ac-search-ig__tabs {
+      display: flex;
+      gap: 22px;
+      align-items: flex-end;
+      overflow: auto;
+      border-bottom: 1px solid rgba(17, 17, 17, 0.1);
+      padding: 0 2px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .ac-search-ig__tab {
+      border: 0;
+      background: transparent;
+      padding: 12px 0;
+      font-size: 14px;
+      font-weight: 650;
+      color: #6b6b70;
+      cursor: pointer;
+      white-space: nowrap;
+      position: relative;
+    }
+    .ac-search-ig__tab[aria-selected='true'] {
+      color: #111;
+    }
+    .ac-search-ig__tab[aria-selected='true']::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -1px;
+      height: 2px;
+      background: #111;
+      border-radius: 99px;
+    }
+
+    /* Sections */
+    .ac-search-ig__panel {
+      display: none;
+      padding-top: 14px;
+    }
+    .ac-search-ig__panel.is-active {
+      display: block;
+    }
+
+    /* Artists list (like screenshot) */
+    .ac-artist-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+    .ac-artist-item {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(17, 17, 17, 0.08);
+      text-decoration: none;
+      color: #111;
+    }
+    .ac-artist-item:last-child {
+      border-bottom: 0;
+    }
+    .ac-artist-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      overflow: hidden;
+      flex: 0 0 auto;
+      border: 1px solid rgba(17, 17, 17, 0.12);
+      background: rgba(17, 17, 17, 0.05);
+    }
+    .ac-artist-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .ac-artist-main {
+      min-width: 0;
+    }
+    .ac-artist-name {
+      font-size: 14px;
+      font-weight: 750;
+      line-height: 1.2;
+    }
+    .ac-artist-sub {
+      font-size: 12px;
+      color: #6b6b70;
+      line-height: 1.2;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Mosaic grid (Artworks + For you) */
+    .ac-mosaic {
+      display: block;
+      column-gap: var(--ac-mosaic-gap);
+    }
+    @media (min-width: 900px) {
+      .ac-mosaic {
+        column-count: var(--ac-cols-desktop);
+      }
+    }
+    @media (max-width: 899px) {
+      .ac-mosaic {
+        column-count: var(--ac-cols-mobile);
+      }
+    }
+    .ac-mosaic__card {
+      break-inside: avoid;
+      margin: 0 0 var(--ac-mosaic-gap) 0;
+      display: block;
+      text-decoration: none;
+      color: #111;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(17, 17, 17, 0.1);
+      background: #fff;
+    }
+    .ac-mosaic__img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .ac-mosaic__meta {
+      padding: 8px 10px;
+    }
+    .ac-mosaic__title {
+      font-size: 12px;
+      font-weight: 700;
+      margin: 0 0 2px;
+      line-height: 1.25;
+    }
+    .ac-mosaic__sub {
+      font-size: 11px;
+      color: #6b6b70;
+      margin: 0;
+    }
+
+    /* Articles list */
+    .ac-article-list {
+      display: flex;
+      flex-direction: column;
+    }
+    .ac-article-item {
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(17, 17, 17, 0.08);
+      text-decoration: none;
+      color: #111;
+    }
+    .ac-article-title {
+      font-size: 14px;
+      font-weight: 750;
+      margin: 0 0 4px;
+    }
+    .ac-article-sub {
+      font-size: 12px;
+      color: #6b6b70;
+      margin: 0;
+      line-height: 1.35;
+    }
+
+    /* Small helpers */
+    .ac-muted {
+      color: #6b6b70;
+      font-size: 12px;
+      padding: 12px 0;
+    }
+    .ac-h2 {
+      font-size: 16px;
+      font-weight: 800;
+      margin: 12px 0 10px;
+    }
+
+    /* --- AC Artfeed (search) styles (same behavior as feed) --- */
+    .ac-artfeed-grid--search .ac-artfeed-grid__grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 24px;
+    }
+    .ac-artfeed-grid--search[data-layout='mosaic'] .ac-artfeed-grid__grid {
+      display: block;
+      column-gap: var(--ac-mosaic-gap);
+    }
+    @media (min-width: 900px) {
+      .ac-artfeed-grid--search[data-layout='mosaic'] .ac-artfeed-grid__grid {
+        column-count: var(--ac-mosaic-cols-desktop);
+      }
+    }
+    @media (max-width: 899px) {
+      .ac-artfeed-grid--search[data-layout='mosaic'] .ac-artfeed-grid__grid {
+        column-count: var(--ac-mosaic-cols-mobile);
+      }
+    }
+    .ac-artfeed-grid--search[data-layout='mosaic'] .ac-artfeed-card {
+      break-inside: avoid;
+      margin: 0 0 var(--ac-mosaic-gap) 0;
+      max-width: none;
+      width: 100%;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .ac-artfeed-grid--search[data-layout='mosaic'] .ac-artfeed-card__side,
+    .ac-artfeed-grid--search[data-layout='mosaic'] .ac-artfeed-card__header,
+    .ac-artfeed-grid--search[data-layout='mosaic'] .ac-artfeed-card__more {
+      display: none;
+    }
+    .ac-artfeed-grid--search .ac-artfeed-card {
+      max-width: 900px;
+      margin: 0 auto;
+      border-radius: 18px;
+      border: 1px solid rgba(17, 17, 17, 0.12);
+      background: #fff;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    @media (min-width: 900px) {
+      .ac-artfeed-grid--search .ac-artfeed-card {
+        flex-direction: row;
+        border-radius: 0;
+      }
+    }
+
+    .ac-artfeed-grid--search .ac-artfeed-card__media {
+      position: relative;
+      display: block;
+      overflow: hidden;
+    }
+    .ac-artfeed-grid--search .ac-artfeed-card__media img {
+      display: block;
+      width: 100%;
+      height: auto;
+      transition: transform 0.25s ease;
+    }
+    .ac-artfeed-grid--search .ac-artfeed-card__media:hover img {
+      transform: scale(1.03);
+    }
+    .ac-artfeed-grid--search .ac-artfeed-card__more {
+      position: absolute;
+      left: 50%;
+      bottom: 14px;
+      transform: translateX(-50%);
+      padding: 7px 16px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.94);
+      font-size: 12px;
+      font-weight: 600;
+      color: #111;
+      white-space: nowrap;
+    }
+    .ac-artfeed-grid--search .ac-artfeed-card__more.is-peek {
+      animation: acPeekMore 900ms ease both;
+    }
+    @keyframes acPeekMore {
+      0% {
+        transform: translateX(-50%) translateY(8px);
+        opacity: 0;
+      }
+      20% {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+      }
+      80% {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+      }
+      100% {
+        transform: translateX(-50%) translateY(8px);
+        opacity: 0;
+      }
+    }
+
+    /* Back + overlay (reuse your look) */
+    .ac-artfeed-back {
+      position: sticky;
+      top: 12px;
+      z-index: 30;
+      display: none;
+      justify-content: flex-start;
+      pointer-events: none;
+    }
+    .ac-artfeed-back__btn {
+      pointer-events: auto;
+      border: 1px solid rgba(17, 17, 17, 0.14);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: saturate(180%) blur(10px);
+      -webkit-backdrop-filter: saturate(180%) blur(10px);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 650;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+    }
+    .ac-artfeed-back__dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: #111;
+      opacity: 0.6;
+    }
+    .ac-artfeed-grid--search[data-ac-can-back='1'] .ac-artfeed-back {
+      display: flex;
+    }
+
+    .ac-artfeed-transition {
+      position: fixed;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.72);
+      backdrop-filter: saturate(180%) blur(10px);
+      -webkit-backdrop-filter: saturate(180%) blur(10px);
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 160ms ease;
+    }
+    .ac-artfeed-transition.is-on {
+      display: flex;
+      opacity: 1;
+    }
+    .ac-artfeed-transition__pill {
+      border: 1px solid rgba(17, 17, 17, 0.12);
+      background: rgba(255, 255, 255, 0.92);
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-size: 12px;
+      font-weight: 650;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+    }
+  </style>
+
+  {% assign artist_type = section.settings.artist_metaobject_type | strip %}
+  {% assign artists = null %}
+  {% if artist_type != blank %}
+    {%- comment -%}
+      Shopify Liquid supports: shop.metaobjects.<type>.values
+      We access dynamically via bracket-style is not supported reliably, so we provide 2 common variants.
+    {%- endcomment -%}
+    {% if artist_type == 'kunstler' %}
+      {% assign artists = shop.metaobjects.kunstler.values %}
+    {% elsif artist_type == 'kuenstler' %}
+      {% assign artists = shop.metaobjects.kuenstler.values %}
+    {% endif %}
+  {% endif %}
+
+  <div class="ac-search-ig__inner">
+    <div class="ac-search-ig__top">
+      <button type="button" class="ac-search-ig__back" aria-label="Back" onclick="history.back()">‹</button>
+
+      <div class="ac-search-ig__searchwrap">
+        <span class="ac-search-ig__icon">⌕</span>
+        <input
+          type="search"
+          class="ac-search-ig__input"
+          placeholder="{{ section.settings.placeholder }}"
+          autocomplete="off"
+          spellcheck="false"
+          data-ac-q
+        >
+      </div>
+    </div>
+
+    <div class="ac-search-ig__tabs" role="tablist" aria-label="Search tabs">
+      <button class="ac-search-ig__tab" role="tab" aria-selected="true" data-ac-tab="for-you">For you</button>
+      <button class="ac-search-ig__tab" role="tab" aria-selected="false" data-ac-tab="artists">Artists</button>
+      <button class="ac-search-ig__tab" role="tab" aria-selected="false" data-ac-tab="artworks">Artworks</button>
+      <button class="ac-search-ig__tab" role="tab" aria-selected="false" data-ac-tab="articles">
+        Magazine Articles
+      </button>
+    </div>
+
+    <!-- Panels -->
+    <div class="ac-search-ig__panel is-active" data-ac-panel="for-you">
+      <div class="ac-h2">Artists</div>
+      <div class="ac-artist-list" data-ac-artists-for-you>
+        {% if artists and artists.size > 0 %}
+          {% for a in artists limit: section.settings.artists_limit_for_you %}
+            {% assign name = a.name | default: a.title | default: a.handle %}
+            {% assign subtitle = a.subtitle | default: a.short_bio | default: '' %}
+            {% assign url = a.system.url | default: '' %}
+            {% assign avatar = a.bilder | default: a.avatar | default: blank %}
+            <a
+              class="ac-artist-item"
+              href="{{ url }}"
+              data-ac-artist
+              data-blob="{{ name | escape }} {{ subtitle | strip_html | escape }}"
+            >
+              <span class="ac-artist-avatar">
+                {% if avatar != blank %}
+                  {{ avatar | image_url: width: 120 | image_tag: loading: 'lazy', alt: name }}
+                {% endif %}
+              </span>
+              <span class="ac-artist-main">
+                <div class="ac-artist-name">{{ name }}</div>
+                {% if subtitle != blank %}
+                  <div class="ac-artist-sub">{{ subtitle | strip_html }}</div>
+                {% endif %}
+              </span>
+            </a>
+          {% endfor %}
+        {% else %}
+          <div class="ac-muted">No artists found (check metaobject type in section settings).</div>
+        {% endif %}
+      </div>
+
+      <div class="ac-h2">Artworks</div>
+
+      <div
+        class="ac-artfeed-grid ac-artfeed-grid--search"
+        data-layout="mosaic"
+        style="
+          --ac-mosaic-cols-desktop: {{ section.settings.mosaic_columns_desktop }};
+          --ac-mosaic-cols-mobile: {{ section.settings.mosaic_columns_mobile }};
+          --ac-mosaic-gap: {{ section.settings.mosaic_gap }}px;
+        "
+        data-ac-artfeed-for-you
+      >
+        <div class="ac-artfeed-grid__grid" data-ac-grid></div>
+        <div class="ac-muted" data-ac-empty style="display:none">No artworks found.</div>
+      </div>
+
+      <div class="ac-h2">Magazine Articles</div>
+      <div class="ac-article-list" data-ac-articles-for-you></div>
+    </div>
+
+    <div class="ac-search-ig__panel" data-ac-panel="artists">
+      <div class="ac-artist-list" data-ac-artists>
+        {% if artists and artists.size > 0 %}
+          {% for a in artists limit: section.settings.artists_limit %}
+            {% assign name = a.name | default: a.title | default: a.handle %}
+            {% assign subtitle = a.subtitle | default: a.short_bio | default: '' %}
+            {% assign url = a.system.url | default: '' %}
+            {% assign avatar = a.bilder | default: a.avatar | default: blank %}
+            <a
+              class="ac-artist-item"
+              href="{{ url }}"
+              data-ac-artist
+              data-blob="{{ name | escape }} {{ subtitle | strip_html | escape }}"
+            >
+              <span class="ac-artist-avatar">
+                {% if avatar != blank %}
+                  {{ avatar | image_url: width: 120 | image_tag: loading: 'lazy', alt: name }}
+                {% endif %}
+              </span>
+              <span class="ac-artist-main">
+                <div class="ac-artist-name">{{ name }}</div>
+                {% if subtitle != blank %}
+                  <div class="ac-artist-sub">{{ subtitle | strip_html }}</div>
+                {% endif %}
+              </span>
+            </a>
+          {% endfor %}
+        {% else %}
+          <div class="ac-muted">No artists found (check metaobject type in section settings).</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="ac-search-ig__panel" data-ac-panel="artworks">
+      <div
+        class="ac-artfeed-grid ac-artfeed-grid--search"
+        data-layout="mosaic"
+        data-ac-can-back="0"
+        style="
+          --ac-mosaic-cols-desktop: {{ section.settings.mosaic_columns_desktop }};
+          --ac-mosaic-cols-mobile: {{ section.settings.mosaic_columns_mobile }};
+          --ac-mosaic-gap: {{ section.settings.mosaic_gap }}px;
+        "
+        data-ac-artfeed-search
+      >
+        <div class="ac-artfeed-back">
+          <button type="button" class="ac-artfeed-back__btn" data-ac-back data-ac-back-mosaic>
+            <span class="ac-artfeed-back__dot"></span>
+            Back to mosaic
+          </button>
+        </div>
+
+        <div class="ac-artfeed-grid__grid" data-ac-grid></div>
+
+        <div class="ac-muted" data-ac-empty style="display:none">No artworks found.</div>
+
+        <div class="ac-artfeed-transition" data-ac-overlay aria-hidden="true">
+          <div class="ac-artfeed-transition__pill">Switching view…</div>
+        </div>
+      </div>
+
+      {% render 'ac-artfeed-switcher' %}
+    </div>
+
+    <div class="ac-search-ig__panel" data-ac-panel="articles">
+      <div class="ac-article-list" data-ac-articles></div>
+      <div class="ac-muted" data-ac-articles-empty style="display:none">No articles found.</div>
+    </div>
+  </div>
+
+  <script>
+(function () {
+  var root = document.getElementById('ac-search-ig-{{ section.id }}');
+  if (!root) return;
+
+  var qInput = root.querySelector('[data-ac-q]');
+  if (!qInput) return;
+
+  var tabs = Array.prototype.slice.call(root.querySelectorAll('[data-ac-tab]'));
+  var panels = Array.prototype.slice.call(root.querySelectorAll('[data-ac-panel]'));
+
+  function setTab(id) {
+    tabs.forEach(function (t) {
+      var on = t.getAttribute('data-ac-tab') === id;
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    panels.forEach(function (p) {
+      p.classList.toggle('is-active', p.getAttribute('data-ac-panel') === id);
+    });
+  }
+
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () {
+      setTab(t.getAttribute('data-ac-tab'));
+    });
+  });
+
+  function esc(s) {
+    return String(s || '').replace(/[&<>"']/g, function (m) {
+      return ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      })[m];
+    });
+  }
+
+  // Client-side filter for artists (metaobjects are pre-rendered)
+  function filterArtists(q) {
+    var needle = (q || '').trim().toLowerCase();
+    root.querySelectorAll('[data-ac-artist]').forEach(function (el) {
+      var blob = (el.getAttribute('data-blob') || '').toLowerCase();
+      el.style.display = (!needle || blob.indexOf(needle) !== -1) ? '' : 'none';
+    });
+  }
+
+  // Live suggestions for products + articles
+  var tmr = null;
+  var cache = {
+    q: '',
+    products: [],
+    articles: []
+  };
+
+  function shopRoot() {
+    var r = (window.Shopify && Shopify.routes && Shopify.routes.root) ? Shopify.routes.root : '/';
+    if (!r.endsWith('/')) r += '/';
+    return r;
+  }
+
+  function normalizeBucket(data, key) {
+    var res = (data && data.resources && data.resources.results) ? data.resources.results : {};
+    var bucket = res[key];
+
+    // Shopify can return either [] or { results: [] }
+    if (bucket && bucket.results) bucket = bucket.results;
+    return Array.isArray(bucket) ? bucket : [];
+  }
+
+  function fetchType(q, type) {
+    var limit = {{ section.settings.suggest_limit | default: 24 }};
+    var url =
+      shopRoot() + 'search/suggest.json' +
+      '?q=' + encodeURIComponent(q) +
+      '&resources[type]=' + encodeURIComponent(type) +
+      '&resources[limit]=' + encodeURIComponent(limit) +
+      '&resources[options][unavailable_products]=last' +
+      '&resources[options][prefix]=last';
+
+    // (Optional) broader fields – Shopify ignores unknown fields safely
+    if (type === 'product') {
+      url += '&resources[options][fields]=title,product_type,variants.title,vendor,variants.sku';
+    }
+
+    return fetch(url, { headers: { 'Accept': 'application/json' } })
+      .then(function (r) {
+        if (!r.ok) throw new Error('Suggest ' + type + ' HTTP ' + r.status);
+        return r.json();
+      });
+  }
+
+  // Bulletproof: fetch products + articles separately (avoids Shopify response-shape quirks)
+  function fetchSuggest(q) {
+    cache.q = q;
+
+    return Promise.all([
+      fetchType(q, 'product'),
+      fetchType(q, 'article')
+    ])
+      .then(function (pair) {
+        var dataProducts = pair[0];
+        var dataArticles = pair[1];
+
+        cache.products = normalizeBucket(dataProducts, 'products');
+        cache.articles = normalizeBucket(dataArticles, 'articles');
+
+        return cache;
+      })
+      .catch(function (err) {
+        console.warn('[AC Search] suggest failed:', err);
+        cache.products = [];
+        cache.articles = [];
+        return cache;
+      });
+  }
+
+  function renderArtfeedCards(rootFeed, products) {
+    var grid = rootFeed.querySelector('[data-ac-grid]');
+    var empty = rootFeed.querySelector('[data-ac-empty]');
+    if (!grid) return;
+
+    if (!products || !products.length) {
+      grid.innerHTML = '';
+      if (empty) empty.style.display = '';
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+
+    var html = '';
+    products.forEach(function (p) {
+      var title = p.title || '';
+      var url = p.url || '#';
+
+      var handle = p.handle;
+      if (!handle) {
+        var m = (url || '').match(/\/products\/([^/?#]+)/);
+        handle = m ? m[1] : '';
+      }
+
+      // image variations
+      var img = '';
+      if (p.image) {
+        img = (typeof p.image === 'string') ? p.image : (p.image.url || p.image.src || '');
+      }
+      if (!img && p.featured_image) {
+        img = (typeof p.featured_image === 'string') ? p.featured_image : (p.featured_image.url || p.featured_image.src || '');
+      }
+      if (!img && p.images && p.images.length) {
+        var first = p.images[0];
+        img = (typeof first === 'string') ? first : (first.url || first.src || '');
+      }
+
+      var vendor = p.vendor || '';
+
+      html += ''
+        + '<article class="ac-artfeed-card" data-ac-handle="' + esc(handle) + '">'
+        +   '<a href="' + esc(url) + '" class="ac-artfeed-card__media" data-ac-open-story data-ac-handle="' + esc(handle) + '" aria-label="' + esc(title) + '">'
+        +     (img
+                ? '<img src="' + esc(img) + '" alt="' + esc(title) + '" loading="lazy">'
+                : '<div style="padding:14px 12px;font-size:12px;font-weight:700;line-height:1.3;border:1px solid rgba(17,17,17,.10);border-radius:12px;">' + esc(title) + '</div>'
+              )
+        +     '<span class="ac-artfeed-card__more">{{ section.settings.more_label | escape }}</span>'
+        +   '</a>'
+        +   '<div class="ac-artfeed-card__side">'
+        +     '<div class="ac-artfeed-card__actions">'
+        +       '<button type="button" class="ac-artfeed-card__wishlist"><span class="ac-artfeed-card__heart">♡</span><span>{{ section.settings.wishlist_label | escape }}</span></button>'
+        +     '</div>'
+        +     '<div class="ac-artfeed-card__text">'
+        +       '<h3 class="ac-artfeed-card__title">' + esc(title) + '</h3>'
+        +       (vendor ? '<p class="ac-artfeed-card__desc">' + esc(vendor) + '</p>' : '')
+        +     '</div>'
+        +   '</div>'
+        + '</article>';
+    });
+
+    grid.innerHTML = html;
+
+    // ensure layout default is mosaic for search results
+    if (rootFeed.getAttribute('data-layout') !== 'mosaic') {
+      rootFeed.setAttribute('data-layout', 'mosaic');
+    }
+
+    if (window.ACArtfeedInit) window.ACArtfeedInit(rootFeed);
+  }
+
+  function renderArticles(target, articles) {
+    if (!target) return;
+
+    var html = '';
+    (articles || []).forEach(function (a) {
+      var title = a.title || '';
+      var url = a.url || '#';
+      var summary = (a.summary || a.content || '').replace(/<[^>]*>/g, '').trim();
+
+      html += ''
+        + '<a class="ac-article-item" href="' + esc(url) + '">'
+        +   '<p class="ac-article-title">' + esc(title) + '</p>'
+        +   (summary ? '<p class="ac-article-sub">' + esc(summary.slice(0, 120)) + (summary.length > 120 ? '…' : '') + '</p>' : '')
+        + '</a>';
+    });
+
+    target.innerHTML = html;
+  }
+
+  function clearFeed(feed) {
+    if (!feed) return;
+    var g = feed.querySelector('[data-ac-grid]');
+    if (g) g.innerHTML = '';
+    var e = feed.querySelector('[data-ac-empty]');
+    if (e) e.style.display = 'none';
+  }
+
+  function updateAll(q) {
+    filterArtists(q);
+
+    var articles = root.querySelector('[data-ac-articles]');
+    var articlesFY = root.querySelector('[data-ac-articles-for-you]');
+    var articlesEmpty = root.querySelector('[data-ac-articles-empty]');
+
+    var feed = root.querySelector('[data-ac-artfeed-search]');
+    var feedFY = root.querySelector('[data-ac-artfeed-for-you]');
+
+    var term = (q || '').trim();
+
+    if (term.length < 2) {
+      clearFeed(feed);
+      clearFeed(feedFY);
+      if (articles) articles.innerHTML = '';
+      if (articlesFY) articlesFY.innerHTML = '';
+      if (articlesEmpty) articlesEmpty.style.display = 'none';
+      return;
+    }
+
+    fetchSuggest(term).then(function () {
+      var prods = cache.products || [];
+      var arts = cache.articles || [];
+
+      if (feed) renderArtfeedCards(feed, prods);
+      if (feedFY) renderArtfeedCards(feedFY, prods.slice(0, {{ section.settings.for_you_products | default: 12 }}));
+
+      renderArticles(articles, arts);
+      renderArticles(articlesFY, arts.slice(0, {{ section.settings.for_you_articles | default: 6 }}));
+
+      if (articlesEmpty) articlesEmpty.style.display = arts.length ? 'none' : '';
+    });
+  }
+
+  qInput.addEventListener('input', function () {
+    var q = qInput.value;
+    if (tmr) clearTimeout(tmr);
+    tmr = setTimeout(function () {
+      updateAll(q);
+    }, 180);
+  });
+
+  // initial
+  updateAll(qInput.value || '');
+})();
+</script>
+
+</section>
+
+{% schema %}
+{
+  "name": "AC Search (Instagram)",
+  "settings": [
+    { "type": "text", "id": "placeholder", "label": "Placeholder", "default": "Search" },
+
+    {
+      "type": "text",
+      "id": "artist_metaobject_type",
+      "label": "Artist metaobject type",
+      "default": "kunstler",
+      "info": "Your metaobject definition/type. Common: kunstler or kuenstler."
+    },
+
+    {
+      "type": "range",
+      "id": "artists_limit",
+      "label": "Artists shown (Artists tab)",
+      "min": 10,
+      "max": 200,
+      "step": 10,
+      "default": 50
+    },
+    {
+      "type": "range",
+      "id": "artists_limit_for_you",
+      "label": "Artists shown (For you)",
+      "min": 3,
+      "max": 30,
+      "step": 3,
+      "default": 9
+    },
+
+    {
+      "type": "range",
+      "id": "suggest_limit",
+      "label": "Live suggest limit",
+      "min": 6,
+      "max": 40,
+      "step": 2,
+      "default": 24
+    },
+
+    {
+      "type": "range",
+      "id": "for_you_products",
+      "label": "For you: products count",
+      "min": 6,
+      "max": 24,
+      "step": 2,
+      "default": 12
+    },
+    {
+      "type": "range",
+      "id": "for_you_articles",
+      "label": "For you: articles count",
+      "min": 3,
+      "max": 12,
+      "step": 1,
+      "default": 6
+    },
+
+    {
+      "type": "range",
+      "id": "mosaic_columns_desktop",
+      "label": "Mosaic columns (desktop)",
+      "min": 3,
+      "max": 6,
+      "step": 1,
+      "default": 5
+    },
+    {
+      "type": "select",
+      "id": "mosaic_columns_mobile",
+      "label": "Mosaic columns (mobile)",
+      "options": [
+        { "value": "2", "label": "2 columns" },
+        { "value": "3", "label": "3 columns" }
+      ],
+      "default": "3"
+    },
+    { "type": "range", "id": "mosaic_gap", "label": "Mosaic gap (px)", "min": 6, "max": 24, "step": 2, "default": 12 }
+  ],
+  "presets": [{ "name": "AC Search (Instagram)", "category": "ARTCLUB" }]
+}
+{% endschema %}

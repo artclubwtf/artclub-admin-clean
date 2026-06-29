@@ -1,0 +1,522 @@
+{%- comment -%}
+ARTCLUB — Onboarding (Person) v2.0
+Props (optional via {% render %}):
+  - submit_url: String (App-Proxy/Backend POST; schreibt Customer-Metafelder)
+  - redirect_url: String (Wohin nach Abschluss; Default "/")
+  - mapbox_token: String (optional; wenn gesetzt, wird Places-Autocomplete aktiviert)
+
+Speichert:
+  1) localStorage:
+     - ac_person_profile, ac_person_interests, ac_person_prefs, ac_person_optin, ac_onboarding_person_done
+  2) Cart Attributes (für Liquid):
+     - ac_role, ac_name, ac_city, ac_country, ac_budget, ac_interests, ac_prefs, ac_optin, ac_freq, ac_radius, ac_postal, ac_street
+  3) Backend (submit_url): JSON mit allen Feldern + customer.id
+{%- endcomment -%}
+
+{%- comment -%}
+Wenn kein Kunde eingeloggt ist, zeigen wir die native Shopify-Registrierung
+und leiten danach zurück genau auf diese Seite (Onboarding geht dann weiter).
+Funktioniert mit „Classic customer accounts“. Bei „Customer accounts (neu, OTP)“
+bieten wir zusätzlich den offiziellen Login-Link mit return_to an.
+{%- endcomment -%}
+
+{% unless customer %}
+<section class="acp acp--register" style="--bg:#0b0c0f; --ink:#fff; --border:#1c1f26; font-family:Inter,system-ui">
+  <div class="acp__wrap" style="width:min(600px,94vw);margin:0 auto;color:var(--ink);padding:clamp(16px,5vw,44px) 16px;">
+    <h2 style="font-weight:900; font-size:clamp(22px,4.8vw,38px); margin:0 0 8px;">
+      Erstelle deinen Account
+    </h2>
+    <p style="margin:0 0 14px; color:#a6adbb;">
+      Einmal registrieren, dann personalisieren wir deinen Feed im nächsten Schritt.
+    </p>
+
+    {%- comment -%} Native Registrierung mit Redirect zurück in dieses Onboarding {%- endcomment -%}
+    {% form 'create_customer', return_to: request.path %}
+      {{ form.errors | default_errors }}
+      <div style="display:grid; gap:10px;">
+        <div style="display:grid; gap:6px;">
+          <label>Vorname
+            <input type="text" name="customer[first_name]" class="acp__input" style="padding:12px;border:1px solid var(--border);border-radius:10px;background:#0f1116;color:#fff;">
+          </label>
+        </div>
+        <div style="display:grid; gap:6px;">
+          <label>Nachname
+            <input type="text" name="customer[last_name]" class="acp__input" style="padding:12px;border:1px solid var(--border);border-radius:10px;background:#0f1116;color:#fff;">
+          </label>
+        </div>
+        <div style="display:grid; gap:6px;">
+          <label>E-Mail*
+            <input type="email" name="customer[email]" required autocomplete="email" class="acp__input" style="padding:12px;border:1px solid var(--border);border-radius:10px;background:#0f1116;color:#fff;">
+          </label>
+        </div>
+        <div style="display:grid; gap:6px;">
+          <label>Passwort*
+            <input type="password" name="customer[password]" required autocomplete="new-password" class="acp__input" style="padding:12px;border:1px solid var(--border);border-radius:10px;background:#0f1116;color:#fff;">
+          </label>
+        </div>
+
+        <label style="display:flex;gap:8px;align-items:center;color:#a6adbb;">
+          <input type="checkbox" name="customer[accepts_marketing]" value="true">
+          <span>Ja, schickt mir kuratierte Updates</span>
+        </label>
+
+        <button type="submit" style="appearance:none;border:1px solid #fff;background:#fff;color:#0b0c0f;padding:12px 14px;border-radius:10px;font-weight:800;cursor:pointer;">
+          Account erstellen & weiter →
+        </button>
+      </div>
+    {% endform %}
+
+    <div style="margin-top:16px; color:#a6adbb;">
+      Nutzt ihr die **neuen Kundenkonten (OTP / Magic Code)**?
+      <a href="{{ routes.storefront_login_url }}?return_to={{ request.path | url_encode }}" style="color:#fff; text-decoration:underline;">
+        Per E-Mail-Code anmelden / Konto erstellen
+      </a>
+    </div>
+  </div>
+</section>
+{% else %}
+{#---- AB HIER bleibt dein bestehendes Personen-Onboarding (Steps, Autocomplete etc.) ----#}
+
+{%- assign _submit = submit_url | default: '/apps/artclub/onboarding/person' -%}
+{%- assign _redirect = redirect_url | default: '/' -%}
+{%- assign _mapbox = mapbox_token | default: '' -%}
+
+<section id="acp-onb" class="acp"
+  data-submit-url="{{ _submit }}"
+  data-redirect-url="{{ _redirect }}"
+  data-mapbox-token="{{ _mapbox | escape }}"
+  data-customer-id="{% if customer %}{{ customer.id }}{% endif %}">
+  <div class="acp__wrap" role="region" aria-labelledby="acp-title">
+
+    <!-- Progress -->
+    <div class="acp__progress" aria-hidden="true">
+      <div class="acp__bar"><span class="acp__barfill" style="width:20%"></span></div>
+      <div class="acp__steps">Schritt <span data-acp-step>1</span>/5</div>
+    </div>
+
+    <!-- Step 1: Name -->
+    <section class="acp__step is-active" data-step="1" aria-labelledby="acp-title">
+      <h2 id="acp-title" class="acp__h">Willkommen im <span class="acp__brand">artclub</span></h2>
+      <p class="acp__p">Wie dürfen wir dich ansprechen?</p>
+
+      <div class="acp__grid">
+        <label class="acp__label">Anzeigename*
+          <input type="text" class="acp__input" id="acp-name" placeholder="z. B. Alex" required autocomplete="name">
+        </label>
+        <label class="acp__label">Pronomen (optional)
+          <input type="text" class="acp__input" id="acp-pronouns" placeholder="z. B. sie/ihr, er/ihm, they/them" autocomplete="honorific-prefix">
+        </label>
+      </div>
+
+      <div class="acp__actions">
+        <button class="acp__btn acp__btn--primary" data-acp-next disabled>Weiter →</button>
+      </div>
+    </section>
+
+    <!-- Step 2: Interessen -->
+    <section class="acp__step" data-step="2" aria-labelledby="acp-int-h">
+      <h3 id="acp-int-h" class="acp__h">Welche Kunst interessiert dich?</h3>
+      <p class="acp__p acp__muted">Wähle mindestens drei – du kannst es später ändern.</p>
+
+      <div class="acp__chips" role="group" aria-label="Interessen auswählen">
+        {% assign tags = "Malerei,Fotografie,Skulptur,Illustration,Digitale Kunst,Street Art,Installation,Video/Film,Performance,Druck/Editionen,Collage,Keramik,Textil,AI Art" | split: "," %}
+        {% for t in tags %}
+          <button type="button" class="acp__chip" data-value="{{ t | escape }}">{{ t }}</button>
+        {% endfor %}
+      </div>
+
+      <div class="acp__actions">
+        <button class="acp__btn acp__btn--ghost" data-acp-prev>Zurück</button>
+        <button class="acp__btn acp__btn--primary" data-acp-next disabled>Weiter</button>
+      </div>
+    </section>
+
+    <!-- Step 3: Adresse + Profil -->
+    <section class="acp__step" data-step="3" aria-labelledby="acp-prof-h">
+      <h3 id="acp-prof-h" class="acp__h">Dein Ort – für Events & Empfehlungen</h3>
+
+      <div class="acp__grid">
+        <label class="acp__label">Straße & Nr.* 
+          <input type="text" class="acp__input" id="acp-street" placeholder="z. B. Torstraße 1" required
+            autocomplete="address-line1">
+        </label>
+
+        <label class="acp__label">PLZ* 
+          <input type="text" class="acp__input" id="acp-postal" placeholder="10119" required
+            inputmode="numeric" autocomplete="postal-code">
+        </label>
+
+        <label class="acp__label">Stadt* 
+          <input type="text" class="acp__input" id="acp-city" placeholder="Berlin" required
+            autocomplete="address-level2">
+        </label>
+
+        <label class="acp__label">Land*
+          <select class="acp__input" id="acp-country" required autocomplete="country">
+            <option value="" disabled selected>Bitte wählen</option>
+            <option>Deutschland</option><option>Österreich</option><option>Schweiz</option>
+            <option>Frankreich</option><option>Italien</option><option>Niederlande</option>
+            <option>Belgien</option><option>Spanien</option><option>Polen</option>
+            <option>Andere</option>
+          </select>
+        </label>
+
+        <label class="acp__label">Budget (Editionen)
+          <select class="acp__input" id="acp-budget">
+            <option value="" selected>Ich schaue mich nur um</option>
+            <option>&lt; 200 €</option><option>200–500 €</option><option>500–1.500 €</option><option>&gt; 1.500 €</option>
+          </select>
+        </label>
+
+        <label class="acp__label">Geburtsjahr (optional)
+          <input type="number" class="acp__input" id="acp-yob" min="1900" max="2025" placeholder="1995" autocomplete="bday-year">
+        </label>
+      </div>
+
+      <div class="acp__actions">
+        <button class="acp__btn acp__btn--ghost" data-acp-prev>Zurück</button>
+        <button class="acp__btn acp__btn--primary" data-acp-next>Weiter</button>
+      </div>
+    </section>
+
+    <!-- Step 4: Benachrichtigungen -->
+    <section class="acp__step" data-step="4" aria-labelledby="acp-noti-h">
+      <h3 id="acp-noti-h" class="acp__h">Nah dran bleiben?</h3>
+      <p class="acp__p acp__muted">Nur Relevantes zu deinen Themen & Events in deiner Nähe.</p>
+
+      <div class="acp__grid">
+        <label class="acp__check">
+          <input type="checkbox" id="acp-optin" checked>
+          <span class="acp__check-ui" aria-hidden="true">✓</span>
+          <span>E-Mail-Updates zu meinen Interessen</span>
+        </label>
+
+        <label class="acp__label">Häufigkeit
+          <select class="acp__input" id="acp-freq">
+            <option value="weekly" selected>Wöchentlich</option>
+            <option value="monthly">Monatlich</option>
+            <option value="off">Nur bei Highlights</option>
+          </select>
+        </label>
+
+        <label class="acp__label">Event-Radius
+          <select class="acp__input" id="acp-radius">
+            <option value="10">10 km</option><option value="25" selected>25 km</option><option value="50">50 km</option><option value="100">100 km</option>
+          </select>
+        </label>
+
+        <label class="acp__check">
+          <input type="checkbox" id="acp-consent" required>
+          <span class="acp__check-ui" aria-hidden="true">✓</span>
+          <span>Ich stimme Datenschutz & Nutzungsbedingungen zu*</span>
+        </label>
+      </div>
+
+      <div class="acp__actions">
+        <button class="acp__btn acp__btn--ghost" data-acp-prev>Zurück</button>
+        <button class="acp__btn acp__btn--primary" data-acp-next>Weiter</button>
+      </div>
+    </section>
+
+    <!-- Step 5: Zusammenfassung & Abschluss -->
+    <section class="acp__step" data-step="5" aria-labelledby="acp-sum-h">
+      <h3 id="acp-sum-h" class="acp__h">Alles klar – dein persönlicher Start</h3>
+
+      <div class="acp__card">
+        <div class="acp__card-row"><strong>Name</strong><span data-acp-sum="name">—</span></div>
+        <div class="acp__card-row"><strong>Ort</strong><span data-acp-sum="place">—</span></div>
+        <div class="acp__card-row"><strong>Interessen</strong><div class="acp__pillwrap" data-acp-summary-interests></div></div>
+        <div class="acp__card-row"><strong>Updates</strong><span data-acp-summary-optin>—</span></div>
+      </div>
+
+      <div class="acp__actions">
+        <button class="acp__btn acp__btn--ghost" data-acp-prev>Zurück</button>
+        <button class="acp__btn acp__btn--primary" data-acp-finish>
+          Feed personalisieren → <span class="acp__spinner" hidden></span>
+        </button>
+      </div>
+
+      <p class="acp__tiny acp__muted">Mit Abschluss stimmst du unseren Nutzungsbedingungen und Datenschutzbestimmungen zu.</p>
+    </section>
+  </div>
+</section>
+
+<style>
+  #acp-onb.acp{ --bg:#0b0c0f; --surface:#121418; --ink:#fff; --muted:#a6adbb; --border:#1c1f26; --accent:#0a84ff;
+    background: var(--bg); color: var(--ink); padding: clamp(16px,5vw,44px) 16px; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+  .acp__wrap{ width:min(900px,94vw); margin:0 auto; }
+
+  /* progress */
+  .acp__progress{ display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+  .acp__bar{ flex:1; height:6px; background:#0f1116; border-radius:10px; overflow:hidden; border:1px solid var(--border); }
+  .acp__barfill{ display:block; height:100%; background:#fff; }
+  .acp__steps{ font-size:12px; color:var(--muted); }
+
+  /* steps */
+  .acp__step{ display:none; }
+  .acp__step.is-active{ display:block; }
+  .acp__h{ font-size: clamp(22px,4.8vw,38px); margin:0 0 8px; font-weight:900; letter-spacing:-.01em; }
+  .acp__brand{ font-style: italic; background: linear-gradient(90deg, var(--accent), #fff); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .acp__p{ margin:0 0 14px; font-size: clamp(14px,1.6vw,16px); }
+  .acp__muted{ color: var(--muted); }
+  .acp__tiny{ font-size:12px; }
+
+  /* forms */
+  .acp__grid{ display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:12px; margin: 8px 0 14px; }
+  @media (max-width: 720px){ .acp__grid{ grid-template-columns: 1fr; } }
+  .acp__label{ display:grid; gap:6px; font-weight:700; }
+  .acp__input{ width:100%; padding:12px 12px; border-radius:10px; border:1px solid var(--border); background:#0f1116; color:#fff; font-weight:600; }
+  .acp__input:focus{ outline:2px solid #fff; outline-offset:1px; }
+
+  /* chips */
+  .acp__chips{ display:flex; flex-wrap:wrap; gap:8px; margin: 6px 0 14px; }
+  .acp__chip{ border:1px solid var(--border); background: color-mix(in oklab, var(--surface) 85%, #000 15%); color:#e9edf5; padding:8px 12px; border-radius:999px; cursor:pointer; font-weight:700; font-size:14px; }
+  .acp__chip.is-selected{ border-color:#fff; background:#fff; color:#0b0c0f; }
+
+  /* check/toggles */
+  .acp__check{ display:flex; align-items:center; gap:10px; }
+  .acp__check-ui{ display:inline-grid; place-items:center; width:22px; height:22px; border:1px solid var(--border); border-radius:6px; background:#0f1116; }
+
+  /* card */
+  .acp__card{ border:1px solid var(--border); background: color-mix(in oklab, var(--surface) 80%, #000 20%); border-radius:14px; padding:12px; }
+  .acp__card-row{ display:flex; align-items:center; gap:12px; padding:10px 6px; border-bottom:1px dashed var(--border); }
+  .acp__card-row:last-child{ border-bottom:0; }
+  .acp__pillwrap{ display:flex; flex-wrap:wrap; gap:6px; }
+  .acp__pill{ background:#fff; color:#0b0c0f; border-radius:999px; padding:4px 10px; font-size:13px; font-weight:800; }
+
+  /* actions */
+  .acp__actions{ display:flex; gap:10px; margin-top: 10px; }
+  .acp__btn{ appearance:none; border:1px solid #fff; background:#fff; color:#0b0c0f; padding:12px 14px; border-radius:10px; font-weight:800; cursor:pointer; }
+  .acp__btn--ghost{ background: transparent; color:#fff; border-color: var(--border); }
+  .acp__btn[disabled]{ opacity:.5; cursor:not-allowed; }
+  .acp__spinner{ width:16px; height:16px; border:2px solid #000; border-top-color:transparent; border-radius:999px; display:inline-block; animation: acp-spin 1s linear infinite; }
+  @keyframes acp-spin { to { transform: rotate(360deg);} }
+</style>
+
+<script>
+(function(){
+  const root = document.getElementById('acp-onb');
+  if(!root) return;
+
+  const submitURL   = root.getAttribute('data-submit-url')   || '';
+  const redirectURL = root.getAttribute('data-redirect-url') || '/';
+  const mapboxToken = root.getAttribute('data-mapbox-token') || '';
+  const customerId  = root.getAttribute('data-customer-id')  || '';
+
+  const steps   = Array.from(root.querySelectorAll('.acp__step'));
+  const bar     = root.querySelector('.acp__barfill');
+  const stepNum = root.querySelector('[data-acp-step]');
+  const total   = steps.length;
+
+  let current = 0;
+  const $ = (sel) => root.querySelector(sel);
+
+  function show(i){
+    steps.forEach((s,idx)=> s.classList.toggle('is-active', idx===i));
+    current = i;
+    const pct = Math.round(((current+1)/total)*100); bar.style.width = pct+'%';
+    if(stepNum) stepNum.textContent = String(current+1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if(current === total-1) renderSummary();
+  }
+
+  // ====== Elements
+  const nameInput   = $('#acp-name');
+  const pronouns    = $('#acp-pronouns');
+  const chips       = Array.from(root.querySelectorAll('.acp__chip'));
+  const streetInput = $('#acp-street');
+  const postalInput = $('#acp-postal');
+  const cityInput   = $('#acp-city');
+  const countrySel  = $('#acp-country');
+  const budgetSel   = $('#acp-budget');
+  const yobInput    = $('#acp-yob');
+  const optin       = $('#acp-optin');
+  const freq        = $('#acp-freq');
+  const radius      = $('#acp-radius');
+  const consent     = $('#acp-consent');
+
+  // ====== Validation bindings
+  const next1 = steps[0].querySelector('[data-acp-next]');
+  nameInput.addEventListener('input', ()=> next1.disabled = nameInput.value.trim().length < 2);
+
+  const next2 = steps[1].querySelector('[data-acp-next]');
+  chips.forEach(ch=>{
+    ch.addEventListener('click', ()=>{
+      ch.classList.toggle('is-selected');
+      next2.disabled = getInterests().length < 3;
+    });
+  });
+
+  // Step navigation with validation
+  root.querySelectorAll('[data-acp-next]').forEach(btn=>btn.addEventListener('click', ()=>{
+    const step = steps[current].getAttribute('data-step');
+    if(step === '1' && nameInput.value.trim().length < 2) return shake(steps[current]);
+    if(step === '2' && getInterests().length < 3)        return shake(steps[current]);
+    if(step === '3'){
+      if(streetInput.value.trim().length < 3 || postalInput.value.trim().length < 3 || cityInput.value.trim().length < 2 || !countrySel.value){
+        return shake(steps[current]);
+      }
+    }
+    if(step === '4' && !consent.checked) return shake(consent.closest('.acp__grid') || steps[current]);
+    show(Math.min(current+1, total-1));
+  }));
+  root.querySelectorAll('[data-acp-prev]').forEach(btn=>btn.addEventListener('click', ()=> show(Math.max(current-1,0))));
+
+  // ====== Address Autocomplete (Mapbox optional)
+  if(mapboxToken){
+    // lightweight loader
+    const s = document.createElement('script');
+    s.src = 'https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js';
+    s.onload = ()=> setupMapboxAutocomplete();
+    document.head.appendChild(s);
+  }
+  function setupMapboxAutocomplete(){
+    // nutzt Mapbox Geocoding API via fetch; kein UI-Widget nötig
+    const inputs = [streetInput, cityInput, postalInput];
+    inputs.forEach(inp=>{
+      let last = 0, ctl;
+      inp.setAttribute('autocomplete', 'off');
+      inp.addEventListener('input', async ()=>{
+        const q = inp.value.trim();
+        const now = Date.now();
+        if(q.length < 3 || (now - last) < 250) return; last = now;
+        try{
+          const countryHint = (countrySel.value && countrySel.value !== 'Andere') ? countrySel.value : '';
+          const url = new URL('https://api.mapbox.com/geocoding/v5/mapbox.places/'+encodeURIComponent(q)+'.json');
+          url.searchParams.set('access_token', mapboxToken);
+          url.searchParams.set('autocomplete','true');
+          url.searchParams.set('types','address,place,postcode');
+          if(countryHint){ url.searchParams.set('country', countryToISO(countryHint)); }
+          const res = await fetch(url.toString()); const data = await res.json();
+          // pick best feature
+          const f = (data.features||[])[0]; if(!f) return;
+          const ctx = indexContext(f.context||[]);
+          const place = (f.place_type||[])[0] || '';
+          // map fields
+          if(place==='address'){
+            streetInput.value = (f.text || '') + (f.address ? ' ' + f.address : '');
+            cityInput.value   = ctx.place || ctx.locality || ctx.district || cityInput.value;
+            postalInput.value = ctx.postcode || postalInput.value;
+            if(!countrySel.value) countrySel.value = isoToCountry(ctx.country) || '';
+          }else if(place==='place'){ cityInput.value = f.text || cityInput.value; if(ctx.postcode) postalInput.value = ctx.postcode; if(!countrySel.value) countrySel.value = isoToCountry(ctx.country)||''; }
+          else if(place==='postcode'){ postalInput.value = f.text || postalInput.value; if(ctx.place) cityInput.value = ctx.place; if(!countrySel.value) countrySel.value = isoToCountry(ctx.country)||''; }
+        }catch(e){ /* silent */ }
+      });
+    });
+    function indexContext(ctx){
+      const out={}; (ctx||[]).forEach(c=>{
+        const id = (c.id||'').split('.')[0];
+        if(id==='country') out.country = c.short_code?.toUpperCase() || '';
+        if(id==='region')  out.region  = c.text;
+        if(id==='place')   out.place   = c.text;
+        if(id==='locality')out.locality= c.text;
+        if(id==='district')out.district= c.text;
+        if(id==='postcode')out.postcode= c.text;
+      }); return out;
+    }
+    function countryToISO(name){
+      const map = { 'Deutschland':'DE','Österreich':'AT','Schweiz':'CH','Frankreich':'FR','Italien':'IT','Niederlande':'NL','Belgien':'BE','Spanien':'ES','Polen':'PL' };
+      return map[name] || '';
+    }
+    function isoToCountry(code){
+      const map = { 'DE':'Deutschland','AT':'Österreich','CH':'Schweiz','FR':'Frankreich','IT':'Italien','NL':'Niederlande','BE':'Belgien','ES':'Spanien','PL':'Polen' };
+      return map[(code||'').toUpperCase()] || '';
+    }
+  }
+
+  // ====== Helpers
+  function getInterests(){ return chips.filter(x=>x.classList.contains('is-selected')).map(x=>x.getAttribute('data-value')); }
+  function renderSummary(){
+    root.querySelector('[data-acp-sum="name"]').textContent = nameInput.value.trim() || '—';
+    root.querySelector('[data-acp-sum="place"]').textContent = [postalInput.value, cityInput.value, countrySel.value].filter(Boolean).join(' ') || '—';
+    const wrapInt = root.querySelector('[data-acp-summary-interests]'); wrapInt.innerHTML='';
+    getInterests().forEach(v=>{ const s=document.createElement('span'); s.className='acp__pill'; s.textContent=v; wrapInt.appendChild(s); });
+    root.querySelector('[data-acp-summary-optin]').textContent = (optin && optin.checked) ? 'Ja' : 'Nein';
+  }
+  function shake(node){ node.style.transform='translateX(0)'; node.animate([{transform:'translateX(0)'},{transform:'translateX(-4px)'},{transform:'translateX(4px)'},{transform:'translateX(0)'}],{duration:220}); }
+
+  // ====== Finish → persist everywhere
+  root.querySelector('[data-acp-finish]')?.addEventListener('click', async (e)=>{
+    const btn = e.currentTarget; const spin = btn.querySelector('.acp__spinner');
+    const profile = {
+      role: 'person',
+      name: nameInput.value.trim(),
+      pronouns: (pronouns?.value || '').trim(),
+      street: streetInput.value.trim(),
+      postal: postalInput.value.trim(),
+      city: cityInput.value.trim(),
+      country: countrySel.value || '',
+      budget: budgetSel.value || '',
+      yob: (yobInput?.value || '').trim()
+    };
+    const payload = {
+      customer_id: customerId || null,
+      profile,
+      interests: getInterests(),
+      prefs: getInterests().slice(0,5), // simple seed
+      notifications: {
+        email_optin: !!(optin && optin.checked),
+        email_freq: (freq?.value || 'weekly'),
+        event_radius_km: parseInt((radius?.value || '25'), 10)
+      },
+      ts: new Date().toISOString()
+    };
+
+    // Basic guard
+    if(!profile.name || !profile.street || !profile.postal || !profile.city || !profile.country || payload.interests.length < 3){
+      return shake(root);
+    }
+
+    // UI lock
+    btn.disabled = true; if(spin) spin.hidden=false;
+
+    // 1) localStorage
+    try{
+      localStorage.setItem('ac_person_profile', JSON.stringify(profile));
+      localStorage.setItem('ac_person_interests', JSON.stringify(payload.interests));
+      localStorage.setItem('ac_person_prefs', JSON.stringify(payload.prefs));
+      localStorage.setItem('ac_person_optin', JSON.stringify(payload.notifications.email_optin));
+      localStorage.setItem('ac_onboarding_person_done', 'true');
+    }catch(e){}
+
+    // 2) Cart attributes (Liquid sofort nutzbar)
+    try{
+      const attrs = {
+        'ac_role': 'person',
+        'ac_name': profile.name,
+        'ac_city': profile.city,
+        'ac_country': profile.country,
+        'ac_postal': profile.postal,
+        'ac_street': profile.street,
+        'ac_budget': profile.budget,
+        'ac_interests': payload.interests.join(', '),
+        'ac_prefs': payload.prefs.join(', '),
+        'ac_optin': String(payload.notifications.email_optin),
+        'ac_freq': payload.notifications.email_freq,
+        'ac_radius': String(payload.notifications.event_radius_km)
+      };
+      await fetch('/cart/update.js', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ attributes: attrs }), credentials:'same-origin' });
+    }catch(e){}
+
+    // 3) Backend (App-Proxy) – mit Retry
+    const doPost = async ()=>{
+      if(!submitURL) return { ok:true };
+      const res = await fetch(submitURL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload), credentials:'same-origin' });
+      return { ok: res.ok };
+    };
+    let posted = await doPost();
+    if(!posted.ok){ await new Promise(r=>setTimeout(r, 600)); posted = await doPost(); }
+
+    // Analytics Hook
+    try{ window.dispatchEvent(new CustomEvent('ac:onboarding:person:completed', { detail: payload })); }catch(e){}
+
+    // Redirect (immer weiter – Personalisierung klappt schon via localStorage/Cart)
+    window.location.assign(redirectURL || '/');
+  });
+
+  // init
+  show(0);
+})();
+</script>
+
+{% endunless %}

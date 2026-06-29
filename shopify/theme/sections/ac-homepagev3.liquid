@@ -1,0 +1,194 @@
+<section id="ac-hero-{{ section.id }}" class="ac-hero-up">
+<style>
+  .ac-hero-up {
+    position: relative;
+    width: 100%;
+    min-height: 90svh;
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+    background: #111;
+  }
+  .ac-hero-up__bg {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    opacity: 0.6;
+  }
+  /* Subtiler Gradient von unten */
+  .ac-hero-up::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(
+      to top,
+      rgba(0,0,0,0.72) 0%,
+      rgba(0,0,0,0.18) 55%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
+  .ac-hero-up__content {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    padding: clamp(48px,7vw,100px) clamp(24px,5vw,72px);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .ac-hero-up__label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.5);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .ac-hero-up__label::before {
+    content: '';
+    width: 28px; height: 1px;
+    background: rgba(255,255,255,0.35);
+    flex-shrink: 0;
+  }
+  .ac-hero-up__title {
+    font-size: clamp(48px, 8vw, 112px);
+    font-weight: 800;
+    line-height: 0.95;
+    letter-spacing: -0.04em;
+    color: #fff;
+    max-width: 16ch;
+    margin-bottom: clamp(28px, 4vw, 48px);
+  }
+  .ac-hero-up__title em {
+    font-style: italic;
+    font-weight: 300;
+    opacity: 0.75;
+  }
+  .ac-hero-up__row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .ac-hero-up__sub {
+    font-size: clamp(14px,1.4vw,17px);
+    line-height: 1.65;
+    color: rgba(255,255,255,0.55);
+    max-width: 44ch;
+  }
+  .ac-hero-up__ctas {
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .ac-hero-up__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform .16s, box-shadow .16s, background .16s;
+    text-decoration: none;
+  }
+  .ac-hero-up__btn:hover { transform: translateY(-2px); }
+  .ac-hero-up__btn--primary {
+    background: #fff;
+    color: #111;
+  }
+  .ac-hero-up__btn--primary:hover { box-shadow: 0 12px 32px rgba(255,255,255,0.18); }
+  .ac-hero-up__btn--secondary {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.85);
+    backdrop-filter: blur(8px);
+  }
+  .ac-hero-up__btn--secondary:hover { background: rgba(255,255,255,0.16); }
+  /* Credit */
+  .ac-hero-up__credit {
+    position: absolute;
+    bottom: 18px; right: 24px;
+    z-index: 2;
+    font-size: 11px;
+    color: rgba(255,255,255,0.3);
+    letter-spacing: 0.04em;
+  }
+  @media (max-width: 600px) {
+    .ac-hero-up__row { flex-direction: column; align-items: flex-start; gap: 20px; }
+  }
+</style>
+
+  {% if section.settings.image %}
+    {{ section.settings.image | image_url: width: 2400 | image_tag:
+        class: 'ac-hero-up__bg',
+        loading: 'eager',
+        fetchpriority: 'high',
+        alt: '' }}
+  {% endif %}
+
+  <div class="ac-hero-up__content">
+    {% if section.settings.eyebrow != blank %}
+      <p class="ac-hero-up__label">{{ section.settings.eyebrow }}</p>
+    {% endif %}
+    <h1 class="ac-hero-up__title">
+      {{ section.settings.title_line1 }}
+      {% if section.settings.title_line2 != blank %}<br><em>{{ section.settings.title_line2 }}</em>{% endif %}
+    </h1>
+    <div class="ac-hero-up__row">
+      {% if section.settings.subtext != blank %}
+        <p class="ac-hero-up__sub">{{ section.settings.subtext }}</p>
+      {% endif %}
+      <div class="ac-hero-up__ctas">
+        {% if section.settings.cta1_label != blank %}
+          <a href="{{ section.settings.cta1_url | default: '/collections/all' }}"
+             class="ac-hero-up__btn ac-hero-up__btn--primary">
+            {{ section.settings.cta1_label }} →
+          </a>
+        {% endif %}
+        {% if section.settings.cta2_label != blank %}
+          <a href="{{ section.settings.cta2_url | default: '/pages/artists' }}"
+             class="ac-hero-up__btn ac-hero-up__btn--secondary">
+            {{ section.settings.cta2_label }}
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% if section.settings.credit != blank %}
+    <span class="ac-hero-up__credit">{{ section.settings.credit }}</span>
+  {% endif %}
+</section>
+
+{% schema %}
+{
+  "name": "Hero Upgrade",
+  "settings": [
+    { "type": "image_picker", "id": "image",       "label": "Hintergrundfoto" },
+    { "type": "text",         "id": "eyebrow",     "label": "Eyebrow",         "default": "Berlin Art Platform" },
+    { "type": "text",         "id": "title_line1", "label": "Headline Zeile 1","default": "Die naechste" },
+    { "type": "text",         "id": "title_line2", "label": "Headline Zeile 2 (kursiv, optional)", "default": "Kunstgeneration" },
+    { "type": "textarea",     "id": "subtext",     "label": "Subtext",         "default": "Originale und Editionen von aufstrebenden Kuenstlern. Direkt aus dem Studio." },
+    { "type": "text",         "id": "cta1_label",  "label": "Button 1 Text",   "default": "Kunst entdecken" },
+    { "type": "url",          "id": "cta1_url",    "label": "Button 1 Link" },
+    { "type": "text",         "id": "cta2_label",  "label": "Button 2 Text",   "default": "Kuenstler kennenlernen" },
+    { "type": "url",          "id": "cta2_url",    "label": "Button 2 Link" },
+    { "type": "text",         "id": "credit",      "label": "Foto Credit (unten rechts)" }
+  ],
+  "presets": [{ "name": "Hero Upgrade", "category": "ARTCLUB" }]
+}
+{% endschema %}
+
+
+{% comment %} ═══════════════════════════════════════════
+  SECTION 2: TILES UPGRADE
+  Dateiname: sections/ac-tiles-upgrade.liquid
+  Ersetzt die 2x2 Kacheln — gleiche 4 Bereiche,
+  aber als klarer, moderner Grid mit echten Hover-States
+═══════════════════════════════════════════ {% endcomment %}

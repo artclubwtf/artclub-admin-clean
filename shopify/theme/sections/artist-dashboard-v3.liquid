@@ -1,0 +1,1572 @@
+{% comment %} ARTCLUB — Artist Dashboard (Social Links: Add/Delete) {% endcomment %}
+
+<style>
+  :root {
+    --ink: #0b0c0f;
+    --bg: #f5f6f8;
+    --muted: #6b7280;
+    --line: rgba(0, 0, 0, 0.08);
+    --card: rgba(255, 255, 255, 0.6);
+    --glass: blur(18px) saturate(120%);
+    --brand: #0a84ff;
+    --brand2: #34c759;
+    --warn: #ffd60a;
+    --err: #ff453a;
+    --r-lg: 22px;
+    --r-sm: 12px;
+    --shadow: 0 20px 50px rgba(0, 0, 0, 0.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d0e10;
+      --ink: #e5e7eb;
+      --muted: #9aa0a6;
+      --line: rgba(255, 255, 255, 0.08);
+      --card: rgba(22, 22, 24, 0.7);
+    }
+  }
+
+  .ac-wrap {
+    font-family: -apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif;
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 1rem;
+  }
+
+  .ac-topbar { display: none; }
+  @media (max-width: 980px) {
+    .ac-topbar {
+      position: sticky; top: 0; z-index: 8;
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--bg);
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .ac-top-title { font-weight: 800; }
+    .ac-top-sub { font-size: 12px; color: var(--muted); }
+  }
+
+  .ac-sidebar {
+    position: sticky; top: 28px; align-self: start;
+    display: flex; flex-direction: column; gap: 16px;
+    border: 1px solid var(--line); border-radius: var(--r-lg);
+    background: var(--card); backdrop-filter: var(--glass); box-shadow: var(--shadow);
+    padding: 16px;
+  }
+  .ac-profile {
+    display: flex; gap: 12px; align-items: center;
+    border: 1px solid var(--line); border-radius: 16px;
+    padding: 12px; background: rgba(255, 255, 255, 0.35);
+  }
+  @media (prefers-color-scheme: dark) { .ac-profile { background: rgba(0, 0, 0, 0.25); } }
+  .ac-avatar {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: grid; place-items: center; font-weight: 800;
+    background: linear-gradient(135deg, var(--brand), var(--brand2)); color: #fff;
+  }
+  .ac-name { font-weight: 700; }
+  .ac-mail { color: var(--muted); font-size: 12px; }
+
+  .ac-nav { display: flex; flex-direction: column; gap: 8px; }
+  .ac-nav-item {
+    appearance: none; border: 1px solid var(--line); background: transparent;
+    padding: 10px 12px; border-radius: 12px; text-align: left;
+    font-weight: 600; cursor: pointer; color: var(--ink);
+  }
+  .ac-nav-item:hover { border-color: var(--brand); }
+  .ac-nav-item.is-active {
+    background: linear-gradient(135deg, var(--brand), var(--brand2));
+    color: #fff; border-color: transparent;
+  }
+
+  .ac-sidecard {
+    border: 1px solid var(--line); border-radius: 16px; padding: 12px;
+    background: rgba(255, 255, 255, 0.35);
+  }
+  @media (prefers-color-scheme: dark) { .ac-sidecard { background: rgba(0, 0, 0, 0.25); } }
+  .ac-sidecard-title { font-weight: 700; margin-bottom: 6px; }
+  .ac-kv {
+    display: flex; justify-content: space-between; gap: 8px;
+    padding: 8px 0; border-bottom: 1px dashed var(--line);
+  }
+  .ac-kv:last-child { border-bottom: 0; }
+
+  .ac-main { display: flex; flex-direction: column; gap: 18px; }
+  .ac-card {
+    border: 1px solid var(--line); border-radius: var(--r-lg);
+    background: var(--card); backdrop-filter: var(--glass); box-shadow: var(--shadow);
+    opacity: 0.95; transform: translateY(6px);
+    transition: transform 0.25s ease, opacity 0.25s ease;
+  }
+  .ac-card.is-active { opacity: 1; transform: none; }
+  .ac-card-head {
+    padding: 16px 18px; border-bottom: 1px solid var(--line);
+    display: flex; justify-content: space-between; gap: 12px; align-items: center;
+  }
+  .ac-card-head h2 { margin: 0; font-size: 18px; }
+  .ac-card-body { padding: 18px; }
+
+  .ac-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .ac-grid.three { grid-template-columns: repeat(3, 1fr); }
+  .ac-span-12 { grid-column: 1 / -1; }
+
+  label { font-weight: 700; color: var(--muted); margin-bottom: 6px; display: block; }
+
+  .ac-box {
+    border: 1px solid var(--line); border-radius: 14px; background: rgba(255, 255, 255, 0.4); padding: 12px;
+  }
+  @media (prefers-color-scheme: dark) { .ac-box { background: rgba(0, 0, 0, 0.25); } }
+
+  .ac-line { padding: 8px 0; border-bottom: 1px dashed var(--line); }
+
+  .ac-links { list-style: none; margin: 0; padding: 0; }
+  .ac-links li { margin: 6px 0; }
+  .ac-links a { color: #0a84ff; text-decoration: none; }
+  .ac-links a:hover { text-decoration: underline; }
+
+  .ac-note {
+    border: 1px dashed var(--line); border-radius: 12px; padding: 12px;
+    color: var(--muted); margin-bottom: 12px;
+  }
+
+  .ac-btn {
+    appearance: none; border: 1px solid var(--line); background: #fff;
+    padding: 10px 14px; border-radius: 12px; cursor: pointer; font-weight: 700;
+  }
+  .ac-btn-primary {
+    background: linear-gradient(135deg, var(--brand), var(--brand2));
+    color: #fff; border-color: transparent;
+  }
+  .ac-edit-toggle {
+    appearance: none; border: 1px solid var(--line); background: #fff;
+    padding: 8px 12px; border-radius: 10px; cursor: pointer; font-weight: 600;
+  }
+  .ac-edit { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+
+  .ac-input {
+    width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: #fff;
+  }
+  .ac-hint { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; }
+
+  .ac-savebar {
+    position: sticky; bottom: 12px; display: flex; gap: 12px; align-items: center; justify-content: space-between;
+    background: var(--card); backdrop-filter: var(--glass);
+    border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px;
+  }
+  .ac-feedback { border-radius: 10px; padding: 8px 10px; font-weight: 700; }
+  .ac-feedback.success { background: #d9fdd3; }
+  .ac-feedback.error { background: #ffd7d4; }
+
+  /* Social links editor */
+  .ac-links-editor { border: 1px dashed var(--line); border-radius: 12px; padding: 12px; }
+  .ac-link-item {
+    display: flex; gap: 8px; align-items: center; justify-content: space-between;
+    padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; margin-bottom: 8px;
+  }
+  .ac-link-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ac-links-add { display: flex; gap: 8px; margin-top: 8px; }
+  .ac-remove { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 6px 8px; cursor: pointer; }
+
+  /* Status + mobile tabbar */
+  .ac-badge { display: inline-block; padding: 8px 12px; border-radius: 999px; font-weight: 800; }
+  .ac-badge.ok { background: #d9fdd3; color: #093; }
+  .ac-badge.warn { background: #fff5c2; color: #775d00; }
+  .ac-badge.err { background: #ffd7d4; color: #7a0000; }
+  .ac-badge.muted { background: #e5e7eb; color: #374151; }
+
+  .ac-tabbar { display: none; }
+  .ac-tab {
+    appearance: none; background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    flex: 1 1 0; padding: 8px 6px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+    font-size: 11px; color: #222;
+  }
+  .ac-tab.is-active {
+    background: linear-gradient(135deg, var(--brand), var(--brand2)); color: #fff; border-color: transparent;
+  }
+
+  @media (max-width: 980px) {
+    .ac-wrap { grid-template-columns: 1fr; gap: 12px; padding: 0 0 72px; }
+    .ac-sidebar { display: none; }
+    .ac-grid, .ac-grid.three { grid-template-columns: 1fr; gap: 12px; }
+    .ac-card { border-radius: 18px; transform: none; opacity: 1; }
+    .ac-card-head { padding: 12px 14px; }
+    .ac-card-body { padding: 14px; }
+    .ac-tabbar {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 9;
+      display: flex; gap: 8px; padding: 10px 12px; background: var(--bg); border-top: 1px solid var(--line);
+    }
+    .section-artist-dashboard ~ .shopify-section { display: none !important; }
+  }
+  @media (max-width: 380px) { .ac-tab span { display: none; } }
+
+  /* DNA Pills / Progress / Wizard */
+  .ac-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 999px; font-weight: 800; font-size: 12px;
+    border: 1px solid var(--line); background: #fff; color: var(--ink);
+  }
+  .ac-pill-ok { background: #d9fdd3; border-color: transparent; color: #0a5f2c; }
+  .ac-pill-warn { background: #fff5c2; border-color: transparent; color: #6a5300; }
+  .ac-pill-err { background: #ffd7d4; border-color: transparent; color: #7a0000; }
+  .ac-pill-muted { background: #e5e7eb; color: #374151; border-color: transparent; }
+  .ac-nav-item .ac-pill { margin-left: auto; }
+
+  .ac-progress { width: 160px; height: 8px; border-radius: 999px; background: rgba(0,0,0,.08); overflow: hidden; }
+  @media (max-width: 980px) { .ac-progress { width: 120px; } }
+  .ac-progress-bar { height: 100%; background: linear-gradient(135deg, var(--brand), var(--brand2)); }
+
+  .ac-stepper { display: flex; align-items: center; gap: 10px; }
+  .ac-step { display: flex; align-items: center; gap: 6px; font-weight: 700; color: var(--muted); }
+  .ac-step.is-active { color: var(--ink); }
+  .ac-dot {
+    width: 22px; height: 22px; border-radius: 999px; display: grid; place-items: center;
+    background: #e5e7eb; color: #111; font-size: 12px; font-weight: 800;
+  }
+  .ac-step.is-active .ac-dot { background: linear-gradient(135deg, var(--brand), var(--brand2)); color: #fff; }
+  .ac-step-line { height: 2px; flex: 1; background: rgba(0,0,0,.08); }
+
+  .ac-wizard { display: flex; flex-direction: column; gap: 16px; }
+  .ac-pane { display: none; }
+  .ac-pane.is-active { display: block; }
+  .ac-wiz-actions { display: flex; gap: 8px; justify-content: space-between; margin-top: 8px; }
+  .ac-btn.secondary { background: #fff; }
+  .ac-pane h3 { margin: .25rem 0 .5rem; font-size: 16px; }
+  .ac-pane .ac-hint { margin-top: 4px; }
+</style>
+
+{% if customer %}
+  {% assign role = customer.metafields.custom.role | downcase | default: '' %}
+  {% if role == 'artist' %}
+    <section id="artistDashboard" class="section-artist-dashboard ac-wrap" data-customer-id="{{ customer.id }}">
+      <header class="ac-topbar">
+        <div>
+          <div class="ac-top-title">{{ section.settings.title | default: 'Künstler Dashboard' }}</div>
+          <div class="ac-top-sub">{{ section.settings.subtitle | default: 'Verwalten & Analysieren' }}</div>
+        </div>
+        <div class="ac-top-actions">
+          {% assign status_raw = customer.metafields.custom.kunstler_status | default: 'Unbekannt' %}
+          {% assign status = status_raw | downcase %}
+          <span class="ac-badge {% if status == 'aktiv' %}ok{% elsif status == 'pending' or status == 'wartend' %}warn{% elsif status == 'inaktiv' %}err{% else %}muted{% endif %}">
+            {{- status_raw | capitalize -}}
+          </span>
+        </div>
+      </header>
+
+      <!-- Sidebar -->
+      <aside class="ac-sidebar">
+        <div class="ac-profile">
+          <div class="ac-avatar" aria-hidden="true">{{ customer.first_name | slice: 0, 1 | upcase }}</div>
+          <div class="ac-profile-meta">
+            <div class="ac-name">{{ customer.first_name }} {{ customer.last_name }}</div>
+            <div class="ac-mail">{{ customer.email }}</div>
+          </div>
+        </div>
+
+        <nav class="ac-nav" role="navigation" aria-label="Sektionen">
+          <button class="ac-nav-item is-active" data-target="sec-overview">Übersicht</button>
+          <button class="ac-nav-item" data-target="sec-stammdaten">Stammdaten</button>
+          <button class="ac-nav-item" data-target="sec-kunst">Künstlerische Infos</button>
+          <button class="ac-nav-item" data-target="sec-dna">
+            Artist DNA
+            <span id="dnaSideBadge" class="ac-pill ac-pill-muted" aria-label="Vervollständigung">0%</span>
+          </button>
+          <button class="ac-nav-item" data-target="sec-marketing">Marketing</button>
+          <button class="ac-nav-item" data-target="sec-vertrag">Vertrag & Auszahlung</button>
+          <button class="ac-nav-item" data-target="sec-docs">Dokumente</button>
+          <button class="ac-nav-item" data-target="sec-contact">Kontakt</button>
+          <button class="ac-nav-item" data-target="sec-status">Status</button>
+        </nav>
+
+
+        <div class="ac-sidecard">
+          <div class="ac-sidecard-title">Konditionen</div>
+          <div class="ac-kv">
+            <span>Originale</span>
+            <strong>
+              {% assign k_orig = customer.metafields.custom.kunstleranteil_originalwerke %}
+              {{- k_orig | default: '—' -}}{% if k_orig %}%{% endif %}
+            </strong>
+          </div>
+          <div class="ac-kv">
+            <span>Drucke</span>
+            <strong>
+              {% assign k_dr = customer.metafields.custom.kunstleranteil_drucke %}
+              {{- k_dr | default: '—' -}}{% if k_dr %}%{% endif %}
+            </strong>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main class="ac-main" id="acPanels">#
+
+        {%- comment -%} ====== OVERVIEW (Startseite) ====== {%- endcomment -%}
+        {%- assign dna_pct = customer.metafields.custom.artist_dna_completion | default: '0' -%}
+        {%- assign dna_pct_num = dna_pct | plus: 0 -%}
+
+        {%- assign links_raw = customer.metafields.custom.social_media_links -%}
+        {%- assign links_count = 0 -%}
+        {%- if links_raw and links_raw.value -%}
+          {%- if links_raw.type == 'list.link' -%}
+            {%- assign links_count = links_raw.value.size -%}
+          {%- else -%}
+            {%- assign parsed = links_raw.value | parse_json -%}
+            {%- if parsed -%}
+              {%- assign links_count = parsed.size -%}
+            {%- else -%}
+              {%- assign links_count = links_raw.value | split: '\n' | size -%}
+            {%- endif -%}
+          {%- endif -%}
+        {%- endif -%}
+
+        {%- assign mfiles = customer.metafields.custom.kunstler_bilder_fur_marketing_co -%}
+        {%- assign assets_count = 0 -%}
+        {%- if mfiles and mfiles.value -%}
+          {%- if mfiles.type == 'list.file_reference' -%}
+            {%- assign assets_count = mfiles.value.size -%}
+          {%- else -%}
+            {%- assign parsed = mfiles.value | parse_json -%}
+            {%- if parsed -%}{%- assign assets_count = parsed.size -%}{%- endif -%}
+          {%- endif -%}
+        {%- endif -%}
+
+        {%- assign has_bank_name = customer.metafields.custom.bankdaten_name -%}
+        {%- assign has_bank_iban = customer.metafields.custom.bankdaten_iban -%}
+        {%- assign has_bank_stnr = customer.metafields.custom.bankdaten_steuernummer -%}
+        {%- assign bank_ok = false -%}
+        {%- if has_bank_name and has_bank_name != blank and has_bank_iban and has_bank_iban != blank and has_bank_stnr and has_bank_stnr != blank -%}
+          {%- assign bank_ok = true -%}
+        {%- endif -%}
+
+        <section id="sec-overview" class="ac-card is-active" data-tab="overview">
+          <header class="ac-card-head">
+            <h2>Artist Dashboard 1.0 (BETA)</h2>
+            <div class="ac-stepper" aria-label="Fortschritt">
+              <div class="ac-step is-active"><div class="ac-dot">●</div><div>Start</div></div>
+              <div class="ac-step-line"></div>
+              <div class="ac-step"><div class="ac-dot">●</div><div>Pflege</div></div>
+              <div class="ac-step-line"></div>
+              <div class="ac-step"><div class="ac-dot">●</div><div>Launch</div></div>
+            </div>
+          </header>
+
+          <div class="ac-card-body">
+            <!-- Hero -->
+            <div class="ac-box" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+              <div>
+                <div style="font-weight:800;font-size:50px!important">Willkommen, {{ customer.first_name }}!</div>
+                <div class="ac-hint">Hier siehst du Status, KPIs und nächste Schritte auf einen Blick.</div>
+              </div>
+              <div>
+                <span class="ac-badge {% if status == 'aktiv' %}ok{% elsif status == 'pending' or status == 'wartend' %}warn{% elsif status == 'inaktiv' %}err{% else %}muted{% endif %}">
+                  {{ status_raw | capitalize }}
+                </span>
+              </div>
+            </div>
+
+            <!-- KPIs -->
+            <div class="ac-grid three" style="margin-top:12px">
+              <div class="ac-box">
+                <label>Artist DNA</label>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                  <div class="ac-progress" style="flex:1"><div class="ac-progress-bar" style="width: {{ dna_pct_num }}%"></div></div>
+                  <span class="ac-pill {% if dna_pct_num >= 80 %}ac-pill-ok{% elsif dna_pct_num >= 40 %}ac-pill-warn{% elsif dna_pct_num > 0 %}ac-pill-err{% else %}ac-pill-muted{% endif %}">
+                    {{ dna_pct_num }}%
+                  </span>
+                </div>
+                <div class="ac-hint">Vervollständige dein Profil für bessere Sichtbarkeit.</div>
+              </div>
+
+              <div class="ac-box">
+                <label>Social Links</label>
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                  <strong style="font-size:20px">{{ links_count }}</strong>
+                  <button class="ac-btn" data-jump="sec-stammdaten">Verwalten</button>
+                </div>
+                <div class="ac-hint">Instagram, TikTok, Website …</div>
+              </div>
+
+              <div class="ac-box">
+                <label>Marketing-Uploads</label>
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                  <strong style="font-size:20px">{{ assets_count }}</strong>
+                  <button class="ac-btn" data-jump="sec-docs">Hochladen</button>
+                </div>
+                <div class="ac-hint">Pressefotos, Reels, Clips.</div>
+              </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="ac-box" style="margin-top:12px">
+              <label>Schnellzugriff</label>
+              <div style="display:flex;flex-wrap:wrap;gap:8px">
+                <button class="ac-btn ac-btn-primary" data-jump="sec-dna">Artist DNA fortsetzen</button>
+                <button class="ac-btn" data-jump="sec-stammdaten">Biografie bearbeiten</button>
+                <button class="ac-btn" data-jump="sec-kunst">Künstlerische Infos</button>
+                <button class="ac-btn" data-jump="sec-vertrag">Bankdaten prüfen</button>
+                <button class="ac-btn" data-jump="sec-docs">Marketing-Uploads</button>
+                <button class="ac-btn" data-jump="sec-contact">Team kontaktieren</button>
+              </div>
+            </div>
+
+            <!-- Checkliste / Nächste Schritte -->
+            <div class="ac-grid">
+              <div class="ac-box">
+                <label>To-do Checkliste</label>
+                <ul class="ac-links" style="margin-top:6px">
+                  <li>
+                    {% if dna_pct_num >= 50 %}
+                      <span class="ac-pill ac-pill-ok">✓</span> Mindmap freigeschaltet ({{ dna_pct_num }}%)
+                    {% else %}
+                      <span class="ac-pill ac-pill-warn">!</span> Artist DNA auf mind. 50% bringen
+                      <button class="ac-btn" data-jump="sec-dna" style="margin-left:8px">Jetzt ausfüllen</button>
+                    {% endif %}
+                  </li>
+                  <li>
+                    {% if links_count > 0 %}
+                      <span class="ac-pill ac-pill-ok">✓</span> Social Links hinterlegt ({{ links_count }})
+                    {% else %}
+                      <span class="ac-pill ac-pill-err">•</span> Social Links hinzufügen
+                      <button class="ac-btn" data-jump="sec-stammdaten" style="margin-left:8px">Hinzufügen</button>
+                    {% endif %}
+                  </li>
+                  <li>
+                    {% if assets_count > 0 %}
+                      <span class="ac-pill ac-pill-ok">✓</span> Marketing-Assets hochgeladen ({{ assets_count }})
+                    {% else %}
+                      <span class="ac-pill ac-pill-err">•</span> Marketing-Assets hochladen
+                      <button class="ac-btn" data-jump="sec-docs" style="margin-left:8px">Upload</button>
+                    {% endif %}
+                  </li>
+                  <li>
+                    {% if bank_ok %}
+                      <span class="ac-pill ac-pill-ok">✓</span> Bankdaten vollständig
+                    {% else %}
+                      <span class="ac-pill ac-pill-err">•</span> Bankdaten vervollständigen
+                      <button class="ac-btn" data-jump="sec-vertrag" style="margin-left:8px">Prüfen</button>
+                    {% endif %}
+                  </li>
+                </ul>
+              </div>
+
+              <div class="ac-box">
+                <label>Hinweise</label>
+                <div class="ac-note" style="margin-top:6px">
+                  • Je vollständiger dein Profil, desto höher deine Sichtbarkeit in ARTCLUB-Kurationslisten und Marketing. <br>
+                  • Uploads: Bilder bis 20 MB, Videos bis 1 GB. <br>
+                  • Verträge werden hier nicht angezeigt – nutze „Kontakt“, wenn du Unterlagen brauchst.
+                </div>
+              </div>
+            </div>
+
+
+                    <!-- Version / Logs -->
+<div class="ac-box" style="margin-top:18px">
+  <label>Version & Hinweise</label>
+  <div class="ac-note" style="margin-top:6px">
+    <strong>ARTCLUB Artist Dashboard — Beta v1.0</strong><br>
+    Dieses Dashboard befindet sich aktuell noch in der <em>Beta-Phase</em>. 
+    Manche Funktionen können eingeschränkt oder fehlerhaft sein.<br><br>
+    Wir arbeiten kontinuierlich an Verbesserungen. 
+    Die nächsten Versionen mit zusätzlichen Features und Bugfixes erscheinen so schnell wie möglich.
+  </div>
+</div>
+          </div>
+        </section>
+
+
+        <!-- STAMMDATEN -->
+        <section id="sec-stammdaten" class="ac-card is-active" data-tab="stammdaten">
+          <header class="ac-card-head">
+            <h2>Stammdaten</h2>
+            <!-- toggelt Bio UND Links-Editor -->
+            <button type="button" class="ac-edit-toggle" data-target="stammdaten-edit,linksEditor">Bearbeiten</button>
+          </header>
+
+          <div class="ac-card-body">
+            <div class="ac-grid">
+              <!-- BIO -->
+              <div class="ac-cell">
+                <label>Biografie</label>
+                <div class="ac-box" data-display-for="biography">
+                  {% assign bio = customer.metafields.custom.biography %}
+                  {% if bio and bio.value %}
+                    {% if bio.type contains 'rich_text' %}
+                      {{ bio | metafield_tag }}
+                    {% else %}
+                      {{ bio.value | newline_to_br }}
+                    {% endif %}
+                  {% else %}
+                    <em>Noch keine Biografie hinterlegt</em>
+                  {% endif %}
+                </div>
+              </div>
+
+              <!-- SOCIAL LINKS -->
+              <div class="ac-cell">
+                <label>Social Links</label>
+                <div class="ac-box" data-display-for="social_links" id="linksDisplayBox">
+                  {% assign sl = customer.metafields.custom.social_media_links %}
+                  {% assign links_array = null %}
+                  {% if sl and sl.value %}
+                    {% if sl.type == 'list.link' %}
+                      {% assign links_array = sl.value %}
+                    {% else %}
+                      {% assign parsed = sl.value | parse_json %}
+                      {% if parsed %}{% assign links_array = parsed %}{% else %}{% assign links_array = sl.value | split: '\n' %}{% endif %}
+                    {% endif %}
+                  {% endif %}
+
+                  {% if links_array and links_array.size > 0 %}
+                    <ul class="ac-links" id="linksDisplayList">
+                      {% for item in links_array %}
+                        {% assign url = item.url | default: item | strip %}
+                        {% if url != blank %}
+                          <li><a href="{{ url }}" target="_blank" rel="noopener">{{ url }}</a></li>
+                        {% endif %}
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    <em id="linksEmptyNote">Keine Social Links hinterlegt</em>
+                  {% endif %}
+                </div>
+
+                {%- comment -%} sichere Rohwerte in data-Attribut (kein Output) {%- endcomment -%}
+                {% capture initial_links %}
+                  {% if links_array and links_array.size > 0 %}
+                    {% for item in links_array %}
+                      {% assign url = item.url | default: item | strip %}
+                      {% if url != blank %}{{ url }}{% unless forloop.last %}&#10;{% endunless %}{% endif %}
+                    {% endfor %}
+                  {% endif %}
+                {% endcapture %}
+
+                <!-- Editor UI (hidden until "Bearbeiten") -->
+                <div
+                  class="ac-links-editor ac-edit"
+                  id="linksEditor"
+                  style="display:none"
+                  data-initial="{{ initial_links | strip | escape }}"
+                >
+                  <div id="linksEditList"></div>
+                  <div class="ac-links-add">
+                    <input type="url" id="newLinkInput" class="ac-input" placeholder="https://instagram.com/…">
+                    <button type="button" class="ac-btn ac-btn-primary" id="addLinkBtn">Hinzufügen</button>
+                  </div>
+                  <small class="ac-hint">
+                    Links werden als Zeilenliste gespeichert (kompatibel). Später kann auf
+                    <code>list.link</code> umgestellt werden.
+                  </small>
+                </div>
+              </div>
+            </div>
+
+            <!-- EDIT: Bio -->
+            <form id="stammdaten-edit" class="ac-edit" style="display:none">
+              <div class="ac-grid">
+                <div class="ac-cell">
+                  <label for="biography">Biografie bearbeiten</label>
+                  <textarea id="biography" rows="6" class="ac-input" placeholder="Erzähle deine Geschichte…">
+{% if bio and bio.value %}{% if bio.type contains 'rich_text' %}{{ bio | metafield_tag | strip_html | escape }}{% else %}{{ bio.value | escape }}{% endif %}{% endif %}</textarea>
+                  <small class="ac-hint">Freitext; wird als Rich Text gespeichert.</small>
+                </div>
+                <div class="ac-cell"></div>
+              </div>
+            </form>
+          </div>
+          
+    
+
+        </section>
+
+        <section id="sec-marketing" class="ac-card" data-tab="marketing" style="display:none">
+          <header class="ac-card-head"><h2>Marketing</h2></header>
+          {% render 'artist-marketing-guide' %}
+        </section>
+
+
+        <!-- KÜNSTLERISCHE INFOS -->
+        <section id="sec-kunst" class="ac-card" data-tab="kunst">
+          <header class="ac-card-head">
+            <h2>Künstlerische Informationen</h2>
+            <button type="button" class="ac-edit-toggle" data-target="kunst-edit">Bearbeiten</button>
+          </header>
+
+          <div class="ac-card-body">
+            <div class="ac-grid three">
+              <div class="ac-cell">
+                <label>Stil</label>
+                <div class="ac-line" data-display-for="kunstler_fragen_stil">
+                  {{ customer.metafields.custom.kunstler_fragen_stil | default: '—' }}
+                </div>
+              </div>
+              <div class="ac-cell">
+                <label>Kunstart</label>
+                <div class="ac-line" data-display-for="kunstler_fragen_kunstart">
+                  {{ customer.metafields.custom.kunstler_fragen_kunstart | default: '—' }}
+                </div>
+              </div>
+              <div class="ac-cell">
+                <label>Medien</label>
+                <div class="ac-line" data-display-for="kunstler_kunstmedien">
+                  {{ customer.metafields.custom.kunstler_kunstmedien | default: '—' }}
+                </div>
+              </div>
+            </div>
+
+            <form id="kunst-edit" class="ac-edit" style="display:none">
+              <div class="ac-grid three">
+                <div class="ac-cell">
+                  <label for="kuenstler_fragen_stil">Stil</label>
+                  <textarea id="kuenstler_fragen_stil" rows="3" class="ac-input">{{ customer.metafields.custom.kunstler_fragen_stil }}</textarea>
+                </div>
+                <div class="ac-cell">
+                  <label for="kuenstler_fragen_kunstart">Kunstart</label>
+                  <textarea id="kuenstler_fragen_kunstart" rows="3" class="ac-input">{{ customer.metafields.custom.kunstler_fragen_kunstart }}</textarea>
+                </div>
+                <div class="ac-cell">
+                  <label for="kuenstler_kunstmedien">Medien</label>
+                  <textarea id="kuenstler_kunstmedien" rows="3" class="ac-input">{{ customer.metafields.custom.kunstler_kunstmedien }}</textarea>
+                </div>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <!-- VERTRAG & AUSZAHLUNG -->
+        <section id="sec-vertrag" class="ac-card" data-tab="vertrag">
+          <header class="ac-card-head">
+            <h2>Vertrag & Auszahlung</h2>
+            <button type="button" class="ac-edit-toggle" data-target="vertrag-edit">Bankdaten bearbeiten</button>
+          </header>
+
+          <div class="ac-card-body">
+            <div class="ac-grid">
+              <div class="ac-cell">
+                <label>Bankdaten</label>
+                <div class="ac-kv">
+                  <span>Name</span>
+                  <strong data-display-for="bankdaten_name">{{- customer.metafields.custom.bankdaten_name | default: '—' -}}</strong>
+                </div>
+                <div class="ac-kv">
+                  <span>IBAN</span>
+                  {% assign biban = customer.metafields.custom.bankdaten_iban %}
+                  <strong data-display-for="bankdaten_iban">
+                    {% if biban %}
+                      {{- biban | replace: ' ', '' | replace: '-', '' | slice: 0, 4 -}}••••••••••••••{{- biban | replace: ' ', '' | replace: '-', '' | slice: -4, 4 -}}
+                    {% else %}—{% endif %}
+                  </strong>
+                </div>
+                <div class="ac-kv">
+                  <span>Steuernummer</span>
+                  <strong data-display-for="bankdaten_steuernummer">{{- customer.metafields.custom.bankdaten_steuernummer | default: '—' -}}</strong>
+                </div>
+              </div>
+            </div>
+
+            <form id="vertrag-edit" class="ac-edit" style="display:none">
+              <div class="ac-grid">
+                <div class="ac-cell">
+                  <label for="bankdaten_name">Kontoinhaber</label>
+                  <input id="bankdaten_name" type="text" class="ac-input" value="{{ customer.metafields.custom.bankdaten_name }}">
+                </div>
+                <div class="ac-cell">
+                  <label for="bankdaten_iban">IBAN</label>
+                  <input id="bankdaten_iban" type="text" class="ac-input" value="{{ customer.metafields.custom.bankdaten_iban }}">
+                </div>
+                <div class="ac-cell">
+                  <label for="bankdaten_steuernummer">Steuernummer</label>
+                  <input id="bankdaten_steuernummer" type="text" class="ac-input" value="{{ customer.metafields.custom.bankdaten_steuernummer }}">
+                </div>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <!-- ===== Artist DNA (vollständige Version mit allen Fragen) ===== -->
+        <section id="sec-dna" class="ac-card" data-tab="dna" style="display:none">
+          <header class="ac-card-head">
+            <div style="display:flex;align-items:center;gap:12px">
+              <h2 style="margin:0">Artist DNA</h2>
+              <div class="ac-progress"><div class="ac-progress-bar" id="dnaProgressBar" style="width:0%"></div></div>
+              <span class="ac-pill ac-pill-muted" id="dnaProgressBadge" title="Profil-Vervollständigung">0%</span>
+            </div>
+            <button type="button" class="ac-btn ac-btn-primary" id="openDnaMapBtn">Mindmap öffnen</button>
+            <div class="ac-stepper" id="dnaStepper" aria-label="Schritte"></div>
+          </header>
+
+          <div class="ac-card-body">
+            <p class="ac-note">Optional – fülle so viel aus wie du magst. Entwürfe werden lokal gespeichert, du kannst alles später bearbeiten.</p>
+
+            <div class="ac-wizard" id="dnaWizard" data-step="1">
+              <!-- STEP 1 – Moodboard -->
+              <div class="ac-pane is-active" data-step="1" data-title="Moodboard">
+                <h3>Moodboard</h3>
+                <label>Bild-Links (ein Link pro Zeile)</label>
+                <textarea id="dna_moodboard" rows="3" class="ac-input" placeholder="https://…">{% assign mb = customer.metafields.custom.artist_dna_moodboard %}{% if mb and mb.value %}{% for u in mb.value %}{{ u }}{% unless forloop.last %}&#10;{% endunless %}{% endfor %}{% endif %}</textarea>
+                <small class="ac-hint">Tipp: 3–10 Links reichen. Upload folgt später.</small>
+              </div>
+
+              <!-- STEP 2 – Identität & Philosophie -->
+              <div class="ac-pane" data-step="2" data-title="Identität">
+                <h3>Künstlerische Identität & Philosophie</h3>
+                <label>Wer bin ich als Künstler und was macht meine Werke einzigartig?</label>
+                <textarea id="artist_dna_identity_who" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_identity_who }}</textarea>
+
+                <label>Zentrale Merkmale (z. B. abstrakt, realistisch, …)</label>
+                <textarea id="artist_dna_identity_features" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_identity_features }}</textarea>
+
+                <label>Motivation / Emotionen</label>
+                <textarea id="artist_dna_identity_motivation" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_identity_motivation }}</textarea>
+
+                <label>Philosophische / gesellschaftliche Botschaften</label>
+                <textarea id="artist_dna_identity_message" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_identity_message }}</textarea>
+              </div>
+
+              <!-- STEP 3 – Storytelling -->
+              <div class="ac-pane" data-step="3" data-title="Story">
+                <h3>Storytelling & Messaging</h3>
+                <label>Meine Geschichte & wie ich sie erzähle</label>
+                <textarea id="artist_dna_story_my_story" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_story_my_story }}</textarea>
+
+                <label>Persönliche Erfahrungen / Herausforderungen</label>
+                <textarea id="artist_dna_story_personal_experience" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_story_personal_experience }}</textarea>
+
+                <label>Übergeordnete Botschaft der Werke</label>
+                <textarea id="artist_dna_story_overarching_message" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_story_overarching_message }}</textarea>
+              </div>
+
+              <!-- STEP 4 – Social -->
+              <div class="ac-pane" data-step="4" data-title="Social">
+                <h3>Social Media & Online-Präsenz</h3>
+                <label>Präsentation auf Social</label>
+                <textarea id="artist_dna_social_presentation" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_social_presentation }}</textarea>
+
+                <label>Plattformen (am besten geeignet)</label>
+                <textarea id="artist_dna_social_platforms" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_social_platforms }}</textarea>
+
+                <label>Inhalte (Prozess, Ausstellungen, Tutorials…)</label>
+                <textarea id="artist_dna_social_content_types" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_social_content_types }}</textarea>
+
+                <label>Community-Interaktion</label>
+                <textarea id="artist_dna_social_community_interaction" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_social_community_interaction }}</textarea>
+              </div>
+
+              <!-- STEP 5 – Visuelle Identität -->
+              <div class="ac-pane" data-step="5" data-title="Brand">
+                <h3>Visuelle Identität & Markenaufbau</h3>
+                <label>Farben / Stile / visuelle Elemente</label>
+                <textarea id="artist_dna_visual_elements" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_visual_elements }}</textarea>
+
+                <label>Präsentation online/offline (Galerie, Website, Social)</label>
+                <textarea id="artist_dna_visual_presentation" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_visual_presentation }}</textarea>
+
+                <label>Techniken & Materialien – warum?</label>
+                <textarea id="artist_dna_visual_techniques" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_visual_techniques }}</textarea>
+              </div>
+
+              <!-- STEP 6 – Zielgruppe -->
+              <div class="ac-pane" data-step="6" data-title="Zielgruppe">
+                <h3>Zielgruppe & Community</h3>
+                <label>Wer schätzt meine Kunst – was verbindet sie?</label>
+                <textarea id="artist_dna_audience_who" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_audience_who }}</textarea>
+
+                <label>Welche Betrachter spricht meine Kunst an?</label>
+                <textarea id="artist_dna_audience_viewers" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_audience_viewers }}</textarea>
+
+                <label>Was motiviert zum Kauf / Support?</label>
+                <textarea id="artist_dna_audience_motivation" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_audience_motivation }}</textarea>
+
+                <label>Geteilte Werte</label>
+                <textarea id="artist_dna_audience_values" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_audience_values }}</textarea>
+              </div>
+
+              <!-- STEP 7 – Ausdruck & Vision -->
+              <div class="ac-pane" data-step="7" data-title="Vision">
+                <h3>Kreative Ausdruckskraft & Vision</h3>
+                <label>Umgebung wahrnehmen & in Kunst übersetzen</label>
+                <textarea id="artist_dna_expression_perception" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_expression_perception }}</textarea>
+
+                <label>Einflüsse & Lebensumstände</label>
+                <textarea id="artist_dna_expression_influences" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_expression_influences }}</textarea>
+
+                <label>Techniken / Materialien – warum?</label>
+                <textarea id="artist_dna_expression_techniques" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_expression_techniques }}</textarea>
+
+                <label>Ziel meiner Werke (Denkanstoß, Emotionen, Ästhetik)</label>
+                <textarea id="artist_dna_expression_goal" rows="4" class="ac-input">{{ customer.metafields.custom.artist_dna_expression_goal }}</textarea>
+              </div>
+
+              <!-- Wizard Controls -->
+              <div class="ac-wiz-actions">
+                <button type="button" class="ac-btn secondary" id="dnaPrevBtn">Zurück</button>
+                <div style="display:flex;gap:8px">
+                  <button type="button" class="ac-btn" id="dnaSaveDraftBtn">Entwurf speichern</button>
+                  <button type="button" class="ac-btn ac-btn-primary" id="saveDnaBtn">Fertig / Speichern</button>
+                  <button type="button" class="ac-btn ac-btn-primary" id="dnaNextBtn">Weiter</button>
+                </div>
+              </div>
+
+              <div class="ac-feedback" id="dnaMsg" style="display:none"></div>
+            </div>
+          </div>
+        </section>
+
+        <script>
+          (() => {
+            const shop = '{{ shop.permanent_domain }}';
+            const customerId = '{{ customer.id }}';
+            const SAVE_URL = 'https://v0-shopify-vercel-project.vercel.app/api/update-artist-profile';
+
+            // DOM
+            const wiz = document.getElementById('dnaWizard');
+            const panes = [...document.querySelectorAll('#dnaWizard .ac-pane')];
+            const prevBtn = document.getElementById('dnaPrevBtn');
+            const nextBtn = document.getElementById('dnaNextBtn');
+            const saveBtn = document.getElementById('saveDnaBtn');
+            const saveDraftBtn = document.getElementById('dnaSaveDraftBtn');
+            const stepper = document.getElementById('dnaStepper');
+            const msg = document.getElementById('dnaMsg');
+            const badgeTop = document.getElementById('dnaProgressBadge');
+            const badgeSide = document.getElementById('dnaSideBadge');
+            const bar = document.getElementById('dnaProgressBar');
+            const moodEl = document.getElementById('dna_moodboard');
+
+            // IDs der Textfelder
+            const DNA_FIELDS = [
+              'artist_dna_identity_who','artist_dna_identity_features','artist_dna_identity_motivation','artist_dna_identity_message',
+              'artist_dna_story_my_story','artist_dna_story_personal_experience','artist_dna_story_overarching_message',
+              'artist_dna_social_presentation','artist_dna_social_platforms','artist_dna_social_content_types','artist_dna_social_community_interaction',
+              'artist_dna_visual_elements','artist_dna_visual_presentation','artist_dna_visual_techniques',
+              'artist_dna_audience_who','artist_dna_audience_viewers','artist_dna_audience_motivation','artist_dna_audience_values',
+              'artist_dna_expression_perception','artist_dna_expression_influences','artist_dna_expression_techniques','artist_dna_expression_goal'
+            ];
+            const $ = id => document.getElementById(id);
+
+            /* Stepper */
+            function renderStepper() {
+              stepper.innerHTML = '';
+              panes.forEach((p, i) => {
+                const n = i + 1, t = p.dataset.title || ('Step ' + n);
+                const node = document.createElement('div');
+                node.className = 'ac-step' + (p.classList.contains('is-active') ? ' is-active' : '');
+                node.innerHTML = `<div class="ac-dot">${n}</div><div>${t}</div>`;
+                node.addEventListener('click', () => goto(n));
+                stepper.appendChild(node);
+                if (i < panes.length - 1) {
+                  const line = document.createElement('div');
+                  line.className = 'ac-step-line';
+                  stepper.appendChild(line);
+                }
+              });
+            }
+            function goto(step) {
+              const idx = Math.max(1, Math.min(step, panes.length));
+              panes.forEach((p, i) => p.classList.toggle('is-active', i === idx - 1));
+              wiz.dataset.step = String(idx);
+              prevBtn.style.visibility = idx === 1 ? 'hidden' : 'visible';
+              nextBtn.style.visibility = idx === panes.length ? 'hidden' : 'visible';
+              renderStepper();
+              updateProgressUI();
+            }
+
+            /* Autosave */
+            const LS = `ac_dna_full_${customerId}`;
+            function loadDraft() {
+              try {
+                const x = JSON.parse(localStorage.getItem(LS) || '{}');
+                DNA_FIELDS.forEach(id => { if (x[id]) $(id).value = x[id]; });
+                if (x.dna_moodboard && moodEl) moodEl.value = x.dna_moodboard;
+              } catch {}
+            }
+            function saveDraftToLS() {
+              const out = {};
+              DNA_FIELDS.forEach(id => out[id] = ($(id)?.value || ''));
+              out.dna_moodboard = (moodEl?.value || '');
+              localStorage.setItem(LS, JSON.stringify(out));
+              toast('Entwurf gespeichert','success');
+            }
+            function bindInputs() {
+              [...DNA_FIELDS.map($), moodEl].forEach(el => {
+                if (!el) return;
+                el.addEventListener('input', () => { localStorage.setItem('__dirty','1'); updateProgressUI(); });
+              });
+            }
+
+            /* Progress */
+            function computeProgress() {
+              const TEXT_MIN = 1;
+              const MB_MIN_1 = 1;
+              const MB_MIN_2 = 3;
+
+              let done = 0, total = 0;
+              DNA_FIELDS.forEach(id => {
+                total += 1;
+                const v = (document.getElementById(id)?.value || '').trim();
+                if (v.length >= TEXT_MIN) done += 1;
+              });
+
+              const mb = (document.getElementById('dna_moodboard')?.value || '')
+                .split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+              total += 2;
+              if (mb.length >= MB_MIN_1) done += 1;
+              if (mb.length >= MB_MIN_2) done += 1;
+
+              const pct = Math.max(0, Math.min(100, Math.round((done / total) * 100)));
+              return pct;
+            }
+            function setPill(el, pct) {
+              if (!el) return;
+              el.textContent = pct + '%';
+              el.classList.remove('ac-pill-muted','ac-pill-warn','ac-pill-err','ac-pill-ok','ok','warn','muted');
+              if (pct >= 80) el.classList.add('ac-pill-ok','ok');
+              else if (pct >= 40) el.classList.add('ac-pill-warn','warn');
+              else if (pct > 0) el.classList.add('ac-pill-err');
+              else el.classList.add('ac-pill-muted','muted');
+            }
+            function updateProgressUI() {
+              const pct = computeProgress();
+              if (bar) bar.style.width = pct + '%';
+              setPill(badgeTop, pct);
+              setPill(badgeSide, pct);
+              return pct;
+            }
+
+            /* Save to backend */
+            function toast(t, type) {
+              if (!msg) return;
+              msg.textContent = t;
+              msg.className = 'ac-feedback ' + (type || '');
+              msg.style.display = t ? 'block' : 'none';
+            }
+            async function saveAll() {
+              try {
+                toast('Speichere…');
+                const pct = updateProgressUI();
+                const payload = { customerId };
+                DNA_FIELDS.forEach(id => payload[`metafields[custom.${id}]`] = ($(id)?.value || '').trim());
+                const mb = (moodEl?.value || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+                if (mb.length) payload['metafields[custom.artist_dna_moodboard]'] = JSON.stringify(mb);
+                payload['metafields[custom.artist_dna_completion]'] = String(pct);
+
+                const res = await fetch(SAVE_URL, {
+                  method: 'POST',
+                  headers: { 'Content-Type':'application/json', 'X-Shop-Domain':'{{ shop.permanent_domain }}', 'X-Customer-Id':'{{ customer.id }}' },
+                  body: JSON.stringify(payload)
+                });
+                const json = await res.json();
+                if (!res.ok || !json.success) throw new Error(json.error || ('HTTP ' + res.status));
+
+                localStorage.removeItem(LS);
+                localStorage.removeItem('__dirty');
+                toast('✓ Artist DNA gespeichert','success');
+              } catch (e) {
+                console.error(e);
+                toast('Fehler: ' + e.message,'error');
+              }
+            }
+
+            /* Events */
+            prevBtn.addEventListener('click', () => goto(Number(wiz.dataset.step) - 1));
+            nextBtn.addEventListener('click', () => goto(Number(wiz.dataset.step) + 1));
+            saveBtn.addEventListener('click', saveAll);
+            saveDraftBtn.addEventListener('click', saveDraftToLS);
+
+            // init
+            loadDraft();
+            bindInputs();
+            renderStepper();
+            goto(1);
+          })();
+        </script>
+
+        <!-- DOKUMENTE -->
+        <section id="sec-docs" class="ac-card" data-tab="docs">
+          <header class="ac-card-head"><h2>Dokumente & Verträge</h2></header>
+          <div class="ac-card-body">
+            <div class="ac-note">
+              Aus Sicherheitsgründen werden Verträge in deinem Konto nicht angezeigt. Wenn du Unterlagen benötigst,
+              kannst du sie hier anfordern.
+            </div>
+            <button class="ac-btn ac-btn-primary" type="button" id="requestDocsBtn">Unterlagen anfragen</button>
+          </div>
+
+          {%- comment -%} === Marketing Uploads (list.file_reference) === {%- endcomment -%}
+          <header class="ac-card-head">
+            <h2>Marketing-Uploads</h2>
+            <small class="ac-hint">Bilder (≤20 MB) & Videos (≤1 GB).</small>
+          </header>
+
+          <div class="ac-card-body">
+            {% assign mfiles = customer.metafields.custom.kunstler_bilder_fur_marketing_co %}
+            {% assign file_items = null %}
+            {% if mfiles and mfiles.value %}
+              {% if mfiles.type == 'list.file_reference' %}
+                {% assign file_items = mfiles.value %}
+              {% else %}
+                {% assign parsed = mfiles.value | parse_json %}
+                {% if parsed %}{% assign file_items = parsed %}{% endif %}
+              {% endif %}
+            {% endif %}
+
+            <div id="acAssets" class="ac-assets" data-shop="{{ shop.permanent_domain }}" data-customer="{{ customer.id }}">
+              <div id="assetGrid" class="ac-asset-grid">
+                {% if file_items and file_items.size > 0 %}
+                  {% for f in file_items %}
+                    {% assign gid = f.id | default: f %}
+                    <div class="ac-asset" data-gid="{{ gid }}">
+                      {% if f.preview and f.preview.image and f.preview.image.url %}
+                        <img src="{{ f.preview.image.url | img_url: '360x' }}" alt="">
+                      {% elsif f.image and f.image.url %}
+                        <img src="{{ f.image.url | img_url: '360x' }}" alt="">
+                      {% else %}
+                        <div class="ac-asset-fallback">Datei</div>
+                      {% endif %}
+                      <button type="button" class="ac-remove" data-gid="{{ gid }}">Entfernen</button>
+                    </div>
+                  {% endfor %}
+                {% endif %}
+              </div>
+
+              <div id="dropzone" class="ac-drop">
+                <div><strong>Zieh Dateien hierher</strong> oder</div>
+                <input id="assetInput" type="file" multiple accept="image/*,video/*">
+                <button type="button" class="ac-btn ac-btn-primary" id="pickFilesBtn">Dateien auswählen</button>
+              </div>
+
+              <div class="ac-savebar" style="margin-top:12px">
+                <div id="assetMsg" class="ac-feedback" style="display:none"></div>
+                <button id="saveAssetsBtn" class="ac-btn ac-btn-primary">Dateien speichern</button>
+              </div>
+            </div>
+          </div>
+
+          <style>
+            .ac-asset-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+            @media (max-width: 980px) { .ac-asset-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+            .ac-asset { position: relative; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; }
+            .ac-asset img { display: block; width: 100%; height: 160px; object-fit: cover; }
+            .ac-asset-fallback { display: grid; place-items: center; height: 160px; color: var(--muted); font-weight: 700; }
+            .ac-asset .ac-remove {
+              position: absolute; top: 8px; right: 8px; background: #fff; border: 1px solid var(--line);
+              border-radius: 8px; padding: 6px 8px; cursor: pointer;
+            }
+            .ac-drop {
+              display: grid; place-items: center; border: 2px dashed var(--line); border-radius: 12px;
+              padding: 16px; background: rgba(255, 255, 255, 0.6); gap: 8px; text-align: center;
+            }
+            .ac-drop.drag { background: #eef6ff; border-color: #0a84ff; }
+            .ac-drop input[type='file'] { display: none; }
+          </style>
+
+          <script>
+            (() => {
+              const wrap = document.getElementById('acAssets');
+              if (!wrap) return;
+
+              const shop = wrap.dataset.shop;
+              const customerId = wrap.dataset.customer;
+              const grid = document.getElementById('assetGrid');
+              const dz = document.getElementById('dropzone');
+              const pickBtn = document.getElementById('pickFilesBtn');
+              const fileInput = document.getElementById('assetInput');
+              const msg = document.getElementById('assetMsg');
+              const saveBtn = document.getElementById('saveAssetsBtn');
+
+              // lokale State: Array von GIDs (bereits vorhanden)
+              let assetGids = [...grid.querySelectorAll('.ac-asset')].map(n => n.dataset.gid);
+
+              function setMsg(t, type) {
+                msg.textContent = t;
+                msg.className = 'ac-feedback ' + (type || '');
+                msg.style.display = t ? 'block' : 'none';
+              }
+              function addThumb(gid, url) {
+                const c = document.createElement('div');
+                c.className = 'ac-asset';
+                c.dataset.gid = gid;
+                c.innerHTML =
+                  (url ? `<img src="${url}" alt="" />` : `<div class="ac-asset-fallback">Datei</div>`) +
+                  `<button type="button" class="ac-remove" data-gid="${gid}">Entfernen</button>`;
+                grid.prepend(c);
+                c.querySelector('.ac-remove').addEventListener('click', onRemove);
+              }
+              function onRemove(e) {
+                const gid = e.currentTarget.dataset.gid;
+                assetGids = assetGids.filter(x => x !== gid);
+                e.currentTarget.closest('.ac-asset')?.remove();
+              }
+              grid.querySelectorAll('.ac-remove').forEach(b => b.addEventListener('click', onRemove));
+
+              function normFiles(list) {
+                return Array.from(list || []).filter(f => f && (f.type.startsWith('image/') || f.type.startsWith('video/')));
+              }
+
+              // Drag & Drop
+              ['dragenter', 'dragover'].forEach(ev =>
+                dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('drag'); }, { passive: false })
+              );
+              ['dragleave', 'drop'].forEach(ev =>
+                dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('drag'); }, { passive: false })
+              );
+              dz.addEventListener('drop', async e => {
+                const files = normFiles(e.dataTransfer.files);
+                if (files.length) await uploadFiles(files);
+              });
+              pickBtn.addEventListener('click', () => fileInput.click());
+              fileInput.addEventListener('change', async e => {
+                const files = normFiles(e.target.files);
+                if (files.length) await uploadFiles(files);
+                e.target.value = '';
+              });
+
+              async function uploadFiles(files) {
+                for (const f of files) {
+                  try {
+                    setMsg(`Lade hoch: ${f.name}`, '');
+
+                    // 1) Datei an unseren Server (multipart/form-data)
+                    const fd = new FormData();
+                    fd.append('file', f);
+
+                    const upRes = await fetch('https://v0-shopify-vercel-project.vercel.app/api/blob/create-upload-url', {
+                      method: 'POST',
+                      body: fd
+                    });
+                    const upJson = await upRes.json();
+                    if (!upRes.ok || !upJson.success) throw new Error(upJson.error || 'Upload failed');
+
+                    const publicUrl = upJson.publicUrl;
+
+                    // 2) In Shopify als File anlegen
+                    const finRes = await fetch('https://v0-shopify-vercel-project.vercel.app/api/artist-assets/finalize', {
+                      method: 'POST',
+                      headers: { 'Content-Type':'application/json' },
+                      body: JSON.stringify({
+                        shop: '{{ shop.permanent_domain }}',
+                        customerId: '{{ customer.id }}',
+                        blobUrl: publicUrl,
+                        contentType: f.type
+                      })
+                    });
+                    const finJson = await finRes.json();
+                    if (!finRes.ok || !finJson.success) throw new Error(finJson.error || 'Finalize failed');
+
+                    const { fileId, previewUrl } = finJson;
+                    if (!assetGids.includes(fileId)) assetGids.push(fileId);
+                    addThumb(fileId, previewUrl || publicUrl);
+                    setMsg(`✓ Hochgeladen: ${f.name}`, 'success');
+                  } catch (err) {
+                    console.error(err);
+                    setMsg(`Fehler: ${f.name} – ${err.message}`, 'error');
+                  }
+                }
+              }
+
+              // Speichert die Liste als list.file_reference
+              saveBtn.addEventListener('click', async () => {
+                try {
+                  setMsg('Speichere…', '');
+                  const payload = {
+                    customerId,
+                    'metafields[custom.kunstler_bilder_fur_marketing_co]': JSON.stringify(assetGids),
+                  };
+                  const res = await fetch('https://v0-shopify-vercel-project.vercel.app/api/update-artist-profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Shop-Domain': shop, 'X-Customer-Id': customerId },
+                    body: JSON.stringify(payload),
+                  });
+                  const json = await res.json();
+                  if (!res.ok || !json.success) throw new Error(json.error || 'HTTP ' + res.status);
+                  setMsg('✓ Dateien gespeichert', 'success');
+                } catch (err) {
+                  console.error(err);
+                  setMsg('Fehler beim Speichern: ' + err.message, 'error');
+                }
+              });
+            })();
+          </script>
+        </section>
+
+        <!-- KONTAKT -->
+        <section id="sec-contact" class="ac-card" data-tab="kontakt">
+          <header class="ac-card-head"><h2>Kontakt zum Team</h2></header>
+          <div class="ac-card-body">
+            {% form 'contact' %}
+              {% if form.posted_successfully? %}
+                <div class="ac-feedback success">Danke! Wir melden uns kurzfristig.</div>
+              {% elsif form.errors %}
+                <div class="ac-feedback error">Bitte prüfe deine Eingaben.</div>
+              {% endif %}
+
+              <div class="ac-grid">
+                <div class="ac-cell">
+                  <label for="ContactFormName">Dein Name</label>
+                  <input id="ContactFormName" name="contact[name]" type="text" class="ac-input" value="{{ customer.name }}" required>
+                </div>
+                <div class="ac-cell">
+                  <label for="ContactFormEmail">E-Mail</label>
+                  <input id="ContactFormEmail" name="contact[email]" type="email" class="ac-input" value="{{ customer.email }}" required>
+                </div>
+                <div class="ac-cell ac-span-12">
+                  <label for="ContactFormMessage">Nachricht</label>
+                  <textarea id="ContactFormMessage" name="contact[body]" rows="5" class="ac-input" required>Hallo ARTCLUB Team,
+
+bitte sendet mir meine Verträge/Dokumente zu.
+Kundennummer: {{ customer.id }}
+E-Mail: {{ customer.email }}
+
+Danke!</textarea>
+                </div>
+              </div>
+
+              <button class="ac-btn ac-btn-primary" type="submit">Nachricht senden</button>
+            {% endform %}
+          </div>
+        </section>
+
+        <!-- STATUS -->
+        <section id="sec-status" class="ac-card" data-tab="status">
+          <header class="ac-card-head"><h2>Status</h2></header>
+          <div class="ac-card-body ac-center">
+            <div class="ac-badge {% if status == 'aktiv' %}ok{% elsif status == 'pending' or status == 'wartend' %}warn{% elsif status == 'inaktiv' %}err{% else %}muted{% endif %}">
+              {{ status_raw | capitalize }}
+            </div>
+          </div>
+        </section>
+
+        <!-- Save Bar -->
+        <div class="ac-savebar">
+          <div id="formFeedback" class="ac-feedback" style="display:none"></div>
+          <button id="saveButton" class="ac-btn ac-btn-primary">Alle Änderungen speichern</button>
+        </div>
+      </main>
+
+      <!-- Artist DNA Mindmap Modal -->
+      <style>
+        .dna-modal{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55)}
+        .dna-modal.is-open{display:flex}
+        .dna-sheet{width:min(1100px,95vw);max-height:90vh;overflow:auto;border-radius:18px;background:var(--bg);padding:16px;border:1px solid var(--line);box-shadow:0 30px 80px rgba(0,0,0,.35)}
+        .dna-sheet-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+      </style>
+
+      <div id="dnaModal" class="dna-modal" aria-hidden="true">
+        <div class="dna-sheet" role="dialog" aria-label="Artist DNA Mindmap">
+          <div class="dna-sheet-head">
+            <strong>ARTCLUB® • Artist DNA Mindmap</strong>
+            <button type="button" class="ac-btn" id="dnaModalClose">Schließen</button>
+          </div>
+          {% render 'artist-dna-mindmap' %}
+        </div>
+      </div>
+
+
+      <!-- Bottom Tab Bar -->
+      <nav class="ac-tabbar" aria-label="Untere Navigation">
+        <button class="ac-tab is-active" data-target="sec-overview"><span>Home</span></button>
+        <button class="ac-tab" data-target="sec-stammdaten"><span>Stamm</span></button>
+        <button class="ac-tab" data-target="sec-kunst"><span>Kunst</span></button>
+        <button class="ac-tab" data-target="sec-dna"><span>DNA</span></button>
+        <button class="ac-tab" data-target="sec-vertrag"><span>Vertrag</span></button>
+        <button class="ac-tab" data-target="sec-docs"><span>Docs</span></button>
+      </nav>
+
+    </section>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const dash = document.getElementById('artistDashboard');
+        if (!dash) return;
+
+        /* NAV */
+        const panels = [...dash.querySelectorAll('.ac-card')];
+        const sideBtns = [...dash.querySelectorAll('.ac-nav-item')];
+        const tabBtns = [...dash.querySelectorAll('.ac-tabbar .ac-tab')];
+
+        function show(id) {
+          panels.forEach(p => {
+            const a = p.id === id;
+            p.classList.toggle('is-active', a);
+            p.style.display = a ? 'block' : 'none';
+          });
+          sideBtns.forEach(b => b.classList.toggle('is-active', b.dataset.target === id));
+          tabBtns.forEach(b => b.classList.toggle('is-active', b.dataset.target === id));
+        }
+
+        show('sec-overview'); // Overview ist Standard
+        sideBtns.forEach(b => b.addEventListener('click', () => show(b.dataset.target)));
+        tabBtns.forEach(b => b.addEventListener('click', () => show(b.dataset.target)));
+        dash.querySelector('#requestDocsBtn')?.addEventListener('click', () => show('sec-contact'));
+
+        dash.querySelectorAll('[data-jump]').forEach(btn => {
+          btn.addEventListener('click', () => show(btn.dataset.jump));
+        });
+
+
+        /* Edit toggles — supports comma-separated ids */
+        dash.querySelectorAll('.ac-edit-toggle').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const ids = (btn.dataset.target || '').split(',').map(s => s.trim()).filter(Boolean);
+            const els = ids.map(id => dash.querySelector('#' + id)).filter(Boolean);
+            const allOpen = els.every(el => el.style.display === 'block');
+            els.forEach(el => el.style.display = allOpen ? 'none' : 'block');
+            btn.textContent = allOpen ? 'Bearbeiten' : 'Fertig';
+          });
+        });
+
+        /* Social links editor */
+        const linksEditor = dash.querySelector('#linksEditor');
+        const linksEditList = dash.querySelector('#linksEditList');
+        const linksDisplayList = dash.querySelector('#linksDisplayList');
+        const linksDisplayBox = dash.querySelector('#linksDisplayBox');
+        const linksEmptyNote = dash.querySelector('#linksEmptyNote');
+        const newLinkInput = dash.querySelector('#newLinkInput');
+        const addLinkBtn = dash.querySelector('#addLinkBtn');
+
+        function parseInitialLinks() {
+          const raw = (linksEditor?.dataset.initial || '').trim();
+          if (!raw) return [];
+          return raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        }
+        let linkState = parseInitialLinks();
+
+        function escapeHtml(s) {
+          return s.replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+        }
+        function normalizeUrl(u) {
+          let s = (u || '').trim();
+          if (!s) return '';
+          if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
+          try { new URL(s); return s; } catch { return ''; }
+        }
+        function renderEditList() {
+          linksEditList.innerHTML = '';
+          if (!linkState.length) {
+            linksEditList.innerHTML = '<div class="ac-hint">Noch keine Links. Füge einen Link hinzu.</div>';
+            return;
+          }
+          linkState.forEach((url, idx) => {
+            const row = document.createElement('div');
+            row.className = 'ac-link-item';
+            row.innerHTML = `<div class="ac-link-url">${escapeHtml(url)}</div><button type="button" class="ac-remove" data-i="${idx}">Entfernen</button>`;
+            linksEditList.appendChild(row);
+          });
+          linksEditList.querySelectorAll('.ac-remove').forEach(b => {
+            b.addEventListener('click', () => {
+              const i = Number(b.dataset.i);
+              linkState.splice(i, 1);
+              renderEditList();
+              renderDisplayList();
+            });
+          });
+        }
+        function ensureDisplayList() {
+          if (!linksDisplayList) {
+            const ul = document.createElement('ul');
+            ul.className = 'ac-links';
+            ul.id = 'linksDisplayList';
+            linksDisplayBox?.appendChild(ul);
+            return ul;
+          }
+          return linksDisplayList;
+        }
+        function renderDisplayList() {
+          const ul = ensureDisplayList();
+          ul.innerHTML = '';
+          if (!linkState.length) {
+            if (linksEmptyNote) linksEmptyNote.style.display = 'inline';
+            return;
+          }
+          if (linksEmptyNote) linksEmptyNote.style.display = 'none';
+          linkState.forEach(url => {
+            const li = document.createElement('li');
+            const a = document.createElement('a');
+            a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = url;
+            li.appendChild(a); ul.appendChild(li);
+          });
+        }
+        renderEditList();
+        renderDisplayList();
+
+        addLinkBtn?.addEventListener('click', () => {
+          const n = normalizeUrl(newLinkInput.value);
+          if (!n) { newLinkInput.focus(); return; }
+          if (!linkState.includes(n)) linkState.push(n);
+          newLinkInput.value = '';
+          renderEditList();
+          renderDisplayList();
+        });
+
+        /* Save */
+        const saveBtn = dash.querySelector('#saveButton');
+        const feedback = dash.querySelector('#formFeedback');
+        const SAVE_URL = 'https://v0-shopify-vercel-project.vercel.app/api/update-artist-profile';
+        const val = sel => dash.querySelector(sel)?.value?.trim() || '';
+        function setFeedback(msg, type) {
+          feedback.textContent = msg;
+          feedback.className = 'ac-feedback ' + (type || '');
+          feedback.style.display = msg ? 'block' : 'none';
+        }
+        function linksAsNewlines() { return linkState.join('\n'); }
+
+        async function doSave() {
+          setFeedback('', '');
+          saveBtn.disabled = true;
+          saveBtn.textContent = 'Speichere…';
+          const payload = {
+            customerId: dash.dataset.customerId,
+            'metafields[custom.biography]': val('#biography'),
+            'metafields[custom.social_media_links]': linksAsNewlines(),
+            'metafields[custom.kunstler_fragen_stil]': val('#kuenstler_fragen_stil'),
+            'metafields[custom.kunstler_fragen_kunstart]': val('#kuenstler_fragen_kunstart'),
+            'metafields[custom.kunstler_kunstmedien]': val('#kuenstler_kunstmedien'),
+            'metafields[custom.bankdaten_name]': val('#bankdaten_name'),
+            'metafields[custom.bankdaten_iban]': val('#bankdaten_iban'),
+            'metafields[custom.bankdaten_steuernummer]': val('#bankdaten_steuernummer'),
+          };
+          try {
+            const res = await fetch(SAVE_URL, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Shop-Domain': '{{ shop.permanent_domain }}',
+                'X-Customer-Id': '{{ customer.id }}',
+              },
+              body: JSON.stringify(payload),
+              credentials: 'omit',
+            });
+            const json = await res.json();
+            if (!res.ok || !json.success) throw new Error(json.error || 'HTTP ' + res.status);
+
+            // Update UI
+            const bioEl = dash.querySelector('[data-display-for="biography"]');
+            if (bioEl) {
+              bioEl.innerHTML =
+                (payload['metafields[custom.biography]'] || '').replace(/\n/g, '<br>') ||
+                '<em>Noch keine Biografie hinterlegt</em>';
+            }
+            renderDisplayList();
+            const txtMap = {
+              kunstler_fragen_stil: 'metafields[custom.kunstler_fragen_stil]',
+              kunstler_fragen_kunstart: 'metafields[custom.kunstler_fragen_kunstart]',
+              kunstler_kunstmedien: 'metafields[custom.kunstler_kunstmedien]',
+              bankdaten_name: 'metafields[custom.bankdaten_name]',
+              bankdaten_steuernummer: 'metafields[custom.bankdaten_steuernummer]',
+            };
+            Object.keys(txtMap).forEach(k => {
+              const el = dash.querySelector(`[data-display-for="${k}"]`);
+              const v = payload[txtMap[k]];
+              if (el) el.textContent = v || '—';
+            });
+            if (payload['metafields[custom.bankdaten_iban]'] !== undefined) {
+              const ibanEl = dash.querySelector('[data-display-for="bankdaten_iban"]');
+              if (ibanEl) {
+                const raw = (payload['metafields[custom.bankdaten_iban]'] || '').replaceAll(' ', '').replaceAll('-', '');
+                ibanEl.textContent = raw ? `${raw.slice(0, 4)}••••••••••••••${raw.slice(-4)}` : '—';
+              }
+            }
+            setFeedback('✓ Änderungen erfolgreich gespeichert', 'success');
+          } catch (err) {
+            setFeedback('Fehler beim Speichern: ' + err.message, 'error');
+            console.error(err);
+          } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Alle Änderungen speichern';
+          }
+        }
+        dash.querySelector('#saveButton')?.addEventListener('click', doSave);
+      });
+    </script>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const dnaPanelBadge = document.getElementById('dnaProgressBadge');
+        const dnaNavBadge = document.getElementById('dnaSideBadge');
+
+        function syncDnaBadge() {
+          if (!dnaPanelBadge || !dnaNavBadge) return;
+          dnaNavBadge.textContent = dnaPanelBadge.textContent;
+          dnaNavBadge.className = dnaPanelBadge.className;
+        }
+
+        // einmal beim Laden
+        syncDnaBadge();
+
+        // wenn der Prozentwert im DNA-Script aktualisiert wird:
+        const mo = new MutationObserver(syncDnaBadge);
+        if (dnaPanelBadge) mo.observe(dnaPanelBadge, { childList: true, characterData: true, subtree: true });
+
+        // zusätzlich beim Tabwechsel updaten
+        document.querySelectorAll('.ac-nav-item, .ac-tabbar .ac-tab')
+          .forEach(b => b.addEventListener('click', syncDnaBadge));
+      });
+    </script>
+
+    <script>
+      (function(){
+        const btn   = document.getElementById('openDnaMapBtn');
+        const modal = document.getElementById('dnaModal');
+        const closeBtn = document.getElementById('dnaModalClose');
+
+        // Fallback: wenn etwas fehlt, still aussteigen
+        if (!btn || !modal) return;
+
+        // Zugriff auf die Progress-Funktionen aus dem DNA-Script
+        // computeProgress() und updateProgressUI() sind dort definiert – falls nicht, fallback auf Badge.
+        function currentPct(){
+          try {
+            if (typeof computeProgress === 'function') return computeProgress();
+            const badge = document.getElementById('dnaProgressBadge');
+            const n = parseInt((badge?.textContent || '0').replace('%',''), 10);
+            return isNaN(n) ? 0 : n;
+          } catch(e){ return 0; }
+        }
+
+        function openModal(){
+          const pct = currentPct();
+          if (pct < 50) {
+            btn.disabled = true;
+            btn.classList.remove('ac-btn-primary');
+            btn.textContent = 'Mindmap ab 50% Profil (erst ausfüllen)';
+            setTimeout(() => { btn.disabled = false; }, 1200);
+            return;
+          }
+          modal.classList.add('is-open');
+          document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal(){
+          modal.classList.remove('is-open');
+          document.body.style.overflow = '';
+        }
+
+        btn.addEventListener('click', openModal);
+        closeBtn?.addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+      })();
+    </script>
+
+
+  {% else %}
+    <p>Kein Künstlerzugang für dieses Konto.</p>
+  {% endif %}
+{% else %}
+  <p>Bitte einloggen, um das Künstler-Dashboard zu sehen.</p>
+{% endif %}
+
+{% schema %}
+{
+  "name": "Artist Dashboard",
+  "tag": "section",
+  "class": "section-artist-dashboard",
+  "settings": [
+    { "type": "text", "id": "title", "label": "Titel", "default": "Künstler Dashboard" },
+    { "type": "text", "id": "subtitle", "label": "Untertitel", "default": "Verwalten & Analysieren" }
+  ],
+  "templates": ["customers/account"],
+  "presets": [{ "name": "Artist Dashboard (App Mobile)" }]
+}
+{% endschema %}

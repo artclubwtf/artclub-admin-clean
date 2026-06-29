@@ -1,0 +1,443 @@
+{% comment %}
+========================================================================
+ARTCLUB — Fullscreen Welcome Popup (Frames wie Mock: 27→32)
+Version: v2.0 (2025-08-22)
+- Fullscreen Overlay
+- Timeline: Artwork+Logo → Artwork+Claim → Black Typo 1 → Typo 2 → Typo 3 → CTA
+- Only guests (unless customer), only returning visitors within 50h
+- A11y: ESC, Focus trap, ARIA
+========================================================================
+{% endcomment %}
+
+{% unless customer %}
+<section id="acfs-{{ section.id }}" class="acfs" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="acfs-title-{{ section.id }}">
+  <div class="acfs__backdrop" data-acfs-close></div>
+
+  <!-- Fullscreen stage -->
+  <div class="acfs__stage" role="document">
+    <button class="acfs__close" type="button" aria-label="{{ 'general.accessibility.close' | t | default: 'Close' }}" data-acfs-close>×</button>
+
+    <!-- SCENES (A0..A4 → B) -->
+    <div class="acfs__scene acfs__scene--A0 is-active" data-scene="A0" aria-labelledby="acfs-title-{{ section.id }}">
+      <div class="acfs__bg acfs__bg--art" style="--bg:url('{{ section.settings.bg_image | image_url: width: 2400 }}');"></div>
+      {% if section.settings.show_pulse %}
+        <div class="acfs__pulse"></div>
+      {% endif %}
+      <div class="acfs__center">
+        <h2 id="acfs-title-{{ section.id }}" class="acfs__logo">{{ section.settings.logo_text }}</h2>
+      </div>
+    </div>
+
+    <div class="acfs__scene acfs__scene--A1" data-scene="A1">
+      <div class="acfs__bg acfs__bg--art" style="--bg:url('{{ section.settings.bg_image | image_url: width: 2400 }}');"></div>
+      {% if section.settings.show_pulse %}
+        <div class="acfs__pulse"></div>
+      {% endif %}
+      <div class="acfs__center">
+        <p class="acfs__claim">{{ section.settings.claim }}</p>
+      </div>
+    </div>
+
+    <div class="acfs__scene acfs__scene--A2" data-scene="A2">
+      <div class="acfs__bg acfs__bg--solid"></div>
+      <div class="acfs__center">
+        <p class="acfs__line">{{ section.settings.ln1 }}</p>
+      </div>
+    </div>
+
+    <div class="acfs__scene acfs__scene--A3" data-scene="A3">
+      <div class="acfs__bg acfs__bg--solid"></div>
+      <div class="acfs__center">
+        <p class="acfs__line">{{ section.settings.ln2 }}</p>
+      </div>
+    </div>
+
+    <div class="acfs__scene acfs__scene--A4" data-scene="A4">
+      <div class="acfs__bg acfs__bg--solid"></div>
+      <div class="acfs__center">
+        <p class="acfs__line">{{ section.settings.ln3 }}</p>
+      </div>
+    </div>
+
+    <!-- CTA (B) -->
+    <div class="acfs__scene acfs__scene--B" data-scene="B" aria-labelledby="acfs-cta-{{ section.id }}">
+      <div class="acfs__bg acfs__bg--solid"></div>
+      <div class="acfs__center acfs__center--cta acfs__cta-flat">
+        {% assign _cta_open = '<span class="acfs__brand">' %}
+        {% assign _cta_txt = section.settings.cta_headline | replace: '[brand]', _cta_open %}
+        <h3 id="acfs-cta-{{ section.id }}" class="acfs__headline acfs__headline--flat">{{ _cta_txt | append: '</span>' }}</h3>
+
+        <p class="acfs__sub acfs__sub--flat">{{ section.settings.cta_sub }}</p>
+
+        <ul class="acfs__list acfs__list--flat" role="list">
+          {% if section.settings.cta_li1 != blank %}<li>{{ section.settings.cta_li1 }}</li>{% endif %}
+          {% if section.settings.cta_li2 != blank %}<li>{{ section.settings.cta_li2 }}</li>{% endif %}
+          {% if section.settings.cta_li3 != blank %}<li>{{ section.settings.cta_li3 }}</li>{% endif %}
+        </ul>
+
+        <a class="acfs__btn acfs__btn--primary acfs__btn--flat" href="{{ section.settings.register_url }}">
+          <span class="acfs__btn-label">{{ section.settings.cta_primary }}</span>
+          <span class="acfs__btn-icon" aria-hidden="true">→</span>
+        </a>
+
+        <button class="acfs__guest-link" type="button" data-acfs-close>{{ section.settings.cta_secondary }}</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  /* ===== Vars ===== */
+  #acfs-{{ section.id }}{
+    --z: 99999;
+    --ink: {{ section.settings.text_color }};
+    --muted: {{ section.settings.muted_color }};
+    --bgDialog: {{ section.settings.bg_color }};
+    --surface: {{ section.settings.surface_color }};
+    --brand: {{ section.settings.accent_color }};
+    --border: {{ section.settings.border_color }};
+    --r: {{ section.settings.radius | default: 20 }}px;
+  }
+
+  /* ===== Base fullscreen overlay ===== */
+  #acfs-{{ section.id }}.acfs[aria-hidden="true"]{ display:none; }
+  #acfs-{{ section.id }}.acfs{
+    position: fixed; inset: 0; z-index: var(--z);
+    font-family: Inter, Roboto, Sans-Serif;
+    color: var(--ink);
+  }
+  #acfs-{{ section.id }} .acfs__backdrop{
+    position:absolute; inset:0; background: rgba(0,0,0,.65); backdrop-filter: blur(6px);
+    opacity:0; animation: acfs-{{ section.id }}-fade .35s ease forwards;
+  }
+
+  /* Stage = Full viewport */
+  #acfs-{{ section.id }} .acfs__stage{
+    position:relative; inset:0; width:100vw; height:100vh; overflow:hidden;
+    background: var(--bgDialog);
+  }
+  #acfs-{{ section.id }} .acfs__close{
+    position: absolute; top: 14px; right: 16px; z-index: 50;
+    width: 44px; height: 44px; border-radius: 999px;
+    border: 1px solid var(--border); background: #000; color: #fff; font-size: 22px!important;
+    display:grid; place-items:center; cursor:pointer;
+  }
+
+  /* Scenes */
+  #acfs-{{ section.id }} .acfs__scene{
+    position:absolute; inset:0; opacity:0; transform: translateX(10px);
+    transition: opacity .6s ease, transform .6s ease;
+    display:grid; place-items:center;
+  }
+  #acfs-{{ section.id }} .acfs__scene.is-active{ opacity:1; transform: translateX(0); }
+
+  /* Backgrounds */
+  #acfs-{{ section.id }} .acfs__bg{ position:absolute; inset:0; }
+  #acfs-{{ section.id }} .acfs__bg--art{
+    background: center/cover no-repeat; background-image: var(--bg);
+    animation: acfs-{{ section.id }}-kenburns 10s ease-in-out both;
+    filter: saturate(110%) contrast(104%);
+  }
+  #acfs-{{ section.id }} .acfs__bg--art::after{
+    content:""; position:absolute; inset:0;
+    background: radial-gradient(70% 60% at 30% 30%, rgba(0,0,0,.1) 0%, rgba(0,0,0,.75) 60%, rgba(0,0,0,.9) 100%);
+  }
+  #acfs-{{ section.id }} .acfs__bg--solid{ background: #0b0c0f; }
+
+  /* Accent pulse */
+  #acfs-{{ section.id }} .acfs__pulse{
+    position:absolute; inset:-15%;
+    background:
+      radial-gradient(40% 40% at 20% 20%, var(--brand), transparent 60%),
+      radial-gradient(30% 30% at 80% 30%, color-mix(in oklab, var(--brand), white 12%), transparent 60%);
+    filter: blur(50px) saturate(130%); opacity:.18;
+    animation: acfs-{{ section.id }}-pulse 8s ease-in-out infinite alternate;
+  }
+
+  /* Centered content */
+  #acfs-{{ section.id }} .acfs__center{ position:relative; z-index:2; padding: clamp(12px,4vw,48px); text-align:left; width:min(1000px, 86vw); margin-inline:auto; }
+  #acfs-{{ section.id }} .acfs__center--cta{
+    background: color-mix(in oklab, var(--surface) 82%, #000 18%);
+    border: 1px solid var(--border); border-radius: var(--r);
+    box-shadow: 0 18px 60px rgba(0,0,0,.35);
+  }
+
+  /* Logo (Frame 27) */
+  #acfs-{{ section.id }} .acfs__logo{
+    font-weight: 900; font-size: clamp(42px, 10vw, 120px)!important; line-height: .92; margin: 0;
+    letter-spacing: -0.03em; color:#fff;
+  }
+
+  /* Claim (Frame 28) */
+  #acfs-{{ section.id }} .acfs__claim{
+    font-weight: 600; color:#fff; margin:0;
+    font-size: clamp(28px, 6vw, 72px)!important; line-height: .98; text-wrap: balance;
+  }
+
+  /* Lines (Frame 29–31) */
+  #acfs-{{ section.id }} .acfs__line{
+    font-weight: 900; color:#fff; margin:0;
+    font-size: clamp(26px, 5vw, 56px)!important; line-height: 1.04; text-wrap: balance;
+    transform: translateY(8px); opacity: 0; animation: acfs-{{ section.id }}-line .6s ease forwards .25s;
+  }
+
+  /* CTA */
+  #acfs-{{ section.id }} .acfs__headline{ color:#fff; font-weight: 900; margin: 0 0 8px;
+    font-size: clamp(28px, 5.5vw, 56px)!important; line-height: 1.04; }
+  #acfs-{{ section.id }} .acfs__brand{ background: linear-gradient(90deg, var(--brand), #fff);
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  #acfs-{{ section.id }} .acfs__sub{ color: var(--muted); margin: 6px 0 12px; font-size: clamp(14px,1.6vw,16px)!important; }
+  #acfs-{{ section.id }} .acfs__list{ color:#dfe3ea; margin: 0 0 16px 18px; font-size: clamp(14px,1.6vw,16px)!important; }
+  #acfs-{{ section.id }} .acfs__list li{ margin: 6px 0; }
+  #acfs-{{ section.id }} .acfs__actions{ display:flex; gap:10px; flex-wrap: wrap; }
+  #acfs-{{ section.id }} .acfs__btn{
+    appearance:none; border:1px solid var(--border); padding: 12px 16px; border-radius: 12px;
+    font-weight: 600; letter-spacing:.01em; cursor:pointer;
+    color:#fff; background: transparent;
+  }
+  #acfs-{{ section.id }} .acfs__btn--primary{ background:#fff; color:#0b0c0f; border-color:#fff; }
+  #acfs-{{ section.id }} .acfs__btn--primary:hover{ filter: brightness(.96); }
+  #acfs-{{ section.id }} .acfs__btn--ghost:hover{ background: rgba(255,255,255,.08); }
+
+  /* Animations */
+  @keyframes acfs-{{ section.id }}-fade { to { opacity:1; } }
+  @keyframes acfs-{{ section.id }}-kenburns { from { transform: scale(1.05); } to { transform: scale(1.12); } }
+  @keyframes acfs-{{ section.id }}-pulse { from { transform: scale(1); opacity:.16; } to { transform: scale(1.08); opacity:.22; } }
+  @keyframes acfs-{{ section.id }}-line { to { opacity:1; transform: translateY(0); } }
+
+  @media (max-width: 680px){
+    #acfs-{{ section.id }} .acfs__center--cta{ padding: 16px; }
+  }
+
+
+  /* ===== CTA (Flat Layout wie Screenshot) ===== */
+#acfs-{{ section.id }} .acfs__center--cta.acfs__cta-flat{
+  /* kein Card-Block, sondern „flat“ im Raum */
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  width: min(560px, 88vw);
+  padding: 0;
+}
+
+/* Headline groß, enges Tracking, linksbündig */
+#acfs-{{ section.id }} .acfs__headline--flat{
+  color:#fff;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  margin: 0 0 18px;
+  font-size: clamp(28px, 6vw, 48px);
+  line-height: 1.02;
+}
+
+/* Subline dezent */
+#acfs-{{ section.id }} .acfs__sub--flat{
+  color: #d7dbe3;
+  margin: 0 0 12px;
+  font-size: clamp(14px, 1.8vw, 18px);
+}
+
+/* Bullets wie im Screenshot (disc, luft) */
+#acfs-{{ section.id }} .acfs__list--flat{
+  margin: 0 0 22px 20px;
+  padding: 0;
+  list-style: disc;
+  color: #e9ecf2;
+  font-size: clamp(14px, 1.8vw, 18px);
+}
+#acfs-{{ section.id }} .acfs__list--flat li{ margin: 8px 0; }
+
+/* Großer weißer Button mit Pfeil rechts */
+#acfs-{{ section.id }} .acfs__btn--flat{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: min(520px, 88vw);
+  height: 64px;
+  border-radius: 6px;
+  padding: 0 18px 0 16px;
+  background: #fff;
+  color: #0b0c0f;
+  border: 1px solid #fff;
+  text-decoration: none;
+  font-weight: 600;
+  letter-spacing: 0;
+  margin: 4px 0 14px;
+}
+#acfs-{{ section.id }} .acfs__btn--flat:hover{ filter: brightness(.96); }
+#acfs-{{ section.id }} .acfs__btn-label{ font-size: 16px; }
+#acfs-{{ section.id }} .acfs__btn-icon{ font-size: 22px; line-height: 1; }
+
+/* Unterstrichener Guest-Link */
+#acfs-{{ section.id }} .acfs__guest-link{
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: #d7dbe3;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-size: 16px;
+  cursor: pointer;
+}
+#acfs-{{ section.id }} .acfs__guest-link:hover{ opacity: .9; }
+
+/* Mobile Feinschliff */
+@media (max-width: 680px){
+  #acfs-{{ section.id }} .acfs__btn--flat{ height: 58px; }
+}
+</style>
+
+<script>
+(function(){
+  const el = document.getElementById('acfs-{{ section.id }}');
+  if(!el) return;
+
+  /* ===== Settings (Durations) ===== */
+  const T0 = {{ section.settings.t_logo   | default: 1200 | json }};  // Artwork+Logo
+  const T1 = {{ section.settings.t_claim  | default: 1600 | json }};  // Artwork+Claim
+  const T2 = {{ section.settings.t_line1  | default: 1600 | json }};  // Black line 1
+  const T3 = {{ section.settings.t_line2  | default: 1600 | json }};  // Black line 2
+  const T4 = {{ section.settings.t_line3  | default: 1600 | json }};  // Black line 3
+  const OPEN_DELAY = {{ section.settings.open_delay | default: 800 | json }};
+
+  /* ===== Keys & Windows ===== */
+  const LAST_SEEN_KEY = 'ac_last_seen_at';  // letzter Seitenbesuch
+  const POPUP_SEEN_KEY = 'acfs_seen_at';    // letztes Öffnen des Popups
+
+  // Fixes: Mindestfenster = 50h; optional kannst du im Schema noch zusätzliche Stunden setzen
+  const EXTRA_SUPPRESS_H = {{ section.settings.suppress_hours | default: 0 | json }};
+  const WINDOW_MS = Math.max(50 * 3600 * 1000, EXTRA_SUPPRESS_H * 3600 * 1000);
+
+  /* ===== Route Guard ===== */
+  // Nicht auf Account-Seiten öffnen
+  if (location.pathname.startsWith('/account')) return;
+
+  /* ===== Besuch / Popup-Entscheidung ===== */
+  const now = Date.now();
+  const lastVisit = +localStorage.getItem(LAST_SEEN_KEY) || 0;
+  const popupSeenAt = +localStorage.getItem(POPUP_SEEN_KEY) || 0;
+
+  // Diesen Besuch speichern (für das nächste Mal)
+  localStorage.setItem(LAST_SEEN_KEY, String(now));
+
+  let shouldOpen = false;
+
+  if (lastVisit === 0) {
+    // Erste Session: noch nie auf der Seite → immer zeigen
+    shouldOpen = true;
+  } else {
+    // Wiederkehrer: zeigen, wenn Popup > WINDOW_MS (mind. 50h) nicht gesehen wurde
+    if (popupSeenAt === 0 || (now - popupSeenAt) >= WINDOW_MS) {
+      shouldOpen = true;
+    }
+  }
+
+  if (!shouldOpen) return;
+
+  /* ===== Timeline / Öffnen ===== */
+  const goto = (name)=>{
+    el.querySelectorAll('.acfs__scene').forEach(n=>n.classList.remove('is-active'));
+    const next = el.querySelector('[data-scene="'+name+'"]');
+    if(next) next.classList.add('is-active');
+  };
+
+  setTimeout(()=>{
+    el.setAttribute('aria-hidden','false');
+    trapFocus(el);
+
+    // Popup als „gesehen“ markieren (Start der 50h-Sperre)
+    localStorage.setItem(POPUP_SEEN_KEY, String(Date.now()));
+
+    // Sequenz
+    let t = 0;
+    goto('A0'); t += T0;
+    setTimeout(()=>{ goto('A1'); }, t); t += T1;
+    setTimeout(()=>{ goto('A2'); }, t); t += T2;
+    setTimeout(()=>{ goto('A3'); }, t); t += T3;
+    setTimeout(()=>{ goto('A4'); }, t); t += T4;
+    setTimeout(()=>{ goto('B');  }, t);
+  }, OPEN_DELAY);
+
+  /* ===== Close handlers ===== */
+  el.addEventListener('click', (e)=>{
+    if (e.target.matches('[data-acfs-close]')) close();
+  });
+  document.addEventListener('keydown', (e)=>{
+    if (e.key === 'Escape' && el.getAttribute('aria-hidden') === 'false') close();
+  });
+  function close(){
+    el.setAttribute('aria-hidden','true');
+    releaseFocus();
+  }
+
+  /* ===== Focus trap ===== */
+  let prevFocus = null;
+  function trapFocus(container){
+    prevFocus = document.activeElement;
+    const f = container.querySelectorAll('a[href], button, textarea, input, select, [tabindex]:not([tabindex="-1"])');
+    const nodes = Array.from(f).filter(x => !x.hasAttribute('disabled'));
+    if(nodes[0]) nodes[0].focus();
+    function loop(e){
+      if(e.key !== 'Tab' || nodes.length===0) return;
+      const first = nodes[0], last = nodes[nodes.length-1];
+      if(e.shiftKey && document.activeElement===first){ last.focus(); e.preventDefault(); }
+      else if(!e.shiftKey && document.activeElement===last){ first.focus(); e.preventDefault(); }
+    }
+    container.addEventListener('keydown', loop);
+    container._trapLoop = loop;
+  }
+  function releaseFocus(){
+    if(prevFocus && prevFocus.focus) prevFocus.focus();
+    el.removeEventListener('keydown', el._trapLoop || (()=>{}));
+  }
+})();
+</script>
+{% endunless %}
+
+{% schema %}
+{
+  "name": "ARTCLUB — Welcome Popup",
+  "settings": [
+    { "type": "header", "content": "Artwork / Design" },
+    { "type": "image_picker", "id": "bg_image", "label": "Artwork Hintergrund (Frames 27–28)" },
+    { "type": "checkbox", "id": "show_pulse", "label": "Accent Gradient Pulse", "default": true },
+    { "type": "color", "id": "bg_color", "label": "Dialog/Stage Background", "default": "#0b0c0f" },
+    { "type": "color", "id": "surface_color", "label": "CTA Surface", "default": "#121418" },
+    { "type": "color", "id": "text_color", "label": "Textfarbe", "default": "#ffffff" },
+    { "type": "color", "id": "muted_color", "label": "Muted Text", "default": "#9aa3af" },
+    { "type": "color", "id": "accent_color", "label": "Akzent", "default": "#0a84ff" },
+    { "type": "color", "id": "border_color", "label": "Border", "default": "#1a1a1a" },
+
+    { "type": "header", "content": "Layout / Radius" },
+    { "type": "number", "id": "radius", "label": "Radius (px)", "default": 20 },
+
+    { "type": "header", "content": "Texte (Frames 27–31)" },
+    { "type": "text", "id": "logo_text", "label": "Logo-Text", "default": "artclub®" },
+    { "type": "textarea", "id": "claim", "label": "Claim (Frame 28)", "default": "Kunst. Community. Fair." },
+    { "type": "textarea", "id": "ln1", "label": "Frame 29", "default": "ARTCLUB is a platform for young art." },
+    { "type": "textarea", "id": "ln2", "label": "Frame 30", "default": "We connect artists, collectors, and culture enthusiasts — digitally and at events." },
+    { "type": "textarea", "id": "ln3", "label": "Frame 31", "default": "Every edition, every purchase directly supports the artists and keeps art accessible to everyone." },
+
+    { "type": "header", "content": "CTA (Frame 32)" },
+    { "type": "textarea", "id": "cta_headline", "label": "CTA Headline (nutzt [brand])", "default": "Become part of [brand]artclub®" },
+    { "type": "textarea", "id": "cta_sub", "label": "CTA Subline", "default": "Create your account to be closer to what’s happening:" },
+    { "type": "text", "id": "cta_li1", "label": "Bullet 1", "default": "See new works & events before everyone else" },
+    { "type": "text", "id": "cta_li2", "label": "Bullet 2", "default": "Save favorites & build your own collections" },
+    { "type": "text", "id": "cta_li3", "label": "Bullet 3", "default": "Feel the pulse of our community — lightly, by just being there" },
+    { "type": "text", "id": "cta_primary", "label": "Primary Button", "default": "Create a free account" },
+    { "type": "text", "id": "cta_secondary", "label": "Secondary Button", "default": "Continue as a guest" },
+    { "type": "text", "id": "register_url", "label": "Register URL", "default": "/account/register" },
+
+    { "type": "header", "content": "Timing (ms / Std.)" },
+    { "type": "number", "id": "open_delay", "label": "Open-Delay (ms)", "default": 800 },
+    { "type": "number", "id": "t_logo", "label": "Dauer Frame 27 (ms)", "default": 1200 },
+    { "type": "number", "id": "t_claim", "label": "Dauer Frame 28 (ms)", "default": 1600 },
+    { "type": "number", "id": "t_line1", "label": "Dauer Frame 29 (ms)", "default": 1600 },
+    { "type": "number", "id": "t_line2", "label": "Dauer Frame 30 (ms)", "default": 1600 },
+    { "type": "number", "id": "t_line3", "label": "Dauer Frame 31 (ms)", "default": 1600 },
+    { "type": "number", "id": "suppress_hours", "label": "Nach Anzeige unterdrücken (Std., 0 = aus)", "default": 0 }
+  ],
+  "presets": [{ "name": "ARTCLUB — Welcome Popup" }]
+}
+{% endschema %}

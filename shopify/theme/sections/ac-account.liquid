@@ -1,0 +1,47 @@
+<section class="ac-account" data-ac-account>
+  <style>
+    .ac-account{max-width:980px;margin:40px auto;padding:0 16px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;}
+    .ac-account__h1{font-size:42px;letter-spacing:-0.02em;margin:0 0 8px;}
+    .ac-account__sub{color:rgba(0,0,0,.55);margin:0 0 18px;}
+    .ac-card{border:1px solid rgba(0,0,0,.08);border-radius:18px;padding:16px;background:#fff;box-shadow:0 8px 30px rgba(0,0,0,.05);}
+    .ac-tabs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+    .ac-tab{border-radius:12px;padding:10px 12px;border:1px solid rgba(0,0,0,.10);background:#fff;cursor:pointer;font-weight:600;}
+    .ac-tab.is-active{background:#111;color:#fff;border-color:#111;}
+    .ac-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .ac-grid.is-single{grid-template-columns:1fr;}
+    .ac-inp{width:100%;border:1px solid rgba(0,0,0,.10);border-radius:12px;padding:11px 12px;font-size:14px;}
+    .ac-btn{width:100%;margin-top:10px;border-radius:12px;padding:12px 14px;background:#111;color:#fff;border:1px solid #111;font-weight:700;cursor:pointer;}
+    .ac-btn:disabled{opacity:.6;cursor:not-allowed;}
+    .ac-msg{margin-top:10px;color:rgba(0,0,0,.6);font-size:13px;min-height:18px;}
+  </style>
+
+  <h1 class="ac-account__h1">Account</h1>
+  <p class="ac-account__sub">Login & preferences powered by ARTCLUB.</p>
+
+  <div class="ac-card">
+    <div class="ac-tabs">
+      <button class="ac-tab is-active" type="button" data-mode="login">Login</button>
+      <button class="ac-tab" type="button" data-mode="register">Register</button>
+    </div>
+
+    <form data-form>
+      <div class="ac-grid" data-register-fields style="display:none;">
+        <input class="ac-inp" name="name" placeholder="Name" autocomplete="name" />
+        <input class="ac-inp" name="email" placeholder="Email" autocomplete="email" required />
+      </div>
+
+      <div class="ac-grid is-single" data-login-fields>
+        <input class="ac-inp" name="email" placeholder="Email" autocomplete="email" required />
+      </div>
+
+      <div class="ac-grid is-single" style="margin-top:10px;">
+        <input class="ac-inp" name="password" type="password" placeholder="Password" autocomplete="current-password" required />
+      </div>
+
+      <button class="ac-btn" type="submit" data-submit>Login</button>
+      <div class="ac-msg" data-msg></div>
+    </form>
+  </div>
+
+  <script src="{{ 'ac-account.js' | asset_url }}" defer></script>
+</section>

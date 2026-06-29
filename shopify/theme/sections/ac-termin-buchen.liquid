@@ -1,0 +1,334 @@
+{% comment %}
+  Section: Artclub Contact & Benefits
+  Layout wie Mockup:
+  - Links: Headline + 4 Benefit-Cards (Blocks)
+  - Rechts: Kontaktkarte (Bild, Name, Rolle, E-Mail, Button)
+{% endcomment %}
+
+<section id="ac-contact-{{ section.id }}" class="ac-contact-split">
+  <div class="ac-contact-split__inner page-width">
+
+    <!-- Linke Spalte: Headline + Benefit-Grid -->
+    <div class="ac-contact-split__left">
+      {% if section.settings.headline != blank %}
+        <h2 class="ac-benefits__headline">
+          {{ section.settings.headline }}
+        </h2>
+      {% endif %}
+
+      <div class="ac-grid-feature-parent">
+        {%- for block in section.blocks -%}
+          <div class="ac-grid-features-block">
+            <div class="ac-grid-feature-icon"></div>
+            <div class="ac-grid-feature-text">
+              <h3>{{ block.settings.headline }}</h3>
+              <p>{{ block.settings.subline }}</p>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Rechte Spalte: Kontaktkarte -->
+    <div class="ac-contact-split__right">
+      <div class="ac-contact-card">
+        <p class="ac-contact-card__label">Kontakt</p>
+
+        <div class="ac-contact-card__image-wrap">
+          {% if section.settings.contact_image != blank %}
+            {{
+              section.settings.contact_image
+              | image_url: width: 600
+              | image_tag: loading: 'lazy', class: 'ac-contact-card__image', alt: section.settings.name
+            }}
+          {% else %}
+            <div class="ac-contact-card__image-placeholder"></div>
+          {% endif %}
+        </div>
+
+        {% if section.settings.name != blank %}
+          <p class="ac-contact-card__name">
+            {{ section.settings.name }}
+          </p>
+        {% endif %}
+
+        {% if section.settings.role != blank %}
+          <p class="ac-contact-card__role">
+            {{ section.settings.role }}
+          </p>
+        {% endif %}
+
+        {% if section.settings.email != blank %}
+          <p class="ac-contact-card__email">
+            {{ section.settings.email }}
+          </p>
+        {% endif %}
+
+        {% if section.settings.button_label != blank and section.settings.button_link != blank %}
+          <a href="{{ section.settings.button_link }}" class="button ac-contact-card__button">
+            {{ section.settings.button_label }}
+          </a>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<style>
+  #ac-contact-{{ section.id }} {
+    margin: 72px 0 96px;
+  }
+
+  #ac-contact-{{ section.id }} .ac-contact-split__inner {
+    display: grid;
+    grid-template-columns: minmax(0, 2.1fr) minmax(0, 1.4fr);
+    gap: 48px;
+    align-items: center;
+    padding-block: 72px;
+  }
+
+  @media screen and (max-width: 989px) {
+    #ac-contact-{{ section.id }} .ac-contact-split__inner {
+      grid-template-columns: 1fr;
+      gap: 40px;
+      padding-block: 48px;
+    }
+
+    #ac-contact-{{ section.id }} {
+      margin: 48px 0 72px;
+    }
+  }
+
+  /* Linke Seite – Benefits */
+
+  #ac-contact-{{ section.id }} .ac-benefits__headline {
+    font-size: clamp(2.4rem, 3vw, 3rem);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    margin: 0 0 32px;
+  }
+
+  #ac-contact-{{ section.id }} .ac-grid-feature-parent {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  @media screen and (max-width: 749px) {
+    #ac-contact-{{ section.id }} .ac-grid-feature-parent {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  #ac-contact-{{ section.id }} .ac-grid-features-block {
+    background: #ffffff;
+    border-radius: 24px;
+    padding: 24px 24px 20px;
+    box-shadow: 0 12px 40px rgba(15, 23, 42, 0.04);
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  #ac-contact-{{ section.id }} .ac-grid-feature-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 14px;
+    border: 1.5px solid #d3a665; /* Gold-Akzent */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  #ac-contact-{{ section.id }} .ac-grid-feature-icon::before {
+    content: "";
+    width: 16px;
+    height: 16px;
+    border-radius: 6px;
+    border: 1.5px solid #d3a665;
+  }
+
+  #ac-contact-{{ section.id }} .ac-grid-feature-text h3 {
+    margin: 0 0 6px;
+    font-size: 1.15rem;
+    line-height: 1.2;
+  }
+
+  #ac-contact-{{ section.id }} .ac-grid-feature-text p {
+    margin: 0;
+    font-size: 0.95rem;
+    opacity: 0.8;
+  }
+
+  /* Rechte Seite – Kontaktkarte */
+
+  #ac-contact-{{ section.id }} .ac-contact-split__right {
+    display: flex;
+    justify-content: center;
+  }
+
+  #ac-contact-{{ section.id }} .ac-contact-card {
+    background: #ffffff;
+    border-radius: 32px;
+    padding: 32px 32px 28px;
+    text-align: center;
+    box-shadow: 0 12px 40px rgba(15, 23, 42, 0.06);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    max-width: 360px;
+    width: 100%;
+  }
+
+  #ac-contact-{{ section.id }} .ac-contact-card__label {
+    font-size: 0.9rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    opacity: 0.7;
+    margin: 0 0 4px;
+  }
+
+  #ac-contact-{{ section.id }} .ac-contact-card__image-wrap {
+    width: 160px;
+    height: 160px;
+    border-radius: 999px;
+    overflow: hidden;
+    margin: 4px 0 10px;
+    background: #f5f5f5;
+  }
+
+  #ac-contact-{{ section.id }} .ac-contact-card__image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  #ac-contact-{{ section.id }} .ac-contact-card__image-placeholder {
+    width: 100%;
+    height: 100%;
+    background: #ddd;
+  }
+
+  #ac-contact-{{ section.id }} .ac-contact-card__name {
+    font-size: 1.45rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  #ac-contact-{{ section.id }} .ac-contact-card__role {
+    margin: 2px 0 0;
+    font-size: 0.95rem;
+    opacity: 0.75;
+  }
+
+  #ac-contact-{{ section.id }} .ac-contact-card__email {
+    margin: 6px 0 10px;
+    font-size: 0.95rem;
+    opacity: 0.75;
+  }
+
+  #ac-contact-{{ section.id }} .ac-contact-card__button {
+    margin-top: 8px;
+    border-radius: 999px;
+    padding-inline: 28px;
+    background-color: #d3a665;
+    border-color: #d3a665;
+    white-space: nowrap;
+  }
+
+  #ac-contact-{{ section.id }} .ac-contact-card__button:hover {
+    filter: brightness(0.95);
+  }
+</style>
+
+{% schema %}
+{
+  "name": "Artclub Kontakt Split",
+  "tag": "section",
+  "class": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "headline",
+      "label": "Überschrift (Benefits links)",
+      "default": "Vorteile für Ihr Unternehmen"
+    },
+    {
+      "type": "image_picker",
+      "id": "contact_image",
+      "label": "Kontaktbild"
+    },
+    {
+      "type": "text",
+      "id": "name",
+      "label": "Name",
+      "default": "Lina Tscheu"
+    },
+    {
+      "type": "text",
+      "id": "role",
+      "label": "Rolle",
+      "default": "Head of Partnerships & Cooperations"
+    },
+    {
+      "type": "text",
+      "id": "email",
+      "label": "E-Mail",
+      "default": "corporate@artclub.wtf"
+    },
+    {
+      "type": "text",
+      "id": "button_label",
+      "label": "Button-Text",
+      "default": "Kostenlose Erstberatung"
+    },
+    {
+      "type": "url",
+      "id": "button_link",
+      "label": "Button-Link"
+    },
+    {
+      "type": "image_picker",
+      "id": "right_image",
+      "label": "Rechtes Hintergrundbild (nicht genutzt)"
+    },
+    {
+      "type": "text",
+      "id": "right_logo_text",
+      "label": "Logo-Text (nicht genutzt)",
+      "default": "artclub"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "Feature-Block",
+      "name": "Feature Block",
+      "limit": 4,
+      "settings": [
+        {
+          "type": "text",
+          "id": "headline",
+          "label": "Überschrift",
+          "default": "Monatlich statt einmalig investieren"
+        },
+        {
+          "type": "text",
+          "id": "subline",
+          "label": "Text",
+          "default": "Schon ab 69 € pro Monat – planbar & ohne Kapitalbindung."
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Artclub Kontakt Split"
+    }
+  ]
+}
+{% endschema %}

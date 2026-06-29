@@ -1,0 +1,591 @@
+{% comment %}
+  AC Artwork Feed – Story (1 pro Reihe) + Mosaic (Pinterest)
+  Mosaic click => switch to Story + jump to clicked item
+  Story click => normal to product page
+  Includes sticky Back-to-Mosaic + transition overlay + "More" peek
+  Infinite scroll: nur neue Produkte werden angehängt (Duplikat-Check per handle)
+{% endcomment %}
+
+<section
+  id="ac-artfeed-grid-{{ section.id }}"
+  class="ac-artfeed-grid"
+  data-layout="{{ section.settings.layout_mode }}"
+  data-ac-can-back="0"
+  data-ac-sizes-story="(min-width: 900px) 560px, 100vw"
+  data-ac-sizes-mosaic="(min-width: 900px) calc((100vw - 40px) / {{ section.settings.mosaic_columns_desktop }}), calc((100vw - 20px) / {{ section.settings.mosaic_columns_mobile }})"
+  style="
+    --ac-mosaic-cols-desktop: {{ section.settings.mosaic_columns_desktop }};
+    --ac-mosaic-cols-mobile: {{ section.settings.mosaic_columns_mobile }};
+  "
+>
+
+  <style>
+    .ac-artfeed-grid { background: #fff; padding: 40px 0 80px; }
+    .ac-artfeed-grid__inner { max-width: 1240px; margin: 0 auto; padding: 0 10px; }
+
+    .ac-artfeed-grid__header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+    .ac-artfeed-grid__title { font-size: 18px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+    .ac-artfeed-grid__count { font-size: 12px; color: #6b6b70; white-space: nowrap; }
+
+    .ac-artfeed-grid__grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+    .ac-artfeed-grid__loader { text-align: center; padding: 20px 0 0; font-size: 12px; color: #6b6b70; }
+
+    .ac-artfeed-card { max-width: 900px; margin: 0 auto; border-radius: 18px; border: 1px solid #e5e5e7; background: #fff; overflow: hidden; display: flex; flex-direction: column; height: 100%; }
+    .ac-artfeed-card__side { flex: 2; display: flex; flex-direction: column; border-top: 1px solid #f1f1f3; }
+    .ac-artfeed-card__header { display: flex; align-items: center; gap: 8px; padding: 10px 16px 6px; font-size: 12px; }
+    .ac-artfeed-card__artist-link { text-decoration: none; color: #111; font-weight: 500; }
+    .ac-artfeed-card__artist-link:hover { text-decoration: underline; }
+    .ac-artfeed-card__media { position: relative; display: block; overflow: hidden; }
+    .ac-artfeed-card__media img { display: block; width: 100%; height: auto; transition: transform 0.25s ease; }
+    .ac-artfeed-card__media:hover img { transform: scale(1.03); }
+    .ac-artfeed-card__more { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 7px 16px; border-radius: 999px; background: rgba(255,255,255,0.94); font-size: 12px; font-weight: 500; color: #111; white-space: nowrap; }
+    .ac-artfeed-card__more.is-peek { animation: acPeekMore 900ms ease both; }
+    @keyframes acPeekMore {
+      0%   { transform: translateX(-50%) translateY(8px); opacity: 0; }
+      20%  { transform: translateX(-50%) translateY(0);   opacity: 1; }
+      80%  { transform: translateX(-50%) translateY(0);   opacity: 1; }
+      100% { transform: translateX(-50%) translateY(8px); opacity: 0; }
+    }
+    .ac-artfeed-card__actions { display: flex; align-items: center; padding: 6px 16px 4px; border-top: 1px solid #f1f1f3; }
+    .ac-artfeed-card__wishlist { border: 0; background: transparent; padding: 0; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; color: #111; }
+    .ac-artfeed-card__heart { font-size: 15px; line-height: 1; }
+    .ac-artfeed-card__wishlist.is-active { opacity: 1; }
+    .ac-artfeed-card__wishlist.is-active .ac-artfeed-card__heart { transform: translateY(-0.5px); }
+    .ac-artfeed-card__text { padding: 4px 16px 14px; }
+    .ac-artfeed-card__title { font-size: 13px; font-weight: 600; margin: 0 0 4px; }
+    .ac-artfeed-card__desc { font-size: 12px; line-height: 1.5; color: #4b4b4f; margin: 0; }
+    .mobile { display: none !important; }
+
+    @media (min-width: 900px) {
+      .ac-artfeed-card { flex-direction: row; border-radius: 0; }
+      .ac-artfeed-card__side { border-top: none; border-left: 1px solid #f1f1f3; }
+    }
+    @media (max-width: 899px) {
+      article.ac-artfeed-card { border-radius: 0; width: 100%; border-color: transparent; padding: 0; }
+      .mobile { display: flex !important; padding: 10px 0; }
+      .ac-artfeed-card__actions { padding: 6px 0 4px; }
+      .ac-artfeed-card__text { padding: 4px 0 14px; }
+      .desktop { display: none; }
+    }
+
+    /* MOSAIC — echte Spalten-Container, kein column-count */
+    .ac-artfeed-grid[data-layout='mosaic'] .ac-artfeed-grid__grid {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .ac-artfeed-mosaic-col {
+      flex: 1 1 0;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .ac-artfeed-grid[data-layout='mosaic'] .ac-artfeed-card {
+      break-inside: avoid;
+      margin: 0;
+      max-width: none;
+      width: 100%;
+      border-radius: 4px;
+      overflow: hidden;
+      flex-direction: column !important;
+    }
+    .ac-artfeed-grid[data-layout='mosaic'] .ac-artfeed-card__side,
+    .ac-artfeed-grid[data-layout='mosaic'] .ac-artfeed-card__header,
+    .ac-artfeed-grid[data-layout='mosaic'] .ac-artfeed-card__header.mobile,
+    .ac-artfeed-grid[data-layout='mosaic'] .ac-artfeed-card__more { display: none !important; }
+
+    @media (max-width: 760px) {
+      .ac-artfeed-grid[data-layout='mosaic'] .ac-artfeed-grid__grid { gap: 1px; margin-left: -10px; margin-right: -10px; }
+      .ac-artfeed-mosaic-col { gap: 1px; }
+      .ac-artfeed-grid[data-layout='mosaic'] .ac-artfeed-card { border-radius: 0; }
+      .ac-artfeed-grid[data-layout='mosaic'] a.ac-artfeed-card__media { margin: 0 !important; }
+    }
+    .ac-artfeed-back { position: sticky; top: 12px; z-index: 30; display: none; justify-content: flex-start; pointer-events: none; }
+    .ac-artfeed-back__btn { pointer-events: auto; border: 1px solid rgba(17,17,17,0.14); background: rgba(255,255,255,0.92); backdrop-filter: saturate(180%) blur(10px); -webkit-backdrop-filter: saturate(180%) blur(10px); border-radius: 999px; padding: 8px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.06); }
+    .ac-artfeed-back__dot { width: 6px; height: 6px; border-radius: 999px; background: #111; opacity: 0.6; }
+    .ac-artfeed-grid[data-ac-can-back='1'] .ac-artfeed-back { display: flex; }
+
+    /* TRANSITION OVERLAY */
+    .ac-artfeed-transition { position: fixed; inset: 0; background: rgba(255,255,255,0.72); backdrop-filter: saturate(180%) blur(10px); -webkit-backdrop-filter: saturate(180%) blur(10px); z-index: 9999; display: none; align-items: center; justify-content: center; pointer-events: none; opacity: 0; transition: opacity 160ms ease; }
+    .ac-artfeed-transition.is-on { display: flex; opacity: 1; }
+    .ac-artfeed-transition__pill { border: 1px solid rgba(17,17,17,0.12); background: rgba(255,255,255,0.92); border-radius: 999px; padding: 10px 14px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; box-shadow: 0 12px 30px rgba(0,0,0,0.08); }
+    html.ac-no-scroll, body.ac-no-scroll { overflow: hidden !important; height: 100% !important; }
+    .ac-artfeed-card__side { width: 100%; min-width: 300px; }
+
+    .ac-artist-profile-media img { aspect-ratio: 1/1 !important; height: 100%; object-fit: cover; }
+  </style>
+
+  {%- assign feed_collection = section.settings.collection | default: collection -%}
+
+  <div class="ac-artfeed-grid__inner">
+    {%- if section.settings.show_header and feed_collection != blank -%}
+      <div class="ac-artfeed-grid__header">
+        <h2 class="ac-artfeed-grid__title">{{ section.settings.heading | default: feed_collection.title }}</h2>
+        <p class="ac-artfeed-grid__count">{{ feed_collection.products_count }} products</p>
+      </div>
+    {%- endif -%}
+
+    <div class="ac-artfeed-back">
+      <button type="button" class="ac-artfeed-back__btn" data-ac-back-mosaic>
+        <span class="ac-artfeed-back__dot"></span>
+        Back to mosaic
+      </button>
+    </div>
+
+    {%- if feed_collection != blank and feed_collection.products_count > 0 -%}
+      {%- paginate feed_collection.products by section.settings.products_per_page -%}
+        <div
+          class="ac-artfeed-grid__grid"
+          id="ac-artfeed-grid-list-{{ section.id }}"
+          data-next-url="{% if paginate.next %}{{ paginate.next.url }}{% endif %}"
+        >
+          {%- for product in feed_collection.products -%}
+            {%- assign artist_meta = product.metafields.custom.kunstler -%}
+            {%- assign artist_obj = artist_meta.value -%}
+            {%- assign artist_name = artist_obj.name | default: artist_obj.title | default: artist_meta | default: product.vendor -%}
+            {%- assign artist_url = artist_obj.system.url | default: artist_meta | default: '' -%}
+            {%- assign artist_slug = artist_obj.system.handle | default: blank -%}
+            {%- assign artist_metaobject_id = artist_obj.system.id | default: blank -%}
+            {%- assign short_desc = product.metafields.custom.kurzbeschreibung -%}
+            {%- assign artist_meta_value = product.metafields.custom.kunstler.value -%}
+
+            <article
+              class="ac-artfeed-card"
+              data-ac-handle="{{ product.handle }}"
+              data-artclub-track-impression="artwork"
+              data-artclub-product-handle="{{ product.handle }}"
+              data-artclub-shopify-product-id="{{ product.id }}"
+              data-artclub-product-title="{{ product.title | escape }}"
+              {%- if artist_slug != blank -%} data-artclub-artist-slug="{{ artist_slug }}"{%- endif -%}
+              {%- if artist_metaobject_id != blank -%} data-artclub-artist-metaobject-id="{{ artist_metaobject_id }}"{%- endif -%}
+              {%- if artist_name != blank -%} data-artclub-artist-name="{{ artist_name | escape }}"{%- endif -%}
+            >
+              {%- if artist_name != blank -%}
+                {%- if artist_url != blank -%}
+                  <a href="{{ artist_url }}" class="ac-artfeed-card__artist-link">
+                    <header class="ac-artfeed-card__header mobile">
+                      <div class="ac-artist-profile-media" style="aspect-ratio:1/1;overflow:hidden;border-radius:100px;">
+                        {{ artist_meta_value.bilder | image_url: width: 30 | image_tag: loading: 'lazy', alt: artist_name }}
+                      </div>
+                      <b>{{ artist_name }}</b>
+                    </header>
+                  </a>
+                {%- else -%}
+                  <header class="ac-artfeed-card__header mobile">
+                    <span class="ac-artfeed-card__artist-link"><b>{{ artist_name }}</b></span>
+                  </header>
+                {%- endif -%}
+              {%- endif -%}
+
+              <a
+                href="{{ product.url }}"
+                class="ac-artfeed-card__media"
+                data-ac-open-story
+                data-ac-handle="{{ product.handle }}"
+                data-artclub-track-click="shopify_product"
+                data-artclub-product-handle="{{ product.handle }}"
+                data-artclub-shopify-product-id="{{ product.id }}"
+                data-artclub-product-title="{{ product.title | escape }}"
+                {%- if artist_slug != blank -%} data-artclub-artist-slug="{{ artist_slug }}"{%- endif -%}
+                {%- if artist_metaobject_id != blank -%} data-artclub-artist-metaobject-id="{{ artist_metaobject_id }}"{%- endif -%}
+                {%- if artist_name != blank -%} data-artclub-artist-name="{{ artist_name | escape }}"{%- endif -%}
+                aria-label="{{ product.title }}"
+              >
+                {%- if product.featured_image -%}
+                  {%- assign img_loading = 'lazy' -%}
+                  {%- assign img_fetch = 'auto' -%}
+                  {%- if forloop.first -%}{%- assign img_loading = 'eager' -%}{%- assign img_fetch = 'high' -%}
+                  {%- elsif forloop.index == 2 -%}{%- assign img_loading = 'eager' -%}
+                  {%- endif -%}
+                  {{ product.featured_image | image_url: width: 1600 | image_tag:
+                    widths: '240,320,400,480,600,720,900,1100,1300,1600',
+                    sizes: '(min-width: 900px) 560px, 100vw',
+                    loading: img_loading,
+                    fetchpriority: img_fetch,
+                    decoding: 'async',
+                    alt: product.title
+                  }}
+                {%- endif -%}
+                <span class="ac-artfeed-card__more">{{ section.settings.more_label }}</span>
+              </a>
+
+              <div class="ac-artfeed-card__side">
+                {%- if artist_name != blank -%}
+                  {%- if artist_url != blank -%}
+                    <a href="{{ artist_url }}" class="ac-artfeed-card__artist-link">
+                      <header class="ac-artfeed-card__header desktop">
+                        <div class="ac-artist-profile-media" style="aspect-ratio:1/1;overflow:hidden;border-radius:100px;">
+                          {{ artist_meta_value.bilder | image_url: width: 30 | image_tag: loading: 'lazy', alt: artist_name }}
+                        </div>
+                        <b>{{ artist_name }}</b>
+                      </header>
+                    </a>
+                  {%- else -%}
+                    <header class="ac-artfeed-card__header desktop">
+                      <span class="ac-artfeed-card__artist-link"><b>{{ artist_name }}</b></span>
+                    </header>
+                  {%- endif -%}
+                {%- endif -%}
+
+                <div class="ac-artfeed-card__actions">
+                  <button type="button" class="ac-artfeed-card__wishlist" data-ac-wishlist
+                    data-product-handle="{{ product.handle }}" aria-pressed="false"
+                    data-label-off="{{ section.settings.wishlist_label | escape }}"
+                    data-label-on="{% if request.locale.iso_code contains 'de' %}Gespeichert{% else %}Saved{% endif %}">
+                    <span class="ac-artfeed-card__heart" aria-hidden="true">♡</span>
+                    <span data-ac-wishlist-label>{{ section.settings.wishlist_label }}</span>
+                  </button>
+                </div>
+
+                <div class="ac-artfeed-card__text">
+                  <h3 class="ac-artfeed-card__title">{{ product.title }}</h3>
+                  {%- if short_desc != blank -%}<p class="ac-artfeed-card__desc">{{ short_desc }}</p>{%- endif -%}
+                </div>
+              </div>
+            </article>
+          {%- endfor -%}
+        </div>
+
+        <div class="ac-artfeed-grid__loader" id="ac-artfeed-grid-loader-{{ section.id }}"
+          {% unless paginate.next %}style="display:none"{% endunless %}>
+          <span>{{ section.settings.loader_label }}</span>
+        </div>
+      {%- endpaginate -%}
+    {%- else -%}
+      <p>Keine Produkte gefunden.</p>
+    {%- endif -%}
+  </div>
+
+  <div class="ac-artfeed-transition" id="ac-artfeed-transition-{{ section.id }}" aria-hidden="true">
+    <div class="ac-artfeed-transition__pill">Switching view…</div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var root = document.getElementById('ac-artfeed-grid-{{ section.id }}');
+      if (!root) return;
+
+      var list   = document.getElementById('ac-artfeed-grid-list-{{ section.id }}');
+      var loader = document.getElementById('ac-artfeed-grid-loader-{{ section.id }}');
+      var overlay = document.getElementById('ac-artfeed-transition-{{ section.id }}');
+      if (!list || !loader || !overlay) return;
+
+      /* ─────────────────────────────────────────
+         SPALTEN-MASONRY
+         Statt column-count: echte flex-Spalten-Divs.
+         initMosaicCols() verteilt alle vorhandenen Karten.
+         addCardToMosaic() hängt eine neue Karte an die
+         kürzeste Spalte — kein Rebalancing der anderen.
+         ───────────────────────────────────────── */
+      var COLS_D = {{ section.settings.mosaic_columns_desktop }};
+      var COLS_M = {{ section.settings.mosaic_columns_mobile }};
+
+      function getColCount() {
+        return window.innerWidth >= 900 ? COLS_D : parseInt(COLS_M, 10);
+      }
+
+      function getOrCreateCols(n) {
+        var existing = list.querySelectorAll(':scope > .ac-artfeed-mosaic-col');
+        if (existing.length === n) return Array.prototype.slice.call(existing);
+        // Falsche Anzahl → neu aufbauen
+        var cards = Array.prototype.slice.call(list.querySelectorAll('.ac-artfeed-card'));
+        // Spalten-Divs entfernen
+        list.querySelectorAll('.ac-artfeed-mosaic-col').forEach(function(c){ c.remove(); });
+        // Lose Karten raus (sollten nicht mehr da sein, aber sicher)
+        cards.forEach(function(c){ if(c.parentNode === list) c.remove(); });
+        // Neue Spalten anlegen
+        var cols = [];
+        for (var i = 0; i < n; i++) {
+          var col = document.createElement('div');
+          col.className = 'ac-artfeed-mosaic-col';
+          list.appendChild(col);
+          cols.push(col);
+        }
+        // Karten verteilen
+        cards.forEach(function(card, i) { cols[i % n].appendChild(card); });
+        return cols;
+      }
+
+      function shortestCol(cols) {
+        var min = Infinity, idx = 0;
+        cols.forEach(function(col, i) {
+          var h = col.offsetHeight;
+          if (h < min) { min = h; idx = i; }
+        });
+        return cols[idx];
+      }
+
+      function addCardToMosaic(card) {
+        var cols = Array.prototype.slice.call(list.querySelectorAll(':scope > .ac-artfeed-mosaic-col'));
+        if (!cols.length) return;
+        shortestCol(cols).appendChild(card);
+      }
+
+      function initMosaicCols() {
+        if (root.getAttribute('data-layout') !== 'mosaic') return;
+        getOrCreateCols(getColCount());
+      }
+
+      // Beim Start initialisieren
+      initMosaicCols();
+
+      // Bei Resize Spalten neu verteilen (nur wenn Spaltenanzahl wechselt)
+      var lastColCount = getColCount();
+      window.addEventListener('resize', function() {
+        clearTimeout(window['_acResizeMosaic_{{ section.id }}']);
+        window['_acResizeMosaic_{{ section.id }}'] = setTimeout(function() {
+          if (root.getAttribute('data-layout') !== 'mosaic') return;
+          var n = getColCount();
+          if (n !== lastColCount) { lastColCount = n; getOrCreateCols(n); }
+        }, 120);
+      });
+
+      function applySizes() {
+        var layout = root.getAttribute('data-layout') || 'story';
+        var sizes = layout === 'mosaic'
+          ? root.getAttribute('data-ac-sizes-mosaic')
+          : root.getAttribute('data-ac-sizes-story');
+        if (!sizes) return;
+        root.querySelectorAll('.ac-artfeed-card__media img').forEach(function(img){
+          img.setAttribute('sizes', sizes);
+        });
+      }
+      applySizes();
+
+      function attachWishlistButtons(scope) {
+        if (window.ACWishlist) window.ACWishlist.sync(scope || root);
+      }
+      attachWishlistButtons(root);
+
+      /* ─────────────────────────────────────────
+         ENDLESS SCROLL
+         Neue Karten kommen in die kürzeste Spalte.
+         Bestehende Spalten werden NICHT angefasst.
+         ───────────────────────────────────────── */
+      var isLoading = false;
+
+      function loadMore() {
+        if (isLoading) return;
+        var nextUrl = list.getAttribute('data-next-url');
+        if (!nextUrl) { loader.style.display = 'none'; observer.disconnect(); return; }
+        isLoading = true;
+
+        var url = nextUrl + (nextUrl.indexOf('?') === -1 ? '?' : '&') + 'section_id={{ section.id }}';
+
+        fetch(url)
+          .then(function(r) { return r.text(); })
+          .then(function(html) {
+            var parser = new DOMParser();
+            var doc = parser.parseFromString(html, 'text/html');
+            var newList = doc.getElementById('ac-artfeed-grid-list-{{ section.id }}');
+            if (!newList) { loader.style.display = 'none'; observer.disconnect(); return; }
+
+            // Bereits vorhandene Handles → Duplikate überspringen
+            var seen = {};
+            list.querySelectorAll('.ac-artfeed-card[data-ac-handle]').forEach(function(card) {
+              seen[card.getAttribute('data-ac-handle')] = true;
+            });
+
+            var isMosaic = root.getAttribute('data-layout') === 'mosaic';
+            var appended = 0;
+
+            Array.prototype.slice.call(newList.querySelectorAll('.ac-artfeed-card')).forEach(function(card) {
+              var handle = card.getAttribute('data-ac-handle');
+              if (handle && seen[handle]) return;
+              if (isMosaic) {
+                addCardToMosaic(card); // → kürzeste Spalte, kein Rebalancing
+              } else {
+                list.appendChild(card);
+              }
+              appended++;
+            });
+
+            var newNext = newList.getAttribute('data-next-url');
+            if (newNext) {
+              list.setAttribute('data-next-url', newNext);
+            } else {
+              list.removeAttribute('data-next-url');
+              loader.style.display = 'none';
+              observer.disconnect();
+            }
+
+            if (appended > 0) {
+              attachWishlistButtons(root);
+              applySizes();
+            }
+          })
+          .catch(function(e) {
+            console.error('Artfeed infinite scroll error', e);
+            loader.style.display = 'none';
+            observer.disconnect();
+          })
+          .finally(function() { isLoading = false; });
+      }
+
+      var observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) { if (entry.isIntersecting) loadMore(); });
+      });
+      observer.observe(loader);
+
+      /* ─── Overlay helpers ─── */
+      function withNoSmoothScroll(fn) {
+        var html = document.documentElement, prev = html.style.scrollBehavior;
+        html.style.scrollBehavior = 'auto';
+        try { fn(); } finally { html.style.scrollBehavior = prev || ''; }
+      }
+      function showOverlay() { overlay.classList.add('is-on'); }
+      function hideOverlay() { overlay.classList.remove('is-on'); }
+      function safeHandleSelector(h) { return String(h).replace(/"/g, '\\"'); }
+
+      function jumpToHandle(handle) {
+        var target = root.querySelector('.ac-artfeed-card[data-ac-handle="' + safeHandleSelector(handle) + '"]');
+        if (!target) return false;
+        var y = target.getBoundingClientRect().top + (window.pageYOffset || 0) - 12;
+        withNoSmoothScroll(function() { window.scrollTo({ top: y, left: 0, behavior: 'auto' }); });
+        var pill = target.querySelector('.ac-artfeed-card__more');
+        if (pill) {
+          pill.classList.remove('is-peek'); void pill.offsetWidth; pill.classList.add('is-peek');
+          setTimeout(function() { pill.classList.remove('is-peek'); }, 950);
+        }
+        return true;
+      }
+
+      function getActiveStoryHandle() {
+        var cards = Array.prototype.slice.call(root.querySelectorAll('.ac-artfeed-card[data-ac-handle]'));
+        if (!cards.length) return null;
+        var aimY = window.innerHeight * 0.33, best = { handle: null, dist: Infinity };
+        cards.forEach(function(card) {
+          var r = card.getBoundingClientRect(), center = r.top + r.height * 0.35, d = Math.abs(center - aimY);
+          if (d < best.dist) best = { handle: card.getAttribute('data-ac-handle'), dist: d };
+        });
+        return best.handle;
+      }
+
+      function scrollToHandleInMosaic(handle) {
+        var target = root.querySelector('.ac-artfeed-card[data-ac-handle="' + safeHandleSelector(handle) + '"]');
+        if (!target) return false;
+        var y = target.getBoundingClientRect().top + (window.pageYOffset || 0) - 12;
+        withNoSmoothScroll(function() { window.scrollTo({ top: y, left: 0, behavior: 'auto' }); });
+        return true;
+      }
+
+      /* Mosaic click => Story + jump */
+      document.addEventListener('click', function(e) {
+        var trigger = e.target.closest('[data-ac-open-story]');
+        if (!trigger || !trigger.closest('#ac-artfeed-grid-{{ section.id }}')) return;
+        if (root.getAttribute('data-layout') !== 'mosaic') return;
+        e.preventDefault();
+        var handle = trigger.getAttribute('data-ac-handle');
+        if (!handle) return;
+        root.dataset.acMosaicScrollY = String(window.scrollY || window.pageYOffset || 0);
+        root.setAttribute('data-ac-can-back', '1');
+        showOverlay();
+        // Story: Karten aus Spalten herausziehen und direkt in list legen
+        var cards = Array.prototype.slice.call(root.querySelectorAll('.ac-artfeed-card'));
+        list.querySelectorAll('.ac-artfeed-mosaic-col').forEach(function(c){ c.remove(); });
+        cards.forEach(function(c){ list.appendChild(c); });
+        root.setAttribute('data-layout', 'story');
+        applySizes();
+        requestAnimationFrame(function() {
+          requestAnimationFrame(function() {
+            setTimeout(function() { jumpToHandle(handle); hideOverlay(); }, 50);
+          });
+        });
+      });
+
+      /* Back to mosaic */
+      document.addEventListener('click', function(e) {
+        var back = e.target.closest('[data-ac-back-mosaic]');
+        if (!back || !back.closest('#ac-artfeed-grid-{{ section.id }}')) return;
+        e.preventDefault();
+        var activeHandle = getActiveStoryHandle();
+        if (activeHandle) root.dataset.acLastHandle = activeHandle;
+        showOverlay();
+        root.setAttribute('data-layout', 'mosaic');
+        // Spalten neu aufbauen
+        lastColCount = getColCount();
+        getOrCreateCols(lastColCount);
+        applySizes();
+        root.setAttribute('data-ac-can-back', '0');
+        requestAnimationFrame(function() {
+          requestAnimationFrame(function() {
+            setTimeout(function() {
+              var ok = false, h = root.dataset.acLastHandle;
+              if (h) ok = scrollToHandleInMosaic(h);
+              if (!ok) {
+                var y = parseInt(root.dataset.acMosaicScrollY || '0', 10);
+                withNoSmoothScroll(function() { window.scrollTo({ top: isNaN(y) ? 0 : y, left: 0, behavior: 'auto' }); });
+              }
+              hideOverlay();
+            }, 50);
+          });
+        });
+      });
+    });
+  </script>
+
+  <script>
+  (function(){
+    var LS_KEY = 'ac_wishlist_v1', CK_KEY = 'ac_wishlist';
+    function safeParse(s){ try { return JSON.parse(s || ''); } catch(e){ return null; } }
+    function getCookie(name){ var m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/[-[\]{}()*+?.,\\^$|#\s]/g,'\\$&') + '=([^;]*)')); return m ? m[1] : ''; }
+    function setCookie(name,value,days){ var maxAge = days ? '; max-age='+(days*24*60*60) : ''; document.cookie = name+'='+value+maxAge+'; path=/; SameSite=Lax'; }
+    function readList(){
+      var arr = null;
+      try { arr = safeParse(localStorage.getItem(LS_KEY)); } catch(e){}
+      if (!Array.isArray(arr)) { var ck = getCookie(CK_KEY); if (ck) { try { arr = safeParse(decodeURIComponent(ck)); } catch(e){} } }
+      if (!Array.isArray(arr)) arr = [];
+      var out = [], seen = Object.create(null);
+      arr.forEach(function(x){ var v = String(x||'').trim(); if(!v||seen[v]) return; seen[v]=1; out.push(v); });
+      return out;
+    }
+    function writeList(list){ var json = JSON.stringify(Array.isArray(list)?list:[]); try{localStorage.setItem(LS_KEY,json);}catch(e){} try{setCookie(CK_KEY,encodeURIComponent(json),365);}catch(e){} }
+    function has(handle){ return readList().indexOf(String(handle))!==-1; }
+    function paintButton(btn,on){
+      if(!btn) return;
+      btn.classList.toggle('is-active',!!on);
+      btn.setAttribute('aria-pressed',on?'true':'false');
+      var heart=btn.querySelector('.ac-artfeed-card__heart'); if(heart) heart.textContent=on?'♥':'♡';
+      var label=btn.querySelector('[data-ac-wishlist-label]');
+      if(label) label.textContent=on?(btn.getAttribute('data-label-on')||'Saved'):(btn.getAttribute('data-label-off')||'Zur Wunschliste');
+    }
+    function sync(scope){ var list=readList(); (scope||document).querySelectorAll('[data-ac-wishlist][data-product-handle]').forEach(function(btn){ paintButton(btn,list.indexOf(String(btn.getAttribute('data-product-handle')))!==-1); }); }
+    function toggle(handle){
+      var h=String(handle||'').trim(); if(!h) return {on:false,list:readList()};
+      var list=readList(), idx=list.indexOf(h), on=false;
+      if(idx===-1){list.push(h);on=true;}else{list.splice(idx,1);}
+      writeList(list); return {on:on,list:list};
+    }
+    document.addEventListener('click',function(e){
+      var btn=e.target.closest('[data-ac-wishlist]'); if(!btn) return;
+      var handle=btn.getAttribute('data-product-handle'); if(!handle) return;
+      e.preventDefault();
+      var res=toggle(handle); paintButton(btn,res.on);
+      window.dispatchEvent(new CustomEvent('ac:wishlist',{detail:{handle:handle,on:res.on,count:res.list.length,list:res.list}}));
+    });
+    window.ACWishlist = window.ACWishlist || { get:readList, set:writeList, has:has, toggle:toggle, sync:sync, count:function(){return readList().length;} };
+    document.addEventListener('DOMContentLoaded',function(){ sync(document); });
+  })();
+  </script>
+
+</section>
+
+{% schema %}
+{
+  "name": "AC Artwork Feed",
+  "settings": [
+    { "type": "collection", "id": "collection", "label": "Collection (optional)", "info": "Wenn leer, wird die aktuelle Collection verwendet." },
+    { "type": "checkbox", "id": "show_header", "label": "Header anzeigen", "default": true },
+    { "type": "text", "id": "heading", "label": "Titel im Header", "default": "Artworks" },
+    { "type": "range", "id": "products_per_page", "label": "Produkte pro Batch (Endless Scroll)", "min": 3, "max": 30, "step": 3, "default": 9 },
+    { "type": "text", "id": "more_label", "label": "Text fuer Mehr-erfahren-Button", "default": "Mehr erfahren" },
+    { "type": "text", "id": "wishlist_label", "label": "Text für Wunschliste", "default": "Zur Wunschliste" },
+    { "type": "text", "id": "loader_label", "label": "Text für Loader unten", "default": "Weitere Werke werden geladen …" },
+    { "type": "select", "id": "layout_mode", "label": "Feed Layout", "options": [{ "value": "story", "label": "Story Feed (1 pro Reihe)" }, { "value": "mosaic", "label": "Mosaic Feed (Pinterest)" }], "default": "story" },
+    { "type": "range", "id": "mosaic_columns_desktop", "label": "Mosaic: Spalten (Desktop)", "min": 3, "max": 6, "step": 1, "default": 5 },
+    { "type": "select", "id": "mosaic_columns_mobile", "label": "Mosaic: Spalten (Mobile)", "options": [{ "value": "2", "label": "2 Spalten" }, { "value": "3", "label": "3 Spalten" }], "default": "2" }
+  ],
+  "presets": [{ "name": "AC Artwork Feed", "category": "ARTCLUB" }]
+}
+{% endschema %}

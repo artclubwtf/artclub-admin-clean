@@ -1,0 +1,1452 @@
+<div class="al-page">
+
+  <!-- ═══════════════════════════════════════════
+       HERO
+  ═══════════════════════════════════════════ -->
+  <section class="al-hero">
+    <div class="al-hero__bg">
+      {% if section.settings.hero_image != blank %}
+        <img
+          src="{{ section.settings.hero_image | img_url: '1600x' }}"
+          alt="{{ section.settings.hero_heading }}"
+          class="al-hero__img"
+          loading="eager"
+        >
+      {% endif %}
+      <div class="al-hero__overlay"></div>
+    </div>
+    <div class="al-hero__content">
+      <h1 class="al-hero__heading">{{ section.settings.hero_heading | default: 'Your art.<br>Our commitment.' }}</h1>
+      <p class="al-hero__sub">{{ section.settings.hero_subheading | default: 'ARTCLUB is a platform built around one idea: artists deserve a partner who respects their work, protects their rights, and shares the upside — fairly.' }}</p>
+      <a href="{{ section.settings.hero_cta_url | default: '#bewerbung' }}" class="al-btn al-btn--primary">
+        {{ section.settings.hero_cta_label | default: 'Apply as an artist' }}
+      </a>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       VALUE PROPS
+  ═══════════════════════════════════════════ -->
+  <section class="al-values">
+    <div class="al-container">
+      <p class="al-eyebrow">{{ section.settings.values_eyebrow | default: 'How we work' }}</p>
+      <h2 class="al-section-title">{{ section.settings.values_heading | default: 'We treat artists the way wed want to be treated.' }}</h2>
+      <div class="al-values__grid">
+        {% for block in section.blocks %}
+          {% if block.type == 'value_prop' %}
+            <div class="al-value-card al-reveal al-reveal-delay-{{ forloop.index }}" {{ block.shopify_attributes }}>
+              <div class="al-value-card__icon">
+                {% if block.settings.icon == 'store' %}
+                  <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><path d="M4 12h24M8 12V6h16v6M6 12l2 14h16l2-14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                {% elsif block.settings.icon == 'percent' %}
+                  <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.8"/><circle cx="22" cy="22" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M26 6L6 26" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                {% elsif block.settings.icon == 'truck' %}
+                  <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><path d="M2 8h20v14H2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M22 12h5l3 6v4h-8V12z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="8" cy="24" r="2" stroke="currentColor" stroke-width="1.8"/><circle cx="24" cy="24" r="2" stroke="currentColor" stroke-width="1.8"/></svg>
+                {% elsif block.settings.icon == 'calendar' %}
+                  <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><rect x="4" y="6" width="24" height="22" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M4 12h24M10 4v4M22 4v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                {% else %}
+                  <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="12" stroke="currentColor" stroke-width="1.8"/><path d="M16 10v6l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                {% endif %}
+              </div>
+              <h3 class="al-value-card__title">{{ block.settings.title }}</h3>
+              <p class="al-value-card__text">{{ block.settings.text }}</p>
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       COMMISSION / CONDITIONS
+  ═══════════════════════════════════════════ -->
+  <section class="al-conditions">
+    <div class="al-container">
+      <p class="al-eyebrow">{{ section.settings.cond_eyebrow | default: 'No surprises' }}</p>
+      <h2 class="al-section-title">{{ section.settings.cond_heading | default: 'Transparent by design.' }}</h2>
+      <p class="al-section-sub">{{ section.settings.cond_subtext | default: 'No membership fees. No upfront costs. We only earn when you do — and you always know exactly what to expect.' }}</p>
+
+      <div class="al-cond-grid">
+          <div class="al-cond-card al-cond-card--featured al-reveal">
+          <div class="al-cond-badge">Verkauf</div>
+          <div class="al-cond-rows">
+            <div class="al-cond-row">
+              <span class="al-cond-label">Originale</span>
+              <span class="al-cond-value" data-count="70">70&nbsp;%</span>
+            </div>
+            <div class="al-cond-divider"></div>
+            <div class="al-cond-row">
+              <span class="al-cond-label">Prints & Reproduktionen</span>
+              <span class="al-cond-value" data-count="40">40&nbsp;%</span>
+            </div>
+          </div>
+          <p class="al-cond-note">Your share of the net sale price. Shipping to the buyer is fully handled by ARTCLUB.</p>
+        </div>
+
+        <div class="al-cond-card al-reveal al-reveal-delay-1">
+          <div class="al-cond-badge al-cond-badge--alt">Vermietung</div>
+          <div class="al-cond-rows">
+            <div class="al-cond-row">
+              <span class="al-cond-label">Originale</span>
+              <span class="al-cond-value" data-count="70">70&nbsp;%</span>
+            </div>
+            <div class="al-cond-divider"></div>
+            <div class="al-cond-row">
+              <span class="al-cond-label">Prints & Reproduktionen</span>
+              <span class="al-cond-value" data-count="50">50&nbsp;%</span>
+            </div>
+          </div>
+          <p class="al-cond-note">Monthly payout based on 1/36 of the sale price. Logistics and delivery fully on us.</p>
+        </div>
+
+        <div class="al-cond-card al-cond-card--info al-reveal al-reveal-delay-2">
+          <h3 class="al-cond-info-title">What we take care of</h3>
+          <ul class="al-cond-list">
+            <li>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Shipping of sold works
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Delivery & pickup for rental clients
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Print production & costs
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Online marketing & social media
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Payout within 30 days
+            </li>
+            <li>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Events & exhibitions
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="al-cond-footer">
+        <a href="{{ section.settings.terms_url | default: '/pages/terms-of-collaboration' }}" class="al-link">
+          All collaboration terms →
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       ARTIST TESTIMONIALS
+  ═══════════════════════════════════════════ -->
+  <section class="al-testimonials">
+    <div class="al-container">
+      <p class="al-eyebrow al-eyebrow--light">{{ section.settings.testi_eyebrow | default: 'Artists on ARTCLUB' }}</p>
+      <h2 class="al-section-title al-section-title--light">{{ section.settings.testi_heading | default: 'Real words from our community.' }}</h2>
+      <div class="al-testi-grid">
+        {% for block in section.blocks %}
+          {% if block.type == 'testimonial' %}
+            <div class="al-testi-card al-reveal al-reveal-delay-{{ forloop.index }}" {{ block.shopify_attributes }}>
+              {% if block.settings.image != blank %}
+                <div class="al-testi-img-wrap">
+                  <img src="{{ block.settings.image | img_url: '400x400', crop: 'center' }}" alt="{{ block.settings.name }}" class="al-testi-img" loading="lazy">
+                </div>
+              {% else %}
+                <div class="al-testi-img-wrap al-testi-img-wrap--placeholder">
+                  <svg width="48" height="48" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="20" r="10" stroke="currentColor" stroke-width="2"/><path d="M6 44c0-9.94 8.06-18 18-18s18 8.06 18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                </div>
+              {% endif %}
+              <blockquote class="al-testi-quote">{{ block.settings.quote }}</blockquote>
+              <p class="al-testi-name">{{ block.settings.name }}</p>
+              <p class="al-testi-role">{{ block.settings.role | default: 'Artist at ARTCLUB' }}</p>
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       HOW IT WORKS
+  ═══════════════════════════════════════════ -->
+  <section class="al-steps">
+    <div class="al-container">
+      <p class="al-eyebrow">{{ section.settings.steps_eyebrow | default: 'How it works' }}</p>
+      <h2 class="al-section-title al-reveal">{{ section.settings.steps_heading | default: 'Simple from day one.' }}</h2>
+      <div class="al-steps-grid">
+        {% assign step_num = 0 %}
+        {% for block in section.blocks %}
+          {% if block.type == 'step' %}
+            {% assign step_num = step_num | plus: 1 %}
+            <div class="al-step" {{ block.shopify_attributes }}>
+              <div class="al-step__number">{{ step_num }}</div>
+              <div class="al-step__img-wrap">
+                {% if block.settings.image != blank %}
+                  <img src="{{ block.settings.image | img_url: '400x300', crop: 'center' }}" alt="{{ block.settings.title }}" class="al-step__img" loading="lazy">
+                {% else %}
+                  <div class="al-step__img-placeholder"></div>
+                {% endif %}
+              </div>
+              <h3 class="al-step__title">{{ block.settings.title }}</h3>
+              <p class="al-step__text">{{ block.settings.text }}</p>
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <div class="al-steps-cta">
+        <a href="{{ section.settings.steps_cta_url | default: '#bewerbung' }}" class="al-btn al-btn--primary">
+          {{ section.settings.steps_cta_label | default: 'Apply as an artist' }}
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       FAQ
+  ═══════════════════════════════════════════ -->
+  <section class="al-faq">
+    <div class="al-container al-container--narrow">
+      <p class="al-eyebrow">{{ section.settings.faq_eyebrow | default: 'FAQ' }}</p>
+      <h2 class="al-section-title">{{ section.settings.faq_heading | default: 'Questions, answered honestly.' }}</h2>
+      <div class="al-faq-list">
+        {% for block in section.blocks %}
+          {% if block.type == 'faq' %}
+            <div class="al-faq-item" {{ block.shopify_attributes }}>
+              <button class="al-faq-q" aria-expanded="false">
+                {{ block.settings.question }}
+                <svg class="al-faq-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M5 7.5l5 5 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              <div class="al-faq-a">
+                <p>{{ block.settings.answer }}</p>
+              </div>
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       BOTTOM CTA
+  ═══════════════════════════════════════════ -->
+  <section class="al-cta-final">
+    <div class="al-container al-container--narrow">
+      <h2 class="al-cta-final__heading">{{ section.settings.final_heading | default: 'Lets build something together.' }}</h2>
+      <p class="al-cta-final__sub">{{ section.settings.final_sub | default: 'Wed love to hear from you and learn about your work.' }}</p>
+      <a href="{{ section.settings.final_cta_url | default: '#bewerbung' }}" class="al-btn al-btn--primary al-btn--lg">
+        {{ section.settings.final_cta_label | default: 'Apply as an artist' }}
+      </a>
+      <p class="al-cta-final__note">{{ section.settings.final_note | default: 'Free to join · No membership fees · Cancel anytime' }}</p>
+    </div>
+  </section>
+
+</div>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap');
+
+/* ─────────────────────────────────────────────
+   RESET & BASE
+───────────────────────────────────────────── */
+.al-page * {
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.al-page {
+  font-family: 'DM Sans', 'Helvetica Neue', Arial, sans-serif !important;
+  color: #222222 !important;
+  background: #ffffff !important;
+  line-height: 1.55 !important;
+}
+
+/* ─────────────────────────────────────────────
+   SCROLL-REVEAL
+───────────────────────────────────────────── */
+.al-reveal {
+  opacity: 0 !important;
+  transform: translateY(28px) !important;
+  transition: opacity 0.65s cubic-bezier(0.22,1,0.36,1), transform 0.65s cubic-bezier(0.22,1,0.36,1) !important;
+}
+
+.al-reveal.al-visible {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
+
+.al-reveal-delay-1 { transition-delay: 0.1s !important; }
+.al-reveal-delay-2 { transition-delay: 0.2s !important; }
+.al-reveal-delay-3 { transition-delay: 0.3s !important; }
+
+/* ─────────────────────────────────────────────
+   CONTAINERS
+───────────────────────────────────────────── */
+.al-container {
+  max-width: 1180px !important;
+  margin: 0 auto !important;
+  padding: 0 40px !important;
+}
+
+.al-container--narrow {
+  max-width: 760px !important;
+  margin: 0 auto !important;
+  padding: 0 40px !important;
+}
+
+/* ─────────────────────────────────────────────
+   TYPOGRAPHY
+───────────────────────────────────────────── */
+.al-eyebrow {
+  display: block !important;
+  text-align: center !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 2.5px !important;
+  text-transform: uppercase !important;
+  color: #a0a0a0 !important;
+  margin-bottom: 14px !important;
+}
+
+.al-eyebrow--light {
+  color: rgba(255,255,255,0.45) !important;
+}
+
+.al-section-title {
+  text-align: center !important;
+  font-size: 38px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.6px !important;
+  line-height: 1.15 !important;
+  color: #1a1a1a !important;
+  margin-bottom: 16px !important;
+}
+
+.al-section-title--light {
+  color: #ffffff !important;
+}
+
+.al-section-sub {
+  text-align: center !important;
+  font-size: 17px !important;
+  font-weight: 400 !important;
+  color: #787878 !important;
+  max-width: 540px !important;
+  margin: 0 auto !important;
+  margin-bottom: 60px !important;
+  line-height: 1.65 !important;
+}
+
+/* ─────────────────────────────────────────────
+   BUTTONS
+───────────────────────────────────────────── */
+.al-btn {
+  display: inline-block !important;
+  padding: 14px 32px !important;
+  border-radius: 100px !important;
+  font-family: 'DM Sans', sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.2px !important;
+  text-decoration: none !important;
+  cursor: pointer !important;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease !important;
+  border: none !important;
+}
+
+.al-btn:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18) !important;
+}
+
+.al-btn--primary {
+  background: #1a1a1a !important;
+  color: #ffffff !important;
+}
+
+.al-btn--lg {
+  padding: 17px 48px !important;
+  font-size: 15px !important;
+}
+
+.al-link {
+  font-size: 14px !important;
+  color: #1a1a1a !important;
+  text-decoration: none !important;
+  border-bottom: 1px solid #cccccc !important;
+  padding-bottom: 1px !important;
+  transition: border-color 0.18s !important;
+}
+
+.al-link:hover {
+  border-color: #1a1a1a !important;
+}
+
+/* ─────────────────────────────────────────────
+   HERO
+───────────────────────────────────────────── */
+.al-hero {
+  position: relative !important;
+  height: 600px !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.al-hero__bg {
+  position: absolute !important;
+  inset: 0 !important;
+  background: #2a2a2a !important;
+}
+
+.al-hero__img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  opacity: 0.62 !important;
+  transition: transform 8s ease !important;
+}
+
+.al-hero:hover .al-hero__img {
+  transform: scale(1.03) !important;
+}
+
+.al-hero__overlay {
+  position: absolute !important;
+  inset: 0 !important;
+  background: linear-gradient(105deg, rgba(20,20,20,0.75) 0%, rgba(20,20,20,0.25) 70%) !important;
+}
+
+.al-hero__content {
+  position: relative !important;
+  z-index: 2 !important;
+  padding: 0 72px !important;
+  max-width: 680px !important;
+}
+
+.al-hero__heading {
+  font-size: 58px !important;
+  font-weight: 800 !important;
+  line-height: 1.06 !important;
+  letter-spacing: -1.2px !important;
+  color: #ffffff !important;
+  margin-bottom: 20px !important;
+  animation: al-hero-in 0.9s cubic-bezier(0.22,1,0.36,1) both !important;
+}
+
+.al-hero__sub {
+  font-size: 18px !important;
+  font-weight: 400 !important;
+  color: rgba(255,255,255,0.78) !important;
+  margin-bottom: 36px !important;
+  line-height: 1.65 !important;
+  max-width: 460px !important;
+  animation: al-hero-in 0.9s 0.15s cubic-bezier(0.22,1,0.36,1) both !important;
+}
+
+.al-hero .al-btn {
+  animation: al-hero-in 0.9s 0.28s cubic-bezier(0.22,1,0.36,1) both !important;
+}
+
+@keyframes al-hero-in {
+  from { opacity: 0; transform: translateY(22px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─────────────────────────────────────────────
+   VALUE PROPS
+───────────────────────────────────────────── */
+.al-values {
+  padding: 100px 0 !important;
+  background: #f9f8f6 !important;
+}
+
+.al-values__grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 24px !important;
+  margin-top: 60px !important;
+}
+
+.al-value-card {
+  background: #ffffff !important;
+  border: 1px solid #ebebeb !important;
+  border-radius: 20px !important;
+  padding: 40px 32px !important;
+  text-align: left !important;
+  transition: transform 0.28s cubic-bezier(0.22,1,0.36,1), box-shadow 0.28s cubic-bezier(0.22,1,0.36,1) !important;
+  cursor: default !important;
+}
+
+.al-value-card:hover {
+  transform: translateY(-6px) !important;
+  box-shadow: 0 20px 48px rgba(0,0,0,0.09) !important;
+  border-color: transparent !important;
+}
+
+.al-value-card__icon {
+  width: 52px !important;
+  height: 52px !important;
+  border-radius: 14px !important;
+  background: #f0eeea !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-bottom: 24px !important;
+  color: #1a1a1a !important;
+  transition: background 0.2s !important;
+}
+
+.al-value-card:hover .al-value-card__icon {
+  background: #e8e4de !important;
+}
+
+.al-value-card__title {
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  margin-bottom: 10px !important;
+  color: #1a1a1a !important;
+  letter-spacing: -0.2px !important;
+}
+
+.al-value-card__text {
+  font-size: 15px !important;
+  color: #787878 !important;
+  line-height: 1.7 !important;
+}
+
+/* ─────────────────────────────────────────────
+   CONDITIONS
+───────────────────────────────────────────── */
+.al-conditions {
+  padding: 100px 0 !important;
+  background: #ffffff !important;
+}
+
+.al-conditions .al-section-title {
+  margin-bottom: 12px !important;
+}
+
+.al-cond-grid {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr 1fr !important;
+  gap: 20px !important;
+  margin-top: 60px !important;
+}
+
+.al-cond-card {
+  border: 1px solid #ebebeb !important;
+  border-radius: 20px !important;
+  padding: 36px 32px !important;
+  transition: transform 0.28s cubic-bezier(0.22,1,0.36,1), box-shadow 0.28s !important;
+}
+
+.al-cond-card:hover {
+  transform: translateY(-4px) !important;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.08) !important;
+}
+
+.al-cond-card--featured {
+  background: #1a1a1a !important;
+  border-color: transparent !important;
+}
+
+.al-cond-card--featured:hover {
+  box-shadow: 0 16px 40px rgba(0,0,0,0.22) !important;
+}
+
+.al-cond-badge {
+  display: inline-block !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 1.5px !important;
+  text-transform: uppercase !important;
+  background: #f0eeea !important;
+  color: #555555 !important;
+  padding: 5px 14px !important;
+  border-radius: 100px !important;
+  margin-bottom: 28px !important;
+}
+
+.al-cond-card--featured .al-cond-badge {
+  background: rgba(255,255,255,0.12) !important;
+  color: rgba(255,255,255,0.7) !important;
+}
+
+.al-cond-badge--alt {
+  background: #f0eeea !important;
+  color: #555555 !important;
+}
+
+.al-cond-rows {
+  margin-bottom: 24px !important;
+}
+
+.al-cond-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 14px 0 !important;
+}
+
+.al-cond-label {
+  font-size: 14px !important;
+  color: #888888 !important;
+  font-weight: 400 !important;
+}
+
+.al-cond-card--featured .al-cond-label {
+  color: rgba(255,255,255,0.5) !important;
+}
+
+.al-cond-value {
+  font-size: 36px !important;
+  font-weight: 800 !important;
+  color: #1a1a1a !important;
+  letter-spacing: -1px !important;
+  line-height: 1 !important;
+}
+
+.al-cond-card--featured .al-cond-value {
+  color: #ffffff !important;
+}
+
+.al-cond-divider {
+  height: 1px !important;
+  background: #f0eeea !important;
+  margin: 0 !important;
+}
+
+.al-cond-card--featured .al-cond-divider {
+  background: rgba(255,255,255,0.1) !important;
+}
+
+.al-cond-note {
+  font-size: 13px !important;
+  color: #aaaaaa !important;
+  line-height: 1.65 !important;
+}
+
+.al-cond-card--featured .al-cond-note {
+  color: rgba(255,255,255,0.38) !important;
+}
+
+.al-cond-card--info {
+  background: #f9f8f6 !important;
+  border-color: transparent !important;
+}
+
+.al-cond-info-title {
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  margin-bottom: 20px !important;
+  color: #1a1a1a !important;
+  letter-spacing: -0.1px !important;
+}
+
+.al-cond-list {
+  list-style: none !important;
+}
+
+.al-cond-list li {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 10px !important;
+  font-size: 14px !important;
+  color: #555555 !important;
+  padding: 9px 0 !important;
+  border-bottom: 1px solid #eeeeee !important;
+  line-height: 1.5 !important;
+}
+
+.al-cond-list li:last-child {
+  border-bottom: none !important;
+}
+
+.al-cond-list svg {
+  flex-shrink: 0 !important;
+  margin-top: 1px !important;
+  color: #1a1a1a !important;
+}
+
+.al-cond-footer {
+  text-align: center !important;
+  margin-top: 44px !important;
+}
+
+/* ─────────────────────────────────────────────
+   TESTIMONIALS
+───────────────────────────────────────────── */
+.al-testimonials {
+  padding: 100px 0 !important;
+  background: #1a1a1a !important;
+}
+
+.al-testimonials .al-eyebrow {
+  margin-bottom: 14px !important;
+}
+
+.al-testimonials .al-section-title {
+  margin-bottom: 60px !important;
+}
+
+.al-testi-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 20px !important;
+}
+
+.al-testi-card {
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  border-radius: 20px !important;
+  padding: 32px !important;
+  text-align: left !important;
+  transition: background 0.25s, border-color 0.25s, transform 0.28s cubic-bezier(0.22,1,0.36,1) !important;
+}
+
+.al-testi-card:hover {
+  background: rgba(255,255,255,0.08) !important;
+  border-color: rgba(255,255,255,0.15) !important;
+  transform: translateY(-4px) !important;
+}
+
+.al-testi-img-wrap {
+  width: 52px !important;
+  height: 52px !important;
+  border-radius: 50% !important;
+  overflow: hidden !important;
+  margin-bottom: 20px !important;
+  background: rgba(255,255,255,0.1) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: rgba(255,255,255,0.3) !important;
+}
+
+.al-testi-img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+.al-testi-quote {
+  font-size: 15px !important;
+  color: rgba(255,255,255,0.75) !important;
+  line-height: 1.7 !important;
+  font-style: italic !important;
+  margin-bottom: 24px !important;
+}
+
+.al-testi-name {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  margin-bottom: 3px !important;
+}
+
+.al-testi-role {
+  font-size: 12px !important;
+  color: rgba(255,255,255,0.35) !important;
+}
+
+/* ─────────────────────────────────────────────
+   STEPS
+───────────────────────────────────────────── */
+.al-steps {
+  padding: 100px 0 !important;
+  background: #f9f8f6 !important;
+}
+
+.al-steps .al-section-title {
+  margin-bottom: 60px !important;
+}
+
+.al-steps-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 24px !important;
+}
+
+.al-step {
+  text-align: left !important;
+}
+
+.al-step__number {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 12px !important;
+  background: #1a1a1a !important;
+  color: #ffffff !important;
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-bottom: 20px !important;
+  letter-spacing: -0.5px !important;
+}
+
+.al-step__img-wrap {
+  width: 100% !important;
+  height: 210px !important;
+  border-radius: 16px !important;
+  overflow: hidden !important;
+  margin-bottom: 24px !important;
+  background: #e8e4de !important;
+  position: relative !important;
+}
+
+.al-step__img-wrap::after {
+  content: '' !important;
+  position: absolute !important;
+  inset: 0 !important;
+  background: linear-gradient(to bottom, transparent 60%, rgba(0,0,0,0.18) 100%) !important;
+}
+
+.al-step__img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  transition: transform 0.5s ease !important;
+}
+
+.al-step:hover .al-step__img {
+  transform: scale(1.04) !important;
+}
+
+.al-step__img-placeholder {
+  width: 100% !important;
+  height: 100% !important;
+  background: linear-gradient(135deg, #e8e4de 0%, #d8d4ce 100%) !important;
+}
+
+.al-step__title {
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  margin-bottom: 10px !important;
+  color: #1a1a1a !important;
+  letter-spacing: -0.2px !important;
+}
+
+.al-step__text {
+  font-size: 15px !important;
+  color: #787878 !important;
+  line-height: 1.7 !important;
+}
+
+.al-steps-cta {
+  text-align: center !important;
+  margin-top: 60px !important;
+}
+
+/* ─────────────────────────────────────────────
+   FAQ
+───────────────────────────────────────────── */
+.al-faq {
+  padding: 100px 0 !important;
+  background: #ffffff !important;
+}
+
+.al-faq .al-section-title {
+  margin-bottom: 52px !important;
+}
+
+.al-faq-list {
+  border-top: 1px solid #ebebeb !important;
+}
+
+.al-faq-item {
+  border-bottom: 1px solid #ebebeb !important;
+}
+
+.al-faq-q {
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 22px 0 !important;
+  font-family: 'DM Sans', sans-serif !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.1px !important;
+  color: #1a1a1a !important;
+  text-align: left !important;
+  cursor: pointer !important;
+  background: none !important;
+  border: none !important;
+  gap: 20px !important;
+  transition: color 0.15s !important;
+}
+
+.al-faq-q:hover {
+  color: #555555 !important;
+}
+
+.al-faq-icon {
+  flex-shrink: 0 !important;
+  transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), color 0.15s !important;
+  color: #bbbbbb !important;
+}
+
+.al-faq-q[aria-expanded="true"] .al-faq-icon {
+  transform: rotate(180deg) !important;
+  color: #1a1a1a !important;
+}
+
+.al-faq-a {
+  max-height: 0 !important;
+  overflow: hidden !important;
+  transition: max-height 0.4s cubic-bezier(0.22,1,0.36,1) !important;
+}
+
+.al-faq-a.is-open {
+  max-height: 300px !important;
+  display: block !important;
+}
+
+.al-faq-a p {
+  font-size: 15px !important;
+  color: #787878 !important;
+  line-height: 1.75 !important;
+  padding-bottom: 24px !important;
+  max-width: 600px !important;
+}
+
+/* ─────────────────────────────────────────────
+   BOTTOM CTA
+───────────────────────────────────────────── */
+.al-cta-final {
+  padding: 120px 48px !important;
+  background: #f9f8f6 !important;
+  text-align: center !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.al-cta-final::before {
+  content: '' !important;
+  position: absolute !important;
+  top: -120px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: 600px !important;
+  height: 600px !important;
+  background: radial-gradient(circle, rgba(200,185,165,0.2) 0%, transparent 70%) !important;
+  pointer-events: none !important;
+}
+
+.al-cta-final__heading {
+  font-size: 48px !important;
+  font-weight: 800 !important;
+  letter-spacing: -1px !important;
+  color: #1a1a1a !important;
+  margin-bottom: 16px !important;
+  line-height: 1.1 !important;
+  position: relative !important;
+}
+
+.al-cta-final__sub {
+  font-size: 18px !important;
+  color: #888888 !important;
+  margin-bottom: 40px !important;
+  position: relative !important;
+}
+
+.al-cta-final__note {
+  font-size: 13px !important;
+  color: #aaaaaa !important;
+  margin-top: 20px !important;
+  position: relative !important;
+}
+
+/* ─────────────────────────────────────────────
+   RESPONSIVE
+───────────────────────────────────────────── */
+@media (max-width: 960px) {
+  .al-values__grid,
+  .al-cond-grid,
+  .al-testi-grid,
+  .al-steps-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .al-hero__heading {
+    font-size: 38px !important;
+  }
+  .al-section-title {
+    font-size: 28px !important;
+  }
+  .al-hero__content {
+    padding: 0 32px !important;
+  }
+  .al-cta-final__heading {
+    font-size: 32px !important;
+  }
+  .al-container,
+  .al-container--narrow {
+    padding: 0 24px !important;
+  }
+}
+</style>
+
+<script>
+(function () {
+  /* ── FAQ accordion ── */
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.al-faq-q').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var expanded = this.getAttribute('aria-expanded') === 'true';
+        /* close all */
+        document.querySelectorAll('.al-faq-q').forEach(function (b) {
+          b.setAttribute('aria-expanded', 'false');
+          b.nextElementSibling.classList.remove('is-open');
+        });
+        /* open clicked if it was closed */
+        if (!expanded) {
+          this.setAttribute('aria-expanded', 'true');
+          this.nextElementSibling.classList.add('is-open');
+        }
+      });
+    });
+
+    /* ── Scroll-reveal ── */
+    var revealEls = document.querySelectorAll('.al-reveal');
+    if ('IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) {
+            e.target.classList.add('al-visible');
+            io.unobserve(e.target);
+          }
+        });
+      }, { threshold: 0.12 });
+      revealEls.forEach(function (el) { io.observe(el); });
+    } else {
+      revealEls.forEach(function (el) { el.classList.add('al-visible'); });
+    }
+
+    /* ── Count-up for percentage numbers ── */
+    var countEls = document.querySelectorAll('[data-count]');
+    var countIO = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        countIO.unobserve(e.target);
+        var el = e.target;
+        var target = parseInt(el.getAttribute('data-count'), 10);
+        var duration = 900;
+        var start = null;
+        function step(ts) {
+          if (!start) start = ts;
+          var progress = Math.min((ts - start) / duration, 1);
+          var eased = 1 - Math.pow(1 - progress, 3);
+          el.textContent = Math.round(eased * target) + ' %';
+          if (progress < 1) requestAnimationFrame(step);
+        }
+        requestAnimationFrame(step);
+      });
+    }, { threshold: 0.5 });
+    countEls.forEach(function (el) { countIO.observe(el); });
+  });
+})();
+</script>
+
+{% schema %}
+{
+  "name": "Artist Landing Page",
+  "settings": [
+    {
+      "type": "header",
+      "content": "Hero"
+    },
+    {
+      "type": "image_picker",
+      "id": "hero_image",
+      "label": "Hero image"
+    },
+    {
+      "type": "text",
+      "id": "hero_heading",
+      "label": "Heading",
+      "default": "Your art. Our commitment."
+    },
+    {
+      "type": "textarea",
+      "id": "hero_subheading",
+      "label": "Subtext",
+      "default": "ARTCLUB is a platform built around one idea: artists deserve a partner who respects their work, protects their rights, and shares the upside — fairly."
+    },
+    {
+      "type": "text",
+      "id": "hero_cta_label",
+      "label": "Button text",
+      "default": "Apply as an artist"
+    },
+    {
+      "type": "url",
+      "id": "hero_cta_url",
+      "label": "Button link"
+    },
+    {
+      "type": "header",
+      "content": "Value Props"
+    },
+    {
+      "type": "text",
+      "id": "values_eyebrow",
+      "label": "Eyebrow",
+      "default": "How we work"
+    },
+    {
+      "type": "text",
+      "id": "values_heading",
+      "label": "Heading",
+      "default": "We treat artists the way we'd want to be treated."
+    },
+    {
+      "type": "header",
+      "content": "Conditions"
+    },
+    {
+      "type": "text",
+      "id": "cond_eyebrow",
+      "label": "Eyebrow",
+      "default": "No surprises"
+    },
+    {
+      "type": "text",
+      "id": "cond_heading",
+      "label": "Heading",
+      "default": "Transparent by design."
+    },
+    {
+      "type": "textarea",
+      "id": "cond_subtext",
+      "label": "Subtext",
+      "default": "No membership fees. No upfront costs. We only earn when you do — and you always know exactly what to expect."
+    },
+    {
+      "type": "url",
+      "id": "terms_url",
+      "label": "Link to collaboration terms"
+    },
+    {
+      "type": "header",
+      "content": "Testimonials"
+    },
+    {
+      "type": "text",
+      "id": "testi_eyebrow",
+      "label": "Eyebrow",
+      "default": "Artists on ARTCLUB"
+    },
+    {
+      "type": "text",
+      "id": "testi_heading",
+      "label": "Heading",
+      "default": "Real words from our community."
+    },
+    {
+      "type": "header",
+      "content": "How it works"
+    },
+    {
+      "type": "text",
+      "id": "steps_eyebrow",
+      "label": "Eyebrow",
+      "default": "How it works"
+    },
+    {
+      "type": "text",
+      "id": "steps_heading",
+      "label": "Heading",
+      "default": "Simple from day one."
+    },
+    {
+      "type": "text",
+      "id": "steps_cta_label",
+      "label": "Button text",
+      "default": "Apply as an artist"
+    },
+    {
+      "type": "url",
+      "id": "steps_cta_url",
+      "label": "Button link"
+    },
+    {
+      "type": "header",
+      "content": "FAQ"
+    },
+    {
+      "type": "text",
+      "id": "faq_eyebrow",
+      "label": "Eyebrow",
+      "default": "FAQ"
+    },
+    {
+      "type": "text",
+      "id": "faq_heading",
+      "label": "Heading",
+      "default": "Questions, answered honestly."
+    },
+    {
+      "type": "header",
+      "content": "Final CTA"
+    },
+    {
+      "type": "text",
+      "id": "final_heading",
+      "label": "Heading",
+      "default": "Let's build something together."
+    },
+    {
+      "type": "text",
+      "id": "final_sub",
+      "label": "Subtext",
+      "default": "We'd love to hear from you and learn about your work."
+    },
+    {
+      "type": "text",
+      "id": "final_cta_label",
+      "label": "Button text",
+      "default": "Apply as an artist"
+    },
+    {
+      "type": "url",
+      "id": "final_cta_url",
+      "label": "Button link"
+    },
+    {
+      "type": "text",
+      "id": "final_note",
+      "label": "Note below button",
+      "default": "Free to join · No membership fees · Cancel anytime"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "value_prop",
+      "name": "Value Prop",
+      "settings": [
+        {
+          "type": "select",
+          "id": "icon",
+          "label": "Icon",
+          "options": [
+            { "value": "store", "label": "Shop / Gallery" },
+            { "value": "percent", "label": "Commission / Percent" },
+            { "value": "truck", "label": "Shipping" },
+            { "value": "calendar", "label": "Events" },
+            { "value": "clock", "label": "Time / Payment" }
+          ],
+          "default": "store"
+        },
+        {
+          "type": "text",
+          "id": "title",
+          "label": "Title",
+          "default": "Online + Events"
+        },
+        {
+          "type": "textarea",
+          "id": "text",
+          "label": "Text",
+          "default": "Your works are featured in the ARTCLUB shop and at curated events — with genuine care for how they're presented."
+        }
+      ]
+    },
+    {
+      "type": "testimonial",
+      "name": "Testimonial",
+      "settings": [
+        {
+          "type": "image_picker",
+          "id": "image",
+          "label": "Photo"
+        },
+        {
+          "type": "textarea",
+          "id": "quote",
+          "label": "Quote",
+          "default": "It finally feels like someone is actually on my side."
+        },
+        {
+          "type": "text",
+          "id": "name",
+          "label": "Name",
+          "default": "Anna M."
+        },
+        {
+          "type": "text",
+          "id": "role",
+          "label": "Description",
+          "default": "Painter"
+        }
+      ]
+    },
+    {
+      "type": "step",
+      "name": "Step",
+      "settings": [
+        {
+          "type": "image_picker",
+          "id": "image",
+          "label": "Image"
+        },
+        {
+          "type": "text",
+          "id": "title",
+          "label": "Title",
+          "default": "Share your work"
+        },
+        {
+          "type": "textarea",
+          "id": "text",
+          "label": "Text",
+          "default": "Send us your portfolio. We look at everything carefully and get back to you within a few days."
+        }
+      ]
+    },
+    {
+      "type": "faq",
+      "name": "FAQ Entry",
+      "settings": [
+        {
+          "type": "text",
+          "id": "question",
+          "label": "Question",
+          "default": "Does it cost anything to join?"
+        },
+        {
+          "type": "textarea",
+          "id": "answer",
+          "label": "Answer",
+          "default": "Nothing. Joining ARTCLUB is completely free. We only earn a commission when something sells or gets rented."
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Artist Landing Page",
+      "blocks": [
+        {
+          "type": "value_prop",
+          "settings": {
+            "icon": "store",
+            "title": "We show up for your work",
+            "text": "Your pieces get featured in our online shop and at curated events. We put genuine effort into how your work is presented — because it matters."
+          }
+        },
+        {
+          "type": "value_prop",
+          "settings": {
+            "icon": "percent",
+            "title": "You keep the lion's share",
+            "text": "We believe artists should earn well from their own work. 70% on originals, and we cover all production and shipping costs on prints."
+          }
+        },
+        {
+          "type": "value_prop",
+          "settings": {
+            "icon": "truck",
+            "title": "We handle the logistics",
+            "text": "Shipping, delivery, returns — we take care of all of it. You focus on making art. We take care of the rest."
+          }
+        },
+        {
+          "type": "testimonial",
+          "settings": {
+            "quote": "It finally feels like someone is actually on my side. Honest terms, no surprises — and they genuinely care about the work.",
+            "name": "Max K.",
+            "role": "Photographer"
+          }
+        },
+        {
+          "type": "testimonial",
+          "settings": {
+            "quote": "What I appreciate most is the respect. They ask before they act, they explain everything, and they never push.",
+            "name": "Sarah L.",
+            "role": "Painter"
+          }
+        },
+        {
+          "type": "testimonial",
+          "settings": {
+            "quote": "No gallery pressure, no vague contracts. Just a platform that treats artists like adults.",
+            "name": "David P.",
+            "role": "Illustrator"
+          }
+        },
+        {
+          "type": "step",
+          "settings": {
+            "title": "Share your work",
+            "text": "Send us your portfolio. We look at everything carefully and get back to you within a few days — with honest feedback either way."
+          }
+        },
+        {
+          "type": "step",
+          "settings": {
+            "title": "We set things up together",
+            "text": "We agree on which works to feature, how to price them, and what fits your style. You stay in control at every step."
+          }
+        },
+        {
+          "type": "step",
+          "settings": {
+            "title": "We take it from there",
+            "text": "We handle the marketing, logistics and payments. You get paid within 30 days of each transaction — no chasing, no ambiguity."
+          }
+        },
+        {
+          "type": "faq",
+          "settings": {
+            "question": "Does it cost anything to join?",
+            "answer": "Nothing. Joining ARTCLUB is completely free. We cover shipping, print production, and all logistics ourselves. We only earn a commission when something sells or gets rented — and you always know the exact split upfront."
+          }
+        },
+        {
+          "type": "faq",
+          "settings": {
+            "question": "What's my share when an original sells?",
+            "answer": "You receive 70% of the net sale price. For prints and reproductions it's 40% — but we cover all production and shipping costs, so there's nothing to deduct on your end."
+          }
+        },
+        {
+          "type": "faq",
+          "settings": {
+            "question": "What happens to my works if I want to leave?",
+            "answer": "You can cancel anytime with 45 days' notice — a simple email is enough. We'll have your works ready for pickup within 14 days. No hard feelings, no complications."
+          }
+        },
+        {
+          "type": "faq",
+          "settings": {
+            "question": "Who decides the pricing?",
+            "answer": "We decide together. Prices are set collaboratively and documented. ARTCLUB will never change a price — up or down — without your explicit agreement."
+          }
+        },
+        {
+          "type": "faq",
+          "settings": {
+            "question": "Do you own any rights to my work?",
+            "answer": "No. You keep 100% of your copyright. ARTCLUB only gets a limited license to show, promote, and facilitate the sale or rental of your work — and only for as long as we work together."
+          }
+        },
+        {
+          "type": "faq",
+          "settings": {
+            "question": "Do I have to attend events in person?",
+            "answer": "Not at all. Participation in events is entirely voluntary. We'll always ask in advance and respect whatever you decide."
+          }
+        }
+      ]
+    }
+  ]
+}
+{% endschema %}

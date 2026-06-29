@@ -1,0 +1,134 @@
+{% comment %}
+  Section: artist-profile-header.liquid
+  ✅ For METAOBJECT pages (artist pages).
+  Assumes the current page context provides `metaobject`.
+
+  Metaobject fields:
+    - bilder (files/images)  -> profile picture (first image)
+    - name (text)            -> display name + username
+    - quote (text)           -> bio replacement
+
+  Status text based on metaobject.created_at:
+    - < 3 months  -> "New with ARTCLUB"
+    - < 12 months -> "With ARTCLUB for 1 year"
+    - else        -> "With ARTCLUB for X years" (floor)
+{% endcomment %}
+
+{% assign artist = metaobject %}
+{% if artist == blank %}
+  <!-- No metaobject context found -->
+  {% break %}
+{% endif %}
+
+{% assign display_name = artist.name | default: "Artist" %}
+{% assign artist_slug = artist.system.handle | default: artist.handle | default: display_name | handleize %}
+{% assign artist_metaobject_id = artist.system.id | default: artist.id %}
+{% assign artist_page_url = artist.system.url | default: request.path %}
+{% assign username = artist_slug %}
+{% assign quote = artist.quote | default: "" %}
+
+{%- comment -%} Profile image: first item from files list {%- endcomment -%}
+{% assign avatar_img = blank %}
+{% if artist.bilder != blank and artist.bilder.value != blank %}
+  {% assign avatar_img = artist.bilder %}
+{% endif %}
+
+{%- comment -%} Use metaobject created_at {%- endcomment -%}
+{% assign created_at = artist.created_at %}
+{% if created_at == blank %}
+  {% assign created_at = 'now' | date: "%Y-%m-%dT%H:%M:%S%z" %}
+{% endif %}
+
+{% assign now_s = 'now' | date: "%s" | plus: 0 %}
+{% assign created_s = created_at | date: "%s" | plus: 0 %}
+{% assign diff_s = now_s | minus: created_s %}
+{% if diff_s < 0 %}{% assign diff_s = 0 %}{% endif %}
+
+{% assign months = diff_s | divided_by: 2592000 %}
+{% assign years  = diff_s | divided_by: 31536000 %}
+
+{% if months < 3 %}
+  {% assign with_text = "New with ARTCLUB" %}
+{% elsif months < 12 %}
+  {% assign with_text = "With ARTCLUB for 1 year" %}
+{% else %}
+  {% if years < 1 %}{% assign years = 1 %}{% endif %}
+  {% assign with_text = "With ARTCLUB for " | append: years | append: " years" %}
+{% endif %}
+
+<section
+  id="artist-header-{{ section.id }}"
+  class="ac-artist-header"
+  data-artclub-track-impression="artist"
+  data-artclub-page-url="{{ artist_page_url }}"
+  data-artclub-artist-name="{{ display_name | escape }}"
+  {%- if artist_slug != blank -%} data-artclub-artist-slug="{{ artist_slug }}"{%- endif -%}
+  {%- if artist_metaobject_id != blank -%} data-artclub-artist-metaobject-id="{{ artist_metaobject_id }}"{%- endif -%}
+>
+  <style>
+    .ac-artist-header{--bg:#fff;--fg:#0A0A0A;--muted:#6B7280;--line:rgba(0,0,0,.10);--gold:#C8A24A}
+    .ac-artist-header{background:var(--bg);color:var(--fg)}
+    .ac-artist-header .wrap {
+    max-width: 500px;
+    margin: 0 auto;
+    padding: 28px 20px;
+}
+    .ac-artist-header .row{display:flex;gap:18px;align-items:center}
+    .ac-artist-header .avatar{width:88px;height:88px;border-radius:999px;overflow:hidden;border:1px solid var(--line);background:#F3F4F6;flex:0 0 auto}
+    .ac-artist-header .avatar img{width:100%;height:100%;object-fit:cover;display:block}
+    .ac-artist-header .meta{min-width:0;flex:1}
+    .ac-artist-header .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .ac-artist-header .name{font-size:22px;line-height:1.1;font-weight:700;letter-spacing:-.02em;margin:0}
+    .ac-artist-header .badge{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px}
+    .ac-artist-header .user{font-size:13px;color:var(--muted);margin:2px 0 0}
+    .ac-artist-header .quote{margin:10px 0 0;color:var(--fg);font-size:14px;line-height:1.45;max-width:62ch}
+    .ac-artist-header .stats{margin:12px 0 0;font-size:13px;color:var(--muted)}
+    .ac-artist-header .divider{margin-top:18px;border-top:1px solid var(--line)}
+    @media (max-width:640px){
+      .ac-artist-header .wrap{padding:22px 16px}
+      .ac-artist-header .avatar{width:76px;height:76px}
+      .ac-artist-header .name{font-size:20px}
+    }
+  </style>
+
+  <div class="wrap">
+    <div class="row">
+      <div class="avatar" aria-hidden="true">
+        {% if avatar_img != blank %}
+          <img
+            src="{{ avatar_img | image_url: width: 240 }}"
+            alt="{{ display_name | escape }}"
+            loading="lazy"
+            width="240"
+            height="240">
+        {% endif %}
+      </div>
+
+      <div class="meta">
+        <div class="top">
+          <h1 class="name">{{ display_name }}</h1>
+        </div>
+
+        <div class="user">@{{ username }}</div>
+
+        {% if quote != blank %}
+          <div class="quote">“{{ quote }}”</div>
+        {% endif %}
+
+        <div class="stats">{{ with_text }}</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Artist Profile Header",
+  "settings": [],
+  "presets": [
+    { "name": "Artist Profile Header" }
+  ]
+}
+{% endschema %}

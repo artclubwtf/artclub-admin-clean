@@ -1,0 +1,278 @@
+{% comment %}
+sections/product-artclub.liquid
+{% endcomment %}
+
+<section
+  id="product-artclub-{{ section.id }}"
+  class="pc-container section-{{ section.id }}-padding"
+  data-section="{{ section.id }}"
+>
+  {%- style -%}
+    /* Padding aus den Section-Settings */
+    .section-{{ section.id }}-padding {
+      padding-top: {{ section.settings.padding_top | times: 0.75 | round: 0 }}px;
+      padding-bottom: {{ section.settings.padding_bottom | times: 0.75 | round: 0 }}px;
+    }
+    @media (min-width:750px) {
+      .section-{{ section.id }}-padding {
+        padding-top: {{ section.settings.padding_top }}px;
+        padding-bottom: {{ section.settings.padding_bottom }}px;
+      }
+    }
+  {%- endstyle -%}
+
+  {%- comment -%} Dawn-Assets für Preis & Variant-Picker {%- endcomment -%}
+  {{ 'component-price.css'               | asset_url | stylesheet_tag }}
+  {% unless product.has_only_default_variant %}
+    {{ 'component-product-variant-picker.css' | asset_url | stylesheet_tag }}
+  {% endunless %}
+  <script src="{{ 'product-form.js' | asset_url }}" defer></script>
+
+  <div class="grid grid--2-col-tablet grid--1-col">
+    <!-- LINKS: Deine Canvas-Galerie -->
+    <div class="grid__item">
+      <div class="pc-gallery">
+        <div id="room-selector-{{ section.id }}" class="pc-room-selector"></div>
+        <div class="pc-images">
+          <canvas id="artclub-canvas-{{ section.id }}"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- RECHTS: Dawn Produkt-Form -->
+    <div class="grid__item">
+      <product-form
+        id="ProductForm-{{ section.id }}"
+        class="pc-form"
+        data-section="{{ section.id }}"
+        method="post"
+        action="/cart/add"
+      >
+        <div class="pc-info">
+          <!-- Titel & Vendor -->
+          <h1 class="pc-info__title">{{ product.title }}</h1>
+          <p class="pc-info__vendor">{{ product.vendor }}</p>
+
+          <!-- Preis (wird dynamisch von product-form.js upgedatet) -->
+          <div id="Price-{{ section.id }}" class="pc-price">
+            {%- render 'price',
+              product: product,
+              use_variant: true,
+              show_badges: false,
+              price_class: 'pc-price__current'
+            -%}
+          </div>
+
+          <!-- Variant-Dropdowns -->
+          {% unless product.has_only_default_variant %}
+            {% for option in product.options_with_values %}
+              <div class="pc-form__group">
+                <label for="Option{{ forloop.index0 }}-{{ section.id }}" class="pc-form__label">{{ option.name }}</label>
+                <select
+                  id="Option{{ forloop.index0 }}-{{ section.id }}"
+                  name="options[{{ option.name }}]"
+                  class="pc-form__select"
+                >
+                  {% for value in option.values %}
+                    <option value="{{ value }}">{{ value }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            {% endfor %}
+          {% endunless %}
+
+          <!-- In den Warenkorb Button -->
+          <div class="pc-form__group">
+            <button type="submit" class="pc-button pc-button--add">
+              In den Warenkorb
+            </button>
+          </div>
+
+          <!-- USPs -->
+          <div class="pc-usps">
+            {% for block in section.blocks %}
+              {% if block.type == 'usp' %}
+                <div class="pc-usps__item">
+                  {% if block.settings.icon %}
+                    <img src="{{ block.settings.icon | img_url: '50x50' }}" class="pc-usps__icon">
+                  {% endif %}
+                  <p class="pc-usps__text">{{ block.settings.text }}</p>
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+
+          <!-- Accordion: Versand & Service -->
+          <div class="pc-details">
+            <details class="pc-details__item">
+              <summary class="pc-details__summary">Versand &amp; Steuern</summary>
+              <div class="pc-details__content">
+                Steuern und Versand für Lieferung nach {{ shop.country }} inklusive*
+              </div>
+            </details>
+            <details class="pc-details__item">
+              <summary class="pc-details__summary">Kostenloser Service</summary>
+              <div class="pc-details__content">
+                30 Tage Rückgaberecht, Echtheitszertifikat, fertig zum Aufhängen.
+              </div>
+            </details>
+          </div>
+        </div>
+      </product-form>
+    </div>
+  </div>
+
+  {% schema %}
+  {
+    "name": "Product Artclub",
+    "settings": [
+      {
+        "type":"range",
+        "id":"padding_top",
+        "label":"Padding oben",
+        "min":0,
+        "max":100,
+        "step":4,
+        "unit":"px",
+        "default":36
+      },
+      {
+        "type":"range",
+        "id":"padding_bottom",
+        "label":"Padding unten",
+        "min":0,
+        "max":100,
+        "step":4,
+        "unit":"px",
+        "default":36
+      }
+    ],
+    "blocks":[
+      {
+        "type":"usp",
+        "name":"USP",
+        "settings":[
+          { "type":"text","id":"text","label":"Text" },
+          { "type":"image_picker","id":"icon","label":"Icon" }
+        ]
+      },
+      {
+        "type":"room_image",
+        "name":"Raumbild",
+        "settings":[
+          { "type":"image_picker","id":"image","label":"Raumbild" },
+          { "type":"number","id":"zone_top","label":"Zone oben (%)","default":0 },
+          { "type":"number","id":"zone_left","label":"Zone links (%)","default":0 },
+          { "type":"number","id":"zone_bottom","label":"Zone unten (%)","default":0 },
+          { "type":"number","id":"zone_right","label":"Zone rechts (%)","default":0 },
+          { "type":"number","id":"zone_width_cm","label":"Breite Zone (cm)","default":50 },
+          { "type":"number","id":"max_height_cm","label":"Max. Kunstwerk-Höhe (cm)","default":100 },
+          { "type":"checkbox","id":"display_zone_overlay","label":"Zone-Overlay anzeigen","default":false }
+        ]
+      },
+      {
+        "type":"global_image",
+        "name":"Globales Bild",
+        "settings":[
+          { "type":"image_picker","id":"image","label":"Bild" }
+        ]
+      }
+    ],
+    "presets":[{"name":"Product Artclub","category":"Produkt"}]
+  }
+  {% endschema %}
+
+  <!-- DEIN CANVAS-RENDERING (1:1 unverändert) -->
+  <script>
+    (function(){
+      const sectionId = '{{ section.id }}';
+      const canvas    = document.getElementById(`artclub-canvas-${sectionId}`);
+      const selector  = document.getElementById(`room-selector-${sectionId}`);
+      if (!canvas || !selector) return;
+      const ctx = canvas.getContext('2d');
+
+      const artImg  = new Image(); artImg.src  = '{{ product.featured_image | img_url: "2048x2048" }}';
+      const woodImg = new Image(); woodImg.src = '{{ "wood-texture.jpg" | asset_url }}';
+      let loaded=0; [artImg, woodImg].forEach(img=>img.onload=()=>{ if(++loaded===2) init(); });
+
+      const roomBlocks = [{% for b in section.blocks %}{% if b.type=='room_image' and b.settings.image %}{
+        type:'room', imageUrl:'{{ b.settings.image|img_url:"2048x2048" }}',
+        zoneTop:{{b.settings.zone_top}}/100, zoneLeft:{{b.settings.zone_left}}/100,
+        zoneBottom:{{b.settings.zone_bottom}}/100, zoneRight:{{b.settings.zone_right}}/100,
+        zoneWidthCm:{{b.settings.zone_width_cm}}, maxHeightCm:{{b.settings.max_height_cm}},
+        overlay:{{b.settings.display_zone_overlay|json}}
+      }{% unless forloop.last %},{% endunless %}{% endif %}{% endfor %}];
+      const globalBlocks = [{% for b in section.blocks %}{% if b.type=='global_image' and b.settings.image %}{
+        type:'global', imageUrl:'{{ b.settings.image|img_url:"2048x2048" }}'
+      }{% unless forloop.last %},{% endunless %}{% endif %}{% endfor %}];
+
+      const variants = {{ product.variants | json }};
+      const selQuery = `#ProductForm-${section.id} select`;
+
+      function getVariant(){
+        const vals = Array.from(document.querySelectorAll(selQuery)).map(e=>e.value);
+        return variants.find(v=>v.options.every((o,i)=>o===vals[i]));
+      }
+
+      let items=[], currentIdx=0;
+      function init(){
+        const v = getVariant();
+        const m = v.options[0].match(/([\d.]+)\s*x\s*([\d.]+)/);
+        const h = m?parseFloat(m[2]):0;
+        buildSelector(h);
+        draw(0);
+        document.querySelectorAll(selQuery).forEach(e=>e.addEventListener('change',()=>draw(0)));
+      }
+
+      function buildSelector(h){
+        selector.innerHTML='';
+        const rooms = roomBlocks.filter(r=>h<=r.maxHeightCm);
+        items = [...rooms, ...globalBlocks];
+        items.forEach((it,i)=>{
+          const img = document.createElement('img');
+          img.src = it.imageUrl;
+          img.className = 'pc-thumb' + (i===0?' active':'');
+          img.onclick = ()=>{
+            currentIdx = i;
+            selector.querySelectorAll('img').forEach(n=>n.classList.remove('active'));
+            img.classList.add('active');
+            draw(i);
+          };
+          selector.appendChild(img);
+        });
+      }
+
+      function draw(i){
+        const it = items[i], img = new Image();
+        img.onload = ()=>{
+          canvas.width  = img.width;
+          canvas.height = img.height;
+          ctx.clearRect(0,0,canvas.width,canvas.height);
+          ctx.drawImage(img,0,0,canvas.width,canvas.height);
+          if(it.type==='room') render(it);
+        };
+        img.src = it.imageUrl;
+      }
+
+      function render(rb){
+        const X = rb.zoneLeft * canvas.width,
+              Y = rb.zoneTop  * canvas.height,
+              W = (1 - rb.zoneLeft - rb.zoneRight) * canvas.width,
+              H = (1 - rb.zoneTop  - rb.zoneBottom)* canvas.height;
+        const v = getVariant(),
+              m = v.options[0].match(/([\d.]+)\s*x\s*([\d.]+)/),
+              wcm = m?+m[1]:0, hcm = m?+m[2]:0,
+              px = W / rb.zoneWidthCm,
+              wpx= wcm*px, hpx= hcm*px,
+              x  = X + (W - wpx)/2,
+              y  = Y + (H - hpx)/2;
+        ctx.drawImage(artImg, x,y, wpx,hpx);
+        if(rb.overlay){
+          ctx.strokeStyle = 'rgba(255,0,0,0.5)';
+          ctx.lineWidth   = 2;
+          ctx.strokeRect(X,Y,W,H);
+        }
+      }
+    })();
+  </script>
+</section>

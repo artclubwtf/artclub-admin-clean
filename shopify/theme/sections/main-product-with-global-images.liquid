@@ -1,0 +1,300 @@
+{% comment %}
+sections/product-artclub.liquid
+{% endcomment %}
+
+<section id="product-artclub-{{ section.id }}" class="pc-container" data-section-id="{{ section.id }}">
+  <div class="pc-content">
+    <!-- Gallery -->
+    <div class="pc-gallery">
+      <div id="room-selector-{{ section.id }}" class="pc-room-selector"></div>
+      <div class="pc-images">
+        <canvas id="artclub-canvas-{{ section.id }}"></canvas>
+      </div>
+    </div>
+
+    <!-- Info & Product Form -->
+    <div class="pc-info">
+      <!-- Title & Vendor -->
+      <h1 class="pc-info__title">{{ product.title }}</h1>
+      <p class="pc-info__vendor">{{ product.vendor }}</p>
+
+      <!-- Price & Compare -->
+      {% assign first_var = product.selected_or_first_available_variant %}
+      {% assign save      = first_var.compare_at_price | minus: first_var.price %}
+      {% assign pct       = save | times: 100 | divided_by: first_var.compare_at_price | round %}
+      <div id="pc-price-{{ section.id }}" class="pc-price">
+        {% if first_var.compare_at_price > first_var.price %}
+          <span class="pc-price__compare">{{ first_var.compare_at_price | money }}</span>
+          <span class="pc-price__current">{{ first_var.price | money }}</span>
+          <span class="pc-price__saved">Sparen {{ pct }}%</span>
+        {% else %}
+          <span class="pc-price__current">{{ first_var.price | money }}</span>
+        {% endif %}
+      </div>
+
+      <!-- Dawn 13 Product Form -->
+      <form
+        method="post"
+        action="/cart/add"
+        id="product-form-{{ section.id }}"
+        class="pc-form"
+        data-section-id="{{ section.id }}"
+      >
+        <input
+          type="hidden"
+          name="id"
+          id="variant-id-{{ section.id }}"
+          value="{{ first_var.id }}"
+        />
+
+        {% for opt in product.options_with_values %}
+          <div class="pc-form__group">
+            <label
+              for="opt-{{ forloop.index0 }}-{{ section.id }}"
+              class="pc-form__label"
+            >
+              {{ opt.name }}
+            </label>
+            <select
+              id="opt-{{ forloop.index0 }}-{{ section.id }}"
+              name="options[{{ opt.name }}]"
+              class="pc-form__select"
+            >
+              {% for val in opt.values %}
+                <option
+                  value="{{ val }}"
+                  {% if val == first_var.options[forloop.index0] %}selected{% endif %}
+                >
+                  {{ val }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        {% endfor %}
+
+        <button
+          type="submit"
+          class="pc-button pc-button--add"
+          data-add-to-cart
+        >
+          In den Warenkorb
+        </button>
+      </form>
+
+      <!-- USPs -->
+      <div class="pc-usps">
+        {% for block in section.blocks %}
+          {% if block.type == 'usp' %}
+            <div class="pc-usps__item">
+              {% if block.settings.icon %}
+                <img
+                  src="{{ block.settings.icon | img_url: '50x50' }}"
+                  class="pc-usps__icon"
+                />
+              {% endif %}
+              <p class="pc-usps__text">{{ block.settings.text }}</p>
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+
+      <!-- Details -->
+      <div class="pc-details">
+        <details class="pc-details__item">
+          <summary class="pc-details__summary">Versand &amp; Steuern</summary>
+          <div class="pc-details__content">
+            Steuern und Versand für Lieferung nach {{ shop.country }} inklusive*
+          </div>
+        </details>
+        <details class="pc-details__item">
+          <summary class="pc-details__summary">Kostenloser Service</summary>
+          <div class="pc-details__content">
+            30 Tage Rückgaberecht, Echtheitszertifikat, fertig zum Aufhängen.
+          </div>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .pc-container { max-width:100%; margin:auto; padding:1rem; }
+    .pc-content { display:flex; gap:1rem; }
+    @media (max-width:768px){ .pc-content { flex-direction:column; } }
+
+    /* Gallery */
+    .pc-gallery { flex:1 1 60%; background:#171717; border-radius:6px; padding:1rem; min-height:80vh; }
+    .pc-room-selector { display:flex; flex-wrap:wrap; gap:.5rem; margin-bottom:.5rem; }
+    .pc-thumb { width:60px; height:60px; object-fit:cover; cursor:pointer; border:2px solid transparent; }
+    .pc-thumb.active { border-color:#333; }
+    .pc-images { display:flex; align-items:center; justify-content:center; height:calc(80vh - 60px); }
+    .pc-gallery canvas { max-width:100%; }
+
+    /* Info */
+    .pc-info { flex:1 1 35%; }
+    .pc-info__title { font-size:1.5rem; margin-bottom:.25rem; }
+    .pc-info__vendor { font-size:.875rem; color:#666; margin-bottom:1rem; }
+
+    /* Price */
+    .pc-price { margin:1rem 0; display:flex; align-items:baseline; }
+    .pc-price__compare { text-decoration:line-through; color:#999; margin-right:.5rem; }
+    .pc-price__current { font-size:1.25rem; font-weight:bold; }
+    .pc-price__saved { color:green; margin-left:.5rem; font-size:.875rem; }
+
+    /* Form */
+    .pc-form__group { margin-bottom:1rem; }
+    .pc-form__label { display:block; margin-bottom:.25rem; }
+    .pc-form__select { width:100%; padding:.5rem; border:1px solid #ccc; border-radius:4px; }
+    .pc-button { display:block; width:100%; padding:.75rem; border:none; border-radius:4px; cursor:pointer; margin-top:.5rem; }
+    .pc-button--add { background:#000; color:#fff; }
+
+    /* USPs */
+    .pc-usps { margin-top:1.5rem; }
+    .pc-usps__item { display:flex; align-items:center; margin-bottom:.75rem; }
+    .pc-usps__icon { width:24px; height:24px; margin-right:.5rem; }
+    .pc-usps__text { font-size:.875rem; color:#333; }
+
+    /* Details */
+    .pc-details__item { border-top:1px solid #eaeaea; padding:.75rem 0; }
+    .pc-details__summary { font-weight:500; cursor:pointer; }
+    .pc-details__content { margin-top:.5rem; font-size:.875rem; color:#555; }
+  </style>
+
+  <script>
+    (function() {
+      const sectionId = '{{ section.id }}';
+      const selQuery  = `#product-artclub-${sectionId} select`;
+      const varInput  = document.getElementById(`variant-id-${sectionId}`);
+      const priceDiv  = document.getElementById(`pc-price-${section.id}`);
+      const canvas    = document.getElementById(`artclub-canvas-${sectionId}`);
+      const selector  = document.getElementById(`room-selector-${section.id}`);
+      if (![varInput, priceDiv, canvas, selector].every(e => e)) return;
+      const ctx = canvas.getContext('2d');
+
+      // Load images
+      const artImg  = new Image(); artImg.src  = '{{ product.featured_image | img_url: "2048x2048" }}';
+      const woodImg = new Image(); woodImg.src = '{{ "wood-texture.jpg" | asset_url }}';
+      let loaded = 0;
+      [artImg, woodImg].forEach(img => img.onload = () => { if (++loaded === 2) init(); });
+
+      // Build blocks
+      const roomBlocks = [{% for b in section.blocks %}{% if b.type == 'room_image' and b.settings.image %}{
+        type: 'room',
+        imageUrl: '{{ b.settings.image | img_url: "2048x2048" }}',
+        zoneTop: {{ b.settings.zone_top }} / 100,
+        zoneLeft: {{ b.settings.zone_left }} / 100,
+        zoneBottom: {{ b.settings.zone_bottom }} / 100,
+        zoneRight: {{ b.settings.zone_right }} / 100,
+        zoneWidthCm: {{ b.settings.zone_width_cm }},
+        maxHeightCm: {{ b.settings.max_height_cm }},
+        overlay: {{ b.settings.display_zone_overlay | json }}
+      }{% unless forloop.last %},{% endunless %}{% endif %}{% endfor %}];
+      const globalBlocks = [{% for b in section.blocks %}{% if b.type == 'global_image' and b.settings.image %}{
+        type: 'global',
+        imageUrl: '{{ b.settings.image | img_url: "2048x2048" }}'
+      }{% unless forloop.last %},{% endunless %}{% endif %}{% endfor %}];
+
+      // Variants
+      const variants = {{ product.variants | json }};
+
+      function getCurrentVariant() {
+        const vals = Array.from(document.querySelectorAll(selQuery)).map(el => el.value);
+        return variants.find(v => v.options.every((o,i) => o === vals[i]));
+      }
+
+      function updatePrice(v) {
+        let html = '';
+        if (v.compare_at_price > v.price) {
+          const diff = v.compare_at_price - v.price;
+          const p    = Math.round(diff * 100 / v.compare_at_price);
+          html += `<span class="pc-price__compare">${Shopify.formatMoney(v.compare_at_price)}</span>`;
+          html += `<span class="pc-price__current">${Shopify.formatMoney(v.price)}</span>`;
+          html += `<span class="pc-price__saved">Sparen ${p}%</span>`;
+        } else {
+          html = `<span class="pc-price__current">${Shopify.formatMoney(v.price)}</span>`;
+        }
+        priceDiv.innerHTML = html;
+      }
+
+      let items = [], currentIdx = 0;
+
+      function init() {
+        const v0 = getCurrentVariant();
+        varInput.value = v0.id;
+        updatePrice(v0);
+
+        const m0 = v0.options[0].match(/([\d.]+)\s*x\s*([\d.]+)/);
+        const hcm = m0 ? parseFloat(m0[2]) : 0;
+
+        buildSelector(hcm);
+        drawItem(0);
+
+        document.querySelectorAll(selQuery).forEach(el =>
+          el.addEventListener('change', () => {
+            const v = getCurrentVariant();
+            varInput.value = v.id;
+            updatePrice(v);
+
+            const m = v.options[0].match(/([\d.]+)\s*x\s*([\d.]+)/);
+            buildSelector(m ? parseFloat(m[2]) : 0);
+            drawItem(0);
+          })
+        );
+      }
+
+      function buildSelector(maxH) {
+        selector.innerHTML = '';
+        const rooms = roomBlocks.filter(rb => maxH <= rb.maxHeightCm);
+        items = [...rooms, ...globalBlocks];
+        items.forEach((it, idx) => {
+          const img = document.createElement('img');
+          img.src = it.imageUrl;
+          img.className = 'pc-thumb' + (idx === 0 ? ' active' : '');
+          img.onclick = () => {
+            currentIdx = idx;
+            selector.querySelectorAll('img').forEach(n => n.classList.remove('active'));
+            img.classList.add('active');
+            drawItem(idx);
+          };
+          selector.appendChild(img);
+        });
+      }
+
+      function drawItem(idx) {
+        const it = items[idx];
+        const img = new Image();
+        img.onload = () => {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.clearRect(0,0,canvas.width,canvas.height);
+          ctx.drawImage(img,0,0,canvas.width,canvas.height);
+          if (it.type === 'room') renderArtwork(it);
+        };
+        img.src = it.imageUrl;
+      }
+
+      function renderArtwork(rb) {
+        const X = rb.zoneLeft * canvas.width;
+        const Y = rb.zoneTop  * canvas.height;
+        const W = (1 - rb.zoneLeft - rb.zoneRight) * canvas.width;
+        const H = (1 - rb.zoneTop  - rb.zoneBottom) * canvas.height;
+        const v = getCurrentVariant();
+        const m = v.options[0].match(/([\d.]+)\s*x\s*([\d.]+)/);
+        const wcm = m ? +m[1] : 0;
+        const hcm = m ? +m[2] : 0;
+        const px  = W / rb.zoneWidthCm;
+        const wpx = wcm * px;
+        const hpx = hcm * px;
+        const x   = X + (W - wpx)/2;
+        const y   = Y + (H - hpx)/2;
+
+        ctx.drawImage(artImg, x, y, wpx, hpx);
+
+        if (rb.overlay) {
+          ctx.strokeStyle = 'rgba(255,0,0,0.5)';
+          ctx.lineWidth   = 2;
+          ctx.strokeRect(X, Y, W, H);
+        }
+      }
+    })();
+  </script>
+</section>

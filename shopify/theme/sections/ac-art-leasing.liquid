@@ -1,0 +1,1316 @@
+{%- comment -%}
+  Section: Office Art Leasing Landingpage
+  Usage: Fullpage Landing für "Art That Works — Kunstleasing für moderne Büros"
+{%- endcomment -%}
+
+<section
+  id="office-leasing-{{ section.id }}"
+  class="office-leasing-landing color-background-1"
+>
+  <style>
+    #office-leasing-{{ section.id }} {
+      padding: 4rem 0 5rem;
+      background: #f7f4f0;
+      color: #111111;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+    }
+
+    #office-leasing-{{ section.id }} .ol-container {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-grid {
+      display: grid;
+      gap: 2.5rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-hero {
+      display: grid;
+      gap: 2.5rem;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+      align-items: center;
+      margin-bottom: 4rem;
+    }
+
+    @media (max-width: 900px) {
+      #office-leasing-{{ section.id }} .ol-hero {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    #office-leasing-{{ section.id }} .ol-kicker {
+      text-transform: uppercase;
+      letter-spacing: .15em;
+      font-size: .75rem;
+      font-weight: 500;
+      color: #8b8174;
+      margin-bottom: .75rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-hero-title {
+      font-size: clamp(2.2rem, 3vw, 2.8rem);
+      line-height: 1.05;
+      font-weight: 600;
+      letter-spacing: -.03em;
+      margin-bottom: 1rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-hero-subtitle {
+      font-size: 1.02rem;
+      line-height: 1.6;
+      color: #4d453a;
+      margin-bottom: 1.5rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-hero-bullets {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 1.75rem;
+      display: grid;
+      gap: .5rem;
+      color: #3a3329;
+    }
+
+    #office-leasing-{{ section.id }} .ol-hero-bullets li::before {
+      content: "•";
+      margin-right: .5rem;
+      color: #111111;
+    }
+
+    #office-leasing-{{ section.id }} .ol-hero-ctas {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .75rem;
+      align-items: center;
+    }
+
+    #office-leasing-{{ section.id }} .ol-btn-primary,
+    #office-leasing-{{ section.id }} .ol-btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: .8rem 1.4rem;
+      border-radius: 999px;
+      font-size: .95rem;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: transform 150ms ease, box-shadow 150ms ease, background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+    }
+
+    #office-leasing-{{ section.id }} .ol-btn-primary {
+      background: #111111;
+      color: #ffffff;
+      box-shadow: 0 12px 25px rgba(0, 0, 0, 0.16);
+    }
+
+    #office-leasing-{{ section.id }} .ol-btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 16px 30px rgba(0, 0, 0, 0.22);
+    }
+
+    #office-leasing-{{ section.id }} .ol-btn-secondary {
+      background: transparent;
+      color: #111111;
+      border-color: #c7b9a4;
+    }
+
+    #office-leasing-{{ section.id }} .ol-btn-secondary:hover {
+      background: #111111;
+      color: #ffffff;
+      border-color: #111111;
+    }
+
+    #office-leasing-{{ section.id }} .ol-hero-meta {
+      font-size: .8rem;
+      color: #7a6f61;
+      margin-top: .6rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-hero-visual {
+      background: #e3dbd0;
+      border-radius: 1.5rem;
+      padding: 1.4rem;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.10);
+    }
+
+    #office-leasing-{{ section.id }} .ol-hero-visual-inner {
+      background: #f7f4f0;
+      border-radius: 1.1rem;
+      padding: 1.4rem;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 1rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-hero-room {
+      border-radius: 1rem;
+      background: linear-gradient(135deg, #f5f0e6, #ebe0d1);
+      padding: 1.4rem;
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr);
+      gap: 1.25rem;
+      align-items: center;
+    }
+
+    @media (max-width: 640px) {
+      #office-leasing-{{ section.id }} .ol-hero-room {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    #office-leasing-{{ section.id }} .ol-hero-artwall {
+      background: #d8cec1;
+      border-radius: .9rem;
+      padding: 1rem;
+      position: relative;
+    }
+
+    #office-leasing-{{ section.id }} .ol-hero-art-placeholder {
+      border-radius: .6rem;
+      background: repeating-linear-gradient(
+        135deg,
+        rgba(17,17,17,0.08),
+        rgba(17,17,17,0.08) 8px,
+        rgba(17,17,17,0.02) 8px,
+        rgba(17,17,17,0.02) 16px
+      );
+      height: 170px;
+    }
+
+    #office-leasing-{{ section.id }} .ol-hero-art-label {
+      position: absolute;
+      bottom: .9rem;
+      left: 1rem;
+      right: 1rem;
+      display: flex;
+      justify-content: space-between;
+      font-size: .7rem;
+      color: #3b3429;
+      opacity: .85;
+    }
+
+    #office-leasing-{{ section.id }} .ol-hero-office-meta {
+      font-size: .8rem;
+      color: #6b5f51;
+    }
+
+    #office-leasing-{{ section.id }} .ol-section {
+      margin-bottom: 4rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-section-header {
+      margin-bottom: 2rem;
+      text-align: left;
+    }
+
+    #office-leasing-{{ section.id }} .ol-section-kicker {
+      text-transform: uppercase;
+      letter-spacing: .18em;
+      font-size: .75rem;
+      color: #8b8174;
+      margin-bottom: .35rem;
+      font-weight: 500;
+    }
+
+    #office-leasing-{{ section.id }} .ol-section-title {
+      font-size: 1.6rem;
+      letter-spacing: -.02em;
+      margin: 0 0 .5rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-section-subtitle {
+      font-size: .98rem;
+      color: #5a5043;
+      max-width: 540px;
+    }
+
+    /* Benefits */
+    #office-leasing-{{ section.id }} .ol-benefits-grid {
+      display: grid;
+      gap: 1.6rem;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    @media (max-width: 900px) {
+      #office-leasing-{{ section.id }} .ol-benefits-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 640px) {
+      #office-leasing-{{ section.id }} .ol-benefits-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    #office-leasing-{{ section.id }} .ol-benefit-card {
+      background: #ffffff;
+      border-radius: 1.1rem;
+      padding: 1.2rem 1.25rem;
+      border: 1px solid #e0d7c9;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.03);
+    }
+
+    #office-leasing-{{ section.id }} .ol-benefit-eyebrow {
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .14em;
+      color: #a0917c;
+      margin-bottom: .35rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-benefit-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: .4rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-benefit-text {
+      font-size: .9rem;
+      color: #5b5144;
+      line-height: 1.6;
+    }
+
+    /* Process */
+    #office-leasing-{{ section.id }} .ol-process-grid {
+      display: grid;
+      gap: 1.5rem;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      counter-reset: step;
+    }
+
+    @media (max-width: 900px) {
+      #office-leasing-{{ section.id }} .ol-process-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 640px) {
+      #office-leasing-{{ section.id }} .ol-process-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    #office-leasing-{{ section.id }} .ol-process-step {
+      background: #f9f5ef;
+      border-radius: 1rem;
+      padding: 1.1rem 1.2rem;
+      border: 1px solid #e3d7c8;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #office-leasing-{{ section.id }} .ol-process-step::before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      top: .85rem;
+      right: 1rem;
+      font-size: 2.2rem;
+      font-weight: 500;
+      color: rgba(139,129,116,0.18);
+    }
+
+    #office-leasing-{{ section.id }} .ol-process-title {
+      font-size: .98rem;
+      font-weight: 600;
+      margin-bottom: .35rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-process-text {
+      font-size: .9rem;
+      color: #5b5144;
+      line-height: 1.5;
+    }
+
+    /* Packages */
+    #office-leasing-{{ section.id }} .ol-packages-grid {
+      display: grid;
+      gap: 1.6rem;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    @media (max-width: 900px) {
+      #office-leasing-{{ section.id }} .ol-packages-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 640px) {
+      #office-leasing-{{ section.id }} .ol-packages-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    #office-leasing-{{ section.id }} .ol-package-card {
+      background: #ffffff;
+      border-radius: 1.2rem;
+      padding: 1.4rem 1.4rem 1.5rem;
+      border: 1px solid #ded4c8;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 1rem;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.06);
+    }
+
+    #office-leasing-{{ section.id }} .ol-package-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: .5rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-package-name {
+      font-weight: 600;
+      font-size: 1.05rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-package-tag {
+      font-size: .75rem;
+      padding: .2rem .6rem;
+      border-radius: 999px;
+      border: 1px solid #d3c7b7;
+      color: #645746;
+      background: #f7f1e7;
+    }
+
+    #office-leasing-{{ section.id }} .ol-package-meta {
+      font-size: .85rem;
+      color: #6a6053;
+    }
+
+    #office-leasing-{{ section.id }} .ol-package-list {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 .5rem;
+      font-size: .9rem;
+      color: #4f4538;
+      display: grid;
+      gap: .28rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-package-list li::before {
+      content: "✓";
+      color: #111111;
+      margin-right: .35rem;
+      font-size: .8rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-package-cta {
+      margin-top: .3rem;
+    }
+
+    /* FAQ */
+    #office-leasing-{{ section.id }} .ol-faq-list {
+      display: grid;
+      gap: .9rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-faq-item {
+      background: #fff;
+      border-radius: .9rem;
+      border: 1px solid #e1d6c8;
+      padding: .9rem 1rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-faq-item summary {
+      list-style: none;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: .95rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    #office-leasing-{{ section.id }} .ol-faq-item summary::-webkit-details-marker {
+      display: none;
+    }
+
+    #office-leasing-{{ section.id }} .ol-faq-item summary span.ol-faq-icon {
+      font-size: 1.1rem;
+      color: #8b8174;
+      margin-left: .9rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-faq-item p {
+      margin: .55rem 0 0;
+      font-size: .9rem;
+      color: #5b5144;
+      line-height: 1.6;
+    }
+
+    /* Logos */
+    #office-leasing-{{ section.id }} .ol-logos-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem 2.75rem;
+      align-items: center;
+      font-size: .85rem;
+      color: #8b8174;
+    }
+
+    #office-leasing-{{ section.id }} .ol-logos-label {
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: .16em;
+      font-size: .72rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-logo-pill {
+      padding: .4rem .8rem;
+      border-radius: 999px;
+      background: #f1e8da;
+      border: 1px solid #e1d6c8;
+      font-size: .8rem;
+      color: #514535;
+    }
+
+    /* Contact */
+    #office-leasing-{{ section.id }} .ol-contact-card {
+      background: #111111;
+      color: #f7f4f0;
+      border-radius: 1.5rem;
+      padding: 2rem 1.7rem;
+      display: grid;
+      gap: 2rem;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+      align-items: start;
+    }
+
+    @media (max-width: 900px) {
+      #office-leasing-{{ section.id }} .ol-contact-card {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    #office-leasing-{{ section.id }} .ol-contact-title {
+      font-size: 1.4rem;
+      letter-spacing: -.02em;
+      margin-bottom: .5rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-contact-sub {
+      font-size: .95rem;
+      color: #d0c6b7;
+      max-width: 420px;
+    }
+
+    #office-leasing-{{ section.id }} .ol-contact-meta {
+      margin-top: 1rem;
+      font-size: .8rem;
+      color: #b9ae9f;
+    }
+
+    #office-leasing-{{ section.id }} .ol-contact-form {
+      display: grid;
+      gap: .9rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-contact-form label {
+      font-size: .8rem;
+      text-transform: uppercase;
+      letter-spacing: .14em;
+      margin-bottom: .25rem;
+      display: block;
+      color: #d6cbbd;
+    }
+
+    #office-leasing-{{ section.id }} .ol-contact-form input,
+    #office-leasing-{{ section.id }} .ol-contact-form textarea,
+    #office-leasing-{{ section.id }} .ol-contact-form select {
+      width: 100%;
+      border-radius: .7rem;
+      border: 1px solid #3b332a;
+      background: #18130d;
+      color: #f7f4f0;
+      padding: .7rem .8rem;
+      font-size: .9rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-contact-form textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+
+    #office-leasing-{{ section.id }} .ol-contact-form button {
+      margin-top: .4rem;
+    }
+
+    #office-leasing-{{ section.id }} .ol-contact-note {
+      font-size: .75rem;
+      color: #b1a697;
+      margin-top: .4rem;
+    }
+  </style>
+
+  <div class="ol-container">
+    {%- comment -%} HERO {%- endcomment -%}
+    <div class="ol-hero">
+      <div class="ol-hero-copy">
+        {%- if section.settings.hero_kicker != blank -%}
+          <div class="ol-kicker">{{ section.settings.hero_kicker }}</div>
+        {%- endif -%}
+
+        <h1 class="ol-hero-title">
+          {{ section.settings.hero_title }}
+        </h1>
+
+        {%- if section.settings.hero_subtitle != blank -%}
+          <p class="ol-hero-subtitle">
+            {{ section.settings.hero_subtitle }}
+          </p>
+        {%- endif -%}
+
+        {%- if section.settings.show_hero_bullets and section.settings.hero_bullets != blank -%}
+          <ul class="ol-hero-bullets">
+            {%- assign bullets = section.settings.hero_bullets | split: "\n" -%}
+            {%- for bullet in bullets -%}
+              {%- assign trimmed = bullet | strip -%}
+              {%- if trimmed != blank -%}
+                <li>{{ trimmed }}</li>
+              {%- endif -%}
+            {%- endfor -%}
+          </ul>
+        {%- endif -%}
+
+        <div class="ol-hero-ctas">
+          {%- if section.settings.primary_cta_label != blank -%}
+            <a href="#office-leasing-contact-{{ section.id }}" class="ol-btn-primary">
+              {{ section.settings.primary_cta_label }}
+            </a>
+          {%- endif -%}
+
+          {%- if section.settings.secondary_cta_label != blank and section.settings.secondary_cta_url != blank -%}
+            <a href="{{ section.settings.secondary_cta_url }}" class="ol-btn-secondary">
+              {{ section.settings.secondary_cta_label }}
+            </a>
+          {%- endif -%}
+        </div>
+
+        {%- if section.settings.hero_meta != blank -%}
+          <div class="ol-hero-meta">
+            {{ section.settings.hero_meta }}
+          </div>
+        {%- endif -%}
+      </div>
+
+      <div class="ol-hero-visual" aria-hidden="true">
+        <div class="ol-hero-visual-inner">
+          <div class="ol-hero-room">
+            <div class="ol-hero-artwall">
+              <div class="ol-hero-art-placeholder"></div>
+              <div class="ol-hero-art-label">
+                <span>{{ section.settings.hero_art_label_left }}</span>
+                <span>{{ section.settings.hero_art_label_right }}</span>
+              </div>
+            </div>
+            <div class="ol-hero-office-meta">
+              {{ section.settings.hero_office_meta }}
+            </div>
+          </div>
+          <div class="ol-hero-office-meta">
+            {{ section.settings.hero_bottom_meta }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {%- comment -%} LOGOS {%- endcomment -%}
+    {%- assign has_logo = false -%}
+    {%- for block in section.blocks -%}
+    {%- if block.type == 'logo' -%}
+        {%- assign has_logo = true -%}
+    {%- endif -%}
+    {%- endfor -%}
+    {%- if has_logo -%}
+    <div class="ol-section" id="office-leasing-logos-{{ section.id }}">
+        <div class="ol-logos-bar">
+        <span class="ol-logos-label">{{ section.settings.logos_label }}</span>
+        {%- for block in section.blocks -%}
+            {%- if block.type == 'logo' -%}
+            <span class="ol-logo-pill">
+                {{ block.settings.logo_text }}
+            </span>
+            {%- endif -%}
+        {%- endfor -%}
+        </div>
+    </div>
+    {%- endif -%}
+
+
+    {%- comment -%} BENEFITS {%- endcomment -%}
+    <div class="ol-section" id="office-leasing-benefits-{{ section.id }}">
+      <div class="ol-section-header">
+        <div class="ol-section-kicker">{{ section.settings.benefits_kicker }}</div>
+        <h2 class="ol-section-title">{{ section.settings.benefits_title }}</h2>
+        {%- if section.settings.benefits_subtitle != blank -%}
+          <p class="ol-section-subtitle">
+            {{ section.settings.benefits_subtitle }}
+          </p>
+        {%- endif -%}
+      </div>
+
+      <div class="ol-benefits-grid">
+        {%- for block in section.blocks -%}
+            {%- if block.type == 'benefit' -%}
+            <div class="ol-benefit-card" {{ block.shopify_attributes }}>
+                {%- if block.settings.eyebrow != blank -%}
+                <div class="ol-benefit-eyebrow">{{ block.settings.eyebrow }}</div>
+                {%- endif -%}
+                <div class="ol-benefit-title">{{ block.settings.title }}</div>
+                <div class="ol-benefit-text">{{ block.settings.text }}</div>
+            </div>
+            {%- endif -%}
+        {%- endfor -%}
+        </div>
+      </div>
+
+
+
+
+    {%- comment -%} PROCESS {%- endcomment -%}
+    <div class="ol-section" id="office-leasing-process-{{ section.id }}">
+      <div class="ol-section-header">
+        <div class="ol-section-kicker">{{ section.settings.process_kicker }}</div>
+        <h2 class="ol-section-title">{{ section.settings.process_title }}</h2>
+        {%- if section.settings.process_subtitle != blank -%}
+          <p class="ol-section-subtitle">
+            {{ section.settings.process_subtitle }}
+          </p>
+        {%- endif -%}
+      </div>
+
+      <div class="ol-process-grid">
+        {%- for block in section.blocks -%}
+            {%- if block.type == 'step' -%}
+            <div class="ol-process-step" {{ block.shopify_attributes }}>
+                <div class="ol-process-title">{{ block.settings.title }}</div>
+                <div class="ol-process-text">{{ block.settings.text }}</div>
+            </div>
+            {%- endif -%}
+        {%- endfor -%}
+        </div>
+
+    </div>
+
+    {%- comment -%} PACKAGES {%- endcomment -%}
+    <div class="ol-section" id="office-leasing-packages-{{ section.id }}">
+      <div class="ol-section-header">
+        <div class="ol-section-kicker">{{ section.settings.packages_kicker }}</div>
+        <h2 class="ol-section-title">{{ section.settings.packages_title }}</h2>
+        {%- if section.settings.packages_subtitle != blank -%}
+          <p class="ol-section-subtitle">
+            {{ section.settings.packages_subtitle }}
+          </p>
+        {%- endif -%}
+      </div>
+
+      <div class="ol-packages-grid">
+  {%- for block in section.blocks -%}
+    {%- if block.type == 'package' -%}
+      <div class="ol-package-card" {{ block.shopify_attributes }}>
+        <div>
+          <div class="ol-package-header">
+            <div class="ol-package-name">{{ block.settings.name }}</div>
+            {%- if block.settings.tagline != blank -%}
+              <div class="ol-package-tag">{{ block.settings.tagline }}</div>
+            {%- endif -%}
+          </div>
+          {%- if block.settings.meta != blank -%}
+            <div class="ol-package-meta">
+              {{ block.settings.meta }}
+            </div>
+          {%- endif -%}
+          {%- if block.settings.features != blank -%}
+            <ul class="ol-package-list">
+              {%- assign feats = block.settings.features | split: "\n" -%}
+              {%- for feat in feats -%}
+                {%- assign trimmed = feat | strip -%}
+                {%- if trimmed != blank -%}
+                  <li>{{ trimmed }}</li>
+                {%- endif -%}
+              {%- endfor -%}
+            </ul>
+          {%- endif -%}
+        </div>
+
+        <div class="ol-package-cta">
+          <a href="#office-leasing-contact-{{ section.id }}" class="ol-btn-secondary">
+            {{ block.settings.cta_label | default: section.settings.package_default_cta }}
+          </a>
+        </div>
+      </div>
+    {%- endif -%}
+  {%- endfor -%}
+</div>
+
+    </div>
+
+    {%- comment -%} FAQ {%- endcomment -%}
+    {%- assign has_faq = false -%}
+{%- for block in section.blocks -%}
+  {%- if block.type == 'faq' -%}
+    {%- assign has_faq = true -%}
+  {%- endif -%}
+{%- endfor -%}
+
+{%- if has_faq -%}
+  <div class="ol-section" id="office-leasing-faq-{{ section.id }}">
+    <div class="ol-section-header">
+      <div class="ol-section-kicker">{{ section.settings.faq_kicker }}</div>
+      <h2 class="ol-section-title">{{ section.settings.faq_title }}</h2>
+      {%- if section.settings.faq_subtitle != blank -%}
+        <p class="ol-section-subtitle">
+          {{ section.settings.faq_subtitle }}
+        </p>
+      {%- endif -%}
+    </div>
+
+    <div class="ol-faq-list">
+      {%- for block in section.blocks -%}
+        {%- if block.type == 'faq' -%}
+          <details class="ol-faq-item" {{ block.shopify_attributes }}>
+            <summary>
+              <span>{{ block.settings.question }}</span>
+              <span class="ol-faq-icon">+</span>
+            </summary>
+            <p>{{ block.settings.answer }}</p>
+          </details>
+        {%- endif -%}
+      {%- endfor -%}
+    </div>
+  </div>
+{%- endif -%}
+
+
+    {%- comment -%} CONTACT CTA {%- endcomment -%}
+    <div class="ol-section" id="office-leasing-contact-{{ section.id }}">
+      <div class="ol-contact-card">
+        <div>
+          <div class="ol-section-kicker">{{ section.settings.contact_kicker }}</div>
+          <h2 class="ol-contact-title">{{ section.settings.contact_title }}</h2>
+          {%- if section.settings.contact_subtitle != blank -%}
+            <p class="ol-contact-sub">
+              {{ section.settings.contact_subtitle }}
+            </p>
+          {%- endif -%}
+          {%- if section.settings.contact_meta != blank -%}
+            <div class="ol-contact-meta">
+              {{ section.settings.contact_meta }}
+            </div>
+          {%- endif -%}
+        </div>
+
+        <div>
+          {% form 'contact', id: 'OfficeLeasingContact-' | append: section.id %}
+            <div class="ol-contact-form">
+              <input type="hidden" name="contact[Form]" value="Office Art Leasing Landing" />
+              {%- if section.settings.contact_context_tag != blank -%}
+                <input type="hidden" name="contact[Context]" value="{{ section.settings.contact_context_tag }}" />
+              {%- endif -%}
+
+              <div>
+                <label for="office-name-{{ section.id }}">{{ section.settings.label_company }}</label>
+                <input
+                  id="office-name-{{ section.id }}"
+                  type="text"
+                  name="contact[Unternehmen]"
+                  autocomplete="organization"
+                  required
+                >
+              </div>
+
+              <div>
+                <label for="office-contact-{{ section.id }}">{{ section.settings.label_contact }}</label>
+                <input
+                  id="office-contact-{{ section.id }}"
+                  type="text"
+                  name="contact[Ansprechperson]"
+                  autocomplete="name"
+                  required
+                >
+              </div>
+
+              <div>
+                <label for="office-email-{{ section.id }}">{{ section.settings.label_email }}</label>
+                <input
+                  id="office-email-{{ section.id }}"
+                  type="email"
+                  name="contact[email]"
+                  autocomplete="email"
+                  required
+                >
+              </div>
+
+              <div>
+                <label for="office-size-{{ section.id }}">{{ section.settings.label_office_size }}</label>
+                <select id="office-size-{{ section.id }}" name="contact[Bürogröße]">
+                  <option value="" selected disabled>{{ section.settings.label_office_size_placeholder }}</option>
+                  <option value="bis 10 Arbeitsplätze">bis 10 Arbeitsplätze</option>
+                  <option value="11–30 Arbeitsplätze">11–30 Arbeitsplätze</option>
+                  <option value="31–80 Arbeitsplätze">31–80 Arbeitsplätze</option>
+                  <option value="80+ Arbeitsplätze">80+ Arbeitsplätze</option>
+                </select>
+              </div>
+
+              <div>
+                <label for="office-message-{{ section.id }}">{{ section.settings.label_message }}</label>
+                <textarea
+                  id="office-message-{{ section.id }}"
+                  name="contact[Nachricht]"
+                  rows="4"
+                  placeholder="{{ section.settings.placeholder_message }}"
+                ></textarea>
+              </div>
+
+              <button type="submit" class="ol-btn-primary">
+                {{ section.settings.contact_cta_label }}
+              </button>
+              {%- if section.settings.contact_note != blank -%}
+                <div class="ol-contact-note">
+                  {{ section.settings.contact_note }}
+                </div>
+              {%- endif -%}
+            </div>
+
+            {%- if form.posted_successfully? -%}
+              <p class="ol-contact-note">
+                {{ 'contact.form.post_success' | t }}
+              </p>
+            {%- endif -%}
+
+            {%- if form.errors -%}
+              <p class="ol-contact-note">
+                {{ 'contact.form.error_heading' | t }}
+              </p>
+            {%- endif -%}
+          {% endform %}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Office Art Leasing",
+  "tag": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "hero_kicker",
+      "label": "Hero Kicker",
+      "default": "Artclub Office Leasing"
+    },
+    {
+      "type": "text",
+      "id": "hero_title",
+      "label": "Hero Titel",
+      "default": "Art That Works — Kunstleasing für moderne Büros"
+    },
+    {
+      "type": "textarea",
+      "id": "hero_subtitle",
+      "label": "Hero Untertitel",
+      "default": "Wir kuratieren echte Kunst für eure Büros: flexibel, steuerlich absetzbar und ohne Anschaffungskosten. Von der Beratung bis zur Hängung – alles aus einer Hand."
+    },
+    {
+      "type": "checkbox",
+      "id": "show_hero_bullets",
+      "label": "Hero Bulletpoints anzeigen",
+      "default": true
+    },
+    {
+      "type": "textarea",
+      "id": "hero_bullets",
+      "label": "Hero Bulletpoints (jeweils neue Zeile)",
+      "default": "Kunstleasing ab 3 Werken\nFlexible Laufzeiten & Austauschoption\nAuf Wunsch inklusive Hängung & Versicherung"
+    },
+    {
+      "type": "text",
+      "id": "primary_cta_label",
+      "label": "Primärer CTA-Text",
+      "default": "Kostenlosen Vorschlag erhalten"
+    },
+    {
+      "type": "text",
+      "id": "secondary_cta_label",
+      "label": "Sekundärer CTA-Text",
+      "default": "Deck zur Office-Kunst anfordern"
+    },
+    {
+      "type": "url",
+      "id": "secondary_cta_url",
+      "label": "Sekundärer CTA-Link"
+    },
+    {
+      "type": "textarea",
+      "id": "hero_meta",
+      "label": "Hero Meta (kleiner Text unter CTAs)",
+      "default": "Unverbindliche Anfrage · Antwort in der Regel innerhalb von 24 Stunden."
+    },
+    {
+      "type": "text",
+      "id": "hero_art_label_left",
+      "label": "Label links am Art Placeholder",
+      "default": "Kuratiertes Artwork (Placeholder)"
+    },
+    {
+      "type": "text",
+      "id": "hero_art_label_right",
+      "label": "Label rechts am Art Placeholder",
+      "default": "Flexible Leasing-Option"
+    },
+    {
+      "type": "textarea",
+      "id": "hero_office_meta",
+      "label": "Text neben Art-Wall",
+      "default": "Euer Büro als kuratierter Raum: Cleanes Set-up mit echter Kunst – abgestimmt auf Brand, Architektur und Team."
+    },
+    {
+      "type": "textarea",
+      "id": "hero_bottom_meta",
+      "label": "Text unten im Hero-Visual",
+      "default": "Artclub betreut den gesamten Prozess: Auswahl, Logistik, Versicherung & regelmäßige Updates der Werke."
+    },
+
+    {
+      "type": "text",
+      "id": "logos_label",
+      "label": "Logos-Unterzeile",
+      "default": "Ausgewählte Unternehmen, die mit Kunst arbeiten"
+    },
+
+    {
+      "type": "text",
+      "id": "benefits_kicker",
+      "label": "Benefits Kicker",
+      "default": "Warum Kunstleasing?"
+    },
+    {
+      "type": "text",
+      "id": "benefits_title",
+      "label": "Benefits Titel",
+      "default": "Kunst, die eure Marke und eure Teams stärkt."
+    },
+    {
+      "type": "textarea",
+      "id": "benefits_subtitle",
+      "label": "Benefits Untertitel",
+      "default": "Wir denken Bürokunst nicht als Dekoration, sondern als Teil eurer Brand Experience – vom Empfang bis zur Meeting-Zone."
+    },
+
+    {
+      "type": "text",
+      "id": "process_kicker",
+      "label": "Prozess Kicker",
+      "default": "So läuft es ab"
+    },
+    {
+      "type": "text",
+      "id": "process_title",
+      "label": "Prozess Titel",
+      "default": "Von der Anfrage zur kuratierten Wand – in wenigen Schritten."
+    },
+    {
+      "type": "textarea",
+      "id": "process_subtitle",
+      "label": "Prozess Untertitel",
+      "default": "Wir nehmen euch die ganze Arbeit ab. Ihr gebt Rahmenbedingungen vor – wir liefern ein fertiges Konzept."
+    },
+
+    {
+      "type": "text",
+      "id": "packages_kicker",
+      "label": "Pakete Kicker",
+      "default": "Pakete & Set-ups"
+    },
+    {
+      "type": "text",
+      "id": "packages_title",
+      "label": "Pakete Titel",
+      "default": "Leasing-Set-ups für verschiedene Bürosituationen."
+    },
+    {
+      "type": "textarea",
+      "id": "packages_subtitle",
+      "label": "Pakete Untertitel",
+      "default": "Jedes Paket wird individuell kalkuliert – abhängig von Anzahl der Werke, Laufzeit, Versicherung und Logistik."
+    },
+    {
+      "type": "text",
+      "id": "package_default_cta",
+      "label": "Standard-CTA für Pakete",
+      "default": "Paket unverbindlich anfragen"
+    },
+
+    {
+      "type": "text",
+      "id": "faq_kicker",
+      "label": "FAQ Kicker",
+      "default": "Noch Fragen?"
+    },
+    {
+      "type": "text",
+      "id": "faq_title",
+      "label": "FAQ Titel",
+      "default": "Häufige Fragen zum Kunstleasing."
+    },
+    {
+      "type": "textarea",
+      "id": "faq_subtitle",
+      "label": "FAQ Untertitel",
+      "default": "Falls etwas offen bleibt, schreib uns kurz über das Formular – wir melden uns persönlich."
+    },
+
+    {
+      "type": "text",
+      "id": "contact_kicker",
+      "label": "Kontakt Kicker",
+      "default": "Nächster Schritt"
+    },
+    {
+      "type": "text",
+      "id": "contact_title",
+      "label": "Kontakt Titel",
+      "default": "Erhalte einen kuratierten Vorschlag für euer Büro."
+    },
+    {
+      "type": "textarea",
+      "id": "contact_subtitle",
+      "label": "Kontakt Untertitel",
+      "default": "Sag uns kurz, wie euer Büro aussieht und wie ihr arbeitet. Wir entwickeln auf dieser Basis ein passendes Kunstkonzept."
+    },
+    {
+      "type": "textarea",
+      "id": "contact_meta",
+      "label": "Kontakt Meta",
+      "default": "Wir melden uns in der Regel innerhalb von 1–2 Werktagen mit einem ersten Vorschlag und einer groben Budgeteinschätzung."
+    },
+    {
+      "type": "text",
+      "id": "contact_cta_label",
+      "label": "Kontakt-Button Text",
+      "default": "Kostenlosen Vorschlag anfordern"
+    },
+    {
+      "type": "textarea",
+      "id": "contact_note",
+      "label": "Hinweis unter Formular",
+      "default": "Mit dem Absenden erklärst du dich damit einverstanden, dass wir dich per E-Mail oder Telefon zu diesem Thema kontaktieren. Es erfolgt keine Newsletter-Anmeldung."
+    },
+    {
+      "type": "text",
+      "id": "contact_context_tag",
+      "label": "Hidden Context-Tag im Formular",
+      "default": "Office-Leasing-Landing"
+    },
+
+    {
+      "type": "text",
+      "id": "label_company",
+      "label": "Label Unternehmen",
+      "default": "Unternehmen"
+    },
+    {
+      "type": "text",
+      "id": "label_contact",
+      "label": "Label Ansprechperson",
+      "default": "Ansprechperson"
+    },
+    {
+      "type": "text",
+      "id": "label_email",
+      "label": "Label E-Mail",
+      "default": "E-Mail"
+    },
+    {
+      "type": "text",
+      "id": "label_office_size",
+      "label": "Label Bürogröße",
+      "default": "Größe des Büros"
+    },
+    {
+      "type": "text",
+      "id": "label_office_size_placeholder",
+      "label": "Placeholder Bürogröße",
+      "default": "Bitte auswählen"
+    },
+    {
+      "type": "text",
+      "id": "label_message",
+      "label": "Label Nachricht",
+      "default": "Worum geht es?"
+    },
+    {
+      "type": "textarea",
+      "id": "placeholder_message",
+      "label": "Placeholder Nachricht",
+      "default": "Zum Beispiel: Standort, ungefähre Anzahl der Wände/Arbeitsplätze, gewünschte Stimmung oder besondere Anforderungen."
+    }
+  ],
+  "blocks": [
+    {
+      "type": "logo",
+      "name": "Logo / Referenz",
+      "limit": 6,
+      "settings": [
+        {
+          "type": "text",
+          "id": "logo_text",
+          "label": "Name / Referenz",
+          "default": "Creative Studio Berlin"
+        }
+      ]
+    },
+    {
+      "type": "benefit",
+      "name": "Benefit",
+      "limit": 6,
+      "settings": [
+        {
+          "type": "text",
+          "id": "eyebrow",
+          "label": "Eyebrow (klein, optional)",
+          "default": "."
+        },
+        {
+          "type": "text",
+          "id": "title",
+          "label": "Titel",
+          "default": "Markenwirkung statt Deko"
+        },
+        {
+          "type": "textarea",
+          "id": "text",
+          "label": "Text",
+          "default": "Kunst, die zur Sprache eurer Marke passt – abgestimmt auf CI, Tonalität und eure Kund:innen."
+        }
+      ]
+    },
+    {
+      "type": "step",
+      "name": "Prozess-Schritt",
+      "limit": 4,
+      "settings": [
+        {
+          "type": "text",
+          "id": "title",
+          "label": "Titel",
+          "default": "1. Kurze Anfrage"
+        },
+        {
+          "type": "textarea",
+          "id": "text",
+          "label": "Beschreibung",
+          "default": "Du teilst uns kurz Rahmenbedingungen, Bürogröße und gewünschte Atmosphäre mit."
+        }
+      ]
+    },
+    {
+      "type": "package",
+      "name": "Paket",
+      "limit": 3,
+      "settings": [
+        {
+          "type": "text",
+          "id": "name",
+          "label": "Paketname",
+          "default": "Starter Walls"
+        },
+        {
+          "type": "text",
+          "id": "tagline",
+          "label": "Tag (kleines Label)",
+          "default": "Für kleinere Teams"
+        },
+        {
+          "type": "textarea",
+          "id": "meta",
+          "label": "Meta / Kurzbeschreibung",
+          "default": "Ideal für bis zu 10 Arbeitsplätze oder ein repräsentatives Front-Office."
+        },
+        {
+          "type": "textarea",
+          "id": "features",
+          "label": "Features (jeweils neue Zeile)",
+          "default": "3–6 kuratierte Werke\nIndividuelles Hängungskonzept\nOptional inklusive Logistik & Aufbau\nAustauschoption alle 6–12 Monate"
+        },
+        {
+          "type": "text",
+          "id": "cta_label",
+          "label": "CTA Text (optional)",
+          "default": "test"
+        }
+      ]
+    },
+    {
+      "type": "faq",
+      "name": "FAQ",
+      "limit": 8,
+      "settings": [
+        {
+          "type": "text",
+          "id": "question",
+          "label": "Frage",
+          "default": "Wie lange läuft ein Kunstleasing-Vertrag?"
+        },
+        {
+          "type": "textarea",
+          "id": "answer",
+          "label": "Antwort",
+          "default": "In der Regel arbeiten wir mit Laufzeiten ab 6 oder 12 Monaten. Danach könnt ihr verlängern, Werke austauschen oder das Setup an neue Flächen anpassen."
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Office Art Leasing Landing",
+      "blocks": [
+        {
+          "type": "benefit"
+        },
+        {
+          "type": "benefit"
+        },
+        {
+          "type": "benefit"
+        },
+        {
+          "type": "step"
+        },
+        {
+          "type": "step"
+        },
+        {
+          "type": "step"
+        },
+        {
+          "type": "step"
+        },
+        {
+          "type": "package"
+        },
+        {
+          "type": "package"
+        },
+        {
+          "type": "package"
+        },
+        {
+          "type": "faq"
+        },
+        {
+          "type": "faq"
+        }
+      ]
+    }
+  ]
+}
+{% endschema %}

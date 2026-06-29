@@ -1,0 +1,200 @@
+{% comment %}
+  ARTCLUB Art Finder — Quiz Section
+  sections/art-finder.liquid
+  Bei Abschluss: Redirect zu /pages/art-finder-results?style=X&color=Y&mood=Z&budget=W
+{% endcomment %}
+
+{%- assign sid = section.id -%}
+{%- assign mode = section.settings.display_mode -%}
+
+<div class="afq-wrap" id="afq-{{ sid }}">
+
+  {%- if mode == 'button' -%}
+    <div class="afq-teaser" style="text-align:{{ section.settings.teaser_align | default: 'center' }}">
+      {%- if section.settings.headline != blank -%}
+        <p class="afq-hl">{{ section.settings.headline }}</p>
+      {%- endif -%}
+      {%- if section.settings.subline != blank -%}
+        <p class="afq-sub">{{ section.settings.subline }}</p>
+      {%- endif -%}
+      <button class="afq-open-btn" onclick="afqOpen('{{ sid }}')">
+        {{ section.settings.button_text | default: 'Art Finder starten' }}
+      </button>
+    </div>
+    <div class="afq-overlay" id="afq-ov-{{ sid }}" style="display:none">
+      <div class="afq-modal">
+        <button class="afq-x" onclick="afqClose('{{ sid }}')" aria-label="Schliessen">&#215;</button>
+        <div id="afq-inner-{{ sid }}"></div>
+      </div>
+    </div>
+  {%- else -%}
+    <div class="afq-embedded" id="afq-emb-{{ sid }}">
+      <div id="afq-inner-{{ sid }}"></div>
+    </div>
+  {%- endif -%}
+
+</div>
+
+<style>
+.afq-wrap{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif!important;color:#111!important;box-sizing:border-box!important}
+.afq-wrap *{box-sizing:border-box!important}
+.afq-teaser{padding:48px 16px!important}
+.afq-hl{font-size:22px!important;font-weight:600!important;margin:0 0 8px!important;letter-spacing:-.02em!important;color:#111!important}
+.afq-sub{font-size:15px!important;color:#999!important;margin:0 0 24px!important;font-weight:400!important}
+.afq-open-btn{background:#111!important;color:#fff!important;border:none!important;border-radius:50px!important;padding:13px 28px!important;font-size:14px!important;font-weight:500!important;cursor:pointer!important;transition:opacity .2s,transform .2s!important;letter-spacing:-.01em!important}
+.afq-open-btn:hover{opacity:.82!important;transform:scale(.98)!important}
+.afq-embedded{max-width:640px!important;margin:0 auto!important;padding:40px 16px!important}
+.afq-overlay{position:fixed!important;inset:0!important;background:rgba(0,0,0,.4)!important;z-index:10000!important;display:flex;align-items:center!important;justify-content:center!important;padding:16px!important;backdrop-filter:blur(4px)!important;-webkit-backdrop-filter:blur(4px)!important}
+.afq-modal{background:#fff!important;border-radius:24px!important;width:100%!important;max-width:680px!important;max-height:90vh!important;overflow-y:auto!important;position:relative!important;padding:36px 36px 28px!important;box-shadow:0 24px 80px rgba(0,0,0,.18)!important}
+.afq-x{position:absolute!important;top:16px!important;right:16px!important;background:#f2f1ef!important;border:none!important;border-radius:50%!important;width:28px!important;height:28px!important;font-size:15px!important;line-height:28px!important;text-align:center!important;cursor:pointer!important;color:#777!important;padding:0!important;z-index:1!important;transition:background .15s!important}
+.afq-x:hover{background:#e5e4e2!important}
+.afq-meta{display:flex!important;justify-content:space-between!important;font-size:12px!important;color:#bbb!important;margin-bottom:8px!important;letter-spacing:.01em!important}
+.afq-bar{height:2px!important;background:#f0efed!important;border-radius:2px!important;margin-bottom:32px!important}
+.afq-fill{height:100%!important;background:#111!important;border-radius:2px!important;transition:width .4s cubic-bezier(.4,0,.2,1)!important}
+.afq-eyebrow{font-size:10px!important;letter-spacing:.12em!important;text-transform:uppercase!important;color:#ccc!important;margin:0 0 8px!important}
+.afq-question{font-size:21px!important;font-weight:600!important;margin:0 0 6px!important;letter-spacing:-.02em!important;color:#111!important;line-height:1.25!important}
+.afq-qsub{font-size:14px!important;color:#aaa!important;margin:0 0 20px!important;font-weight:400!important}
+.afq-opts{display:grid!important;grid-template-columns:repeat(2,1fr)!important;gap:10px!important;margin-bottom:24px!important}
+.afq-opts.g3{grid-template-columns:repeat(3,1fr)!important}
+@media(max-width:480px){.afq-opts,.afq-opts.g3{grid-template-columns:repeat(2,1fr)!important}}
+.afq-opt{background:#fafaf9!important;border:1.5px solid transparent!important;border-radius:16px!important;padding:16px!important;cursor:pointer!important;transition:background .15s,border-color .15s,box-shadow .15s!important;user-select:none!important;box-shadow:0 1px 3px rgba(0,0,0,.06)!important}
+.afq-opt:hover{background:#f5f4f2!important;border-color:#e0deda!important;box-shadow:0 2px 8px rgba(0,0,0,.08)!important}
+.afq-opt.sel{border:1.5px solid #111!important;background:#f5f4f2!important;box-shadow:0 2px 8px rgba(0,0,0,.06)!important}
+.afq-ol{font-size:13px!important;font-weight:600!important;color:#111!important;margin:0 0 3px!important;letter-spacing:-.01em!important}
+.afq-od{font-size:12px!important;color:#aaa!important;margin:0!important}
+.afq-foot{display:flex!important;justify-content:space-between!important;align-items:center!important;padding-top:4px!important}
+.afq-nav{background:none!important;border:none!important;font-size:13px!important;color:#bbb!important;cursor:pointer!important;padding:0!important;transition:color .15s!important}
+.afq-nav:hover{color:#111!important}
+</style>
+
+<script>
+(function(){
+var SID='{{ sid }}',MODE='{{ mode }}';
+var RESULTS_PAGE='{{ section.settings.results_page | default: '/pages/art-finder-results' }}';
+var QS=[
+  {id:'style',q:'Welchen Stil suchst du?',sub:'Dein erster Instinkt z\u00e4hlt.',opts:[
+    {id:'minimal',l:'Abstrakt & minimal',d:'Ruhige Formen, reduzierte Palette'},
+    {id:'gestural',l:'Expressiv & gestural',d:'Dynamik, Bewegung, Energie'},
+    {id:'urban',l:'Urban & street',d:'Stadt, Grafik, Stra\u00dfenkultur'},
+    {id:'surreal',l:'Figurativ & surreal',d:'Figur, Traum, Poesie'}
+  ]},
+  {id:'color',q:'Welche Farben sprechen dich an?',sub:'W\u00e4hle eine Farbwelt.',cols:3,opts:[
+    {id:'neutral',l:'Ged\u00e4mpft & neutral',pal:['#e8e2da','#d4cdc4','#b8b0a6','#9a9288']},
+    {id:'cool',l:'K\u00fchl & dunkel',pal:['#1a2535','#2d4a6e','#4a7ba8','#7aa4c8']},
+    {id:'warm',l:'Warm & erdig',pal:['#8b5e3c','#a67c52','#c49a6c','#d4b896']},
+    {id:'bold',l:'Neon & bold',pal:['#e8175d','#00cc66','#f5c400','#ff6600']},
+    {id:'blush',l:'Blush & rosa',pal:['#f2dbd6','#d4a8a0','#c08880','#a06860']},
+    {id:'mono',l:'Monochrom',pal:['#f0f0f0','#999','#555','#111']}
+  ]},
+  {id:'mood',q:'Welche Stimmung soll es haben?',sub:'Das Gef\u00fchl beim Hinschauen.',opts:[
+    {id:'quiet',l:'Ruhig & kontemplativ',d:'Stille, Tiefe, Meditativ'},
+    {id:'energetic',l:'Lebendig & energetisch',d:'Bewegung, Kraft, Pr\u00e4senz'},
+    {id:'poetic',l:'Poetisch & traumhaft',d:'Traum, Emotion, Poesie'},
+    {id:'modern',l:'Modern & direkt',d:'Klar, zeitgem\u00e4\u00df, fokussiert'}
+  ]},
+  {id:'budget',q:'Was ist dein Budget?',sub:'Prints ab \u20ac60 \u2014 Originals bis \u20ac3.900.',opts:[
+    {id:'entry',l:'Bis \u20ac200',d:'Editionen & Prints'},
+    {id:'mid',l:'\u20ac200 \u2013 \u20ac1.500',d:'Editionen & kleine Originals'},
+    {id:'high',l:'\u20ac1.500 \u2013 \u20ac3.500',d:'Originals & gro\u00dfe Formate'},
+    {id:'premium',l:'\u00dcber \u20ac3.500',d:'Statement-Pieces'}
+  ]}
+];
+var step=0,ans={};
+function $i(id){return document.getElementById(id);}
+function renderQuiz(){
+  var q=QS[step],pct=Math.round(step/QS.length*100),g=q.cols===3?' g3':'';
+  var opts=q.opts.map(function(o){
+    var sel=ans[q.id]===o.id?' sel':'';
+    if(o.pal){
+      var sw=o.pal.map(function(c){
+        return'<div style="flex:1;min-width:0;height:44px;background:'+c+'"></div>';
+      }).join('');
+      return'<div class="afq-opt'+sel+'" onclick="afqPick(\''+SID+'\',\''+o.id+'\')">'+
+        '<div style="display:flex;gap:3px;border-radius:6px;overflow:hidden;margin-bottom:10px;height:44px">'+sw+'</div>'+
+        '<div class="afq-ol">'+o.l+'</div></div>';
+    }
+    return'<div class="afq-opt'+sel+'" onclick="afqPick(\''+SID+'\',\''+o.id+'\')">'+
+      '<div class="afq-ol">'+o.l+'</div>'+
+      (o.d?'<div class="afq-od">'+o.d+'</div>':'')+
+      '</div>';
+  }).join('');
+  $i('afq-inner-'+SID).innerHTML=
+    '<div class="afq-meta"><span>Frage '+(step+1)+' von '+QS.length+'</span><span>'+pct+' komplett</span></div>'+
+    '<div class="afq-bar"><div class="afq-fill" style="width:'+pct+'%"></div></div>'+
+    '<p class="afq-eyebrow">Art Finder \u2014 ARTCLUB</p>'+
+    '<h2 class="afq-question">'+q.q+'</h2>'+
+    '<p class="afq-qsub">'+q.sub+'</p>'+
+    '<div class="afq-opts'+g+'">'+opts+'</div>'+
+    '<div class="afq-foot">'+
+      '<button class="afq-nav" style="visibility:'+(step>0?'visible':'hidden')+'" onclick="afqBack(\''+SID+'\')">&#8592; zur\u00fcck</button>'+
+      '<button class="afq-nav" onclick="afqRestart(\''+SID+'\')">Neustart</button>'+
+    '</div>';
+}
+function goToResults(){
+  var params=new URLSearchParams({style:ans.style||'minimal',color:ans.color||'neutral',mood:ans.mood||'quiet',budget:ans.budget||'mid'});
+  window.location.href=RESULTS_PAGE+'?'+params.toString();
+}
+window.afqOpen=window.afqOpen||function(sid){
+  if(sid!==SID)return;
+  $i('afq-ov-'+SID).style.display='flex';
+  document.body.style.overflow='hidden';
+  step=0;ans={};renderQuiz();
+};
+window.afqClose=window.afqClose||function(sid){
+  if(sid!==SID)return;
+  $i('afq-ov-'+SID).style.display='none';
+  document.body.style.overflow='';
+};
+window.afqPick=window.afqPick||function(sid,v){
+  if(sid!==SID)return;
+  ans[QS[step].id]=v;
+  if(step<QS.length-1){step++;renderQuiz();}
+  else{goToResults();}
+};
+window.afqBack=window.afqBack||function(sid){
+  if(sid!==SID)return;
+  if(step>0){step--;renderQuiz();}
+};
+window.afqRestart=window.afqRestart||function(sid){
+  if(sid!==SID)return;
+  step=0;ans={};renderQuiz();
+};
+document.addEventListener('keydown',function(e){if(e.key==='Escape')afqClose(SID);});
+if(MODE==='embedded'){step=0;ans={};var el=$i('afq-inner-'+SID);if(el)renderQuiz();}
+})();
+</script>
+
+{% schema %}
+{
+  "name": "Art Finder — Quiz",
+  "tag": "section",
+  "settings": [
+    {
+      "type": "select",
+      "id": "display_mode",
+      "label": "Modus",
+      "options": [
+        {"value":"button","label":"Button (Overlay)"},
+        {"value":"embedded","label":"Direkt eingebettet"}
+      ],
+      "default": "button"
+    },
+    {
+      "type": "text",
+      "id": "results_page",
+      "label": "Ergebnisseite URL",
+      "default": "/pages/art-finder-results",
+      "info": "Seite, auf die nach dem Quiz weitergeleitet wird."
+    },
+    {"type":"header","content":"Button-Modus"},
+    {"type":"text","id":"headline","label":"Ueberschrift","default":"Finde dein perfektes Kunstwerk"},
+    {"type":"text","id":"subline","label":"Unterzeile","default":"In 60 Sekunden kuratiert — persoenlich fuer dich."},
+    {"type":"text","id":"button_text","label":"Button-Text","default":"Art Finder starten"},
+    {"type":"select","id":"teaser_align","label":"Ausrichtung","options":[{"value":"left","label":"Links"},{"value":"center","label":"Zentriert"}],"default":"center"}
+  ],
+  "presets": [
+    {"name":"Art Finder Quiz — Button","settings":{"display_mode":"button"}},
+    {"name":"Art Finder Quiz — Eingebettet","settings":{"display_mode":"embedded"}}
+  ]
+}
+{% endschema %}

@@ -1,0 +1,641 @@
+{% comment %}
+  AC Product Artwork — Same front, NO room rendering
+  - Front: identical clean PDP (title/artist/actions/hero/desc + zoom + wishlist)
+  - Modal: product images + Shopify option selects (uses option names from Shopify)
+  - Works with ANY option schema (Size/Configuration, Model/Finish/Size, etc.)
+{% endcomment %}
+
+<section
+  id="ac-pdp-figma-{{ section.id }}"
+  class="ac-pdp-figma"
+  data-section-id="{{ section.id }}"
+  {% if product %}
+    data-product-id="{{ product.id }}"
+    data-product-handle="{{ product.handle }}"
+  {% endif %}
+>
+  <style>
+    {% render 'ac-pdp-figma-base-styles', section_id: section.id, avatar_font_weight: 650 %}
+
+    /* ===== Figma Stage ===== */
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__hero{
+      --ac-gap:26px; --ac-stage-w:860px; --ac-stage-h:clamp(520px, 72vh, 760px);
+      display:grid;
+      grid-template-columns:minmax(0,1fr) minmax(0,var(--ac-stage-w)) minmax(0,1fr);
+      gap:var(--ac-gap);
+      align-items:stretch;
+      margin-top:10px;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__rail{
+      background:#efeff2;
+      height:var(--ac-stage-h);
+      min-height:var(--ac-stage-h);
+      border-radius:0;
+      display:flex;
+      align-items:flex-end;
+      justify-content:flex-end;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__media{
+      height:var(--ac-stage-h);
+      min-height:var(--ac-stage-h);
+      background:#fff;
+      border:none;
+      overflow:hidden;
+      cursor:zoom-in;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__media img{
+      height:100%;
+      width:auto;
+      max-height:100%;
+      max-width:100%;
+      object-fit:contain;
+      display:block;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__zoomHint{
+      margin:16px;
+      font-size:12px;
+      padding:8px 12px;
+      border-radius:999px;
+      background:rgba(255,255,255,0.92);
+      border:1px solid rgba(0,0,0,0.08);
+      color:#0b0b0c;
+      opacity:.92;
+      backdrop-filter:blur(8px);
+      -webkit-backdrop-filter:blur(8px);
+      cursor:pointer;
+    }
+
+    /* ===== Below text aligned to center stage ===== */
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__below{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) minmax(0,860px) minmax(0,1fr);
+      gap:26px;
+      margin-top:22px;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__desc{
+      font-size:16px;
+      line-height:1.65;
+      color:#141417;
+      opacity:.92;
+      width:100%;
+      max-width:none;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__desc *{ max-width:none; }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__desc p{ margin:0 0 16px; }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__desc p:last-child{ margin-bottom:0; }
+
+    /* ===== Zoom overlay (PDP hero) ===== */
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-zoom{
+      position:fixed; inset:0; background:rgba(0,0,0,0.9);
+      display:none; align-items:center; justify-content:center; z-index:9999; padding:20px;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-zoom.is-active{ display:flex; }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-zoom__img{ max-width:95vw; max-height:95vh; }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-zoom__img img{ display:block; max-width:100%; max-height:95vh; object-fit:contain; }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-zoom__close{
+      position:fixed; top:18px; right:22px; width:44px; height:44px; border-radius:999px;
+      border:1px solid rgba(255,255,255,0.18); background:rgba(0,0,0,0.25); color:#fff; font-size:20px;
+      display:flex; align-items:center; justify-content:center; cursor:pointer;
+    }
+
+    /* ===== Modal (NoRender) ===== */
+    #ac-pdp-figma-{{ section.id }} html.ac-modal-open,
+    #ac-pdp-figma-{{ section.id }} body.ac-modal-open { overflow:hidden !important; }
+
+    #ac-pdp-figma-{{ section.id }} .ac-modal{ position:fixed; inset:0; z-index:999999; display:none; }
+    #ac-pdp-figma-{{ section.id }} .ac-modal.is-open{ display:block; }
+
+    #ac-pdp-figma-{{ section.id }} .ac-modal__backdrop{
+      position:absolute; inset:0;
+      background:rgba(0,0,0,0.28);
+      backdrop-filter: blur(10px);
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-modal__panel{
+      position:relative; width:100%; height:100%;
+      background:#fff; overflow:auto;
+      padding:76px 0 calc(28px + 86px + env(safe-area-inset-bottom, 0px));
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-modal__close{
+      position:fixed; top:16px; right:16px;
+      width:44px; height:44px; border-radius:999px;
+      border:1px solid rgba(0,0,0,0.08);
+      background:rgba(255,255,255,0.85);
+      backdrop-filter: blur(10px);
+      display:grid; place-items:center;
+      cursor:pointer; z-index:3;
+    }
+
+    #ac-pdp-figma-{{ section.id }} .ac-modal__grid{
+      display:grid;
+      grid-template-columns:minmax(0,1.25fr) 420px;
+      gap:clamp(16px, 3vw, 32px);
+      align-items:start;
+      max-width:1600px;
+      margin:0 auto;
+      padding:0 24px;
+    }
+    @media (max-width:1100px){
+      #ac-pdp-figma-{{ section.id }} .ac-modal__grid{ grid-template-columns:1fr; padding:0 16px; }
+    }
+
+    /* Left: product images */
+    #ac-pdp-figma-{{ section.id }} .ac-modal-media{
+      border-radius:12px; overflow:hidden; background:#f4f4f6;
+      border:1px solid rgba(0,0,0,0.06);
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-modal-media__main{
+      display:flex; align-items:center; justify-content:center;
+      padding:18px; background:#fff;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-modal-media__main img{
+      max-width:100%; max-height:70vh; height:auto; width:auto; object-fit:contain; display:block;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-modal-media__thumbs{
+      display:flex; gap:10px; padding:12px;
+      overflow-x:auto; -webkit-overflow-scrolling:touch;
+      background:#f4f4f6;
+      border-top:1px solid rgba(0,0,0,0.06);
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-modal-media__thumb{
+      border:1px solid rgba(0,0,0,0.10);
+      border-radius:10px; overflow:hidden;
+      background:#fff; cursor:pointer;
+      padding:0; height:74px; flex:0 0 104px;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-modal-media__thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+    #ac-pdp-figma-{{ section.id }} .ac-modal-media__thumb.is-active{ outline:2px solid #111; }
+
+    /* Right: Shopify-like selects */
+    #ac-pdp-figma-{{ section.id }} .ac-modal-form{ max-width:420px; margin-inline:auto; padding:0 6px; }
+    @media (max-width:1100px){ #ac-pdp-figma-{{ section.id }} .ac-modal-form{ max-width:720px; } }
+
+    #ac-pdp-figma-{{ section.id }} .ac-modal-form__back{
+      appearance:none; border:0; background:transparent; cursor:pointer;
+      padding: 8px 0 12px;
+      font: 600 14px/1 system-ui;
+      color:#111; opacity:0.75;
+    }
+
+    #ac-pdp-figma-{{ section.id }} .ac-opt{ margin:0 0 14px; }
+    #ac-pdp-figma-{{ section.id }} .ac-opt label{
+      display:block; font:600 12px/1.2 system-ui; color:#6b6b6b; margin:0 0 8px;
+      letter-spacing:0.02em;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-opt select{
+      width:100%;
+      height:44px;
+      border-radius:12px;
+      border:1px solid rgba(0,0,0,0.14);
+      background:#fff;
+      padding:0 12px;
+      font:600 14px/1 system-ui;
+      color:#111;
+      outline:none;
+    }
+
+    /* Sticky bar */
+    #ac-pdp-figma-{{ section.id }} .ac-sticky{
+      position:sticky; bottom:0; z-index:999;
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      padding:12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+      background:rgba(255,255,255,0.92);
+      backdrop-filter: blur(12px);
+      border-top:1px solid rgba(0,0,0,0.08);
+      max-width:420px;
+      margin-left:auto; margin-right:auto;
+    }
+    @media (max-width:1100px){
+      #ac-pdp-figma-{{ section.id }} .ac-sticky{ max-width:720px; align-items:stretch; }
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-sticky__title{ font:700 13px/1.2 system-ui; color:#111; }
+    #ac-pdp-figma-{{ section.id }} .ac-sticky__sub{ font:500 12px/1.25 system-ui; color:#6b6b6b; margin-top:3px; }
+    #ac-pdp-figma-{{ section.id }} .ac-atc{
+      display:inline-flex; align-items:center; justify-content:space-between; gap:10px;
+      border:0; border-radius:999px;
+      padding:12px 14px;
+      background:#0071e3; color:#fff;
+      font:700 13px/1 system-ui;
+      cursor:pointer;
+      min-width:180px;
+    }
+    @media (max-width:1100px){
+      #ac-pdp-figma-{{ section.id }} .ac-atc{ width:100%; min-width:0; }
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-atc[disabled]{ opacity:0.45; cursor:not-allowed; }
+    #ac-pdp-figma-{{ section.id }} .ac-atc__price{ font-weight:800; white-space:nowrap; }
+
+    /* PDP Mobile */
+    @media (max-width:920px){
+      #ac-pdp-figma-{{ section.id }}.ac-pdp-figma{ padding:40px 0 70px; }
+      #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__top{ flex-direction:column; gap:14px; }
+      #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__actions{ margin-top:0; }
+      #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__hero{
+        grid-template-columns:1fr;
+        --ac-stage-w:100%;
+        --ac-stage-h:clamp(420px, 66vh, 560px);
+        gap:14px;
+      }
+      #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__rail{ display:none; }
+      #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__below{ grid-template-columns:1fr; gap:0; }
+    }
+  </style>
+
+  {% if product == blank %}
+    <div style="max-width:1100px;margin:60px auto;padding:0 20px;">
+      Diese Section ist für Produktseiten gedacht (product object fehlt).
+    </div>
+  {% else %}
+    {%- assign back_url = section.settings.back_url -%}
+    {%- if back_url == blank and collection -%}{%- assign back_url = collection.url -%}{%- endif -%}
+    {%- if back_url == blank -%}{%- assign back_url = '/collections/all' -%}{%- endif -%}
+
+    {%- assign artist_name = product.metafields.custom.kuenstler_text | default: product.vendor -%}
+    {%- assign artist_avatar = product.metafields.custom.kuenstler_avatar -%}
+
+    <div class="ac-pdp-figma__wrap">
+      <div class="ac-pdp-figma__top">
+        <div>
+          {% if section.settings.show_back %}
+            <a class="ac-pdp-figma__back" href="{{ back_url }}"><span aria-hidden="true">←</span>{{ section.settings.back_label }}</a>
+          {% endif %}
+
+          <h1 class="ac-pdp-figma__title">{{ product.title }}</h1>
+
+          <div class="ac-pdp-figma__artistRow">
+            <div class="ac-pdp-figma__avatar" aria-hidden="true">
+              {% if artist_avatar != blank %}
+                {{ artist_avatar | image_url: width: 120 | image_tag: loading: 'lazy', alt: artist_name }}
+              {% else %}
+                <div class="ac-pdp-figma__avatarFallback">{{ artist_name | slice: 0, 1 | upcase }}</div>
+              {% endif %}
+            </div>
+            {% if artist_name != blank %}<div class="ac-pdp-figma__artistName">{{ artist_name }}</div>{% endif %}
+          </div>
+        </div>
+
+        <div class="ac-pdp-figma__actions">
+          <button type="button" class="ac-pdp-figma__iconBtn" aria-label="{{ section.settings.wishlist_label }}" aria-pressed="false" data-ac-wishlist-toggle>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 20.5s-7-4.3-9.4-8.2C.6 8.7 2.6 5.5 6 5.5c1.9 0 3.3 1 4 2.1.7-1.1 2.1-2.1 4-2.1 3.4 0 5.4 3.2 3.4 6.8C19 16.2 12 20.5 12 20.5z" stroke="#0b0b0c" stroke-width="1.6" fill="transparent" />
+            </svg>
+          </button>
+
+          <button type="button" class="ac-pdp-figma__pillBtn" data-ac-open-modal="ac-modal-{{ section.id }}">
+            {{ section.settings.buy_label }}
+          </button>
+        </div>
+      </div>
+
+      <div class="ac-pdp-figma__hero">
+        <div class="ac-pdp-figma__rail" aria-hidden="true"></div>
+
+        <div class="ac-pdp-figma__media" data-ac-zoom-trigger>
+          {% if product.featured_image %}
+            {{ product.featured_image | image_url: width: 2400 | image_tag: loading: 'lazy', alt: product.title }}
+          {% endif %}
+        </div>
+
+        <div class="ac-pdp-figma__rail" aria-hidden="true">
+          <button type="button" class="ac-pdp-figma__zoomHint" data-ac-zoom-trigger>{{ section.settings.zoom_hint }}</button>
+        </div>
+      </div>
+
+      {%- assign werk_text_mf = product.metafields.custom.werk_text -%}
+      {%- assign desc_html = product.description -%}
+      {% if werk_text_mf != blank or desc_html != blank %}
+        <div class="ac-pdp-figma__below">
+          <div aria-hidden="true"></div>
+          <div>
+            <div class="ac-pdp-figma__desc">
+              {% if werk_text_mf != blank %}
+                {%- assign t = werk_text_mf | replace: '\r\n', '\n' -%}
+                {%- assign t = t | replace: '\n\n', '[[P]]' -%}
+                {%- assign t = t | replace: '\n', ' ' -%}
+                {%- assign t = t | replace: '[[P]]', '</p><p>' -%}
+                <p>{{ t }}</p>
+              {% else %}
+                {{ desc_html }}
+              {% endif %}
+            </div>
+          </div>
+          <div aria-hidden="true"></div>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- PDP Zoom Overlay -->
+    <div class="ac-pdp-zoom" data-ac-zoom>
+      <button type="button" class="ac-pdp-zoom__close" data-ac-zoom-close aria-label="Close">×</button>
+      <div class="ac-pdp-zoom__img">
+        {% if product.featured_image %}
+          {{ product.featured_image | image_url: width: 2800 | image_tag: alt: product.title }}
+        {% endif %}
+      </div>
+    </div>
+
+    {%- capture variants_json -%}[{% for v in product.variants %}{% if forloop.first == false %},{% endif %}{
+      "id": {{ v.id }},
+      "title": {{ v.title | json }},
+      "price": {{ v.price | json }},
+      "available": {{ v.available | json }},
+      "option1": {{ v.option1 | json }},
+      "option2": {{ v.option2 | json }},
+      "option3": {{ v.option3 | json }},
+      "img": {% if v.featured_media %}{{ v.featured_media | image_url: width: 2000 | json }}{% else %}null{% endif %}
+    }{% endfor %}]{%- endcapture -%}
+
+    {%- assign selected_variant = product.selected_or_first_available_variant -%}
+
+    <!-- Modal (NoRender) -->
+    <div class="ac-modal" id="ac-modal-{{ section.id }}" aria-hidden="true">
+      <div class="ac-modal__backdrop" data-ac-close></div>
+
+      <div class="ac-modal__panel" role="dialog" aria-modal="true" aria-label="{{ product.title | escape }}" tabindex="-1">
+        <button type="button" class="ac-modal__close" data-ac-close aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+
+        <div class="ac-modal__grid" data-ac-modal-root>
+          <!-- LEFT: product images -->
+          <div class="ac-modal-media">
+            <div class="ac-modal-media__main">
+              {% if product.featured_media %}
+                <img
+                  data-ac-main-img
+                  src="{{ product.featured_media | image_url: width: 2000 }}"
+                  alt="{{ product.title | escape }}"
+                  loading="lazy"
+                >
+              {% endif %}
+            </div>
+
+            {% assign image_media = product.media | where: "media_type", "image" %}
+            {% if image_media.size > 1 %}
+              <div class="ac-modal-media__thumbs" data-ac-thumbs>
+                {% for m in image_media %}
+                  <button type="button" class="ac-modal-media__thumb{% if forloop.first %} is-active{% endif %}" data-ac-thumb="{{ m | image_url: width: 2000 }}">
+                    <img src="{{ m | image_url: width: 360 }}" alt="{{ product.title | escape }}" loading="lazy">
+                  </button>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+
+          <!-- RIGHT: selects -->
+          <div class="ac-modal-form">
+            <button type="button" class="ac-modal-form__back" data-ac-close>← Zurück</button>
+
+            <div data-ac-selects>
+              {% unless product.has_only_default_variant %}
+                {% for opt in product.options_with_values %}
+                  <div class="ac-opt">
+                    <label for="ac-opt-{{ section.id }}-{{ forloop.index }}">{{ opt.name }}</label>
+                    <select
+                      id="ac-opt-{{ section.id }}-{{ forloop.index }}"
+                      data-ac-opt
+                      data-ac-name="{{ opt.name | escape }}"
+                      data-ac-index="{{ forloop.index }}"
+                    >
+                      {% assign selected_value = selected_variant.options[forloop.index0] %}
+                      {% for v in opt.values %}
+                        <option value="{{ v | escape }}" {% if v == selected_value %}selected{% endif %}>{{ v }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                {% endfor %}
+              {% endunless %}
+            </div>
+
+            <div class="ac-sticky">
+              <div class="ac-sticky__meta">
+                <div class="ac-sticky__title">{{ product.title }}</div>
+                <div class="ac-sticky__sub" data-ac-summary></div>
+              </div>
+
+              <form method="post" action="/cart/add" class="ac-sticky__form">
+                <input type="hidden" name="id" value="{{ selected_variant.id }}" data-ac-variant>
+                <button class="ac-atc" type="submit" {% unless selected_variant.available %}disabled{% endunless %} data-ac-atc>
+                  <span>Add to Cart</span>
+                  <span class="ac-atc__price" data-ac-price>{{ selected_variant.price | money }}</span>
+                </button>
+              </form>
+            </div>
+          </div>
+        </div><!-- /grid -->
+      </div><!-- /panel -->
+    </div><!-- /modal -->
+
+    <script>
+      (function(){
+        var root = document.getElementById('ac-pdp-figma-{{ section.id }}');
+        if(!root) return;
+
+        /* -------- Wishlist (localStorage) -------- */
+        var PRODUCT_ID = String(root.getAttribute('data-product-id') || '');
+        var WISHLIST_KEY = 'ac_wishlist';
+        var wishBtn = root.querySelector('[data-ac-wishlist-toggle]');
+        function safeParse(json){ try{ return JSON.parse(json); }catch(e){ return null; } }
+        function getWishlist(){
+          var raw = localStorage.getItem(WISHLIST_KEY);
+          var parsed = safeParse(raw);
+          if(Array.isArray(parsed)) return parsed.map(String);
+          return [];
+        }
+        function setWishlist(arr){
+          localStorage.setItem(WISHLIST_KEY, JSON.stringify(arr));
+          window.dispatchEvent(new CustomEvent('ac:wishlist:changed', { detail: { ids: arr } }));
+        }
+        function isWishlisted(){ return getWishlist().indexOf(PRODUCT_ID) !== -1; }
+        function renderWishlist(){
+          if(!wishBtn) return;
+          var active = isWishlisted();
+          wishBtn.classList.toggle('is-active', active);
+          wishBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        }
+        function toggleWishlist(){
+          if(!PRODUCT_ID) return;
+          var list = getWishlist();
+          var idx = list.indexOf(PRODUCT_ID);
+          if(idx >= 0) list.splice(idx, 1);
+          else list.push(PRODUCT_ID);
+          setWishlist(list);
+          renderWishlist();
+        }
+        if(wishBtn) wishBtn.addEventListener('click', toggleWishlist);
+        window.addEventListener('storage', function(e){ if(e.key === WISHLIST_KEY) renderWishlist(); });
+        window.addEventListener('ac:wishlist:changed', renderWishlist);
+        renderWishlist();
+
+        /* -------- PDP Zoom -------- */
+        var zoomOverlay = root.querySelector('[data-ac-zoom]');
+        var zoomClose = root.querySelector('[data-ac-zoom-close]');
+        function openZoom(){
+          if(!zoomOverlay) return;
+          zoomOverlay.classList.add('is-active');
+          document.documentElement.style.overflow = 'hidden';
+        }
+        function closeZoom(){
+          if(!zoomOverlay) return;
+          zoomOverlay.classList.remove('is-active');
+          document.documentElement.style.overflow = '';
+        }
+        var zoomTriggers = root.querySelectorAll('[data-ac-zoom-trigger]');
+        if(zoomTriggers && zoomTriggers.length){
+          zoomTriggers.forEach(function(el){ el.addEventListener('click', openZoom); });
+        }
+        if(zoomClose) zoomClose.addEventListener('click', closeZoom);
+        if(zoomOverlay) zoomOverlay.addEventListener('click', function(e){ if(e.target === zoomOverlay) closeZoom(); });
+
+        /* -------- Modal open/close -------- */
+        var MODAL_ID = 'ac-modal-{{ section.id }}';
+        var modal = document.getElementById(MODAL_ID);
+        if(!modal) return;
+        var panel = modal.querySelector('.ac-modal__panel');
+        var lastFocus = null;
+
+        function openModal(fromEl){
+          if(modal.classList.contains('is-open')) return;
+          lastFocus = fromEl || document.activeElement;
+          modal.classList.add('is-open');
+          modal.setAttribute('aria-hidden','false');
+          document.documentElement.classList.add('ac-modal-open');
+          document.body.classList.add('ac-modal-open');
+          requestAnimationFrame(function(){ if(panel) panel.focus(); });
+        }
+        function closeModal(){
+          if(!modal.classList.contains('is-open')) return;
+          modal.classList.remove('is-open');
+          modal.setAttribute('aria-hidden','true');
+          document.documentElement.classList.remove('ac-modal-open');
+          document.body.classList.remove('ac-modal-open');
+          if(lastFocus && lastFocus.focus) lastFocus.focus();
+        }
+
+        document.addEventListener('click', function(e){
+          var opener = e.target.closest('[data-ac-open-modal="ac-modal-{{ section.id }}"]');
+          if(opener){
+            e.preventDefault();
+            openModal(opener);
+            return;
+          }
+          if(!modal.classList.contains('is-open')) return;
+          var closer = e.target.closest('[data-ac-close]');
+          if(closer){
+            e.preventDefault();
+            closeModal();
+          }
+        });
+
+        document.addEventListener('keydown', function(e){
+          if(e.key === 'Escape'){
+            if(zoomOverlay && zoomOverlay.classList.contains('is-active')) closeZoom();
+            if(modal.classList.contains('is-open')) closeModal();
+          }
+        });
+
+        /* -------- Variant selection (uses Shopify option names) -------- */
+        var VARIANTS = {{ variants_json | strip_newlines }};
+        var currency = {{ shop.currency | json }};
+        function fmtMoney(cents){
+          try { return new Intl.NumberFormat("de-DE", { style:"currency", currency:currency }).format((cents||0)/100); }
+          catch(e){ return ((cents||0)/100).toFixed(2); }
+        }
+
+        var selects = Array.prototype.slice.call(modal.querySelectorAll('[data-ac-opt]'));
+        var atcVariant = modal.querySelector('[data-ac-variant]');
+        var atcBtn = modal.querySelector('[data-ac-atc]');
+        var priceEl = modal.querySelector('[data-ac-price]');
+        var summaryEl = modal.querySelector('[data-ac-summary]');
+        var mainImg = modal.querySelector('[data-ac-main-img]');
+
+        function findVariantBySelectedOptions(){
+          if(!selects.length) return VARIANTS[0] || null;
+          var chosen = selects.map(function(s){ return String(s.value || ''); });
+          for(var i=0;i<VARIANTS.length;i++){
+            var v = VARIANTS[i];
+            var ok = true;
+            for(var idx=0; idx<chosen.length; idx++){
+              var key = 'option' + (idx+1);
+              if(String(v[key] || '') !== chosen[idx]) { ok = false; break; }
+            }
+            if(ok) return v;
+          }
+          return null;
+        }
+
+        function setMain(src){
+          if(!mainImg || !src) return;
+          mainImg.src = src;
+          // thumbs highlight (best-effort)
+          var thumbs = Array.prototype.slice.call(modal.querySelectorAll('[data-ac-thumb]'));
+          thumbs.forEach(function(b){
+            b.classList.toggle('is-active', b.getAttribute('data-ac-thumb') === src);
+          });
+        }
+
+        function sync(){
+          var v = findVariantBySelectedOptions();
+          if(summaryEl){
+            if(!selects.length){
+              summaryEl.textContent = '';
+            } else {
+              var parts = selects.map(function(s){
+                return (s.getAttribute('data-ac-name') || '') + ': ' + (s.value || '');
+              }).filter(Boolean);
+              summaryEl.textContent = parts.join(' · ');
+            }
+          }
+
+          if(!v){
+            if(atcVariant) atcVariant.value = '';
+            if(atcBtn) atcBtn.disabled = true;
+            if(priceEl) priceEl.textContent = '';
+            return;
+          }
+
+          if(atcVariant) atcVariant.value = v.id;
+          if(atcBtn) atcBtn.disabled = !v.available;
+          if(priceEl) priceEl.textContent = fmtMoney(v.price);
+
+          if(v.img) setMain(v.img);
+        }
+
+        selects.forEach(function(s){ s.addEventListener('change', sync); });
+
+        // thumbs -> change main image only
+        var thumbButtons = Array.prototype.slice.call(modal.querySelectorAll('[data-ac-thumb]'));
+        thumbButtons.forEach(function(btn){
+          btn.addEventListener('click', function(){
+            setMain(btn.getAttribute('data-ac-thumb'));
+          });
+        });
+
+        // initial
+        sync();
+      })();
+    </script>
+  {% endif %}
+
+{% schema %}
+{
+  "name": "AC Product (NoRender)",
+  "settings": [
+    { "type": "checkbox", "id": "show_back", "label": "Back-Link anzeigen", "default": true },
+    { "type": "url", "id": "back_url", "label": "Zurück-Link (optional)", "info": "Wenn leer, wird die aktuelle Collection oder /collections/all verwendet." },
+    { "type": "text", "id": "back_label", "label": "Zurück-Text", "default": "Back" },
+
+    { "type": "text", "id": "buy_label", "label": "Buy Button Label", "default": "Buy options" },
+    { "type": "text", "id": "wishlist_label", "label": "Wishlist Button Label", "default": "Save to wishlist" },
+    { "type": "text", "id": "zoom_hint", "label": "Zoom Hinweis", "default": "Zum Vergrößern klicken" }
+  ],
+  "presets": [
+    { "name": "AC Product Artwork (NoRender Modal)", "category": "ARTCLUB" }
+  ]
+}
+{% endschema %}
+</section>

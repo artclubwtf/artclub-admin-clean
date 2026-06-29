@@ -1,0 +1,2669 @@
+{% comment %}
+  AC Product Artwork — Figma PDP (final + TEXT FIX)
+  Fixes:
+  - description no longer collapses into a super-narrow column (overrides theme max-width on p)
+  - unwraps hard line-breaks in plain-text metafield (keeps paragraphs via double line breaks)
+  - product.description (HTML) stays HTML and gets clean paragraph spacing
+{% endcomment %}
+
+<section
+  id="ac-pdp-figma-{{ section.id }}"
+  class="ac-pdp-figma"
+  data-section-id="{{ section.id }}"
+  data-product-id="{{ product.id }}"
+  data-product-handle="{{ product.handle }}"
+>
+  <style>
+    {% render 'ac-pdp-figma-base-styles', section_id: section.id, avatar_font_weight: 600 %}
+
+    /* ===== Figma Stage ===== */
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__hero{
+      --ac-gap:26px; --ac-stage-w:860px; --ac-stage-h:clamp(520px, 72vh, 760px);
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) minmax(0,var(--ac-stage-w)) minmax(0,1fr) !important;
+      gap:var(--ac-gap) !important;
+      align-items:stretch !important;
+      margin-top:10px !important;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__rail{
+      background:#efeff2 !important;
+      height:var(--ac-stage-h) !important;
+      min-height:var(--ac-stage-h) !important;
+      border-radius:0 !important;
+      display:flex !important;
+      align-items:flex-end !important;
+      justify-content:flex-end !important;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__rail--left{ grid-column:1 !important; }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__media{ grid-column:2 !important; }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__rail--right{ grid-column:3 !important; }
+
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__media{
+      height:var(--ac-stage-h) !important;
+      min-height:var(--ac-stage-h) !important;
+      background:#fff !important;
+      border:none !important;
+      overflow:hidden !important;
+      cursor:zoom-in !important;
+      display:flex !important;
+      align-items:center !important;
+      justify-content:center !important;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__media img{
+      height:100% !important;
+      width:auto !important;
+      max-height:100% !important;
+      max-width:100% !important;
+      object-fit:contain !important;
+      display:block !important;
+    }
+
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__zoomHint{
+      margin:16px !important;
+      font-size:12px !important;
+      padding:8px 12px !important;
+      border-radius:999px !important;
+      background:rgba(255,255,255,0.92) !important;
+      border:1px solid rgba(0,0,0,0.08) !important;
+      color:#0b0b0c !important;
+      opacity:.92 !important;
+      backdrop-filter:blur(8px) !important;
+      -webkit-backdrop-filter:blur(8px) !important;
+      cursor:pointer !important;
+    }
+
+    /* ===== Below text aligned to center stage ===== */
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__below{
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) minmax(0,860px) minmax(0,1fr) !important;
+      gap:26px !important;
+      margin-top:22px !important;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__body{ margin:0; }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__desc{
+      font-size:16px !important;
+      line-height:1.65 !important;
+      color:#141417 !important;
+      opacity:.92 !important;
+
+      /* CRITICAL: defeat theme "narrow text" rules */
+      width:100% !important;
+      max-width:none !important;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__desc *{
+      max-width:none !important;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__desc p{
+      margin:0 0 16px !important;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__desc p:last-child{
+      margin-bottom:0 !important;
+    }
+
+    /* ===== Zoom overlay ===== */
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-zoom{
+      position:fixed; inset:0; background:rgba(0,0,0,0.9);
+      display:none; align-items:center; justify-content:center; z-index:9999; padding:20px;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-zoom.is-active{ display:flex; }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-zoom__img{ max-width:95vw; max-height:95vh; }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-zoom__img img{ display:block; max-width:100%; max-height:95vh; object-fit:contain; }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-zoom__close{
+      position:fixed; top:18px; right:22px; width:44px; height:44px; border-radius:999px;
+      border:1px solid rgba(255,255,255,0.18); background:rgba(0,0,0,0.25); color:#fff; font-size:20px;
+      display:flex; align-items:center; justify-content:center; cursor:pointer;
+    }
+
+    /* ===== Buy popup ===== */
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-buy{
+      position:fixed; inset:0; background:rgba(0,0,0,0.46);
+      display:none; align-items:center; justify-content:center; z-index:9998; padding:20px;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-buy.is-active{ display:flex; }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-buy__panel{
+      width:100%; max-width:520px; background:#fff; border-radius:18px;
+      padding:22px 22px 18px; max-height:90vh; overflow:auto; border:1px solid rgba(0,0,0,0.08);
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-buy__head{
+      display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-buy__title{ margin:0; font-size:16px; font-weight:650; color:#0b0b0c; }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-buy__close{
+      width:36px; height:36px; border-radius:999px; border:1px solid rgba(0,0,0,0.10); background:#fff; cursor:pointer;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-buy__subtitle{ margin:0 0 10px; font-size:12px; color:#6b6b70; }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-buy__price{ margin:0 0 14px; font-size:16px; font-weight:650; color:#0b0b0c; }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-buy select{
+      width:100%; border-radius:12px; border:1px solid rgba(0,0,0,0.10); padding:10px 12px; font-size:14px; background:#fff;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-buy__add{
+      margin-top:14px; width:100%; height:44px; border-radius:999px; border:none; background:#0b0b0c;
+      color:#fff; font-size:14px; font-weight:650; cursor:pointer;
+      transition:transform .16s ease, box-shadow .16s ease, background .16s ease;
+    }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-buy__add:hover{ transform:translateY(-1px); box-shadow:0 12px 28px rgba(0,0,0,0.14); background:#000; }
+    #ac-pdp-figma-{{ section.id }} .ac-pdp-buy__note{ margin:10px 0 0; font-size:12px; color:#6b6b70; }
+
+    /* ===== Mobile ===== */
+    @media (max-width:920px){
+      #ac-pdp-figma-{{ section.id }}.ac-pdp-figma{ padding:40px 0 70px; }
+      #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__top{ flex-direction:column; gap:14px; }
+      #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__actions{ margin-top:0; }
+
+      #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__hero{
+        grid-template-columns:1fr !important;
+        --ac-stage-w:100%;
+        --ac-stage-h:clamp(420px, 66vh, 560px);
+        gap:14px !important;
+      }
+      #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__rail{ display:none !important; }
+      #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__media{ grid-column:1 !important; }
+
+      #ac-pdp-figma-{{ section.id }} .ac-pdp-figma__below{ grid-template-columns:1fr !important; gap:0 !important; }
+    }
+  </style>
+
+  <div class="ac-pdp-figma__wrap">
+    {%- assign back_url = section.settings.back_url -%}
+    {%- if back_url == blank and collection -%}{%- assign back_url = collection.url -%}{%- endif -%}
+    {%- if back_url == blank -%}{%- assign back_url = '/collections/all' -%}{%- endif -%}
+
+    <div class="ac-pdp-figma__top">
+      <div>
+        {% if section.settings.show_back %}
+          <a class="ac-pdp-figma__back" href="{{ back_url }}"><span aria-hidden="true">←</span>{{ section.settings.back_label }}</a>
+        {% endif %}
+
+        <h1 class="ac-pdp-figma__title">{{ product.title }}</h1>
+
+        {%- assign artist_name = product.metafields.custom.kuenstler_text | default: product.vendor -%}
+        {%- assign artist_avatar = product.metafields.custom.kuenstler_avatar -%}
+        <div class="ac-pdp-figma__artistRow">
+          <div class="ac-pdp-figma__avatar" aria-hidden="true">
+            {% if artist_avatar != blank %}
+              {{ artist_avatar | image_url: width: 120 | image_tag: loading: 'lazy', alt: artist_name }}
+            {% else %}
+              <div class="ac-pdp-figma__avatarFallback">{{ artist_name | slice: 0, 1 | upcase }}</div>
+            {% endif %}
+          </div>
+          {% if artist_name != blank %}<div class="ac-pdp-figma__artistName">{{ artist_name }}</div>{% endif %}
+        </div>
+      </div>
+
+      <div class="ac-pdp-figma__actions">
+        <button type="button" class="ac-pdp-figma__iconBtn" aria-label="{{ section.settings.wishlist_label }}" aria-pressed="false" data-ac-wishlist-toggle>
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 20.5s-7-4.3-9.4-8.2C.6 8.7 2.6 5.5 6 5.5c1.9 0 3.3 1 4 2.1.7-1.1 2.1-2.1 4-2.1 3.4 0 5.4 3.2 3.4 6.8C19 16.2 12 20.5 12 20.5z" stroke="#0b0b0c" stroke-width="1.6" fill="transparent" />
+          </svg>
+        </button>
+
+        <button type="button" data-artp-open="artp-modal-{{ section.id }}" class="ac-pdp-figma__pillBtn" data-ac-buy-trigger>{{ section.settings.buy_label }}</button>
+  
+
+  {%- assign art_default_img = product.featured_media | default: product.media.first -%}
+  {%- assign art_default_src = art_default_img | image_url: width: 1600 -%}
+  <div class="artp-modal" id="artp-modal-{{ section.id }}" aria-hidden="true">
+
+
+    <div class="artp-modal__backdrop" data-artp-close></div>
+
+    <div
+      class="artp-modal__panel"
+      role="dialog"
+      aria-modal="true"
+      aria-label="{{ product.title | escape }}"
+      tabindex="-1"
+    >
+      <button type="button" class="artp-modal__close" data-artp-close aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+
+      <div class="artp__grid" data-artp data-section-id="{{ section.id }}">
+        <!-- LEFT: Room previews -->
+        <div class="artp__left">
+          {% if section.blocks.size > 0 %}
+            <div class="artp-room">
+              {% for b in section.blocks %}
+                {% if b.type == 'room' and b.settings.image != blank %}
+                  <figure
+                    class="artp-room__item{% if forloop.first %} is-active{% endif %}"
+                    data-room-idx="{{ forloop.index0 }}"
+                    style="--zl:{{ b.settings.zone_left }}%;--zt:{{ b.settings.zone_top }}%;--zw:{{ b.settings.zone_width }}%;--zh:{{ b.settings.zone_height }}%;"
+                    data-zone-realw="{{ b.settings.zone_realw_cm }}"
+                    data-shadow-deg="{{ b.settings.shadow_deg | times: 10 }}"
+                    data-shadow-dist="{{ b.settings.shadow_dist_cm }}"
+                    data-shadow-blur="{{ b.settings.shadow_blur_cm }}"
+                    data-shadow-op="{{ b.settings.shadow_opacity | divided_by: 100.0 }}"
+                    data-zone-visible="{{ b.settings.show_zone | default: true }}"
+                    data-art-border="{{ b.settings.art_border }}"
+                    data-art-border-color="{{ b.settings.art_border_color }}"
+                  >
+                    {{
+                      b.settings.image
+                      | image_url: width: 2200
+                      | image_tag: loading: 'lazy', class: 'artp-room__bg', alt: product.title
+                    }}
+
+                    <div class="artp-wallzone" aria-hidden="true">
+                      <span class="artp-wallzone__label">Wandbereich</span>
+                    </div>
+
+                    {% if art_default_src %}
+                      <img data-art-img src="{{ art_default_src }}" alt="{{ product.title | escape }}" class="artp-art">
+                      <!-- Visual Overlays -->
+                      <div class="artp-frame" data-frame hidden></div>
+                      <div class="artp-acryl" data-acryl hidden></div>
+                    {% endif %}
+                  </figure>
+                {% endif %}
+              {% endfor %}
+            </div>
+            <!-- Zoom Pane -->
+
+            {% if section.blocks.size > 1 %}
+              <div class="artp-room__thumbs">
+                {% for b in section.blocks %}
+                  {% if b.type == 'room' and b.settings.image != blank %}
+                    <button
+                      class="artp-room__thumb{% if forloop.first %} is-active{% endif %}"
+                      data-room-go="{{ forloop.index0 }}"
+                    >
+                      {{ b.settings.image | image_url: width: 360 | image_tag: loading: 'lazy', alt: product.title }}
+                    </button>
+                  {% endif %}
+                {% endfor %}
+              </div>
+            {% endif %}
+          {% else %}
+            <div class="artp-gallery">
+              {% for media in product.media %}
+                <figure class="artp-gallery__item">{{ media | media_tag }}</figure>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+
+        <!-- RIGHT: Slim info panel -->
+        <!-- Stepper (Option A) -->
+        <!-- RIGHT: Apple-like Configurator -->
+<div class="artp-config" data-ac-config>
+    <button type="button" class="artp-config__close" data-artp-close>
+  ← Zurück
+</button>
+  <div class="artp-config__group" data-group="model">
+    <div class="artp-config__head">
+      <div class="artp-config__kicker">Ausführung</div>
+      <div class="artp-config__title">Was passt zu dir?</div>
+    </div>
+    <div class="artp-choicegrid" data-model-choices></div>
+  </div>
+
+  <div class="artp-config__group" data-group="finish" hidden>
+    <div class="artp-config__head">
+      <div class="artp-config__kicker">Finish</div>
+      <div class="artp-config__title">Rahmen / Oberfläche</div>
+    </div>
+    <div class="artp-choicegrid" data-finish-choices></div>
+  </div>
+
+  <div class="artp-config__group" data-group="size" hidden>
+    <div class="artp-config__head">
+      <div class="artp-config__kicker">Größe</div>
+      <div class="artp-config__title">Welche Size?</div>
+    </div>
+    <div class="artp-choicegrid" data-size-choices></div>
+  </div>
+
+</div>
+
+<!-- Sticky Add-to-cart bar (Apple style) -->
+<div class="artp-stickybar" data-stickybar>
+  <div class="artp-stickybar__meta">
+    <div class="artp-stickybar__title">{{ product.title }}</div>
+    <div class="artp-stickybar__sub" data-selection-summary>Bitte auswählen</div>
+  </div>
+
+  <!-- keep internal inputs for your preview logic -->
+  <input type="hidden" value="{{ product.selected_or_first_available_variant.id }}" data-variant-id-input-original>
+  <input type="hidden" value="" data-variant-id-input-edition>
+
+  <form method="post" action="/cart/add" class="artp-stickybar__form" data-atc-form>
+    <input type="hidden" name="id" value="{{ product.selected_or_first_available_variant.id }}" data-atc-variant>
+    <button class="artp-atc" type="submit" disabled data-atc-btn>
+      <span>Add to Cart</span>
+      <span class="artp-atc__price" data-atc-price></span>
+    </button>
+  </form>
+</div>
+
+      </div>
+    </div>
+  </div>
+      </div>
+    </div>
+
+    <div class="ac-pdp-figma__hero">
+      <div class="ac-pdp-figma__rail ac-pdp-figma__rail--left" aria-hidden="true"></div>
+
+      <div class="ac-pdp-figma__media" data-ac-zoom-trigger>
+        {% if product.featured_image %}
+          {{ product.featured_image | image_url: width: 2400 | image_tag: loading: 'lazy', alt: product.title }}
+        {% endif %}
+      </div>
+
+      <div class="ac-pdp-figma__rail ac-pdp-figma__rail--right" aria-hidden="true">
+        <button type="button" class="ac-pdp-figma__zoomHint" data-ac-zoom-trigger>{{ section.settings.zoom_hint }}</button>
+      </div>
+    </div>
+
+    {%- comment -%} ===== TEXT: prefer plain-text metafield, else use HTML description ===== {%- endcomment -%}
+    {%- assign werk_text_mf = product.metafields.custom.werk_text -%}
+    {%- assign desc_html = product.description -%}
+
+    {% if werk_text_mf != blank or desc_html != blank %}
+      <div class="ac-pdp-figma__below">
+        <div aria-hidden="true"></div>
+        <div class="ac-pdp-figma__body">
+          <div class="ac-pdp-figma__desc">
+            {% if werk_text_mf != blank %}
+              {%- assign t = werk_text_mf | replace: '\r\n', '\n' -%}
+              {%- assign t = t | replace: '\n\n', '[[P]]' -%}
+              {%- assign t = t | replace: '\n', ' ' -%}
+              {%- assign t = t | replace: '[[P]]', '</p><p>' -%}
+              <p>{{ t }}</p>
+            {% else %}
+              {{ desc_html }}
+            {% endif %}
+          </div>
+        </div>
+        <div aria-hidden="true"></div>
+      </div>
+    {% endif %}
+  </div>
+
+  {% comment %} Zoom Overlay {% endcomment %}
+  <div class="ac-pdp-zoom" data-ac-zoom>
+    <button type="button" class="ac-pdp-zoom__close" data-ac-zoom-close aria-label="Close">×</button>
+    <div class="ac-pdp-zoom__img">
+      {% if product.featured_image %}
+        {{ product.featured_image | image_url: width: 2800 | image_tag: alt: product.title }}
+      {% endif %}
+    </div>
+  </div>
+
+  {% comment %} Buy Options Popup {% endcomment %}
+  <div class="ac-pdp-buy" data-ac-buy>
+    <div class="ac-pdp-buy__panel" role="dialog" aria-modal="true" aria-label="{{ section.settings.buy_label }}">
+      <div class="ac-pdp-buy__head">
+        <h2 class="ac-pdp-buy__title">{{ product.title }}</h2>
+        <button type="button" class="ac-pdp-buy__close" data-ac-buy-close aria-label="Close">×</button>
+      </div>
+
+      <p class="ac-pdp-buy__subtitle">{{ section.settings.buy_subtitle }}</p>
+
+      {% assign current_variant = product.selected_or_first_available_variant %}
+      <p class="ac-pdp-buy__price" data-ac-buy-price>{{ current_variant.price | money_with_currency }}</p>
+
+      {% assign buy_form_id = 'ac-buy-form-' | append: section.id %}
+      {% form 'product', product, id: buy_form_id %}
+        {% if product.has_only_default_variant == false %}
+          <select name="id" data-ac-variant-select>
+            {% for variant in product.variants %}
+              {% if variant.available %}
+                <option value="{{ variant.id }}" {% if variant == current_variant %}selected{% endif %}>{{ variant.title }} – {{ variant.price | money_with_currency }}</option>
+              {% else %}
+                <option disabled>{{ variant.title }} – {{ 'products.product.sold_out' | t }}</option>
+              {% endif %}
+            {% endfor %}
+          </select>
+        {% else %}
+          <input type="hidden" name="id" value="{{ current_variant.id }}">
+        {% endif %}
+
+        <button type="submit" class="ac-pdp-buy__add" {% unless product.available %}disabled{% endunless %}>
+          {% if product.available %}{{ 'products.product.add_to_cart' | t }}{% else %}{{ 'products.product.sold_out' | t }}{% endif %}
+        </button>
+
+        <p class="ac-pdp-buy__note">{{ section.settings.buy_popup_note }}</p>
+      {% endform %}
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      var root = document.getElementById('ac-pdp-figma-{{ section.id }}');
+      if(!root) return;
+
+      var productId = String(root.getAttribute('data-product-id') || '');
+
+      /* ---------- Wishlist (localStorage) ---------- */
+      var WISHLIST_KEY = 'ac_wishlist';
+      var wishBtn = root.querySelector('[data-ac-wishlist-toggle]');
+
+      function safeParse(json){ try{ return JSON.parse(json); }catch(e){ return null; } }
+      function getWishlist(){
+        var raw = localStorage.getItem(WISHLIST_KEY);
+        var parsed = safeParse(raw);
+        if(Array.isArray(parsed)) return parsed.map(String);
+        return [];
+      }
+      function setWishlist(arr){
+        localStorage.setItem(WISHLIST_KEY, JSON.stringify(arr));
+        window.dispatchEvent(new CustomEvent('ac:wishlist:changed', { detail: { ids: arr } }));
+      }
+      function isWishlisted(){ return getWishlist().indexOf(productId) !== -1; }
+      function renderWishlist(){
+        if(!wishBtn) return;
+        var active = isWishlisted();
+        wishBtn.classList.toggle('is-active', active);
+        wishBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      }
+      function toggleWishlist(){
+        var list = getWishlist();
+        var idx = list.indexOf(productId);
+        if(idx >= 0) list.splice(idx, 1);
+        else list.push(productId);
+        setWishlist(list);
+        renderWishlist();
+      }
+      if(wishBtn) wishBtn.addEventListener('click', toggleWishlist);
+      window.addEventListener('storage', function(e){ if(e.key === WISHLIST_KEY) renderWishlist(); });
+      window.addEventListener('ac:wishlist:changed', renderWishlist);
+      renderWishlist();
+
+      /* ---------- Zoom ---------- */
+      var zoomOverlay = root.querySelector('[data-ac-zoom]');
+      var zoomClose = root.querySelector('[data-ac-zoom-close]');
+
+      function openZoom(){
+        if(!zoomOverlay) return;
+        zoomOverlay.classList.add('is-active');
+        document.documentElement.style.overflow = 'hidden';
+      }
+      function closeZoom(){
+        if(!zoomOverlay) return;
+        zoomOverlay.classList.remove('is-active');
+        document.documentElement.style.overflow = '';
+      }
+
+      var zoomTriggers = root.querySelectorAll('[data-ac-zoom-trigger]');
+      if(zoomTriggers && zoomTriggers.length){
+        zoomTriggers.forEach(function(el){ el.addEventListener('click', openZoom); });
+      }
+      if(zoomClose) zoomClose.addEventListener('click', closeZoom);
+      if(zoomOverlay) zoomOverlay.addEventListener('click', function(e){ if(e.target === zoomOverlay) closeZoom(); });
+
+      /* ---------- Buy popup ---------- */
+      var buyTrigger = root.querySelector('[data-ac-buy-trigger]');
+      var buyOverlay = root.querySelector('[data-ac-buy]');
+      var buyClose = root.querySelector('[data-ac-buy-close]');
+
+      function openBuy(){
+        if(!buyOverlay) return;
+        buyOverlay.classList.add('is-active');
+        document.documentElement.style.overflow = 'hidden';
+      }
+      function closeBuy(){
+        if(!buyOverlay) return;
+        buyOverlay.classList.remove('is-active');
+        document.documentElement.style.overflow = '';
+      }
+
+      if(buyTrigger) buyTrigger.addEventListener('click', openBuy);
+      if(buyClose) buyClose.addEventListener('click', closeBuy);
+      if(buyOverlay) buyOverlay.addEventListener('click', function(e){ if(e.target === buyOverlay) closeBuy(); });
+
+      /* ---------- ESC close ---------- */
+      document.addEventListener('keydown', function(e){
+        if(e.key !== 'Escape') return;
+        if(zoomOverlay && zoomOverlay.classList.contains('is-active')) closeZoom();
+        if(buyOverlay && buyOverlay.classList.contains('is-active')) closeBuy();
+      });
+
+      /* ---------- Variant price update ---------- */
+      var variantSelect = root.querySelector('[data-ac-variant-select]');
+      var priceEl = root.querySelector('[data-ac-buy-price]');
+      var moneyFormat = {{ shop.money_format | json }};
+      var variants = {{ product.variants | json }};
+
+      function formatMoney(cents){
+        if(window.Shopify && typeof window.Shopify.formatMoney === 'function'){
+          return window.Shopify.formatMoney(cents, moneyFormat);
+        }
+        return (cents/100).toFixed(2);
+      }
+
+      if(variantSelect && priceEl && Array.isArray(variants)){
+        variantSelect.addEventListener('change', function(){
+          var id = String(variantSelect.value || '');
+          var v = variants.find(function(x){ return String(x.id) === id; });
+          if(v && typeof v.price === 'number'){ priceEl.textContent = formatMoney(v.price); }
+        });
+      }
+    })();
+  </script>
+</section>
+
+  <style>
+    :root {
+      --room-max-h: min(72vh, 900px);
+    }
+    .artp--v2 {
+      --gap: clamp(16px, 3vw, 32px);
+    }
+    .artp__grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) 420px;
+      gap: var(--gap);
+      align-items: start;
+      max-width: 160rem;
+      margin: auto;
+    }
+    @media (max-width: 1100px) {
+      .artp__grid {
+        grid-template-columns: 1fr;
+        max-width: 100%;
+        padding: 1rem;
+      }
+    }
+
+    /* Left */
+    .artp-room {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .artp-room__item {
+      display: none;
+      position: relative;
+      margin: 0;
+    }
+    .artp-room__item.is-active {
+      display: block;
+    }
+    .artp-room__bg {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .artp-wallzone {
+      position: absolute;
+      left: var(--zl, 0%);
+      top: var(--zt, 0%);
+      width: var(--zw, 100%);
+      height: var(--zh, 100%);
+      pointer-events: none;
+    }
+    .artp-room__item[data-zone-visible='true'] .artp-wallzone {
+      outline: 2px dashed rgba(0, 0, 0, 0.25);
+      background: rgba(0, 0, 0, 0.03);
+    }
+    .artp-wallzone__label {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      font: 600 12px/1.2 system-ui;
+      color: #000;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 3px 6px;
+      opacity: 0.7;
+    }
+    .artp-art {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 40%;
+      height: auto;
+      max-width: 100%;
+      max-height: 100%;
+      border: var(--art-border, 0px) solid var(--art-border-color, #fff);
+      background: #fff;
+      pointer-events: none;
+    }
+    .artp-room__thumbs {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .artp-room__thumb {
+      border: 1px solid #e5e5e5;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fff;
+      cursor: pointer;
+      aspect-ratio: 4/3;
+      object-fit: cover;
+      padding: 0;
+      height: 100px;
+    }
+    .artp-room__thumb img {
+      width: 100% !important;
+      height: 100% !important;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+      margin: 0;
+    }
+    .artp-room__thumb.is-active {
+      outline: 2px solid #111;
+    }
+
+    /* Right */
+    .artp__right {
+      max-width: 420px;
+      margin-inline: auto;
+    }
+    .artp-head {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .artp-artist {
+      font: 700 26px/1.25 system-ui;
+      margin: 0;
+    }
+    .artp-title {
+      font: 500 14px/1.5 system-ui;
+      color: #666;
+      margin-top: 4px;
+    }
+    .artp-seg {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      background: #f2f2f2;
+      border-radius: 999px;
+      padding: 4px;
+      margin: 18px 0 10px;
+    }
+    .artp-buytab {
+      flex: 1 1 0;
+      min-width: 120px;
+      border: 0;
+      background: transparent;
+      padding: 8px 12px;
+      font: 600 14px/1 system-ui;
+      border-radius: 999px;
+      cursor: pointer;
+      color: #333;
+    }
+    .artp-buytab.is-active {
+      background: #fff;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+    }
+    .artp-size-line {
+      text-align: center;
+      color: #111;
+      font: 500 13px/1.4 system-ui;
+      margin: 8px 0 2px;
+    }
+    .artp-medium {
+      text-align: center;
+      color: #666;
+      font: 500 12px/1.4 system-ui;
+      margin-bottom: 16px;
+    }
+
+    .artp-sizes {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin: 10px 0 14px;
+    }
+    @media (max-width: 420px) {
+      .artp-sizes {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    .artp-size {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 0.55em 0.75em;
+      background: #fff;
+      cursor: pointer;
+      font: 600 13px/1 system-ui;
+    }
+    .artp-size.is-active {
+      border-color: #111;
+      box-shadow: 0 0 0 2px #111 inset;
+      color: #111;
+    }
+    .artp-size[disabled] {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .artp-cta {
+      width: 100%;
+      background: #000;
+      color: #fff;
+      border: 0;
+      padding: 12px 16px;
+      font: 600 14px/1 system-ui;
+      cursor: pointer;
+    }
+    .artp-cta[disabled] {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .artp-price--hidden {
+      display: none;
+    }
+
+    /* Room: Höhe = natürliche Bildhöhe, kein Innenabstand */
+    .artp-room {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #f6f6f6; /* dezent; gern ändern/entfernen */
+      padding: 0; /* wichtig: kein links/rechts Padding */
+    }
+
+    /* Bild bestimmt die Höhe */
+    .artp-room__bg {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    /* Falls du auf großem Screen seitliche Luft willst: nur dort! */
+    @media (min-width: 1200px) {
+      .artp-room {
+        padding-inline: 2rem;
+      } /* optional */
+    }
+
+    /* Alle aspect-ratio Regeln für .artp-room bitte entfernen. */
+
+    /* ---- Visual Overlays ---- */
+    /* ---- Visual Overlays (über dem Artwork) ---- */
+    .artp-art {
+      z-index: 10;
+    }
+
+    .artp-acryl,
+    .artp-frame {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    /* Acrylglas: gut sichtbare Reflexion + feiner Rand */
+    .artp-acryl {
+      z-index: 20;
+      /* Größe setzt JS */
+      border-radius: 0;
+      /* fallback, falls mix-blend-mode nicht greift */
+      background: linear-gradient(
+          135deg,
+          rgba(255, 255, 255, 0.18) 0%,
+          rgba(255, 255, 255, 0.45) 35%,
+          rgba(255, 255, 255, 0.08) 60%
+        ),
+        linear-gradient(315deg, rgba(255, 255, 255, 0.21) 0%, rgba(255, 255, 255, 0) 45%);
+      mix-blend-mode: screen;
+      opacity: 0.85; /* gern anpassen (0.6 – 0.9) */
+      border: 1px solid white;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1), /* dünne Kante */ 0 10px 24px rgba(0, 0, 0, 0.18); /* leichter Glare */
+    }
+
+    /* Floater Frame: als innerer Ring, Mitte bleibt TRANSPARENT */
+    .artp-frame {
+      z-index: 15;
+      /* Größe setzt JS */
+      background: transparent; /* wichtig! */
+      /* Der eigentliche Rahmen (Breite via --frame-thick) */
+      box-shadow: inset 0 0 0 var(--frame-thick, 20px) var(--frame-color, #111);
+      border-radius: 0;
+    }
+
+    /* Schattenfuge (liegt innerhalb des Rahmens) */
+    .artp-frame::before {
+      content: '';
+      position: absolute;
+      inset: var(--frame-thick, 20px);
+      /* Fuge als dunkler innerer Saum */
+      box-shadow: inset 0 0 0 var(--frame-gap, 8px) rgba(0, 0, 0, 0.6), inset 0 12px 20px rgba(0, 0, 0, 0.25);
+      border-radius: 0;
+    }
+
+    div:empty {
+      display: unset;
+    }
+
+    .artp-acryl[hidden],
+    .artp-frame[hidden] {
+      display: none !important;
+    }
+
+    /* ==== Editions UI (wie Screenshot) ==== */
+    .artp-size-tabs {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+      justify-content: flex-start;
+      margin: 6px 0 18px;
+    }
+    .artp-size-tab {
+      appearance: none;
+      border: 0;
+      cursor: pointer;
+      background: #eaeaea;
+      color: #111;
+      border-radius: 8px;
+      padding: 14px 22px;
+      font: 600 22px/1.1 system-ui;
+    }
+    .artp-size-tab.is-active {
+      border: 1px solid #888888ff;
+    }
+
+    .artp-finishlist {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin: 6px 0 18px;
+    }
+
+    .artp-finishcard {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+      background: #fff;
+      border: 1px solid #e6e6e6;
+      border-radius: 8px;
+      padding: 16px 18px;
+    }
+    .artp-finishcard:hover {
+      border-color: #cfcfcf;
+    }
+    .artp-finishcard.is-active {
+      border-color: #111;
+    }
+
+    .artp-finishcard__left {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .artp-finishcard__title {
+      font: 700 22px/1.2 system-ui;
+      color: #111;
+    }
+    .artp-finishcard__sub {
+      font: 500 12px/1.45 system-ui;
+      color: #666;
+    }
+
+    .artp-finishcard__price {
+      white-space: nowrap;
+      font: 700 20px/1.1 system-ui;
+      color: #111;
+    }
+
+    /* Hidden-Bug absichern (wegen div:empty) */
+    .artp-acryl[hidden],
+    .artp-frame[hidden],
+    [hidden] {
+      display: none !important;
+    }
+
+    button.artp-size-tab {
+      font-size: 1.2rem;
+    }
+
+    /* Zoom Pane */
+    .artp__left {
+      position: relative;
+    } /* für absolute Positionierung */
+    .artp-zoom[hidden] {
+      display: none !important;
+    }
+    .artp-zoom {
+      position: absolute;
+      right: 12px;
+      top: 12px;
+      width: min(44%, 520px);
+      aspect-ratio: 4/3;
+      z-index: 50;
+      pointer-events: none;
+    }
+    .artp-zoom__pane {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #fff;
+      border: 1px solid #e6e6e6;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+    }
+    .artp-zoom__stage {
+      position: absolute;
+      left: 0;
+      top: 0;
+      transform-origin: top left;
+    }
+    /* Zoom auf kleinen Screens ausblenden */
+    @media (max-width: 1100px) {
+      .artp-zoom {
+        display: none !important;
+      }
+    }
+
+    /* falls globales div:empty aktiv war */
+    .artp-acryl[hidden],
+    .artp-frame[hidden],
+    [hidden] {
+      display: none !important;
+    }
+
+    /* === Zoom-Linse + Pane-BG === */
+    :root {
+      --zoom-lens-w: 220px;
+      --zoom-lens-h: calc(var(--zoom-lens-w) * 0.75); /* 4:3 */
+    }
+    .artp-zoom-lens {
+      position: absolute;
+      width: var(--zoom-lens-w);
+      height: var(--zoom-lens-h);
+      border-radius: 10px;
+      border: 1px solid rgba(0, 0, 0, 0.15);
+      background: #fff no-repeat 50% 50%;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+      z-index: 45;
+      pointer-events: none;
+    }
+    .artp-zoom__pane {
+      background: #fff no-repeat 50% 50%;
+      /* Größe kommt aus JS (natürliche Pixel für „richtigen“ Zoom) */
+    }
+
+    .artp-zoom {
+      display: none !important;
+    }
+
+    /* ================== MOBILE TWEAKS ================== */
+
+    /* Tablet & down */
+    @media (max-width: 1100px) {
+      .artp__grid {
+        gap: 14px;
+      }
+      .artp__right {
+        max-width: 680px;
+        width: 100%;
+      }
+
+      /* Room */
+      .artp-room {
+        padding: 0;
+        border-radius: 10px;
+      }
+      .artp-room__item.is-active {
+        display: block;
+      }
+      .artp-room__thumbs {
+        margin: 10px -8px 0;
+        padding: 0 8px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        gap: 8px;
+      }
+      .artp-room__thumb {
+        height: 72px;
+        flex: 0 0 120px;
+      }
+
+      /* Zone-Label dezenter */
+      .artp-room__item[data-zone-visible='true'] .artp-wallzone {
+        outline-width: 1px;
+      }
+      .artp-wallzone__label {
+        transform: scale(0.9);
+        transform-origin: 0 0;
+        opacity: 0.6;
+      }
+    }
+
+    /* Phones */
+    @media (max-width: 740px) {
+      /* Head + Tabs */
+      .artp-artist {
+        font-size: 22px;
+      }
+      .artp-title {
+        font-size: 14px;
+      }
+      .artp-seg {
+        margin: 12px 0 6px;
+      }
+      .artp-buytab {
+        min-width: auto;
+        padding: 8px 10px;
+        font-size: 14px;
+      }
+
+      .artp-size-line {
+        font-size: 13px;
+      }
+      .artp-medium {
+        font-size: 12px;
+      }
+
+      /* Größen-Tabs => horizontal scrollen */
+      .artp-size-tabs {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        white-space: nowrap;
+        padding-bottom: 6px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      .artp-size-tabs::-webkit-scrollbar {
+        display: none;
+      }
+      .artp-size-tab {
+        flex: 0 0 auto;
+        scroll-snap-align: start;
+        font-size: 16px;
+        padding: 10px 14px;
+        border-radius: 10px;
+      }
+
+      /* Finish-Karten kompakter */
+      .artp-finishlist {
+        gap: 12px;
+      }
+      .artp-finishcard {
+        padding: 14px;
+        gap: 12px;
+        align-items: center;
+      }
+      .artp-finishcard__title {
+        font-size: 18px;
+      }
+      .artp-finishcard__sub {
+        font-size: 11px;
+      }
+      .artp-finishcard__price {
+        font-size: 18px;
+        margin-left: auto;
+      }
+
+      /* CTA sticky unten */
+      .artp-buyview form {
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
+      }
+      .artp-cta {
+        border-radius: 10px;
+        padding: 14px 16px;
+        font-size: 16px;
+        box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.08);
+      }
+    }
+
+    /* Small phones */
+    @media (max-width: 480px) {
+      .artp-room {
+        aspect-ratio: 1 / 1;
+      }
+      .artp-room__thumb {
+        height: 64px;
+        flex: 0 0 100px;
+      }
+
+      .artp-size-tab {
+        font-size: 15px;
+        padding: 8px 12px;
+      }
+      .artp-finishcard {
+        padding: 12px;
+      }
+      .artp-finishcard__title {
+        font-size: 17px;
+      }
+      .artp-finishcard__price {
+        font-size: 17px;
+      }
+
+      .artp-cta {
+        font-size: 15px;
+        padding: 12px 14px;
+      }
+    }
+
+    /* ============ MOBILE / TOUCH OPTIMIERUNGEN ============ */
+
+    /* Zoom-Elemente auf Mobile sicher ausblenden */
+    @media (hover: none), (max-width: 1023.98px) {
+      .artp-zoom,
+      .artp-zoom-lens,
+      .artp-zoom-pane {
+        display: none !important;
+      }
+    }
+
+    /* Tablet & darunter */
+    @media (max-width: 1024px) {
+      .artp__grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+      }
+      .artp__right {
+        max-width: 720px;
+        width: 100%;
+        margin-inline: auto;
+      }
+
+      /* Bildbereich randlos, volle Breite */
+      .artp__left {
+        margin: 0;
+      }
+      .artp-room {
+        padding: 0;
+        border-radius: 12px;
+      }
+
+      /* “Wandbereich” auf Mobil aus */
+      .artp-wallzone,
+      .artp-wallzone__label {
+        display: none !important;
+      }
+
+      /* Thumbnails: Horizontal scroll + Snap */
+      .artp-room__thumbs {
+        margin: 10px -12px 0;
+        padding: 0 12px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        gap: 10px;
+        scroll-snap-type: x proximity;
+      }
+      .artp-room__thumb {
+        height: 74px;
+        flex: 0 0 120px;
+        scroll-snap-align: center;
+      }
+    }
+
+    /* Phones */
+    @media (max-width: 740px) {
+      /* Head + Tabs */
+      .artp-artist {
+        font-size: 22px;
+      }
+      .artp-title {
+        font-size: 14px;
+        color: #666;
+      }
+
+      .artp-seg {
+        margin: 12px 0 6px;
+        border-radius: 999px;
+      }
+      .artp-buytab {
+        padding: 9px 12px;
+        font-size: 14px;
+      }
+
+      .artp-size-line {
+        font-size: 13px;
+      }
+
+      /* Größen-Tabs als Scroller */
+      .artp-size-tabs {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        white-space: nowrap;
+        padding-bottom: 6px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      .artp-size-tabs::-webkit-scrollbar {
+        display: none;
+      }
+      .artp-size-tab {
+        flex: 0 0 auto;
+        font-size: 15px;
+        padding: 10px 14px;
+        border-radius: 10px;
+      }
+
+      /* Finish-Cards kompakter */
+      .artp-finishlist {
+        gap: 12px;
+      }
+      .artp-finishcard {
+        padding: 14px;
+        gap: 12px;
+        border-radius: 10px;
+      }
+      .artp-finishcard__title {
+        font-size: 18px;
+      }
+      .artp-finishcard__sub {
+        font-size: 11px;
+      }
+      .artp-finishcard__price {
+        font-size: 18px;
+        margin-left: auto;
+      }
+
+      /* Countdown dezenter */
+      .delivery-date-and-time {
+        font-size: 11px;
+        padding: 6px 10px;
+        gap: 6px;
+      }
+
+      /* Sticky CTA unten mit Safe-Area */
+      .artp-buyview form {
+        position: sticky;
+        bottom: 0;
+        z-index: 20;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: saturate(1.2) blur(3px);
+        padding: 8px 0 env(safe-area-inset-bottom, 0);
+      }
+      .artp-cta {
+        border-radius: 12px;
+        padding: 14px 16px;
+        font-size: 16px;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+      }
+    }
+
+    /* Sehr kleine Phones */
+    @media (max-width: 480px) {
+      .artp-room {
+        aspect-ratio: 4 / 5;
+      } /* höheres Seitenverhältnis für Handy */
+      .artp-room__thumb {
+        height: 64px;
+        flex: 0 0 100px;
+      }
+
+      .artp-size-tab {
+        font-size: 14px;
+        padding: 9px 12px;
+      }
+      .artp-finishcard {
+        padding: 12px;
+      }
+      .artp-finishcard__title {
+        font-size: 17px;
+      }
+      .artp-finishcard__price {
+        font-size: 17px;
+      }
+      .artp-cta {
+        font-size: 15px;
+        padding: 12px 14px;
+      }
+    }
+
+    @media (max-width: 1024px) {
+      .artp-wallzone,
+      .artp-wallzone__label {
+        display: none !important;
+      }
+    }
+
+    @media (max-width: 1100px) {
+      .artp-room__thumbs {
+        margin: 10px -12px 0;
+        padding: 0 12px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        gap: 10px;
+        scroll-snap-type: x proximity;
+      }
+      .artp-room__thumb {
+        height: 74px;
+        flex: 0 0 120px;
+        scroll-snap-align: center;
+      }
+    }
+
+    @media (max-width: 740px) {
+      .artp-buyview form {
+        position: sticky;
+        bottom: 0;
+        z-index: 20;
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: saturate(1.1) blur(4px);
+        padding: 8px 0 env(safe-area-inset-bottom, 0);
+      }
+      .artp-cta {
+        border-radius: 12px;
+      }
+    }
+
+    .country-selector__overlay {
+      display: none !important;
+    }
+
+    /* harte Kante – keine horizontale Scrollbar */
+    .artp,
+    .artp__grid,
+    .artp__left,
+    .artp-room,
+    .artp-room__item {
+      max-width: 100vw;
+      overflow-x: clip;
+    }
+    img,
+    svg {
+      max-width: 100%;
+      height: auto;
+    }
+
+    /* vorher (bitte löschen)
+@media (max-width:1024px){
+  .artp-wallzone, .artp-wallzone__label{ display:none !important; }
+}
+*/
+
+    /* neu */
+    @media (max-width: 1024px) {
+      .artp-wallzone {
+        opacity: 0;
+        outline: 0;
+        pointer-events: none;
+      }
+      .artp-wallzone__label {
+        display: none !important;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .artp-size-tab {
+        font-size: 14px;
+        padding: 5px 7px;
+      }
+    }
+
+    @media (max-width: 740px) {
+      .artp-size-tabs {
+        display: flex;
+        gap: 3px;
+        overflow-x: auto;
+        white-space: nowrap;
+        padding-bottom: 6px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .artp-finishcard {
+        padding: 10px;
+        flex-direction: column;
+        max-width: calc(100vw - 2rem) !important;
+      }
+    }
+
+    .artp,
+    .artp__grid,
+    .artp__left,
+    .artp-room,
+    .artp-room__item {
+      max-width: 100vw;
+      overflow-x: clip;
+    }
+
+    @media (max-width: 480px) {
+      .artp-room {
+        aspect-ratio: 4 / 5;
+        max-width: calc(100vw - 2rem) !important;
+        height: auto !important;
+        object-fit: cover;
+      }
+
+      img.artp-room__bg {
+        object-fit: cover;
+      }
+    }
+
+    @media (max-width: 1100px) {
+      .artp-room__thumbs {
+        max-width: calc(100vw - 0.5rem) !important;
+        margin: 10px -12px 0;
+        padding: 0 12px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        gap: 10px;
+        scroll-snap-type: x proximity;
+      }
+    }
+
+    @media (max-width: 1100px) {
+      .artp-room__item.is-active {
+        display: block;
+        height: 100%;
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 480px) {
+      img.artp-room__bg {
+        object-fit: cover;
+        height: 100%;
+        width: 100%;
+      }
+    }
+
+    /* =========================
+   ARTCLUB Product Popup
+   ========================= */
+    html.artp-modal-open,
+    body.artp-modal-open {
+      overflow: hidden !important;
+    }
+
+    .artp-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 999999;
+      display: none;
+    }
+
+    .artp-modal.is-open {
+      display: block;
+    }
+
+    .artp-modal__backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(10px);
+    }
+
+    .artp-modal__panel {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #fff;
+      overflow: auto;
+      padding: 76px 0 28px;
+    }
+
+    .artp-modal__close {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(10px);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      z-index: 3;
+    }
+
+    .artp-modal__close:hover {
+      background: #fff;
+    }
+
+    @media (min-width: 768px) {
+      .artp-modal__panel {
+        padding-top: 86px;
+      }
+      .artp-modal__close {
+        top: 22px;
+        right: 22px;
+      }
+    }
+
+    /* ===== Stepper (Option A) ===== */
+    .artp-stepper {
+      margin-top: 18px;
+    }
+
+    .artp-step__q {
+      text-align: center;
+      font: 500 16px/1.3 system-ui;
+      padding: 16px 0;
+      border-top: 1px solid #eee;
+      border-bottom: 1px solid #eee;
+      margin-bottom: 14px;
+    }
+
+    .artp-step__list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .artp-step__row {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 16px;
+      border: 1px solid #ececec;
+      border-radius: 10px;
+      background: #fff;
+      cursor: pointer;
+      text-align: left;
+      font: 500 15px/1.2 system-ui;
+    }
+    .artp-step__row.is-active {
+      border-color: #111;
+      box-shadow: 0 0 0 1px #111 inset;
+    }
+    .artp-step__price {
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .artp-step__back {
+      border: 0;
+      background: transparent;
+      font: 600 14px/1 system-ui;
+      cursor: pointer;
+      margin: 0 0 10px;
+    }
+
+    .artp-cta--split {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      border-radius: 6px;
+    }
+
+    .artp-step__row {
+      position: relative;
+    }
+
+    .artp-step__row.is-active {
+      background: #f7f7f7;
+      border-color: #111;
+      box-shadow: 0 0 0 2px #111 inset;
+    }
+
+    .artp-step__row.is-active::before {
+      content: '✓';
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      font-size: 12px;
+      background: #111;
+      color: #fff;
+    }
+
+    .artp-step__row.is-active > span:first-child {
+      padding-left: 28px; /* Platz für den Check */
+    }
+
+
+    /* ============== Apple-like right configurator ============== */
+.artp-config {
+  max-width: 420px;
+  margin-inline: auto;
+  padding: 0 14px;
+}
+
+.artp-config__group {
+  margin-bottom: 18px;
+}
+
+.artp-config__head {
+  padding: 10px 0 12px;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 12px;
+}
+
+.artp-config__kicker {
+  font: 600 12px/1.2 system-ui;
+  color: #6b6b6b;
+  letter-spacing: 0.02em;
+}
+
+.artp-config__title {
+  font: 700 18px/1.2 system-ui;
+  color: #111;
+  margin-top: 4px;
+}
+
+.artp-choicegrid {
+  display: grid;
+  gap: 12px;
+}
+
+.artp-choice {
+  appearance: none;
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  border-radius: 14px;
+  padding: 16px 16px;
+  cursor: pointer;
+  text-align: left;
+  display: grid;
+  gap: 10px;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.artp-choice:hover {
+  border-color: #bdbdbd;
+}
+
+.artp-choice.is-active {
+  border-color: #0071e3;              /* Apple blue */
+  box-shadow: 0 0 0 2px rgba(0,113,227,0.25);
+}
+
+.artp-choice[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.artp-choice__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.artp-choice__title {
+  font: 700 16px/1.2 system-ui;
+  color: #111;
+}
+
+.artp-choice__sub {
+  font: 500 12px/1.35 system-ui;
+  color: #6b6b6b;
+  margin-top: 4px;
+}
+
+.artp-choice__price {
+  font: 700 14px/1.2 system-ui;
+  color: #111;
+  white-space: nowrap;
+}
+
+/* Sticky bar inside modal panel */
+.artp-modal__panel {
+  padding-bottom: calc(28px + 86px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+.artp-stickybar {
+  position: sticky;
+  bottom: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(0,0,0,0.08);
+  max-width: 420px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.artp-stickybar__title {
+  font: 700 13px/1.2 system-ui;
+  color: #111;
+}
+
+.artp-stickybar__sub {
+  font: 500 12px/1.25 system-ui;
+  color: #6b6b6b;
+  margin-top: 3px;
+}
+
+.artp-stickybar__form {
+  margin: 0;
+}
+
+.artp-atc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 14px;
+  background: #0071e3;
+  color: #fff;
+  font: 700 13px/1 system-ui;
+  cursor: pointer;
+  min-width: 180px;
+}
+
+.artp-atc[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.artp-atc__price {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+/* Mobile: right side full width */
+@media (max-width: 1100px) {
+  .artp-config { max-width: 720px; }
+  .artp-stickybar { max-width: 720px; }
+  .artp-atc { width: 100%; min-width: 0; }
+  .artp-stickybar { align-items: stretch; }
+  .artp-stickybar__form { flex: 1; }
+}
+
+
+.artp-config__close{
+  appearance:none;
+  border:0;
+  background:transparent;
+  cursor:pointer;
+  padding: 8px 0 12px;
+  font: 600 14px/1 system-ui;
+  color:#111;
+  opacity:0.75;
+}
+.artp-config__close:hover{ opacity:1; }
+
+
+  </style>
+
+  {%- capture variants_json -%}[{% for v in product.variants %}{% if forloop.first == false %},{% endif %}{
+    "id": {{ v.id }},
+    "sku": {{ v.sku | json }},
+    "price": {{ v.price | json }},
+    "available": {{ v.available | json }},
+    "option1": {{ v.option1 | json }},
+    "option2": {{ v.option2 | json }},
+    "img": {% if v.featured_media %}{{ v.featured_media | image_url: width: 1600 | json }}{% else %}null{% endif %}
+  }{% endfor %}]{%- endcapture -%}
+
+  <!-- Controller: view-switch + editions + overlay sync -->
+  <script>
+(function () {
+  /* -------------------- Shortcuts & Data -------------------- */
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+  const VARIANTS = {{ variants_json | strip
+}};
+const ED_VARIANTS = VARIANTS.filter(v => v.option1 && v.option1 !== "Original");
+const ORIGINAL = VARIANTS.find(v => v.option1 === "Original") || VARIANTS[0];
+const DEFAULT_ART = {{ art_default_src | default: '' | json }};
+
+const fmtMoney = (c) => { try { return new Intl.NumberFormat("de-DE", { style: "currency", currency: {{ shop.currency | json }}}).format(c / 100);}catch (e) { return (c / 100).toFixed(2); } };
+
+/* -------------------- DOM Refs -------------------- */
+const elPriceDynamic = $('[data-price-dynamic]');
+const elPriceOrig = $('[data-product-price-original]');
+const elPriceEdition = $('[data-edition-price]');
+const inputOrig = $('[data-variant-id-input-original]');
+const inputEdition = $('[data-variant-id-input-edition]');
+const btnEditionSubmit = $('[data-edition-submit]');
+const sizeReadout = $('[data-size-readout]');
+
+const buyTabs = $$('.artp-buytab');
+const viewOriginal = $('.artp-buyview--original');
+const viewEditions = $('.artp-buyview--editions');
+
+const finishTabs = $$('.artp-tab');
+const sizesWrap = $('[data-sizes]');
+
+/* -------------------- State -------------------- */
+{% if product.metafields.custom.height and product.metafields.custom.breite_cm_ %}
+const ORIGINAL_SIZE_LABEL = "{{ product.metafields.custom.height | round: 0 }}x{{ product.metafields.custom.breite_cm_ | round: 0 }}";
+{% else %}
+const ORIGINAL_SIZE_LABEL = "60x40";
+{% endif %}
+
+let activeView = 'original';   // 'original' | 'editions'
+let selectedEditionSize = null;         // "HxB" z.B. "70x50"
+let currentFinishName = null;         // Name aus option1 (z.B. "Mounted under Acrylic Glass" / "Floater Frame")
+
+/* -------------------- Helpers: Room/Geometry -------------------- */
+const getActiveRoom = () => $('.artp-room__item.is-active');
+
+const parseSize = (label) => {
+  const m = String(label || '').match(/(\d+(?:[\.,]\d+)?)\s*[x×]\s*(\d+(?:[\.,]\d+)?)/i);
+  if (!m) return { H: 50, B: 40 };
+  return { H: parseFloat(m[1].replace(',', '.')), B: parseFloat(m[2].replace(',', '.')) };
+};
+
+const getPpcm = (fig) => {
+  const zone = fig?.querySelector('.artp-wallzone'); if (!zone) return 0;
+  const realW = parseFloat(fig.dataset.zoneRealw || '0'); if (!realW) return 0;
+  const r = zone.getBoundingClientRect();
+  return r.width / realW; // px per cm
+};
+
+const applyShadow = (fig, img) => {
+  const ppcm = getPpcm(fig) || 1;
+  const deg = (parseFloat(fig.dataset.shadowDeg || '0') || 0) * Math.PI / 180;
+  const dist = (parseFloat(fig.dataset.shadowDist || '0') || 0) * ppcm;
+  const blur = (parseFloat(fig.dataset.shadowBlur || '0') || 0) * ppcm;
+  const op = parseFloat(fig.dataset.shadowOp || '0.3') || 0.3;
+  const dx = Math.cos(deg) * dist, dy = Math.sin(deg) * dist;
+  img.style.filter = `drop-shadow(${dx.toFixed(1)}px ${dy.toFixed(1)}px ${blur.toFixed(1)}px rgba(0,0,0,${op}))`;
+};
+
+const isAcrylic = (name) => /acryl|acrylic/i.test(String(name || ''));
+const isFloater = (name) => /(rahmen|frame|floater)/i.test(String(name || ''));
+
+/* -------------------- Core: Layout Artwork + Overlays -------------------- */
+window.layoutArtwork = function (fig, sizeLabel, finishName) {
+  if (!fig) return;
+
+  const zone = fig.querySelector('.artp-wallzone');
+  const img = fig.querySelector('[data-art-img]');
+  const acryl = fig.querySelector('[data-acryl]');
+  const frame = fig.querySelector('[data-frame]');
+  if (!zone || !img) return;
+
+  const ppcm = getPpcm(fig); if (!ppcm) return;
+
+  // Artwork-Größe (cm -> px) und in Zone einpassen
+  const { H, B } = parseSize(sizeLabel);
+  const pxW = B * ppcm, pxH = H * ppcm;
+  const zr = zone.getBoundingClientRect();
+  const fr = fig.getBoundingClientRect();
+  const scale = Math.min(1, zr.width / pxW, zr.height / pxH);
+  const artW = pxW * scale, artH = pxH * scale;
+
+  // Artwork platzieren
+  img.style.setProperty('--art-border', (parseFloat(fig.dataset.artBorder || '0') || 0) + 'px');
+  img.style.setProperty('--art-border-color', fig.dataset.artBorderColor || '#fff');
+  img.style.width = artW.toFixed(1) + 'px';
+
+  const cx = (zr.left - fr.left) + zr.width / 2;
+  const cy = (zr.top - fr.top) + zr.height / 2;
+  img.style.left = (cx / fr.width) * 100 + '%';
+  img.style.top = (cy / fr.height) * 100 + '%';
+  img.style.transform = 'translate(-50%,-50%)';
+
+  applyShadow(fig, img);
+
+  // Overlays zunächst ausblenden
+  if (acryl) { acryl.hidden = true; }
+  if (frame) { frame.hidden = true; }
+
+  // Acrylglas – genau über dem Artwork
+  if (isAcrylic(finishName) && acryl) {
+    acryl.style.width = artW.toFixed(1) + 'px';
+    acryl.style.height = artH.toFixed(1) + 'px';
+    acryl.style.left = img.style.left;
+    acryl.style.top = img.style.top;
+    acryl.hidden = false;
+  }
+
+  // Schattenfugenrahmen – fester Rahmen 2.5cm + sichtbare Fuge (1.0cm)
+  if (isFloater(finishName) && frame) {
+    const FRAME_CM = 2.5;
+    const GAP_CM = 1.0;
+    const tPx = FRAME_CM * ppcm;
+    const gPx = GAP_CM * ppcm;
+
+    const outerW = artW + 2 * (tPx + gPx);
+    const outerH = artH + 2 * (tPx + gPx);
+
+    frame.style.setProperty('--frame-thick', tPx.toFixed(2) + 'px');
+    frame.style.setProperty('--frame-gap', gPx.toFixed(2) + 'px');
+    frame.style.width = outerW.toFixed(1) + 'px';
+    frame.style.height = outerH.toFixed(1) + 'px';
+    frame.style.left = img.style.left;
+    frame.style.top = img.style.top;
+    frame.hidden = false;
+  }
+};
+
+// --------- Overlay/Artwork Sync (FEHLT aktuell) ----------
+window.renderOverlayForState = function () {
+  const fig = getActiveRoom();
+  if (!fig) return;
+
+  const img = fig.querySelector('[data-art-img]');
+  if (!img) return;
+
+  // 1) ORIGINAL
+  if (activeView === 'original') {
+    // Bild setzen (wenn Original ein eigenes Bild hat)
+    const v = ORIGINAL;
+    img.src = (v && v.img) ? v.img : DEFAULT_ART;
+
+    // Layout ohne Finish
+    window.layoutArtwork(fig, ORIGINAL_SIZE_LABEL, null);
+    return;
+  }
+
+  // 2) EDITIONS
+  // Wenn keine Finish/Size gewählt: zeige zumindest Base-Preview ohne Overlay
+  const finish = currentFinishName;
+  const size = selectedEditionSize;
+
+  // Variant bestimmen (wenn gewählt)
+  let chosen = null;
+  if (finish && size) {
+    chosen = ED_VARIANTS.find(v => String(v.option1) === String(finish) && String(v.option2) === String(size))
+      || ED_VARIANTS.find(v => String(v.option1) === String(finish) && String(v.option2) === String(size));
+  }
+
+  // Bild: Variantenbild wenn vorhanden, sonst Default
+  img.src = (chosen && chosen.img) ? chosen.img : DEFAULT_ART;
+
+  // Layout: wenn Size fehlt → nimm die kleinste verfügbare Size dieser Finish (oder fallback)
+  let sizeToUse = size;
+  if (!sizeToUse) {
+    const sizes = ED_VARIANTS
+      .filter(v => !finish || String(v.option1) === String(finish))
+      .map(v => String(v.option2 || ''))
+      .filter(Boolean);
+
+    sizeToUse = sizes[0] || ORIGINAL_SIZE_LABEL;
+  }
+
+  window.layoutArtwork(fig, sizeToUse, finish);
+};
+
+
+/* -------------------- UI: Readouts & Price -------------------- */
+const setSizeReadout = (label) => {
+  if (!sizeReadout) return;
+  sizeReadout.textContent = label ? (String(label).replace('x', ' × ') + ' cm') : '';
+};
+
+const currentEditionVariant = () => {
+  const id = inputEdition && inputEdition.value;
+  return id ? ED_VARIANTS.find(v => String(v.id) === String(id)) : null;
+};
+
+const updateDynamicPrice = () => {
+  if (!elPriceDynamic) return;
+  let idToShow = null;
+  if (activeView === 'original') {
+    idToShow = inputOrig?.value || ORIGINAL?.id;
+  } else {
+    idToShow = inputEdition?.value || null;
+    if (!idToShow && ORIGINAL) idToShow = ORIGINAL.id; // Fallback
+  }
+  const v = VARIANTS.find(x => String(x.id) === String(idToShow));
+  if (v) elPriceDynamic.textContent = fmtMoney(v.price);
+};
+
+/* -------------------- Controller: View switch -------------------- */
+/* ==================== Apple-like Configurator (right side) ==================== */
+const configRoot = document.querySelector('[data-ac-config]');
+if (configRoot) {
+  const modelWrap  = configRoot.querySelector('[data-model-choices]');
+  const finishWrap = configRoot.querySelector('[data-finish-choices]');
+  const sizeWrap   = configRoot.querySelector('[data-size-choices]');
+
+  const groupFinish = configRoot.querySelector('[data-group="finish"]');
+  const groupSize   = configRoot.querySelector('[data-group="size"]');
+
+  const inputOrigLocal    = document.querySelector('[data-variant-id-input-original]');
+  const inputEditionLocal = document.querySelector('[data-variant-id-input-edition]');
+
+  const atcVariant = document.querySelector('[data-atc-variant]');
+  const atcBtn     = document.querySelector('[data-atc-btn]');
+  const atcPrice   = document.querySelector('[data-atc-price]');
+  const summaryEl  = document.querySelector('[data-selection-summary]');
+
+  const uniq = (arr)=> Array.from(new Set(arr.filter(Boolean)));
+
+  // Determine variants
+  const ORIGINAL_V = VARIANTS.find(v => String(v.option1) === "Original") || VARIANTS[0];
+  const EDITIONS   = VARIANTS.filter(v => String(v.option1) && String(v.option1) !== "Original");
+
+  const finishes = uniq(EDITIONS.map(v => String(v.option1)));
+  const minPrice = (list)=> list.reduce((m,v)=> Math.min(m, Number(v.price||0) || 0 || m), Number.POSITIVE_INFINITY);
+
+  const cheapestEdition = (() => {
+    const avail = EDITIONS.filter(v => v.available);
+    const list  = avail.length ? avail : EDITIONS;
+    const p = minPrice(list);
+    return Number.isFinite(p) ? p : null;
+  })();
+
+  const finishMinPrice = (finish) => {
+    const list = EDITIONS.filter(v => String(v.option1) === String(finish));
+    const avail = list.filter(v => v.available);
+    const p = minPrice((avail.length ? avail : list));
+    return Number.isFinite(p) ? p : null;
+  };
+
+  const variantBy = (finish, size) => {
+    return EDITIONS.find(v => String(v.option1)===String(finish) && String(v.option2)===String(size) && v.available)
+        || EDITIONS.find(v => String(v.option1)===String(finish) && String(v.option2)===String(size));
+  };
+
+  const sizesForFinish = (finish) => {
+    const sizes = uniq(EDITIONS.filter(v => String(v.option1)===String(finish)).map(v => String(v.option2)));
+    // sort by area (small->large)
+    const parse = (s)=>{
+      const m = String(s||'').match(/(\d+(?:[.,]\d+)?)\s*[x×]\s*(\d+(?:[.,]\d+)?)/i);
+      if(!m) return {a: 0};
+      const h = parseFloat(m[1].replace(',','.'));
+      const w = parseFloat(m[2].replace(',','.'));
+      return {a: w*h};
+    };
+    return sizes.slice().sort((a,b)=> parse(a).a - parse(b).a);
+  };
+
+  // State
+  let mode   = "original";  // "original" | "edition"
+  let finish = null;
+  let size   = null;
+
+  function choiceCard({title, sub, price, active, disabled, onClick}) {
+    const b = document.createElement('button');
+    b.type = "button";
+    b.className = "artp-choice" + (active ? " is-active" : "");
+    if (disabled) b.disabled = true;
+
+    b.innerHTML = `
+      <div class="artp-choice__top">
+        <div>
+          <div class="artp-choice__title">${title}</div>
+          ${sub ? `<div class="artp-choice__sub">${sub}</div>` : ``}
+        </div>
+        ${price ? `<div class="artp-choice__price">${price}</div>` : ``}
+      </div>
+    `;
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+function setATC(variant, summaryText) {
+  if (!atcVariant || !atcBtn || !atcPrice) return;
+
+  // --- BRIDGE: Preview-State immer synchron halten ---
+  activeView = (mode === "original") ? "original" : "editions";
+
+  // Wenn Edition-Modus: Finish/Size in die globalen Variablen spiegeln
+  if (mode === "edition") {
+    currentFinishName = finish || null;
+    selectedEditionSize = size || null;
+  } else {
+    currentFinishName = null;
+    selectedEditionSize = null;
+  }
+
+  // --- Kein Variant gewählt (z.B. nach Finish-Click) ---
+  if (!variant || !variant.id) {
+    atcVariant.value = "";
+    atcBtn.disabled = true;
+    atcPrice.textContent = "";
+    if (summaryEl) summaryEl.textContent = summaryText || "Bitte auswählen";
+
+    // WICHTIG: alte Edition-ID löschen, sonst bleibt Preview "stuck"
+    if (mode === "edition" && inputEditionLocal) inputEditionLocal.value = "";
+
+    return;
+  }
+
+  // --- Variant gesetzt ---
+  atcVariant.value = variant.id;
+
+  // keep internal inputs for preview logic
+  if (mode === "original") {
+    if (inputOrigLocal) inputOrigLocal.value = variant.id;
+    if (inputEditionLocal) inputEditionLocal.value = "";
+  } else {
+    if (inputEditionLocal) inputEditionLocal.value = variant.id;
+  }
+
+  atcBtn.disabled = !variant.available;
+  atcPrice.textContent = fmtMoney(variant.price);
+  if (summaryEl) summaryEl.textContent = summaryText || "";
+}
+
+
+  function syncPreview() {
+    try {
+      if (inputEditionLocal) inputEditionLocal.dispatchEvent(new Event('change', { bubbles: true }));
+      if (inputOrigLocal) inputOrigLocal.dispatchEvent(new Event('change', { bubbles: true }));
+    } catch(e) {}
+
+    // Render im nächsten Frame, damit Layout/hidden states sicher gesetzt sind
+    requestAnimationFrame(() => {
+      try {
+        if (typeof renderOverlayForState === "function") renderOverlayForState();
+      } catch(e) {}
+    });
+  }
+
+
+  function renderModel() {
+    if (!modelWrap) return;
+    modelWrap.innerHTML = "";
+
+    const origSub = (typeof ORIGINAL_SIZE_LABEL !== "undefined") ? `Originalgröße ${String(ORIGINAL_SIZE_LABEL).replace('x','×')} cm` : "";
+    modelWrap.appendChild(choiceCard({
+      title: "Original Artwork",
+      sub: origSub,
+      price: ORIGINAL_V ? fmtMoney(ORIGINAL_V.price) : "",
+      active: mode === "original",
+      onClick: () => {
+        activeView = "original";
+        currentFinishName = null;
+        selectedEditionSize = null;
+        if (inputEditionLocal) inputEditionLocal.value = "";
+        mode = "original";
+        finish = null;
+        size = null;
+
+        groupFinish.hidden = true;
+        groupSize.hidden = true;
+
+        setATC(ORIGINAL_V, "Original");
+        renderModel();
+        renderFinish();
+        renderSize();
+        syncPreview();
+      }
+    }));
+
+    modelWrap.appendChild(choiceCard({
+      title: "Print / Edition",
+      sub: "Wähle Finish & Größe",
+      price: cheapestEdition != null ? (`ab ${fmtMoney(cheapestEdition)}`) : "",
+      active: mode === "edition",
+      disabled: !EDITIONS.length,
+      onClick: () => {
+        mode = "edition";
+
+        activeView = "editions";
+        currentFinishName = finish || null;
+        selectedEditionSize = null;
+        if (inputEditionLocal) inputEditionLocal.value = "";
+
+
+        groupFinish.hidden = false;
+        // size group erst wenn finish gewählt
+        groupSize.hidden = true;
+
+        // Default finish setzen (wie Apple: nächste Sektion öffnet sich)
+        finish = finish || finishes[0] || null;
+        size = null;
+
+        renderModel();
+        renderFinish();
+        renderSize();
+
+        // noch kein ATC bis size gewählt
+        setATC(null, finish ? `Edition · ${finish}` : "Edition");
+        syncPreview();
+      }
+    }));
+  }
+
+  function renderFinish() {
+    if (!finishWrap) return;
+    finishWrap.innerHTML = "";
+
+    if (mode !== "edition") {
+      groupFinish.hidden = true;
+      return;
+    }
+    groupFinish.hidden = false;
+
+    finishes.forEach(f => {
+      const p = finishMinPrice(f);
+      finishWrap.appendChild(choiceCard({
+        title: f,
+        sub: "—",
+        price: p != null ? (`ab ${fmtMoney(p)}`) : "",
+        active: String(finish) === String(f),
+        onClick: () => {
+          finish = f;
+          activeView = "editions";
+          currentFinishName = finish;
+          selectedEditionSize = null;
+          if (inputEditionLocal) inputEditionLocal.value = "";
+
+          size = null;                 // Apple-like: size reset
+          groupSize.hidden = false;
+
+          renderFinish();
+          renderSize();
+
+          setATC(null, `Edition · ${finish}`);
+          syncPreview();
+        }
+      }));
+    });
+  }
+
+  function renderSize() {
+    if (!sizeWrap) return;
+    sizeWrap.innerHTML = "";
+
+    if (mode !== "edition" || !finish) {
+      groupSize.hidden = true;
+      return;
+    }
+    groupSize.hidden = false;
+
+    const sizes = sizesForFinish(finish);
+    sizes.forEach(sz => {
+      const v = variantBy(finish, sz);
+      const disabled = !v || !v.available;
+
+      sizeWrap.appendChild(choiceCard({
+        title: `Size ${sz}`,
+        sub: disabled ? "Nicht verfügbar" : "",
+        price: v ? fmtMoney(v.price) : "",
+        active: String(size) === String(sz),
+        disabled,
+        onClick: () => {
+          size = sz;
+          activeView = "editions";
+          currentFinishName = finish;
+          selectedEditionSize = size;
+
+          const chosen = variantBy(finish, size);
+
+          if (chosen) {
+            setATC(chosen, `Edition · ${finish} · ${size}`);
+          } else {
+            setATC(null, `Edition · ${finish}`);
+          }
+
+          renderSize();
+          syncPreview();
+        }
+      }));
+    });
+  }
+
+  // Init
+  if (ORIGINAL_V) {
+    mode = "original";
+    setATC(ORIGINAL_V, "Original");
+  }
+
+  groupFinish.hidden = true;
+  groupSize.hidden = true;
+
+  renderModel();
+  renderFinish();
+  renderSize();
+}
+
+
+
+/* ==================== ZOOM v3: click-to-open, pointer-follow, global pane ==================== */
+const ZOOM = document.querySelector('[data-zoom]');
+const ZOOM_PANE = ZOOM ? ZOOM.querySelector('.artp-zoom__pane') : null;
+
+function ensureLens(fig) {
+  let lens = fig.querySelector('[data-zoom-lens]');
+  if (!lens) {
+    lens = document.createElement('div');
+    lens.className = 'artp-zoom-lens';
+    lens.setAttribute('data-zoom-lens', '');
+    fig.appendChild(lens);
+  }
+  lens.innerHTML = lens.innerHTML || '<span style="display:none"></span>'; // gegen div:empty
+  return lens;
+}
+
+function setZoomImages(fig) {
+  const art = fig.querySelector('[data-art-img]');
+  if (!art || !ZOOM_PANE) return;
+  const url = art.currentSrc || art.src;
+  const lens = ensureLens(fig);
+  lens.style.backgroundImage = `url(${url})`;
+  ZOOM_PANE.style.backgroundImage = `url(${url})`;
+
+  const apply = () => {
+    const nw = art.naturalWidth || 1600;
+    const nh = art.naturalHeight || 1200;
+    const bgSize = `${nw}px ${nh}px`;   // echte Pixelgröße für 1:1-Zoom
+    lens.style.backgroundSize = bgSize;
+    ZOOM_PANE.style.backgroundSize = bgSize;
+  };
+  if (art.complete) apply(); else art.addEventListener('load', apply, { once: true });
+}
+
+function moveZoom(fig, x, y) {
+  const art = fig.querySelector('[data-art-img]'); if (!art) return;
+  const lens = ensureLens(fig);
+
+  const fr = fig.getBoundingClientRect();
+  const ir = art.getBoundingClientRect();
+  const lw = lens.offsetWidth, lh = lens.offsetHeight;
+
+  // Cursor in die Bildfläche clampen
+  const cx = Math.max(ir.left, Math.min(x, ir.right));
+  const cy = Math.max(ir.top, Math.min(y, ir.bottom));
+
+  // Linse positionieren (relativ zur Figure)
+  lens.style.left = (cx - fr.left - lw / 2) + 'px';
+  lens.style.top = (cy - fr.top - lh / 2) + 'px';
+
+  // Hintergrundposition (Prozent) für Linse & Pane
+  const zx = ((cx - ir.left) / ir.width) * 100;
+  const zy = ((cy - ir.top) / ir.height) * 100;
+  lens.style.backgroundPosition = `${zx}% ${zy}%`;
+  if (ZOOM_PANE) ZOOM_PANE.style.backgroundPosition = `${zx}% ${zy}%`;
+}
+
+function openZoom(fig, x, y) {
+  if (!fig || !ZOOM) return;
+  setZoomImages(fig);
+  fig.classList.add('is-zooming');
+  ensureLens(fig).hidden = false;
+  ZOOM.hidden = false;
+  moveZoom(fig, x, y);
+}
+
+function closeZoom(fig) {
+  if (!fig || !ZOOM) return;
+  fig.classList.remove('is-zooming');
+  const lens = fig.querySelector('[data-zoom-lens]');
+  if (lens) lens.hidden = true;
+  ZOOM.hidden = true;
+}
+
+function setupZoomHandlersClick() {
+  const ENABLE_ZOOM = window.matchMedia('(pointer: fine)').matches && window.innerWidth >= 1024;
+  if (!ENABLE_ZOOM) {
+    // Safety: falls Linse/Panes existieren – verstecken/schließen
+    const fig = document.querySelector('.artp-room__item.is-active');
+    if (fig) {
+      fig.classList.remove('is-zooming');
+      fig.querySelectorAll('[data-zoom-lens],[data-zoom-pane]').forEach(el => el.hidden = true);
+    }
+    return;
+  }
+
+  if (!ZOOM || !ZOOM_PANE) return;
+
+
+  const container = document.querySelector('.artp__left');
+  if (!container) return;
+
+  container.addEventListener('click', (e) => {
+    const fig = getActiveRoom(); if (!fig) return;
+    const art = fig.querySelector('[data-art-img]'); if (!art) return;
+    if (!(e.target === art || art.contains(e.target))) return;
+
+    if (fig.classList.contains('is-zooming')) closeZoom(fig);
+    else openZoom(fig, e.clientX, e.clientY);
+
+  });
+
+  container.addEventListener('pointermove', (e) => {
+    const fig = getActiveRoom();
+    if (!fig || !fig.classList.contains('is-zooming')) return;
+    moveZoom(fig, e.clientX, e.clientY);
+
+  });
+
+  document.addEventListener('click', (e) => {
+    const fig = getActiveRoom();
+    if (!fig || !fig.classList.contains('is-zooming')) return;
+    if (!fig.contains(e.target)) closeZoom(fig);
+  }, true);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeZoom(getActiveRoom());
+  });
+
+  window.addEventListener('resize', () => {
+    const fig = getActiveRoom();
+    if (fig && fig.classList.contains('is-zooming')) setZoomImages(fig);
+
+  });
+}
+
+
+// Nach jedem Re-Render (Raum/Variante) Zoom-Bilder synchron halten
+const __renderOverlayForState = renderOverlayForState;
+renderOverlayForState = function () {
+  __renderOverlayForState();
+  const fig = getActiveRoom();
+  if (fig) setZoomImages(fig);
+};
+
+
+
+/* -------------------- Init -------------------- */
+if (inputOrig && ORIGINAL) inputOrig.value = ORIGINAL.id;
+if (elPriceOrig && ORIGINAL) elPriceOrig.textContent = fmtMoney(ORIGINAL.price);
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Beim ersten Paint immer Originalgröße/Ansicht korrekt darstellen
+  renderOverlayForState();
+  updateDynamicPrice();
+});
+setupZoomHandlersClick();
+// Auf Resize neu skalieren
+window.addEventListener('resize', renderOverlayForState);
+
+// Falls jemand die Hidden-Inputs manuell ändert (Apps etc.)
+[inputOrig, inputEdition].forEach(inp => {
+  if (!inp) return;
+  inp.addEventListener('change', () => {
+    if (inp === inputEdition) {
+      const v = currentEditionVariant();
+      if (v) {
+        selectedEditionSize = v.option2;
+        currentFinishName = v.option1;
+        if (elPriceEdition) elPriceEdition.textContent = fmtMoney(v.price);
+      }
+    }
+    updateDynamicPrice();
+    renderOverlayForState();
+  });
+});
+
+// Preis auch bei Tab-Wechsel/Größenklick aktualisieren (zur Sicherheit)
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.artp-buytab')) updateDynamicPrice();
+  if (e.target.closest('.artp-size[data-variant-id]')) updateDynamicPrice();
+});
+
+}) ();
+</script>
+  <script>
+  (() => {
+    const MODAL_ID = 'artp-modal-{{ section.id }}';
+    const modal = document.getElementById(MODAL_ID);
+    if (!modal) return;
+
+    const panel = modal.querySelector('.artp-modal__panel');
+    let lastFocus = null;
+
+    function openModal(fromEl) {
+      if (modal.classList.contains('is-open')) return;
+      lastFocus = fromEl || document.activeElement;
+
+      modal.classList.add('is-open');
+      modal.setAttribute('aria-hidden', 'false');
+      document.documentElement.classList.add('artp-modal-open');
+      document.body.classList.add('artp-modal-open');
+
+      requestAnimationFrame(() => {
+        if (panel) panel.focus();
+        // WICHTIG: dein Rahmen/Kaschierung-Render hängt an getBoundingClientRect + resize-listener
+        window.dispatchEvent(new Event('resize'));
+      });
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 180);
+    }
+
+    function closeModal() {
+      if (!modal.classList.contains('is-open')) return;
+
+      modal.classList.remove('is-open');
+      modal.setAttribute('aria-hidden', 'true');
+      document.documentElement.classList.remove('artp-modal-open');
+      document.body.classList.remove('artp-modal-open');
+
+      if (lastFocus && lastFocus.focus) lastFocus.focus();
+    }
+
+    // Delegation: Button kann irgendwo auf der Seite sein
+    document.addEventListener('click', (e) => {
+      const opener = e.target.closest('[data-artp-open="' + MODAL_ID + '"]');
+      if (opener) {
+        e.preventDefault();
+        openModal(opener);
+        return;
+      }
+
+      if (!modal.classList.contains('is-open')) return;
+
+      const closer = e.target.closest('[data-artp-close]');
+      if (closer) {
+        e.preventDefault();
+        closeModal();
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+    });
+
+    // Optional: Debug open per URL ?buy=1
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('buy') === '1') openModal();
+    } catch (e) { }
+  })();
+  </script>
+{% schema %}
+{
+  "name": "AC Product Artwork",
+  "settings": [
+    { "type": "checkbox", "id": "show_back", "label": "Back-Link anzeigen", "default": true },
+    { "type": "url", "id": "back_url", "label": "Zurück-Link (optional)", "info": "Wenn leer, wird die aktuelle Collection oder /collections/all verwendet." },
+    { "type": "text", "id": "back_label", "label": "Zurück-Text", "default": "Back" },
+
+    { "type": "text", "id": "buy_label", "label": "Buy Button Label", "default": "Buy Options" },
+    { "type": "text", "id": "wishlist_label", "label": "Wishlist Button Label", "default": "Save to wishlist" },
+
+    { "type": "text", "id": "zoom_hint", "label": "Zoom Hinweis", "default": "Zum Vergrößern klicken" },
+
+    { "type": "text", "id": "buy_subtitle", "label": "Unterzeile im Buy Popup", "default": "Bitte wähle deine Option und bestätige den Kauf." },
+    { "type": "textarea", "id": "buy_popup_note", "label": "Hinweis im Buy Popup", "default": "Nach dem Kauf erhältst du eine Bestätigung per E-Mail. Versand, Abholung oder Hängeservice können wir im Anschluss gemeinsam klären." }
+  ],
+  "blocks": [
+    {
+      "type": "room",
+      "name": "Room Preview",
+      "settings": [
+        { "type": "image_picker", "id": "image", "label": "Raumfoto" },
+
+        { "type": "header", "content": "Wand-Bereich (in % vom Bild)" },
+        {
+          "type": "range",
+          "id": "zone_left",
+          "label": "Linke Kante (%)",
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "default": 12
+        },
+        {
+          "type": "range",
+          "id": "zone_top",
+          "label": "Obere Kante (%)",
+          "min": 0,
+          "max": 100,
+          "step": 1,
+          "default": 8
+        },
+        { "type": "range", "id": "zone_width", "label": "Breite (%)", "min": 5, "max": 100, "step": 1, "default": 60 },
+        { "type": "range", "id": "zone_height", "label": "Höhe (%)", "min": 5, "max": 100, "step": 1, "default": 70 },
+
+        { "type": "header", "content": "Reale Maße" },
+        { "type": "number", "id": "zone_realw_cm", "label": "Reale Wandbreite (cm)", "default": 300 },
+
+        { "type": "header", "content": "Artwork & Darstellung" },
+        { "type": "checkbox", "id": "show_zone", "label": "Wandbereich sichtbar", "default": true },
+        {
+          "type": "range",
+          "id": "art_border",
+          "min": 0,
+          "max": 20,
+          "step": 1,
+          "label": "Rahmenbreite (px)",
+          "default": 0
+        },
+        { "type": "color", "id": "art_border_color", "label": "Rahmenfarbe", "default": "#ffffff" },
+
+        { "type": "header", "content": "Schatten" },
+        {
+          "type": "range",
+          "id": "shadow_deg",
+          "min": 0,
+          "max": 36,
+          "step": 0.5,
+          "label": "Richtung (°)",
+          "default": 13
+        },
+        {
+          "type": "range",
+          "id": "shadow_dist_cm",
+          "min": 0,
+          "max": 10,
+          "step": 0.5,
+          "label": "Distanz (cm)",
+          "default": 1.5
+        },
+        {
+          "type": "range",
+          "id": "shadow_blur_cm",
+          "min": 0,
+          "max": 10,
+          "step": 0.5,
+          "label": "Weichzeichnung (cm)",
+          "default": 2.5
+        },
+        {
+          "type": "range",
+          "id": "shadow_opacity",
+          "min": 0,
+          "max": 100,
+          "step": 5,
+          "label": "Deckkraft (%)",
+          "default": 35
+        }
+      ]
+    }
+  ],
+  "presets": [
+    { "name": "AC Product Artwork (Figma Final + Text Fix)", "category": "ARTCLUB" }
+  ]
+}
+{% endschema %}

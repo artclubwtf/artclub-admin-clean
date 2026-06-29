@@ -1,0 +1,294 @@
+{{ 'customer.css' | asset_url | stylesheet_tag }}
+
+{%- style -%}
+  .section-{{ section.id }}-padding {
+    padding-top: {{ section.settings.padding_top | times: 0.75 | round: 0 }}px;
+    padding-bottom: {{ section.settings.padding_bottom | times: 0.75 | round: 0 }}px;
+  }
+  @media screen and (min-width: 750px) {
+    .section-{{ section.id }}-padding {
+      padding-top: {{ section.settings.padding_top }}px;
+      padding-bottom: {{ section.settings.padding_bottom }}px;
+    }
+  }
+  .ac-note{color:var(--color-foreground-70,#6b7280);font-size:.9rem;margin:.25rem 0 .75rem}
+  .ac-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+  @media (max-width: 750px){.ac-grid{grid-template-columns:1fr}}
+{%- endstyle -%}
+
+<div class="section-{{ section.id }}-padding">
+  {% unless customer %}
+  <!-- ===================== STATE A: REGISTRIEREN ===================== -->
+  <div class="customer register">
+    <h1>{{ 'customer.register.title' | t }}</h1>
+
+    {% form 'create_customer', novalidate: 'novalidate', return_to: request.path %}
+      {% if form.errors %}
+        <h2 class="form__message" tabindex="-1" autofocus>
+          <svg aria-hidden="true" focusable="false"><use href="#icon-error"/></svg>
+          {{ 'templates.contact.form.error_heading' | t }}
+        </h2>
+        <ul>
+          {% for field in form.errors %}
+            <li>
+              {% if field == 'form' %}
+                {{ form.errors.messages[field] }}
+              {% else %}
+                <a href="#RegisterForm-{{ field }}">
+                  {{ form.errors.translated_fields[field] | capitalize }} {{ form.errors.messages[field] }}
+                </a>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+
+      <div class="field">
+        <input type="text" name="customer[first_name]" id="RegisterForm-FirstName"
+          {% if form.first_name %}value="{{ form.first_name }}"{% endif %}
+          autocomplete="given-name" placeholder="{{ 'customer.register.first_name' | t }}">
+        <label for="RegisterForm-FirstName">{{ 'customer.register.first_name' | t }}</label>
+      </div>
+
+      <div class="field">
+        <input type="text" name="customer[last_name]" id="RegisterForm-LastName"
+          {% if form.last_name %}value="{{ form.last_name }}"{% endif %}
+          autocomplete="family-name" placeholder="{{ 'customer.register.last_name' | t }}">
+        <label for="RegisterForm-LastName">{{ 'customer.register.last_name' | t }}</label>
+      </div>
+
+      <div class="field">
+        <input type="email" name="customer[email]" id="RegisterForm-email"
+          {% if form.email %}value="{{ form.email }}"{% endif %}
+          spellcheck="false" autocapitalize="off" autocomplete="email" aria-required="true"
+          {% if form.errors contains 'email' %} aria-invalid="true" aria-describedby="RegisterForm-email-error"{% endif %}
+          placeholder="{{ 'customer.register.email' | t }}">
+        <label for="RegisterForm-email">{{ 'customer.register.email' | t }}</label>
+      </div>
+      {% if form.errors contains 'email' %}
+        <span id="RegisterForm-email-error" class="form__message">
+          <svg aria-hidden="true" focusable="false"><use href="#icon-error"/></svg>
+          {{ form.errors.translated_fields.email | capitalize }} {{ form.errors.messages.email }}.
+        </span>
+      {% endif %}
+
+      <div class="field">
+        <input type="password" name="customer[password]" id="RegisterForm-password" aria-required="true"
+          {% if form.errors contains 'password' %} aria-invalid="true" aria-describedby="RegisterForm-password-error"{% endif %}
+          placeholder="{{ 'customer.register.password' | t }}">
+        <label for="RegisterForm-password">{{ 'customer.register.password' | t }}</label>
+      </div>
+      {% if form.errors contains 'password' %}
+        <span id="RegisterForm-password-error" class="form__message">
+          <svg aria-hidden="true" focusable="false"><use href="#icon-error"/></svg>
+          {{ form.errors.translated_fields.password | capitalize }} {{ form.errors.messages.password }}.
+        </span>
+      {% endif %}
+
+      <!-- Optional: Telefon (wird nach Login in Adressmaske übernommen) -->
+      <div class="field">
+        <input type="tel" id="RegisterForm-Phone" inputmode="tel" autocomplete="tel"
+               placeholder="{{ 'customer.addresses.phone' | t }}">
+        <label for="RegisterForm-Phone">{{ 'customer.addresses.phone' | t }}</label>
+        <p class="ac-note">Wir übernehmen die Nummer gleich in deine Adresse.</p>
+      </div>
+
+      <label class="checkbox">
+        <input type="checkbox" name="customer[accepts_marketing]" value="true"> {{ 'customer.register.accept_marketing' | t | default: 'E-Mail-Updates erhalten' }}
+      </label>
+
+      <button class="button">
+        {{ 'customer.register.submit' | t }}
+      </button>
+    {% endform %}
+
+    <p class="ac-note">
+      Alternativ: <a href="{{ routes.storefront_login_url }}?return_to={{ request.path | url_encode }}">mit E-Mail-Code anmelden</a>
+    </p>
+  </div>
+
+  <script>
+    // Telefon in localStorage parken, damit es in der Adresse vorbefüllt wird
+    document.getElementById('RegisterForm-Phone')?.addEventListener('input', (e)=>{
+      try{ localStorage.setItem('ac_prefill_phone', e.target.value.trim()); }catch(_){}
+    });
+  </script>
+
+  {% else %}
+  <!-- ===================== STATE B: EINGELOGGT → ADRESSE + GEBURTSDATUM ===================== -->
+  <div class="customer">
+    <h1>Dein Profil vervollständigen</h1>
+    <p class="ac-note">Adresse & Telefonnummer werden direkt in deinem Konto gespeichert.</p>
+
+    <div class="ac-grid">
+      <div>
+        <h2 class="h4">Adresse hinzufügen</h2>
+        {% form 'customer_address', customer.new_address %}
+          {{ form.errors | default_errors }}
+
+          <div class="field">
+            <input type="text" name="address[first_name]" id="AddressFirstNameNew" autocomplete="given-name"
+              value="{{ customer.first_name }}" placeholder="{{ 'customer.addresses.first_name' | t }}">
+            <label for="AddressFirstNameNew">{{ 'customer.addresses.first_name' | t }}</label>
+          </div>
+
+          <div class="field">
+            <input type="text" name="address[last_name]" id="AddressLastNameNew" autocomplete="family-name"
+              value="{{ customer.last_name }}" placeholder="{{ 'customer.addresses.last_name' | t }}">
+            <label for="AddressLastNameNew">{{ 'customer.addresses.last_name' | t }}</label>
+          </div>
+
+          <div class="field">
+            <input type="text" name="address[company]" id="AddressCompanyNew" autocomplete="organization"
+              placeholder="{{ 'customer.addresses.company' | t }}">
+            <label for="AddressCompanyNew">{{ 'customer.addresses.company' | t }}</label>
+          </div>
+
+          <div class="field">
+            <input type="text" name="address[address1]" id="AddressAddress1New" autocomplete="address-line1"
+              placeholder="{{ 'customer.addresses.address1' | t }}">
+            <label for="AddressAddress1New">{{ 'customer.addresses.address1' | t }}</label>
+          </div>
+
+          <div class="field">
+            <input type="text" name="address[address2]" id="AddressAddress2New" autocomplete="address-line2"
+              placeholder="{{ 'customer.addresses.address2' | t }}">
+            <label for="AddressAddress2New">{{ 'customer.addresses.address2' | t }}</label>
+          </div>
+
+          <div class="field">
+            <input type="text" name="address[zip]" id="AddressZipNew" autocomplete="postal-code"
+              placeholder="{{ 'customer.addresses.zip' | t }}">
+            <label for="AddressZipNew">{{ 'customer.addresses.zip' | t }}</label>
+          </div>
+
+          <div class="field">
+            <input type="text" name="address[city]" id="AddressCityNew" autocomplete="address-level2"
+              placeholder="{{ 'customer.addresses.city' | t }}">
+            <label for="AddressCityNew">{{ 'customer.addresses.city' | t }}</label>
+          </div>
+
+          <div class="field">
+            <select name="address[country]" id="AddressCountryNew" autocomplete="country">
+              {{ country_option_tags }}
+            </select>
+            <label for="AddressCountryNew">{{ 'customer.addresses.country' | t }}</label>
+          </div>
+
+          <div class="field" id="AddressProvinceContainerNew" style="display:none">
+            <select name="address[province]" id="AddressProvinceNew" autocomplete="address-level1"></select>
+            <label for="AddressProvinceNew">{{ 'customer.addresses.province' | t }}</label>
+          </div>
+
+          <div class="field">
+            <input type="tel" name="address[phone]" id="AddressPhoneNew" inputmode="tel" autocomplete="tel"
+              placeholder="{{ 'customer.addresses.phone' | t }}">
+            <label for="AddressPhoneNew">{{ 'customer.addresses.phone' | t }}</label>
+          </div>
+
+          <label class="checkbox">
+            <input type="checkbox" name="address[default]" id="AddressDefaultNew" value="1" checked>
+            {{ 'customer.addresses.set_default' | t }}
+          </label>
+
+          <button class="button">Adresse speichern</button>
+        {% endform %}
+        <p class="ac-note">Nach dem Speichern lädst du auf dieser Seite – Adresse ist dann in deinem Profil.</p>
+      </div>
+
+      <div>
+        <h2 class="h4">Geburtsdatum</h2>
+        <p class="ac-note">Speichern als Profil-Feld (Metafield). Optional.</p>
+        <div class="field">
+          <input type="date" id="AcBirthday" max="{{ 'now' | date: '%Y-%m-%d' }}">
+          <label for="AcBirthday">Geburtsdatum</label>
+        </div>
+        <button class="button" id="AcBirthdaySave" data-endpoint="{{ section.settings.birthday_endpoint | default: '/apps/artclub/customer/birthday' }}">Speichern</button>
+        <p class="ac-note" id="AcBirthdayMsg" role="status" aria-live="polite"></p>
+
+        <h2 class="h4" style="margin-top:1.5rem">E-Mail & Telefon (Konto)</h2>
+        <p class="ac-note">Deine E-Mail hast du bei der Registrierung gesetzt. Telefon wird oben in der Adresse gespeichert.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Provinzen dynamisch (wie in Dawn)
+    (function(){
+      const country = document.getElementById('AddressCountryNew');
+      const provWrap = document.getElementById('AddressProvinceContainerNew');
+      const prov = document.getElementById('AddressProvinceNew');
+      if(!country) return;
+      function setProv(){
+        const selected = country.options[country.selectedIndex];
+        const provinces = JSON.parse(selected.getAttribute('data-provinces') || '[]');
+        prov.innerHTML = '';
+        if(provinces.length){
+          provinces.forEach(([name, code])=>{
+            const o=document.createElement('option'); o.value = name; o.textContent = name; prov.appendChild(o);
+          });
+          provWrap.style.display='';
+        } else {
+          provWrap.style.display='none';
+        }
+      }
+      country.addEventListener('change', setProv); setProv();
+
+      // Telefonnummer aus Registration vorbefüllen
+      try{
+        const p = localStorage.getItem('ac_prefill_phone');
+        if(p && document.getElementById('AddressPhoneNew')) document.getElementById('AddressPhoneNew').value = p;
+      }catch(_){}
+    })();
+
+    // Geburtsdatum speichern → App-Proxy (Metafield customer.ac.birthday)
+    (function(){
+      const btn = document.getElementById('AcBirthdaySave');
+      const field = document.getElementById('AcBirthday');
+      const msg = document.getElementById('AcBirthdayMsg');
+      if(!btn || !field) return;
+
+      btn.addEventListener('click', async ()=>{
+        const val = field.value;
+        if(!val){ msg.textContent = 'Bitte ein Datum wählen.'; return; }
+        const ep = btn.getAttribute('data-endpoint') || '/apps/artclub/customer/birthday';
+        msg.textContent = 'Speichere …';
+        btn.disabled = true;
+        try{
+          const res = await fetch(ep, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            credentials:'same-origin',
+            body: JSON.stringify({ birthday: val })
+          });
+          if(res.ok){ msg.textContent = 'Geburtsdatum gespeichert.'; }
+          else { msg.textContent = 'Konnte nicht gespeichert werden.'; }
+        }catch(e){ msg.textContent = 'Netzwerkfehler.'; }
+        btn.disabled = false;
+      });
+    })();
+  </script>
+  {% endunless %}
+</div>
+
+{% schema %}
+{
+  "name": "Main register",
+  "settings": [
+    { "type": "header", "content": "Padding" },
+    { "type": "range", "id": "padding_top", "min": 0, "max": 100, "step": 4, "unit": "px", "label": "Top", "default": 36 },
+    { "type": "range", "id": "padding_bottom", "min": 0, "max": 100, "step": 4, "unit": "px", "label": "Bottom", "default": 36 },
+
+    { "type": "header", "content": "Optional: Mapbox Autocomplete" },
+    { 
+  "type": "text",
+  "id": "mapbox_token",
+  "label": "Mapbox token (pk_…)",
+  "default": "none"
+},
+
+    { "type": "header", "content": "Optional: App-Proxy Endpoints" },
+    { "type": "text", "id": "birthday_endpoint", "label": "POST für Geburtsdatum", "default": "/apps/artclub/customer/birthday" }
+  ]
+}
+{% endschema %}

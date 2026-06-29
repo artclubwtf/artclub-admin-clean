@@ -1,0 +1,135 @@
+{%- comment -%}
+  snippets/artclub-rendering.liquid
+  Bindet Gallery, Canvas und das Rendering-Script zusammen.
+  Übergibt:
+    • include.product    – das aktuelle Produkt
+    • include.blocks     – die section.blocks
+    • include.section_id – die section.id
+{%- endcomment -%}
+
+<div class="pc-gallery">
+  <!-- Thumbnail-Selector -->
+  <div id="room-selector-{{ include.section_id }}" class="pc-room-selector"></div>
+  <!-- Canvas -->
+  <div class="pc-images">
+    <canvas id="artclub-canvas-{{ include.section_id }}"></canvas>
+  </div>
+</div>
+
+<script>
+  (function(){
+    const sectionId = '{{ include.section_id }}';
+    const canvas    = document.getElementById(`artclub-canvas-${sectionId}`);
+    const selector  = document.getElementById(`room-selector-${sectionId}`);
+    if (!canvas || !selector) return;
+    const ctx = canvas.getContext('2d');
+
+    // Artwork & Textur laden
+    const artImg  = new Image(); artImg.src  = '{{ include.product.featured_image | img_url: "2048x2048" }}';
+    const woodImg = new Image(); woodImg.src = '{{ "wood-texture.jpg" | asset_url }}';
+    let loaded = 0;
+    [artImg, woodImg].forEach(img => img.onload = () => {
+      if (++loaded === 2) init();
+    });
+
+    // Blocks aus der Section
+    const roomBlocks = [{% for block in include.blocks %}
+      {% if block.type == 'room_image' and block.settings.image %}
+        {
+          type:        'room',
+          imageUrl:    '{{ block.settings.image | img_url: "2048x2048" }}',
+          zoneTop:     {{ block.settings.zone_top   }} / 100,
+          zoneLeft:    {{ block.settings.zone_left  }} / 100,
+          zoneBottom:  {{ block.settings.zone_bottom}} / 100,
+          zoneRight:   {{ block.settings.zone_right }} / 100,
+          zoneWidthCm: {{ block.settings.zone_width_cm }},
+          maxHeightCm: {{ block.settings.max_height_cm }},
+          overlay:     {{ block.settings.display_zone_overlay | json }}
+        }{% unless forloop.last %},{% endunless %}
+      {% endif %}
+    {% endfor %}];
+
+    const globalBlocks = [{% for block in include.blocks %}
+      {% if block.type == 'global_image' and block.settings.image %}
+        { type: 'global', imageUrl: '{{ block.settings.image | img_url: "2048x2048" }}' }{% unless forloop.last %},{% endunless %}
+      {% endif %}
+    {% endfor %}];
+
+    // Varianten-Daten
+    const variants   = {{ include.product.variants | json }};
+    const selectCSS  = `#product-artclub-{{ include.section_id }} select`;
+
+    function getVariant() {
+      const vals = Array.from(document.querySelectorAll(selectCSS)).map(s => s.value);
+      return variants.find(v => v.options.every((o,i) => o === vals[i]));
+    }
+
+    let items = [];
+
+    function init(){
+      const v = getVariant();
+      const m = v.options[0].match(/([\d.]+)\s*x\s*([\d.]+)/);
+      const h = m ? parseFloat(m[2]) : 0;
+      buildThumbs(h);
+      draw(0);
+      document.querySelectorAll(selectCSS).forEach(el =>
+        el.addEventListener('change', () => draw(0))
+      );
+    }
+
+    function buildThumbs(artH){
+      selector.innerHTML = '';
+      const rooms = roomBlocks.filter(r => artH <= r.maxHeightCm);
+      items = [...rooms, ...globalBlocks];
+      items.forEach((it,i) => {
+        const img = document.createElement('img');
+        img.src = it.imageUrl;
+        img.className = 'pc-thumb' + (i === 0 ? ' active' : '');
+        img.onclick   = () => draw(i);
+        selector.appendChild(img);
+      });
+    }
+
+    function draw(index){
+      // Thumbnails aktiv setzen
+      selector.querySelectorAll('img').forEach((el,i) => el.classList.toggle('active', i === index));
+
+      const it = items[index];
+      const img = new Image();
+      img.onload = () => {
+        canvas.width  = img.width;
+        canvas.height = img.height;
+        ctx.clearRect(0,0, img.width, img.height);
+        ctx.drawImage(img, 0,0, img.width, img.height);
+        if (it.type === 'room') drawArt(it);
+      };
+      img.src = it.imageUrl;
+    }
+
+    function drawArt(rb){
+      const X = rb.zoneLeft   * canvas.width;
+      const Y = rb.zoneTop    * canvas.height;
+      const W = (1 - rb.zoneLeft - rb.zoneRight) * canvas.width;
+      const H = (1 - rb.zoneTop  - rb.zoneBottom)* canvas.height;
+
+      const v = getVariant();
+      const m = v.options[0].match(/([\d.]+)\s*x\s*([\d.]+)/);
+      const wcm = m ? parseFloat(m[1]) : 0;
+      const hcm = m ? parseFloat(m[2]) : 0;
+      const px  = W / rb.zoneWidthCm;
+      const wpx = wcm * px;
+      const hpx = hcm * px;
+      const x   = X + (W - wpx)/2;
+      const y   = Y + (H - hpx)/2;
+
+      ctx.drawImage(artImg, x, y, wpx, hpx);
+
+      // Overlay-Rahmen, falls gewünscht
+      if (rb.overlay) {
+        ctx.strokeStyle = 'rgba(255,0,0,0.5)';
+        ctx.lineWidth   = 2;
+        ctx.strokeRect(X, Y, W, H);
+      }
+    }
+  })();
+</script>

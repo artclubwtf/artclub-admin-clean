@@ -1,0 +1,986 @@
+{% comment %}
+  AC Product Artwork — Inline (kein Popup)
+  - Hero: Wandfoto (image_picker) mit Artwork-Overlay
+  - Konfigurator direkt darunter: Model → Finish → Size
+  - Finish-Wechsel: Acryl/Floater-Overlay live
+  - Größen-Wechsel: visuell ~relativ (nicht exakt maßstabsgetreu)
+  - Rahmen/Overlays: maßstabsgetreu zu Artwork
+  - Wishlist (localStorage ac_wishlist)
+  - Schema: ein einziger "wall_image" Block + Section-Settings
+{% endcomment %}
+
+{%- assign artist_metaobject = product.metafields.custom.kunstler.value -%}
+{%- assign artist_name = artist_metaobject.name | default: product.vendor -%}
+{%- assign artist_avatar = artist_metaobject.bilder -%}
+{%- assign artist_slug = artist_metaobject.system.handle | default: blank -%}
+{%- assign artist_metaobject_id = artist_metaobject.system.id | default: blank -%}
+
+<section
+  id="ac-pdp-il-{{ section.id }}"
+  class="ac-pdp-il"
+  data-section-id="{{ section.id }}"
+  data-product-id="{{ product.id }}"
+  data-artclub-track-impression="artwork"
+  data-artclub-product-handle="{{ product.handle }}"
+  data-artclub-shopify-product-id="{{ product.id }}"
+  data-artclub-product-title="{{ product.title | escape }}"
+  {%- if artist_slug != blank -%} data-artclub-artist-slug="{{ artist_slug }}"{%- endif -%}
+  {%- if artist_metaobject_id != blank -%} data-artclub-artist-metaobject-id="{{ artist_metaobject_id }}"{%- endif -%}
+  {%- if artist_name != blank -%} data-artclub-artist-name="{{ artist_name | escape }}"{%- endif -%}
+>
+<style>
+/* =============================================
+   RESET & BASE
+   ============================================= */
+#ac-pdp-il-{{ section.id }}{
+  background:#fff;
+  padding: 0 0 100px;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+#ac-pdp-il-{{ section.id }} *{ box-sizing:border-box; }
+
+/* =============================================
+   HERO STAGE — sticky
+   ============================================= */
+#ac-pdp-il-{{ section.id }} .il-stage{
+  position:sticky;
+  top:0;
+  z-index:50;
+  width:100%;
+  height: clamp(380px, 52vh, 620px);
+  overflow:hidden;
+  background:#f5f5f5;
+}
+@media (max-width:680px){
+  #ac-pdp-il-{{ section.id }} .il-stage{
+    height: clamp(260px, 42vw, 420px);
+  }
+}
+#ac-pdp-il-{{ section.id }} .il-stage__wall{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  object-fit:cover;
+  object-position: center center;
+  display:block;
+  pointer-events:none;
+}
+/* wallzone = anchor for artwork center */
+#ac-pdp-il-{{ section.id }} .il-wallzone{
+  position:absolute;
+  left: var(--zl, 20%);
+  top:  var(--zt, 10%);
+  width: var(--zw, 60%);
+  height:var(--zh, 75%);
+  pointer-events:none;
+}
+/* Artwork img */
+#ac-pdp-il-{{ section.id }} .il-art{
+  position:absolute;
+  left:50%; top:50%;
+  transform:translate(-50%,-50%);
+  /* width/height set by JS */
+  background:#fff;
+  pointer-events:none;
+  z-index:10;
+  transition: width .35s cubic-bezier(.4,0,.2,1),
+              height .35s cubic-bezier(.4,0,.2,1),
+              filter .25s ease;
+}
+/* Overlays */
+#ac-pdp-il-{{ section.id }} .il-acryl,
+#ac-pdp-il-{{ section.id }} .il-frame{
+  position:absolute;
+  left:50%; top:50%;
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+  display:block;
+  transition: width .35s cubic-bezier(.4,0,.2,1),
+              height .35s cubic-bezier(.4,0,.2,1);
+}
+/* [hidden] kommt nach allen anderen Regeln → gewinnt immer */
+#ac-pdp-il-{{ section.id }} .il-acryl[hidden],
+#ac-pdp-il-{{ section.id }} .il-frame[hidden]{ display:none !important; }
+
+#ac-pdp-il-{{ section.id }} .il-acryl{
+  z-index:20;
+  border-radius:2px;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.55) 28%, rgba(255,255,255,0.10) 60%),
+    linear-gradient(315deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0) 45%);
+  mix-blend-mode: screen;
+  opacity:0.95;
+  border:1px solid rgba(255,255,255,0.85);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.10), 0 14px 32px rgba(0,0,0,0.20);
+}
+#ac-pdp-il-{{ section.id }} .il-frame{
+  z-index:15;
+  background:transparent;
+  box-shadow: inset 0 0 0 var(--frame-thick, 20px) var(--frame-color, #111);
+}
+#ac-pdp-il-{{ section.id }} .il-frame::before{
+  content:'';
+  position:absolute;
+  inset: var(--frame-thick, 20px);
+  box-shadow: inset 0 0 0 var(--frame-gap, 8px) rgba(0,0,0,0.6),
+              inset 0 12px 20px rgba(0,0,0,0.25);
+}
+
+/* Stage top-bar (back + badge) */
+#ac-pdp-il-{{ section.id }} .il-stage__bar{
+  position:absolute; top:0; left:0; right:0;
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 18px 24px;
+  z-index:30;
+  pointer-events:none;
+}
+#ac-pdp-il-{{ section.id }} .il-stage__bar > *{ pointer-events:auto; }
+#ac-pdp-il-{{ section.id }} .il-back{
+  display:inline-flex; align-items:center; gap:8px;
+  text-decoration:none;
+  font-size:13px; font-weight:600; color:#0b0b0c;
+  background:rgba(255,255,255,0.88);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  border:1px solid rgba(0,0,0,0.08);
+  border-radius:999px;
+  padding:8px 14px;
+  transition:box-shadow .18s ease;
+}
+#ac-pdp-il-{{ section.id }} .il-back:hover{
+  box-shadow:0 6px 18px rgba(0,0,0,0.10);
+}
+#ac-pdp-il-{{ section.id }} .il-wishbtn{
+  width:44px; height:44px; border-radius:999px;
+  border:1px solid rgba(0,0,0,0.10);
+  background:rgba(255,255,255,0.88);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer;
+  transition:transform .16s ease, box-shadow .16s ease;
+}
+#ac-pdp-il-{{ section.id }} .il-wishbtn:hover{
+  transform:translateY(-1px);
+  box-shadow:0 8px 20px rgba(0,0,0,0.10);
+}
+#ac-pdp-il-{{ section.id }} .il-wishbtn.is-active svg path{ fill:#0b0b0c; stroke:#0b0b0c; }
+#ac-pdp-il-{{ section.id }} .il-wishbtn svg{ width:18px; height:18px; display:block; }
+
+/* =============================================
+   CONTENT WRAP
+   ============================================= */
+#ac-pdp-il-{{ section.id }} .il-wrap{
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* =============================================
+   TITLE + ARTIST
+   ============================================= */
+#ac-pdp-il-{{ section.id }} .il-meta{
+  padding-top: 36px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid #ebebeb;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:24px;
+}
+#ac-pdp-il-{{ section.id }} .il-meta__left{ flex:1 1 auto; min-width:0; }
+#ac-pdp-il-{{ section.id }} .il-title{
+  font-size: clamp(30px, 5vw, 52px);
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  font-weight: 680;
+  color: #0b0b0c;
+  margin: 0 0 16px;
+}
+#ac-pdp-il-{{ section.id }} .il-artist{
+  display:flex; align-items:center; gap:12px;
+}
+#ac-pdp-il-{{ section.id }} .il-avatar{
+  width:38px; height:38px; border-radius:999px;
+  overflow:hidden; background:#e9e9ee;
+  flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid rgba(0,0,0,0.06);
+}
+#ac-pdp-il-{{ section.id }} .il-avatar img{ width:100%; height:100%; object-fit:cover; display:block; }
+#ac-pdp-il-{{ section.id }} .il-avatar__fallback{
+  font-size:12px; font-weight:700; color:#111; opacity:.7; letter-spacing:.03em;
+}
+#ac-pdp-il-{{ section.id }} .il-artistname{
+  font-size:16px; font-weight:600; color:#0b0b0c; opacity:.88;
+}
+
+/* =============================================
+   CONFIGURATOR
+   ============================================= */
+#ac-pdp-il-{{ section.id }} .il-config{
+  padding-top: 32px;
+}
+
+#ac-pdp-il-{{ section.id }} .il-config__group{
+  margin-bottom: 28px;
+}
+#ac-pdp-il-{{ section.id }} .il-config__group[hidden]{ display:none !important; }
+
+#ac-pdp-il-{{ section.id }} .il-config__head{
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ebebeb;
+  margin-bottom: 14px;
+}
+#ac-pdp-il-{{ section.id }} .il-config__kicker{
+  font-size:11px; font-weight:700; letter-spacing:.07em;
+  text-transform:uppercase; color:#888;
+}
+#ac-pdp-il-{{ section.id }} .il-config__label{
+  font-size:17px; font-weight:700; color:#0b0b0c; margin-top:4px;
+}
+
+#ac-pdp-il-{{ section.id }} .il-choices{
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+#ac-pdp-il-{{ section.id }} .il-choice{
+  appearance:none;
+  border:1.5px solid #e0e0e0;
+  background:#fff;
+  border-radius:14px;
+  padding:14px 16px;
+  cursor:pointer;
+  text-align:left;
+  display:flex; align-items:flex-start; justify-content:space-between; gap:10px;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .14s ease;
+}
+#ac-pdp-il-{{ section.id }} .il-choice:hover:not([disabled]){
+  border-color:#bbb;
+  transform:translateY(-1px);
+  box-shadow:0 6px 18px rgba(0,0,0,0.07);
+}
+#ac-pdp-il-{{ section.id }} .il-choice.is-active{
+  border-color:#0071e3;
+  box-shadow:0 0 0 2.5px rgba(0,113,227,0.20);
+}
+#ac-pdp-il-{{ section.id }} .il-choice[disabled]{
+  opacity:.42; cursor:not-allowed;
+}
+#ac-pdp-il-{{ section.id }} .il-choice__body{ flex:1 1 auto; min-width:0; }
+#ac-pdp-il-{{ section.id }} .il-choice__title{
+  font-size:15px; font-weight:700; color:#0b0b0c; line-height:1.2;
+}
+#ac-pdp-il-{{ section.id }} .il-choice__sub{
+  font-size:12px; color:#888; margin-top:3px; line-height:1.35;
+}
+#ac-pdp-il-{{ section.id }} .il-choice__price{
+  font-size:13px; font-weight:700; color:#0b0b0c; white-space:nowrap; padding-top:1px;
+}
+
+/* =============================================
+   STICKY ATC BAR
+   ============================================= */
+#ac-pdp-il-{{ section.id }} .il-atcbar{
+  position:sticky; bottom:0; z-index:100;
+  background:rgba(255,255,255,0.94);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+  border-top:1px solid rgba(0,0,0,0.08);
+  padding:12px 24px calc(12px + env(safe-area-inset-bottom, 0px));
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+}
+#ac-pdp-il-{{ section.id }} .il-atcbar__info{ flex:1 1 auto; min-width:0; }
+#ac-pdp-il-{{ section.id }} .il-atcbar__title{
+  font-size:13px; font-weight:700; color:#0b0b0c; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+#ac-pdp-il-{{ section.id }} .il-atcbar__sub{
+  font-size:12px; color:#888; margin-top:2px;
+}
+#ac-pdp-il-{{ section.id }} .il-atc{
+  appearance:none; border:0;
+  background:#0b0b0c; color:#fff;
+  border-radius:999px;
+  padding:13px 20px;
+  font-size:14px; font-weight:700; line-height:1;
+  display:inline-flex; align-items:center; gap:10px;
+  cursor:pointer; white-space:nowrap;
+  transition:background .18s ease, opacity .18s ease;
+}
+#ac-pdp-il-{{ section.id }} .il-atc:hover:not([disabled]){ background:#1a1a1a; }
+#ac-pdp-il-{{ section.id }} .il-atc[disabled]{ opacity:.38; cursor:not-allowed; }
+#ac-pdp-il-{{ section.id }} .il-atc__price{
+  font-weight:800; font-size:14px;
+}
+
+/* =============================================
+   DESCRIPTION
+   ============================================= */
+#ac-pdp-il-{{ section.id }} .il-desc{
+  padding: 36px 0 0;
+  border-top:1px solid #ebebeb;
+  margin-top: 36px;
+}
+#ac-pdp-il-{{ section.id }} .il-desc p{
+  font-size:16px; line-height:1.68; color:#141417; opacity:.9;
+  margin:0 0 16px;
+}
+#ac-pdp-il-{{ section.id }} .il-desc p:last-child{ margin:0; }
+
+/* =============================================
+   RESPONSIVE
+   ============================================= */
+@media (max-width:680px){
+  #ac-pdp-il-{{ section.id }} .il-meta{
+    flex-direction:column; gap:14px;
+  }
+  #ac-pdp-il-{{ section.id }} .il-choices{
+    grid-template-columns:1fr;
+  }
+  #ac-pdp-il-{{ section.id }} .il-atcbar{
+    flex-direction:column; align-items:stretch; gap:8px;
+  }
+  #ac-pdp-il-{{ section.id }} .il-atc{
+    width:100%; justify-content:space-between;
+  }
+}
+</style>
+
+  {%- assign wall_block = section.blocks | where: 'type', 'wall_image' | first -%}
+  {%- assign wall_img = wall_block.settings.image -%}
+
+  {%- assign tags_lc = product.tags | join: ',' | downcase -%}
+  {%- assign title_lc = product.title | downcase -%}
+  {%- assign force_original_only = false -%}
+  {%- if product.has_only_default_variant -%}
+    {%- if tags_lc contains 'original' or title_lc contains 'original' or product.metafields.custom.height != blank or product.metafields.custom.breite_cm_ != blank -%}
+      {%- assign force_original_only = true -%}
+    {%- endif -%}
+  {%- endif -%}
+
+  {%- capture variants_json -%}[{% for v in product.variants %}{% if forloop.first == false %},{% endif %}{
+    "id":{{ v.id }},"title":{{ v.title | json }},"sku":{{ v.sku | json }},
+    "price":{{ v.price | json }},"available":{{ v.available | json }},
+    "option1":{{ v.option1 | json }},"option2":{{ v.option2 | json }},"option3":{{ v.option3 | json }},
+    "img":{% if v.featured_media %}{{ v.featured_media | image_url: width: 1600 | json }}{% else %}null{% endif %}
+  }{% endfor %}]{%- endcapture -%}
+
+  {%- assign art_default_img = product.featured_media | default: product.media.first -%}
+  {%- assign art_default_src = art_default_img | image_url: width: 1600 -%}
+
+  <!-- HERO STAGE -->
+  <div class="il-stage" data-il-stage>
+    {% if wall_img %}
+      {{ wall_img | image_url: width: 2400 | image_tag: class: 'il-stage__wall', loading: 'eager', alt: '' }}
+    {% endif %}
+
+    <!-- top bar -->
+    <div class="il-stage__bar">
+      {% if section.settings.show_back %}
+        <button type="button" class="il-back" onclick="history.back()">← {{ section.settings.back_label }}</button>
+      {% else %}
+        <div></div>
+      {% endif %}
+      <button type="button" class="il-wishbtn" aria-label="Zur Wunschliste" aria-pressed="false" data-il-wish>
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 20.5s-7-4.3-9.4-8.2C.6 8.7 2.6 5.5 6 5.5c1.9 0 3.3 1 4 2.1.7-1.1 2.1-2.1 4-2.1 3.4 0 5.4 3.2 3.4 6.8C19 16.2 12 20.5 12 20.5z"
+            stroke="#0b0b0c" stroke-width="1.6" fill="transparent"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- wallzone -->
+    <div class="il-wallzone"
+      data-il-zone
+      style="
+        --zl: {{ wall_block.settings.zone_left | default: 20 }}%;
+        --zt: {{ wall_block.settings.zone_top  | default: 10 }}%;
+        --zw: {{ wall_block.settings.zone_width | default: 60 }}%;
+        --zh: {{ wall_block.settings.zone_height | default: 75 }}%;
+      "
+      data-zone-realw="{{ wall_block.settings.zone_realw_cm | default: 300 }}"
+      data-shadow-deg="{{ wall_block.settings.shadow_deg | default: 13 | times: 10 }}"
+      data-shadow-dist="{{ wall_block.settings.shadow_dist_cm | default: 1.5 }}"
+      data-shadow-blur="{{ wall_block.settings.shadow_blur_cm | default: 2.5 }}"
+      data-shadow-op="{{ wall_block.settings.shadow_opacity | default: 35 | divided_by: 100.0 }}"
+      data-art-border="{{ wall_block.settings.art_border | default: 0 }}"
+      data-art-border-color="{{ wall_block.settings.art_border_color | default: '#ffffff' }}"
+    >
+      {% if art_default_src %}
+        <img data-il-art src="{{ art_default_src }}" alt="{{ product.title | escape }}" class="il-art">
+        <div class="il-frame" data-il-frame hidden></div>
+        <div class="il-acryl" data-il-acryl hidden></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="il-wrap">
+
+    <!-- Title + Artist -->
+    <div class="il-meta">
+      <div class="il-meta__left">
+        <h1 class="il-title">{{ product.title }}</h1>
+        <div class="il-artist">
+          <div class="il-avatar" aria-hidden="true">
+            {% if artist_avatar != blank %}
+              {{ artist_avatar | image_url: width: 120 | image_tag: loading: 'lazy', alt: artist_name }}
+            {% else %}
+              <div class="il-avatar__fallback">{{ artist_name | slice: 0, 1 | upcase }}</div>
+            {% endif %}
+          </div>
+          {% if artist_name != blank %}<span class="il-artistname">{{ artist_name }}</span>{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Configurator -->
+    <div class="il-config" data-il-config>
+
+      <!-- Model -->
+      <div class="il-config__group" data-group="model">
+        <div class="il-config__head">
+          <div class="il-config__kicker">Ausführung</div>
+          <div class="il-config__label">Was passt zu dir?</div>
+        </div>
+        <div class="il-choices" data-model-choices></div>
+      </div>
+
+      <!-- Finish -->
+      <div class="il-config__group" data-group="finish" hidden>
+        <div class="il-config__head">
+          <div class="il-config__kicker">Finish</div>
+          <div class="il-config__label">Rahmen & Oberfläche</div>
+        </div>
+        <div class="il-choices" data-finish-choices></div>
+      </div>
+
+      <!-- Size -->
+      <div class="il-config__group" data-group="size" hidden>
+        <div class="il-config__head">
+          <div class="il-config__kicker">Größe</div>
+          <div class="il-config__label">Wähle dein Format</div>
+        </div>
+        <div class="il-choices" data-size-choices></div>
+      </div>
+
+      <!-- Description -->
+      {%- assign werk_text_mf = product.metafields.custom.werk_text -%}
+      {%- assign desc_html = product.description -%}
+      {% if werk_text_mf != blank or desc_html != blank %}
+        <div class="il-desc">
+          {% if werk_text_mf != blank %}
+            {%- assign t = werk_text_mf | replace: '\r\n', '\n' -%}
+            {%- assign t = t | replace: '\n\n', '[[P]]' -%}
+            {%- assign t = t | replace: '\n', ' ' -%}
+            {%- assign t = t | replace: '[[P]]', '</p><p>' -%}
+            <p>{{ t }}</p>
+          {% else %}
+            {{ desc_html }}
+          {% endif %}
+        </div>
+      {% endif %}
+
+    </div><!-- /config -->
+
+    <!-- Sticky ATC Bar -->
+    <div class="il-atcbar" data-il-atcbar>
+      <div class="il-atcbar__info">
+        <div class="il-atcbar__title">{{ product.title }}</div>
+        <div class="il-atcbar__sub" data-il-summary>Bitte auswählen</div>
+      </div>
+      <form method="post" action="/cart/add" data-il-atcform>
+        <input type="hidden" name="id" value="" data-il-variant>
+        <button type="submit" class="il-atc" disabled data-il-atcbtn>
+          <span>{{ section.settings.atc_label | default: 'In den Warenkorb' }}</span>
+          <span class="il-atc__price" data-il-price></span>
+        </button>
+      </form>
+    </div>
+
+  </div><!-- /wrap -->
+
+<script>
+(function(){
+  var ROOT = document.getElementById('ac-pdp-il-{{ section.id }}');
+  if(!ROOT) return;
+
+  /* ─────────────── DATA ─────────────── */
+  var PID         = String(ROOT.dataset.productId || '');
+  var VARIANTS    = {{ variants_json | strip_newlines }};
+  var FORCE_ORIG  = {{ force_original_only | json }};
+  var DEFAULT_ART = {{ art_default_src | default: '' | json }};
+  var CURRENCY    = {{ shop.currency | json }};
+
+  var ORIG_SIZE = (function(){
+    {% if product.metafields.custom.height and product.metafields.custom.breite_cm_ %}
+      return '{{ product.metafields.custom.height | round: 0 }}x{{ product.metafields.custom.breite_cm_ | round: 0 }}';
+    {% else %}
+      return '60x40';
+    {% endif %}
+  })();
+
+  /* ─────────────── HELPERS ─────────────── */
+  function fmt(cents){
+    try{ return new Intl.NumberFormat('de-DE',{style:'currency',currency:CURRENCY}).format((cents||0)/100); }
+    catch(e){ return ((cents||0)/100).toFixed(2); }
+  }
+  function isOrig(v){ return /original/i.test(v.option1||'')||/original/i.test(v.title||''); }
+  function finishKey(v){
+    var o1=v.option1||'',o2=v.option2||'',o3=v.option3||'';
+    return (o3&&/print|edition/i.test(o1)) ? o2 : o1;
+  }
+  function sizeKey(v){
+    var o1=v.option1||'',o2=v.option2||'',o3=v.option3||'';
+    return (o3&&/print|edition/i.test(o1)) ? o3 : o2;
+  }
+  function uniq(arr){ var o=[]; (arr||[]).forEach(function(x){if(x&&o.indexOf(x)<0)o.push(x);}); return o; }
+  function sizeArea(s){
+    var m=String(s||'').match(/(\d+(?:[.,]\d+)?)\s*[x×]\s*(\d+(?:[.,]\d+)?)/i);
+    return m ? parseFloat(m[1].replace(',','.'))*parseFloat(m[2].replace(',','.')) : 0;
+  }
+  function parseSize(label){
+    var m=String(label||'').match(/(\d+(?:[.,]\d+)?)\s*[x×]\s*(\d+(?:[.,]\d+)?)/i);
+    return m ? {H:parseFloat(m[1].replace(',','.')),B:parseFloat(m[2].replace(',','.'))} : {H:50,B:40};
+  }
+  function isAcrylic(s){ return /(acryl|acrylic|acrylglas|plexi|plexiglas|kasch|dibond)/i.test(s); }
+  function isFloater(s){ return /(floater|schattenfuge|shadow.gap|float.frame)/i.test(s); }
+
+  var ORIGINAL = FORCE_ORIG ? (VARIANTS[0]||null) : (VARIANTS.find(isOrig)||null);
+  var EDITIONS = FORCE_ORIG ? [] : VARIANTS.filter(function(v){return !isOrig(v);});
+
+  /* ─────────────── DOM ─────────────── */
+  var stage      = ROOT.querySelector('[data-il-stage]');
+  var zone       = ROOT.querySelector('[data-il-zone]');
+  var artImg     = ROOT.querySelector('[data-il-art]');
+  var frameEl    = ROOT.querySelector('[data-il-frame]');
+  var acrylEl    = ROOT.querySelector('[data-il-acryl]');
+  var wishBtn    = ROOT.querySelector('[data-il-wish]');
+  var modelWrap  = ROOT.querySelector('[data-model-choices]');
+  var finishWrap = ROOT.querySelector('[data-finish-choices]');
+  var sizeWrap   = ROOT.querySelector('[data-size-choices]');
+  var grpFinish  = ROOT.querySelector('[data-group="finish"]');
+  var grpSize    = ROOT.querySelector('[data-group="size"]');
+  var summaryEl  = ROOT.querySelector('[data-il-summary]');
+  var variantInp = ROOT.querySelector('[data-il-variant]');
+  var atcBtn     = ROOT.querySelector('[data-il-atcbtn]');
+  var atcPrice   = ROOT.querySelector('[data-il-price]');
+
+  /* ─────────────── WISHLIST ─────────────── */
+  var WL_KEY = 'ac_wishlist';
+  function getWL(){ try{var r=JSON.parse(localStorage.getItem(WL_KEY));return Array.isArray(r)?r.map(String):[];}catch(e){return[];} }
+  function setWL(a){ localStorage.setItem(WL_KEY,JSON.stringify(a)); window.dispatchEvent(new CustomEvent('ac:wishlist:changed',{detail:{ids:a}})); }
+  function syncWish(){
+    if(!wishBtn) return;
+    var on=getWL().indexOf(PID)>=0;
+    wishBtn.classList.toggle('is-active',on);
+    wishBtn.setAttribute('aria-pressed',on?'true':'false');
+  }
+  if(wishBtn) wishBtn.addEventListener('click',function(){
+    var l=getWL(),i=l.indexOf(PID);
+    if(i>=0)l.splice(i,1);else l.push(PID);
+    setWL(l);syncWish();
+  });
+  window.addEventListener('storage',function(e){if(e.key===WL_KEY)syncWish();});
+  window.addEventListener('ac:wishlist:changed',syncWish);
+  syncWish();
+
+  /* ─────────────── SIZE SCALES ───────────────
+   * Sorted by real area, smallest = 1.0, each step +15%.
+   * Built once globally and per-finish when needed.
+   * Key insight: scale is looked up by size label string.
+   */
+  var SIZE_SCALES = {};
+  function buildSizeScales(sizes){
+    SIZE_SCALES={};
+    var sorted=sizes.slice().sort(function(a,b){return sizeArea(a)-sizeArea(b);});
+    sorted.forEach(function(s,i){ SIZE_SCALES[s]=1.0+i*0.15; });
+  }
+
+  /* ─────────────── GEOMETRY ───────────────
+   * Stage is sticky → we CANNOT use getBoundingClientRect on stage
+   * for relative positioning of art. Instead we use the zone's
+   * offsetLeft/offsetTop relative to its offsetParent (the stage).
+   */
+  function getZoneRect(){
+    // zone position relative to stage (not viewport), immune to sticky scroll offset
+    if(!zone||!stage) return {left:0,top:0,width:300,height:200};
+    var zl = zone.offsetLeft, zt = zone.offsetTop;
+    var zw = zone.offsetWidth, zh = zone.offsetHeight;
+    return {left:zl, top:zt, width:zw, height:zh};
+  }
+
+  function getPpcm(){
+    if(!zone) return 0;
+    var realW=parseFloat(zone.dataset.zoneRealw||'0')||0;
+    if(!realW) return 0;
+    return zone.offsetWidth / realW;
+  }
+
+  function applyShadow(img){
+    var ppcm=getPpcm()||1;
+    var deg=(parseFloat(zone.dataset.shadowDeg||'0')||0)*Math.PI/180;
+    var dist=(parseFloat(zone.dataset.shadowDist||'0')||0)*ppcm;
+    var blur=(parseFloat(zone.dataset.shadowBlur||'0')||0)*ppcm;
+    var op=parseFloat(zone.dataset.shadowOp||'0.3')||0.3;
+    img.style.filter='drop-shadow('+(Math.cos(deg)*dist).toFixed(1)+'px '+(Math.sin(deg)*dist).toFixed(1)+'px '+blur.toFixed(1)+'px rgba(0,0,0,'+op+'))';
+  }
+
+  function layoutArtwork(sizeLabel, finishName, detectStr, visualScale){
+    if(!zone||!artImg||!stage) return;
+    var ppcm=getPpcm();
+    if(!ppcm) return;
+
+    var s=parseSize(sizeLabel);
+
+    // Orientation sanity check: if the actual image disagrees with the size label
+    // (e.g. label says portrait but image is landscape), swap H and B.
+    // This handles cases where height/width were saved the wrong way round in metafields.
+    if(artImg.naturalWidth && artImg.naturalHeight){
+      var imgIsLandscape = artImg.naturalWidth > artImg.naturalHeight;
+      var labelIsLandscape = s.B > s.H; // B = width, H = height
+      if(imgIsLandscape !== labelIsLandscape){
+        var tmp=s.H; s.H=s.B; s.B=tmp;
+      }
+    }
+
+    var zr=getZoneRect();
+
+    // Base size: real cm × ppcm, fitted into zone
+    var pxW=s.B*ppcm, pxH=s.H*ppcm;
+    var fit=Math.min(zr.width/pxW, zr.height/pxH);
+    var isMobile=window.matchMedia('(max-width:680px)').matches;
+
+    // Base artwork px (smallest size = fits zone at ~65%)
+    var BASE_FILL = isMobile ? 0.70 : 0.65;
+    var artW=pxW*fit*BASE_FILL;
+    var artH=pxH*fit*BASE_FILL;
+
+    // Apply visual scale for size steps
+    var vscale=(typeof visualScale==='number'&&visualScale>0) ? visualScale : (SIZE_SCALES[sizeLabel]||1.0);
+    artW*=vscale; artH*=vscale;
+
+    // Hard clamp: never overflow zone
+    var maxW=zr.width*0.92, maxH=zr.height*0.92;
+    var clamp=Math.min(maxW/artW, maxH/artH, 1.0);
+    artW*=clamp; artH*=clamp;
+
+    artImg.style.width   =artW.toFixed(1)+'px';
+    artImg.style.height  =artH.toFixed(1)+'px';
+    artImg.style.maxWidth='none';
+    artImg.style.maxHeight='none';
+
+    // Center in zone, expressed as % of stage dimensions (stable regardless of scroll)
+    var cx=zr.left+zr.width/2;
+    var cy=zr.top +zr.height/2;
+    artImg.style.left=(cx/stage.offsetWidth *100)+'%';
+    artImg.style.top =(cy/stage.offsetHeight*100)+'%';
+    artImg.style.transform='translate(-50%,-50%)';
+
+    applyShadow(artImg);
+
+    // ── Overlays ──
+    var key=(String(finishName||'')+' '+String(detectStr||'')).trim();
+    var acrylic=isAcrylic(key), floater=isFloater(key);
+    if(acrylEl) acrylEl.hidden=true;
+    if(frameEl)  frameEl.hidden=true;
+
+    if(acrylic&&acrylEl){
+      acrylEl.style.width =artW.toFixed(1)+'px';
+      acrylEl.style.height=artH.toFixed(1)+'px';
+      acrylEl.style.left=artImg.style.left;
+      acrylEl.style.top =artImg.style.top;
+      acrylEl.hidden=false;
+    }
+
+    if(floater&&frameEl){
+      // 2.5 cm fixed frame, maßstabsgetreu
+      var tPx=2.5*ppcm, gPx=0.5*ppcm;
+      var outerW=artW+2*(tPx+gPx), outerH=artH+2*(tPx+gPx);
+      frameEl.style.setProperty('--frame-thick',tPx.toFixed(2)+'px');
+      frameEl.style.setProperty('--frame-gap',  gPx.toFixed(2)+'px');
+      frameEl.style.width =outerW.toFixed(1)+'px';
+      frameEl.style.height=outerH.toFixed(1)+'px';
+      frameEl.style.left=artImg.style.left;
+      frameEl.style.top =artImg.style.top;
+      frameEl.hidden=false;
+    }
+  }
+
+  /* ─────────────── STATE ─────────────── */
+  var mode   = null; // 'original' | 'edition'
+  var finish = null;
+  var size   = null;
+
+  function finishesList(){ return uniq(EDITIONS.map(function(v){return String(finishKey(v)||'');})); }
+  function sizesForFinish(f){
+    return uniq(EDITIONS.filter(function(v){return String(finishKey(v))===String(f);})
+      .map(function(v){return String(sizeKey(v)||'');}))
+      .sort(function(a,b){return sizeArea(a)-sizeArea(b);});
+  }
+  function pickVariant(f,s){
+    var list=EDITIONS.filter(function(v){return String(finishKey(v))===String(f)&&String(sizeKey(v))===String(s);});
+    return list.find(function(v){return v.available;})||list[0]||null;
+  }
+  function finishMinPrice(f){
+    var list=EDITIONS.filter(function(v){return String(finishKey(v))===String(f);});
+    if(!list.length) return null;
+    var src=list.filter(function(v){return v.available;});
+    if(!src.length) src=list;
+    var min=src.reduce(function(m,v){return Math.min(m,Number(v.price||0));},Infinity);
+    return isFinite(min)?min:null;
+  }
+
+  /* ─────────────── ATC ─────────────── */
+  function setATC(v,summary){
+    if(summaryEl) summaryEl.textContent=summary||'Bitte auswählen';
+    if(!variantInp||!atcBtn||!atcPrice) return;
+    if(!v||!v.id){ variantInp.value=''; atcBtn.disabled=true; atcPrice.textContent=''; return; }
+    variantInp.value=v.id;
+    atcBtn.disabled=!v.available;
+    atcPrice.textContent=fmt(v.price);
+  }
+
+  /* ─────────────── RENDER OVERLAY ───────────────
+   * Single source of truth: reads mode/finish/size, updates preview.
+   */
+  function renderOverlay(){
+    if(!artImg) return;
+
+    if(mode==='original'){
+      artImg.src=(ORIGINAL&&ORIGINAL.img)?ORIGINAL.img:DEFAULT_ART;
+      layoutArtwork(ORIG_SIZE,null,(ORIGINAL&&ORIGINAL.title)||'',1.0);
+      return;
+    }
+
+    // edition mode
+    var chosen=null;
+    if(finish&&size){
+      chosen=pickVariant(finish,size);
+    } else if(finish){
+      chosen=EDITIONS.find(function(v){return String(finishKey(v))===String(finish)&&v.available;})
+            ||EDITIONS.find(function(v){return String(finishKey(v))===String(finish);})||null;
+    } else if(EDITIONS.length===1){
+      chosen=EDITIONS[0];
+    }
+
+    artImg.src=(chosen&&chosen.img)?chosen.img:DEFAULT_ART;
+
+    var szUse=size||(chosen?sizeKey(chosen):null)||(EDITIONS[0]?sizeKey(EDITIONS[0]):ORIG_SIZE)||ORIG_SIZE;
+    var fnUse=(chosen?finishKey(chosen):finish)||'';
+    var vscale=SIZE_SCALES[szUse]||1.0;
+
+    layoutArtwork(szUse,fnUse,(chosen&&chosen.title)||'',vscale);
+  }
+
+  /* ─────────────── CARD BUILDER ─────────────── */
+  function card(opts){
+    var b=document.createElement('button');
+    b.type='button';
+    b.className='il-choice'+(opts.active?' is-active':'');
+    if(opts.disabled) b.disabled=true;
+    b.innerHTML=
+      '<div class="il-choice__body">'+
+        '<div class="il-choice__title">'+opts.title+'</div>'+
+        (opts.sub?'<div class="il-choice__sub">'+opts.sub+'</div>':'')+
+      '</div>'+
+      (opts.price?'<div class="il-choice__price">'+opts.price+'</div>':'');
+    if(!opts.disabled&&typeof opts.onClick==='function')
+      b.addEventListener('click',opts.onClick);
+    return b;
+  }
+
+  /* ─────────────── RENDER UI ─────────────── */
+  function renderAll(){ renderModel(); renderFinish(); renderSize(); renderOverlay(); }
+
+  function renderModel(){
+    modelWrap.innerHTML='';
+    if(ORIGINAL){
+      var sold=ORIGINAL.available===false;
+      var szTxt=ORIG_SIZE?'Originalgröße '+ORIG_SIZE.replace('x','×')+' cm':'';
+      modelWrap.appendChild(card({
+        title:'Original',
+        sub:sold?(szTxt?szTxt+' · Verkauft':'Verkauft'):szTxt,
+        price:fmt(ORIGINAL.price),
+        active:mode==='original',
+        disabled:sold,
+        onClick:function(){
+          mode='original'; finish=null; size=null;
+          grpFinish.hidden=true; grpSize.hidden=true;
+          setATC(ORIGINAL,'Original');
+          renderAll();
+        }
+      }));
+    }
+    if(EDITIONS.length){
+      var avail=EDITIONS.filter(function(v){return v.available;});
+      var src=avail.length?avail:EDITIONS;
+      var minP=src.reduce(function(m,v){return Math.min(m,Number(v.price||0));},Infinity);
+      modelWrap.appendChild(card({
+        title:'Print / Edition',
+        sub:'Wähle Finish & Größe',
+        price:isFinite(minP)?'ab '+fmt(minP):'',
+        active:mode==='edition',
+        disabled:EDITIONS.every(function(v){return !v.available;}),
+        onClick:function(){
+          mode='edition';
+          if(!finish) finish=finishesList()[0]||null;
+          if(!size&&finish){
+            var szs=sizesForFinish(finish);
+            buildSizeScales(szs);
+            size=szs[0]||null;
+          }
+          grpFinish.hidden=false;
+          grpSize.hidden=!finish;
+          var v=finish&&size?pickVariant(finish,size):null;
+          setATC(v, v?'Edition · '+finish+' · '+size : finish?'Edition · '+finish:'Edition');
+          renderAll();
+        }
+      }));
+    }
+  }
+
+  function renderFinish(){
+    finishWrap.innerHTML='';
+    if(mode!=='edition'){ grpFinish.hidden=true; return; }
+    grpFinish.hidden=false;
+    finishesList().forEach(function(f){
+      var p=finishMinPrice(f);
+      finishWrap.appendChild(card({
+        title:f, sub:'',
+        price:p!=null?'ab '+fmt(p):'',
+        active:String(finish)===String(f),
+        onClick:function(){
+          finish=f;
+          // auto-select smallest available size for this finish
+          var szs=sizesForFinish(f);
+          buildSizeScales(szs);
+          size=szs.find(function(s){var v=pickVariant(f,s);return v&&v.available;})||szs[0]||null;
+          grpSize.hidden=false;
+          var v=size?pickVariant(finish,size):null;
+          setATC(v, v?'Edition · '+f+' · '+size : 'Edition · '+f);
+          renderFinish(); renderSize(); renderOverlay();
+        }
+      }));
+    });
+  }
+
+  function renderSize(){
+    sizeWrap.innerHTML='';
+    if(mode!=='edition'||!finish){ grpSize.hidden=true; return; }
+    grpSize.hidden=false;
+    var sizes=sizesForFinish(finish);
+    buildSizeScales(sizes);
+    sizes.forEach(function(sz){
+      var v=pickVariant(finish,sz);
+      var dis=!v||!v.available;
+      sizeWrap.appendChild(card({
+        title:'Size '+sz,
+        sub:dis?'Nicht verfügbar':'',
+        price:v?fmt(v.price):'',
+        active:String(size)===String(sz),
+        disabled:dis,
+        onClick:function(){
+          size=sz;
+          var chosen=pickVariant(finish,sz);
+          setATC(chosen,'Edition · '+finish+' · '+sz);
+          renderSize();
+          renderOverlay();
+        }
+      }));
+    });
+  }
+
+  /* ─────────────── DEFAULT SELECTION ───────────────
+   * 1. Original vorhanden & verfügbar → Original
+   * 2. Sonst: erster Finish + kleinste verfügbare Size
+   */
+  if(ORIGINAL&&ORIGINAL.available){
+    mode='original';
+    grpFinish.hidden=true; grpSize.hidden=true;
+    setATC(ORIGINAL,'Original');
+  } else if(EDITIONS.length){
+    mode='edition';
+    finish=finishesList()[0]||null;
+    if(finish){
+      var initSzs=sizesForFinish(finish);
+      buildSizeScales(initSzs);
+      size=initSzs.find(function(s){var v=pickVariant(finish,s);return v&&v.available;})||initSzs[0]||null;
+    }
+    grpFinish.hidden=false;
+    grpSize.hidden=!finish;
+    var initV=finish&&size?pickVariant(finish,size):null;
+    setATC(initV, initV?'Edition · '+finish+' · '+size : finish?'Edition · '+finish:'Edition');
+  } else {
+    mode='original';
+    grpFinish.hidden=true; grpSize.hidden=true;
+    setATC(ORIGINAL,'Original · Verkauft');
+  }
+
+  renderModel(); renderFinish(); renderSize();
+
+  // Initial overlay — wait for image if needed
+  function doFirstRender(){
+    renderOverlay();
+    // second pass after layout settles
+    requestAnimationFrame(renderOverlay);
+  }
+  if(artImg&&artImg.complete&&artImg.naturalWidth){
+    doFirstRender();
+  } else if(artImg){
+    artImg.addEventListener('load',doFirstRender,{once:true});
+    // also try immediately in case browser skips load event
+    requestAnimationFrame(renderOverlay);
+  }
+
+  window.addEventListener('resize',function(){
+    clearTimeout(window['_ilRT_{{ section.id }}']);
+    window['_ilRT_{{ section.id }}']=setTimeout(renderOverlay,80);
+  });
+
+})();
+</script>
+
+{% schema %}
+{
+  "name": "AC Product Artwork",
+  "settings": [
+    { "type": "checkbox", "id": "show_back", "label": "Back-Link anzeigen", "default": true },
+    { "type": "text",     "id": "back_label", "label": "Zurück-Text",     "default": "Back" },
+    { "type": "text",     "id": "atc_label",  "label": "Warenkorb Button", "default": "In den Warenkorb" }
+  ],
+  "blocks": [
+    {
+      "type": "wall_image",
+      "name": "Wandfoto",
+      "limit": 1,
+      "settings": [
+        { "type": "image_picker", "id": "image", "label": "Wandfoto (weiße Wand empfohlen)" },
+
+        { "type": "header", "content": "Wand-Bereich (% vom Foto)" },
+        { "type": "range",  "id": "zone_left",   "label": "Linke Kante (%)",  "min": 0,  "max": 100, "step": 1, "default": 20 },
+        { "type": "range",  "id": "zone_top",    "label": "Obere Kante (%)",  "min": 0,  "max": 100, "step": 1, "default": 10 },
+        { "type": "range",  "id": "zone_width",  "label": "Breite (%)",       "min": 5,  "max": 100, "step": 1, "default": 60 },
+        { "type": "range",  "id": "zone_height", "label": "Höhe (%)",         "min": 5,  "max": 100, "step": 1, "default": 75 },
+
+        { "type": "header", "content": "Reale Wandbreite" },
+        { "type": "number", "id": "zone_realw_cm", "label": "Wandbreite (cm)", "default": 300 },
+
+        { "type": "header", "content": "Rahmen & Darstellung" },
+        { "type": "range",  "id": "art_border",       "label": "Rahmenbreite (px)", "min": 0, "max": 20, "step": 1, "default": 0 },
+        { "type": "color",  "id": "art_border_color", "label": "Rahmenfarbe",        "default": "#ffffff" },
+
+        { "type": "header", "content": "Schatten" },
+        { "type": "range",  "id": "shadow_deg",      "label": "Richtung (0–36 = 0°–360°)", "min": 0,  "max": 36,  "step": 0.5, "default": 13 },
+        { "type": "range",  "id": "shadow_dist_cm",  "label": "Distanz (cm)",              "min": 0,  "max": 10,  "step": 0.5, "default": 1.5 },
+        { "type": "range",  "id": "shadow_blur_cm",  "label": "Weichzeichnung (cm)",       "min": 0,  "max": 10,  "step": 0.5, "default": 2.5 },
+        { "type": "range",  "id": "shadow_opacity",  "label": "Deckkraft (%)",             "min": 0,  "max": 100, "step": 5,   "default": 35 }
+      ]
+    }
+  ],
+  "presets": [
+    { "name": "AC Product Artwork (Inline)", "category": "ARTCLUB" }
+  ]
+}
+{% endschema %}
+</section>

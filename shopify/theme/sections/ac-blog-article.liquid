@@ -1,0 +1,257 @@
+{% comment %}
+ARTCLUB — Editorial Article (GQ-ish, LIGHT)
+- Uses Shopify article image as hero (article.image)
+- Clean white layout, wide hero, narrow readable text column
+- CSS uses !important everywhere (per request)
+{% endcomment %}
+
+<section class="ac-gq">
+  <article class="ac-gq__wrap">
+    <header class="ac-gq__top">
+
+      <div class="ac-gq__headline">
+        {% if section.settings.show_kicker %}
+          <div class="ac-gq__kicker">
+            {% if article.tags.size > 0 %}
+              {{ article.tags.first }}
+            {% else %}
+              {{ section.settings.fallback_kicker }}
+            {% endif %}
+          </div>
+        {% endif %}
+
+        <h1 class="ac-gq__title">{{ article.title }}</h1>
+
+        {% if section.settings.show_excerpt %}
+          {% assign excerpt = article.excerpt | strip_html | strip %}
+          {% if excerpt != blank %}
+            <p class="ac-gq__dek">{{ excerpt }}</p>
+          {% endif %}
+        {% endif %}
+
+        {% if section.settings.show_meta %}
+          <div class="ac-gq__meta">
+            <span class="ac-gq__metaitem">
+              {% if article.author != blank %}{{ article.author }}{% else %}{{ section.settings.fallback_author }}{% endif %}
+            </span>
+            <span class="ac-gq__metadot">•</span>
+            <time class="ac-gq__metaitem" datetime="{{ article.published_at | date: '%Y-%m-%d' }}">
+              {{ article.published_at | date: '%d.%m.%Y' }}
+            </time>
+          </div>
+        {% endif %}
+      </div>
+    </header>
+
+    {% if article.image %}
+      <div class="ac-gq__hero">
+        <img
+          src="{{ article.image | image_url: width: 2400 }}"
+          alt="{{ article.image.alt | escape }}"
+          loading="eager"
+        >
+      </div>
+    {% endif %}
+
+    <div class="ac-gq__body">
+      <div class="ac-gq__content rte">
+        {{ article.content }}
+      </div>
+
+      {% if section.settings.show_sidebar %}
+        <aside class="ac-gq__side" aria-label="More">
+          <div class="ac-gq__sidecard">
+            <div class="ac-gq__sidetitle">{{ section.settings.side_title }}</div>
+            <div class="ac-gq__sidetext">{{ section.settings.side_text }}</div>
+            {% if section.settings.side_cta_label != blank and section.settings.side_cta_url != blank %}
+              <a class="ac-gq__sidecta" href="{{ section.settings.side_cta_url }}">{{ section.settings.side_cta_label }}</a>
+            {% endif %}
+          </div>
+        </aside>
+      {% endif %}
+    </div>
+  </article>
+
+  <style>
+    /* ===== Page base ===== */
+    .ac-gq{ background:#ffffff !important; color:#0b0b0c !important; }
+    .ac-gq *{ box-sizing:border-box !important; }
+    .ac-gq__wrap{ max-width:1180px !important; margin:0 auto !important; padding:28px 22px 96px !important; }
+
+    /* ===== Top bar (minimal “GQ-ish” header) ===== */
+    .ac-gq__brand{ display:flex !important; align-items:center !important; justify-content:space-between !important; gap:18px !important; padding:10px 0 18px !important; border-bottom:1px solid rgba(11,11,12,.10) !important; }
+    .ac-gq__brandmark{ font-weight:800 !important; letter-spacing:.02em !important; font-size:16px !important; text-transform:uppercase !important; }
+    .ac-gq__nav{ display:flex !important; gap:14px !important; flex-wrap:wrap !important; justify-content:flex-end !important; }
+    .ac-gq__navlink{ font-size:12px !important; letter-spacing:.14em !important; text-transform:uppercase !important; color:rgba(11,11,12,.70) !important; text-decoration:none !important; }
+    .ac-gq__navlink:hover{ color:#0b0b0c !important; text-decoration:underline !important; text-underline-offset:4px !important; }
+
+    /* ===== Headline block ===== */
+    .ac-gq__headline{ padding:26px 0 0 !important; }
+    .ac-gq__kicker{ font-size:12px !important; letter-spacing:.18em !important; text-transform:uppercase !important; color:rgba(11,11,12,.62) !important; margin:0 0 14px !important; }
+    .ac-gq__title{ font-size:clamp(30px, 3.6vw, 54px) !important; line-height:1.06 !important; letter-spacing:-0.02em !important; margin:0 0 14px !important; font-weight:800 !important; }
+    .ac-gq__dek{ font-size:16px !important; line-height:1.6 !important; margin:0 0 14px !important; color:rgba(11,11,12,.72) !important; max-width:820px !important; }
+    .ac-gq__meta{ display:flex !important; gap:10px !important; align-items:center !important; flex-wrap:wrap !important; font-size:13px !important; color:rgba(11,11,12,.60) !important; margin:0 0 16px !important; }
+    .ac-gq__metadot{ opacity:.6 !important; }
+
+    /* ===== Hero ===== */
+    .ac-gq__hero{ margin:18px 0 30px !important; }
+    .ac-gq__hero img{ width:100% !important; height:auto !important; display:block !important; border-radius:0 !important; }
+
+    /* ===== Body layout ===== */
+    .ac-gq__body{ display:grid !important; grid-template-columns:minmax(0, 720px) minmax(0, 1fr) !important; gap:44px !important; align-items:start !important; padding-top:10px !important; border-top:1px solid rgba(11,11,12,.10) !important; }
+    @media (max-width: 980px){
+      .ac-gq__body{ grid-template-columns:1fr !important; gap:26px !important; }
+    }
+
+    /* ===== Editorial typography ===== */
+    .ac-gq__content{ padding-top:18px !important; font-size:18px !important; line-height:1.8 !important; color:#0b0b0c !important; }
+    .ac-gq__content p{ margin:0 0 1.5em !important; font-family: serif!important; font-size: 18px!important}
+    .ac-gq__content a{ color:#0b0b0c !important; text-decoration:underline !important; text-underline-offset:4px !important; }
+    .ac-gq__content a:hover{ opacity:.78 !important; }
+
+    .ac-gq__content h2{ font-size:28px !important; line-height:1.25 !important; margin:2.2em 0 .8em !important; letter-spacing:-0.02em !important; font-weight:900 !important; }
+    .ac-gq__content h3{ font-size:20px !important; line-height:1.35 !important; margin:1.8em 0 .7em !important; font-weight:800 !important; }
+
+    .ac-gq__content ul{ padding-left:1.2em !important; margin:1.3em 0 1.8em !important; }
+    .ac-gq__content li{ margin:0 0 .65em !important; }
+
+    .ac-gq__content blockquote{
+      margin:2.4em 0 !important;
+      padding:0 0 0 18px !important;
+      border-left:3px solid rgba(11,11,12,.18) !important;
+      font-size:22px !important;
+      line-height:1.45 !important;
+      letter-spacing:-0.01em !important;
+      font-weight:700 !important;
+      color:#0b0b0c !important;
+    }
+
+    /* Subtle separators like magazine pages */
+    .ac-gq__content hr{ border:none !important; border-top:1px solid rgba(11,11,12,.10) !important; margin:2.2em 0 !important; }
+
+    /* ===== Sidebar ===== */
+    .ac-gq__side{ position:sticky !important; top:18px !important; }
+    @media (max-width: 980px){
+      .ac-gq__side{ position:relative !important; top:auto !important; }
+    }
+    .ac-gq__sidecard{
+      border:1px solid rgba(11,11,12,.10) !important;
+      padding:18px 16px !important;
+      background:#fff !important;
+    }
+    .ac-gq__sidetitle{ font-size:12px !important; letter-spacing:.18em !important; text-transform:uppercase !important; margin:0 0 10px !important; color:rgba(11,11,12,.62) !important; }
+    .ac-gq__sidetext{ font-size:14px !important; line-height:1.6 !important; color:rgba(11,11,12,.78) !important; margin:0 0 12px !important; }
+    .ac-gq__sidecta{
+      display:inline-block !important;
+      padding:10px 12px !important;
+      border:1px solid rgba(11,11,12,.18) !important;
+      text-decoration:none !important;
+      font-size:12px !important;
+      letter-spacing:.12em !important;
+      text-transform:uppercase !important;
+      color:#0b0b0c !important;
+      background:#fff !important;
+    }
+    .ac-gq__sidecta:hover{ background:#0b0b0c !important; color:#fff !important; }
+  </style>
+  <style>
+  /* FAQ Auto-Formatting (after H2/H3 "FAQ") */
+  .ac-gq__faq{ margin:2.2em 0 !important; padding:0 !important; list-style:none !important; border-top:1px solid rgba(11,11,12,.10) !important; }
+  .ac-gq__faq > li{ margin:0 !important; padding:18px 0 !important; border-bottom:1px solid rgba(11,11,12,.10) !important; }
+  .ac-gq__faq strong{ display:block !important; font-size:16px !important; line-height:1.4 !important; font-weight:800 !important; letter-spacing:-0.01em !important; margin:0 0 8px !important; }
+  .ac-gq__faq p{ margin:0 !important; font-size:15px !important; line-height:1.75 !important; color:rgba(11,11,12,.78) !important; }
+  .ac-gq__content li {
+    margin: 0 0 .65em !important;
+    font-size: 18px !important;
+}
+</style>
+
+<script>
+  (function () {
+    function isFaqHeading(el) {
+      if (!el) return false;
+      const tag = (el.tagName || "").toLowerCase();
+      if (tag !== "h2" && tag !== "h3") return false;
+      const t = (el.textContent || "").trim().toLowerCase();
+      return t === "faq" || t === "faqs" || t === "fragen & antworten" || t === "fragen und antworten" || t === "häufige fragen";
+    }
+
+    function nextElement(el) {
+      let n = el.nextElementSibling;
+      while (n && n.tagName && n.tagName.toLowerCase() === "p" && !(n.textContent || "").trim()) {
+        n = n.nextElementSibling;
+      }
+      return n;
+    }
+
+    const root = document.querySelector(".ac-gq__content");
+    if (!root) return;
+
+    const headings = root.querySelectorAll("h2, h3");
+    headings.forEach((h) => {
+      if (!isFaqHeading(h)) return;
+
+      const ul = nextElement(h);
+      if (!ul || ul.tagName.toLowerCase() !== "ul") return;
+
+      // Mark UL as FAQ list
+      ul.classList.add("ac-gq__faq");
+
+      // Normalize structure: li may contain <strong> and <p> (your AI format)
+      ul.querySelectorAll("li").forEach((li) => {
+        // If someone used <b> instead of <strong>
+        const b = li.querySelector("b");
+        if (b && !li.querySelector("strong")) {
+          const s = document.createElement("strong");
+          s.innerHTML = b.innerHTML;
+          b.replaceWith(s);
+        }
+
+        // If answer isn't wrapped in <p>, wrap remaining text nodes into p
+        const hasP = li.querySelector("p");
+        if (!hasP) {
+          const p = document.createElement("p");
+          // move non-strong nodes into p
+          Array.from(li.childNodes).forEach((node) => {
+            if (node.nodeType === 1 && node.tagName.toLowerCase() === "strong") return;
+            p.appendChild(node);
+          });
+          li.appendChild(p);
+        }
+      });
+    });
+  })();
+</script>
+
+</section>
+
+{% schema %}
+{
+  "name": "Article ARTCLUB",
+  "settings": [
+    { "type": "text", "id": "brand_label", "label": "Brand label (top left)", "default": "ARTCLUB FILES" },
+    { "type": "checkbox", "id": "show_kicker", "label": "Show kicker (tag/category)", "default": true },
+    { "type": "text", "id": "fallback_kicker", "label": "Fallback kicker", "default": "Art / Culture" },
+    { "type": "checkbox", "id": "show_meta", "label": "Show author/date", "default": true },
+    { "type": "checkbox", "id": "show_excerpt", "label": "Show excerpt (if exists)", "default": true },
+    { "type": "text", "id": "fallback_author", "label": "Fallback author", "default": "ARTCLUB" },
+
+    { "type": "text", "id": "nav_1", "label": "Nav item 1", "default": "Art" },
+    { "type": "text", "id": "nav_2", "label": "Nav item 2", "default": "Berlin" },
+    { "type": "text", "id": "nav_3", "label": "Nav item 3", "default": "Culture" },
+    { "type": "text", "id": "nav_4", "label": "Nav item 4", "default": "Collecting" },
+    { "type": "text", "id": "nav_5", "label": "Nav item 5", "default": "Artists" },
+    { "type": "text", "id": "nav_6", "label": "Nav item 6", "default": "Opinion" },
+    { "type": "url", "id": "nav_url", "label": "Nav link URL (same for all, optional)" },
+
+    { "type": "checkbox", "id": "show_sidebar", "label": "Show sidebar card", "default": true },
+    { "type": "text", "id": "side_title", "label": "Sidebar title", "default": "ARTCLUB" },
+    { "type": "text", "id": "side_text", "label": "Sidebar text", "default": "Independent writing on contemporary art, culture, and the Berlin ecosystem." },
+    { "type": "text", "id": "side_cta_label", "label": "Sidebar button label", "default": "Explore" },
+    { "type": "url", "id": "side_cta_url", "label": "Sidebar button URL" }
+  ],
+  "presets": [
+    { "name": "Article – Editorial Light (GQ-ish) – ARTCLUB" }
+  ]
+}
+{% endschema %}

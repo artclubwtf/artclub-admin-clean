@@ -1,0 +1,995 @@
+{%- comment -%}
+  ARTCLUB — Artist DNA Mindmap (BETA v1.0 — 2025)
+  Hotfix: Scoped CSS + Lazy Mount (nur wenn Modal .is-open ist).
+{%- endcomment -%}
+
+<style>
+  /* ===== Scope ALLES auf #dnaModal ===== */
+  #dnaModal .dna-app {
+    all: initial;
+    font-family: ui-sans-serif, system-ui, -apple-system, Inter, Segoe UI, Roboto, 'Helvetica Neue', Arial;
+  }
+
+  /* ---- lokale Variablen auf .dna-app (nicht :root!) ---- */
+  #dnaModal .dna-app {
+    --bg-0: #0b0f14;
+    --bg-1: #0d1218;
+    --ink: #eaf2ff;
+    --muted: #93a0b1;
+    --line: rgba(255, 255, 255, 0.06);
+
+    --brand-a: #ff8a00; /* wird per JS überschrieben */
+    --brand-b: #ffcc00;
+
+    --c-ident: #ffa84c;
+    --c-story: #b48cff;
+    --c-social: #48e9b6;
+    --c-brand: #ff7aa8;
+    --c-aud: #5ab5ff;
+    --c-vision: #7fd2ff;
+
+    --r: 14px;
+    --shadow: drop-shadow(0 6px 26px rgba(0, 0, 0, 0.35));
+  }
+
+  /* ---- die App belegt den Modal-Inhalt, nicht das ganze Dokument ---- */
+  #dnaModal .dna-app {
+    position: absolute;
+    inset: 0;
+    display: none; /* lazy mount: erst sichtbar, wenn Modal open */
+    color: var(--ink);
+    background: radial-gradient(1200px 1200px at 50% 45%, var(--bg-1), var(--bg-0) 60%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0));
+    overflow: hidden;
+    z-index: 1; /* bleibt IM Modal */
+  }
+
+  /* Kopf/Bedienelemente */
+  #dnaModal .dna-head {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    right: 14px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    z-index: 2;
+  }
+  #dnaModal .dna-badge {
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: #bcd;
+    backdrop-filter: blur(4px) saturate(120%);
+    background: rgba(255, 255, 255, 0.04);
+  }
+  #dnaModal .dna-spacer {
+    flex: 1;
+  }
+  #dnaModal .dna-ctrls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    border: 1px solid var(--line);
+    padding: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(6px) saturate(120%);
+  }
+  #dnaModal .dna-btn {
+    appearance: none;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.06);
+    color: #dfe8ff;
+    padding: 6px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 700;
+  }
+  #dnaModal .dna-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  #dnaModal .dna-progress {
+    width: 160px;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  #dnaModal .dna-progress > span {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, #27b0ff, #2dffb8);
+  }
+  #dnaModal .dna-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 3;
+  }
+
+  /* Bühne */
+  #dnaModal .dna-stage {
+    position: absolute;
+    inset: 0;
+  }
+  #dnaModal .dna-stage svg {
+    width: 100%;
+    height: 100%;
+    filter: var(--shadow);
+  }
+  #dnaModal .edge {
+    stroke: rgba(255, 255, 255, 0.09);
+    stroke-width: 2.2;
+    vector-effect: non-scaling-stroke;
+  }
+
+  #dnaModal .node {
+    cursor: pointer;
+  }
+  #dnaModal .bubble {
+    filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.35));
+    transition: transform 0.2s ease, opacity 0.2s ease;
+  }
+  #dnaModal .node text {
+    fill: #fff;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.4);
+    pointer-events: none;
+  }
+  #dnaModal .node .sub {
+    fill: #eaf2ff;
+    opacity: 0.92;
+    font-weight: 800;
+  }
+  #dnaModal .node:hover .bubble {
+    transform: scale(1.06);
+  }
+  #dnaModal .node.dim .bubble,
+  #dnaModal .node.dim text {
+    opacity: 0.35;
+  }
+
+  /* Seitentafel */
+  #dnaModal .dna-panel {
+    position: absolute;
+    right: 18px;
+    bottom: 18px;
+    width: min(480px, 36vw);
+    max-height: 70vh;
+    overflow: auto;
+    background: rgba(10, 14, 20, 0.78);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px 16px;
+    color: #dfe8ff;
+    backdrop-filter: blur(10px) saturate(120%);
+    box-shadow: 0 22px 70px rgba(0, 0, 0, 0.35);
+    z-index: 2;
+  }
+  #dnaModal .dna-panel h3 {
+    margin: 0.3rem 0 0.4rem;
+    font-size: 15px;
+    opacity: 0.92;
+  }
+  #dnaModal .dna-panel h4 {
+    margin: 0.6rem 0 0.2rem;
+    font-size: 13px;
+    color: #b7c8e0;
+  }
+  #dnaModal .dna-ul {
+    margin: 0.2rem 0 0.6rem;
+    padding-left: 1.1rem;
+  }
+  #dnaModal .dna-ul li {
+    margin: 0.25rem 0;
+  }
+  #dnaModal .dna-kv {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+    color: #b9c6d8;
+    border-bottom: 1px dashed var(--line);
+    padding: 6px 0;
+  }
+  #dnaModal .dna-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid var(--line);
+    margin: 2px 4px 0 0;
+    font-size: 11px;
+  }
+
+  /* Tooltip */
+  #dnaModal .tip {
+    position: fixed;
+    z-index: 5;
+    pointer-events: none;
+    background: rgba(9, 13, 18, 0.92);
+    color: #eaf2ff;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 12px;
+    max-width: 320px;
+    filter: var(--shadow);
+  }
+</style>
+
+{%- comment -%}  Daten aus Metafeldern als JSON (safe)  {%- endcomment -%}
+<script type="application/json" id="artist-dna-json">
+  {
+    "name": {{ customer.name | json }},
+    "email": {{ customer.email | json }},
+    "city_guess": {{ customer.default_address.city | json }},
+    "fields": {
+      {% assign F = customer.metafields.custom %}
+
+      {%- comment -%} Helper-Ausgabe: Text aus Metafield, bevorzugt .value; bei rich_text -> Plaintext {%- endcomment -%}
+      {% assign v = F.artist_dna_identity_who %}
+      "identity_who": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_identity_features %}
+      "identity_features": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_identity_motivation %}
+      "identity_motivation": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_identity_message %}
+      "identity_message": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_story_my_story %}
+      "story_my_story": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_story_personal_experience %}
+      "story_personal_experience": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_story_overarching_message %}
+      "story_overarching_message": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_social_presentation %}
+      "social_presentation": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_social_platforms %}
+      "social_platforms": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_social_content_types %}
+      "social_content_types": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_social_community_interaction %}
+      "social_community_interaction": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_visual_elements %}
+      "visual_elements": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_visual_presentation %}
+      "visual_presentation": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_visual_techniques %}
+      "visual_techniques": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_audience_who %}
+      "aud_who": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_audience_viewers %}
+      "aud_viewers": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_audience_motivation %}
+      "aud_motivation": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_audience_values %}
+      "aud_values": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_expression_perception %}
+      "expr_perception": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_expression_influences %}
+      "expr_influences": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_expression_techniques %}
+      "expr_techniques": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {% assign v = F.artist_dna_expression_goal %}
+      "expr_goal": {% if v and v.value %}{% if v.type contains 'rich_text' %}{{ v | metafield_tag | strip_html | strip_newlines | json }}{% else %}{{ v.value | json }}{% endif %}{% elsif v %}{{ v | json }}{% else %}""{% endif %},
+
+      {%- comment -%} Moodboard: list.link -> URLs, sonst String/JSON {%- endcomment -%}
+      {% assign mb = F.artist_dna_moodboard %}
+      "moodboard":
+        {% if mb and mb.value %}
+          {% if mb.type == 'list.link' %}
+            [{% for l in mb.value %}{{ l.url | json }}{% unless forloop.last %},{% endunless %}{% endfor %}]
+          {% else %}
+            {{ mb.value | json }}
+          {% endif %}
+        {% elsif mb %}
+          {{ mb | json }}
+        {% else %}
+          []
+        {% endif %}
+    }
+  }
+</script>
+
+{%- comment -%}
+  Mount-Container (unsichtbar, bis Modal .is-open hat)
+{%- endcomment -%}
+<div id="dnaMount" class="dna-app" aria-label="ARTCLUB Artist DNA">
+  <div class="dna-head">
+    <span class="dna-badge">ARTIST DNA (BETA) — Version 1.0 — 2025</span>
+    <span class="dna-badge">Progress <span id="dnaProgNum">0%</span></span>
+    <div class="dna-progress" aria-hidden="true"><span id="dnaProgBar" style="width:0%"></span></div>
+    <span class="dna-spacer"></span>
+    <div class="dna-ctrls">
+      <button class="dna-btn" id="btnMinus">−</button>
+      <button class="dna-btn" id="btnPlus">+</button>
+      <button class="dna-btn" id="btnCenter">Center</button>
+    </div>
+  </div>
+
+  <button class="dna-btn dna-close" id="btnClose">Schließen</button>
+
+  <div class="dna-stage" id="stage">
+    <svg viewBox="-1200 -800 2400 1600" preserveAspectRatio="xMidYMid meet">
+      <g id="gZoom">
+        <g id="edges"></g>
+        <g id="nodes"></g>
+      </g>
+    </svg>
+  </div>
+
+  <aside class="dna-panel" id="panel">
+    <h3>Empfehlungen & Next Steps <span class="dna-pill">BETA</span></h3>
+    <div id="panelBody">
+      <div class="dna-kv"><span>Profil</span><strong id="pfName">—</strong></div>
+      <div class="dna-kv"><span>Brandfarben</span><span id="pfColors"></span></div>
+      <div class="dna-kv"><span>Elevator Pitch</span><strong id="pfPitch">—</strong></div>
+      <h4>Instagram Feed (14 Tage)</h4>
+      <ul class="dna-ul" id="tipFeed"></ul>
+      <h4>Content-Serien</h4>
+      <ul class="dna-ul" id="tipContent"></ul>
+      <h4>Platzierung</h4>
+      <ul class="dna-ul" id="tipPlace"></ul>
+      <h4>Hashtags</h4>
+      <div id="tipTags"></div>
+      <div style="margin-top:10px; font-size:11px; color:#9aacbf; border-top:1px solid var(--line); padding-top:10px">
+        <strong>Credits</strong>: Concept & preliminary planning by Leonid Bechtel · Further developed by ARTCLUB<br>
+        Die Idee: Jede:r Künstler:in besitzt eine einzigartige DNA – sichtbar in Werk & Auftreten. Wir generieren ein
+        individuelles Profil samt Code, Empfehlungen & Visualisierung.
+      </div>
+    </div>
+  </aside>
+
+  <div id="tip" class="tip" style="display:none"></div>
+</div>
+
+<script>
+  (() => {
+    const modal = document.getElementById('dnaModal');
+    const mount = document.getElementById('dnaMount');
+
+    if (!modal || !mount) return;
+
+    // ===== Lazy Mount: nur anzeigen, wenn Modal offen ist =====
+    function syncOpenState() {
+      const open = modal.classList.contains('is-open');
+      mount.style.display = open ? 'block' : 'none';
+      if (open && !booted) {
+        try {
+          boot();
+        } catch (e) {
+          console.error('[DNA boot]', e);
+        }
+      }
+    }
+    // initial + Observer
+    syncOpenState();
+    const mo = new MutationObserver(syncOpenState);
+    mo.observe(modal, { attributes: true, attributeFilter: ['class', 'aria-hidden', 'style'] });
+
+    /* ======= Ab hier: identisch zu vorher, aber guards an jeder Stelle ======= */
+
+    const $ = (sel) => mount.querySelector(sel);
+    const $$ = (sel) => [...mount.querySelectorAll(sel)];
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const escapeHTML = (s) =>
+      String(s || '').replace(
+        /[&<>"']/g,
+        (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])
+      );
+
+    function toStr(v) {
+      try {
+        if (v == null) return '';
+        if (typeof v === 'object') {
+          if (Array.isArray(v)) return v.map(toStr).join('\n');
+          if ('value' in v) return String(v.value || '');
+          return String(JSON.stringify(v));
+        }
+        return String(v);
+      } catch {
+        return '';
+      }
+    }
+    function tokenize(s) {
+      return toStr(s)
+        .toLowerCase()
+        .replace(/[“”„"]/g, '"')
+        .replace(/[^\p{L}\p{N}\s\-.,:/&]/gu, '')
+        .split(/[\s/|,;·]+/g)
+        .filter(Boolean);
+    }
+    function splitSentences(s) {
+      return toStr(s)
+        .replace(/\n+/g, ' ')
+        .split(/(?<=[.!?])\s+|[–—-]\s+|;\s+|\u2022\s+/g)
+        .map((x) => x.trim())
+        .filter(Boolean);
+    }
+    const uniq = (a) => [...new Set(a)];
+
+    const KEYSETS = {
+      mediums: [
+        'acryl',
+        'spray',
+        'spraypaint',
+        'spray-paint',
+        'collage',
+        'öl',
+        'oil',
+        'canvas',
+        'graffiti',
+        'stencil',
+        'digital',
+      ],
+      urban: ['urban', 'straße', 'street', 'berlin', 'architektur', 'beton', 'graffiti', 'industrie'],
+      nature: ['natur', 'moos', 'wasser', 'licht', 'wald', 'grün'],
+      emotion: ['resonanz', 'gefühl', 'emotion', 'identität', 'authentisch', 'roh'],
+      social: ['instagram', 'tiktok', 'behance', 'pinterest', 'reels', 'stories', 'live', 'community'],
+      buyer: ['sammler', 'interior', 'designer', 'galerie', 'architekt', 'hotel'],
+    };
+
+    const COLOR_MAP = {
+      blau: '#2f80ff',
+      türkis: '#33dbc3',
+      cyan: '#3ddfff',
+      grün: '#00d27a',
+      neon: '#0affef',
+      orange: '#ff8a00',
+      koralle: '#ff7a64',
+      pink: '#ff6fd8',
+      violett: '#a97cff',
+      lila: '#b48cff',
+      magenta: '#ff00a4',
+      gelb: '#ffd400',
+      schwarz: '#0b0f14',
+      weiß: '#eaf2ff',
+      weiss: '#eaf2ff',
+      grau: '#9aa6b2',
+      rot: '#ff4d4d',
+    };
+
+    function inferPalette(raw) {
+      const text = Object.values(raw || {})
+        .map(toStr)
+        .join(' ')
+        .toLowerCase();
+      const picks = [];
+      for (const [k, hex] of Object.entries(COLOR_MAP)) if (text.includes(k)) picks.push(hex);
+      return picks.length >= 2 ? picks.slice(0, 5) : ['#ff8a00', '#ffcc00', '#48e9b6', '#5ab5ff', '#b48cff', '#ff7aa8'];
+    }
+
+    function scoreSentence(s, globalTokens) {
+      const tokens = tokenize(s),
+        len = clamp(tokens.length, 0, 70);
+      let sp = Math.sqrt(len);
+      const u = new Set(tokens);
+      for (const list of Object.values(KEYSETS)) if (list.some((k) => u.has(k))) sp += 1.4;
+      const cross = tokens.filter((t) => globalTokens.has(t)).length;
+      sp += Math.min(3, cross / 4);
+      if (/^https?:/.test(s)) sp -= 2;
+      return sp;
+    }
+
+    function summarize(groups) {
+      const all = Object.values(groups).map(toStr).join(' ');
+      const global = new Set(tokenize(all).filter((w) => w.length > 4));
+      const out = {};
+      for (const [k, txt] of Object.entries(groups)) {
+        const ranked = splitSentences(txt)
+          .map((t) => ({ t, s: scoreSentence(t, global) }))
+          .sort((a, b) => b.s - a.s);
+        out[k] = ranked.slice(0, 3).map((x) => x.t);
+      }
+      return out;
+    }
+
+    function buildModel(seed) {
+      const f = seed.fields || {};
+      const sections = {
+        identity: {
+          'Wer bin ich': f.identity_who,
+          Merkmale: f.identity_features,
+          Motivation: f.identity_motivation,
+          Botschaft: f.identity_message,
+        },
+        story: {
+          'Meine Geschichte': f.story_my_story,
+          Erfahrungen: f.story_personal_experience,
+          'Übergeordnete Botschaft': f.story_overarching_message,
+        },
+        social: {
+          Präsentation: f.social_presentation,
+          Plattformen: f.social_platforms,
+          Inhalte: f.social_content_types,
+          Community: f.social_community_interaction,
+        },
+        brand: {
+          'Farben / Stile': f.visual_elements,
+          Präsentation: f.visual_presentation,
+          'Techniken (warum)': f.visual_techniques,
+        },
+        audience: {
+          'Wer schätzt mich': f.aud_who,
+          Betrachter: f.aud_viewers,
+          'Motivation zum Kauf': f.aud_motivation,
+          Werte: f.aud_values,
+        },
+        vision: {
+          'Wahrnehmung ⇢ Kunst': f.expr_perception,
+          Einflüsse: f.expr_influences,
+          'Techniken (warum)': f.expr_techniques,
+          'Ziel der Werke': f.expr_goal,
+        },
+      };
+      const summaries = {};
+      for (const [k, v] of Object.entries(sections)) summaries[k] = summarize(v);
+      let total = 0,
+        done = 0;
+      Object.values(sections).forEach((g) =>
+        Object.values(g).forEach((v) => {
+          total++;
+          if (toStr(v).trim().length) done++;
+        })
+      );
+      const completion = total ? Math.round((done / total) * 100) : 0;
+      const palette = inferPalette({ visual: f.visual_elements, story: f.story_my_story });
+      return { name: seed.name || 'Artist', sections, summaries, completion, palette, seed };
+    }
+
+    function makeGraph(model) {
+  const nodesG = $('#nodes'), edgesG = $('#edges');
+  if (!nodesG || !edgesG) return;
+  nodesG.innerHTML = '';
+  edgesG.innerHTML = '';
+
+  const CLUSTERS = [
+    { key: 'identity', label: 'Identität',  color: 'var(--c-ident)'  },
+    { key: 'story',    label: 'Story',      color: 'var(--c-story)'  },
+    { key: 'social',   label: 'Social',     color: 'var(--c-social)' },
+    { key: 'brand',    label: 'Brand',      color: 'var(--c-brand)'  },
+    { key: 'audience', label: 'Zielgruppe', color: 'var(--c-aud)'    },
+    { key: 'vision',   label: 'Vision',     color: 'var(--c-vision)' },
+  ];
+
+  // etwas mehr Luft
+  const center = { x: 0, y: 0 }, R1 = 350, R2 = 220, SPREAD = 110;
+
+  ensureDefs();
+
+  // Zentrum
+  node({
+    id: 'center',
+    x: center.x, y: center.y,
+    r: 120,
+    fill: 'url(#grad-center)',
+    label: model.name,
+    bold: true,
+    glow: true
+  });
+
+  // Kategorien (standardmäßig eingeklappt)
+  CLUSTERS.forEach((c, i) => {
+    const a  = Math.PI * 2 * (i / CLUSTERS.length) - Math.PI / 2;
+    const x  = center.x + Math.cos(a) * R1;
+    const y  = center.y + Math.sin(a) * R1;
+
+    const g = node({ id: `c-${c.key}`, x, y, r: 56, fill: c.color, label: c.label });
+    edge(center.x, center.y, x, y, 2.6);
+
+    // Toggle expand/collapse
+    g.addEventListener('click', () => {
+      // bereits geöffnete Kinder der Kategorie entfernen
+      const open = mount.querySelectorAll(`[data-parent="${c.key}"]`);
+      if (open.length) { open.forEach(el => el.remove()); return; }
+
+      const group   = model.summaries[c.key] || {};
+      const entries = Object.entries(group).flatMap(([sub, lines]) => lines.map(t => ({ sub, t })));
+      const global  = new Set(tokenize(Object.values(model.sections[c.key]).map(toStr).join(' ')));
+      const ranked  = entries
+        .map(e => ({ ...e, score: scoreSentence(e.t, global) }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 7);
+
+      const angleStep = (SPREAD / 180) * Math.PI;
+      const placed = []; // bereits belegte Bounding-Boxen
+
+      ranked.forEach((e, idx) => {
+        const aa0 = a + (idx - (ranked.length - 1) / 2) * angleStep;
+        const rBase = R2, rGrow = 16;
+        let ring = rBase, tries = 0, gChild, bb;
+
+        // nach außen schieben bis keine Überschneidung
+        while (tries < 24) {
+          const rx = x + Math.cos(aa0) * ring;
+          const ry = y + Math.sin(aa0) * ring;
+          const rSize = clamp(24 + e.score * 2.2, 24, 54);
+
+          if (gChild) gChild.remove(); // Test entfernen
+          gChild = node({
+            id: `n-${c.key}-${idx}`,
+            x: rx, y: ry, r: rSize,
+            fill: c.color,
+            label: e.sub,
+            sub: e.t,
+            parent: c.key
+          });
+
+          bb = gChild.getBBox();
+          if (!placed.some(p => intersects(p, bb, 6))) break; // passt
+          ring += rGrow; tries++;
+        }
+
+        placed.push(bb);
+        // Kante mit finaler Position zeichnen
+        const m = gChild.transform.baseVal.consolidate();
+        const tx = m ? m.matrix.e : 0, ty = m ? m.matrix.f : 0;
+        edge(x, y, tx, ty, 2, c.key);
+      });
+    });
+  });
+
+  // --------- lokale Helfer für makeGraph ----------
+  function edge(x1, y1, x2, y2, w = 2, parent = null) {
+    const L = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    L.setAttribute('x1', x1);
+    L.setAttribute('y1', y1);
+    L.setAttribute('x2', x2);
+    L.setAttribute('y2', y2);
+    L.setAttribute('class', 'edge');
+    L.setAttribute('stroke-width', w);
+    if (parent) L.setAttribute('data-parent', parent);
+    edgesG.appendChild(L);
+    return L;
+  }
+
+  function node({ id, x, y, r, fill, label, sub, bold = false, glow = false, parent = null }) {
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('class', 'node');
+    g.setAttribute('transform', `translate(${x},${y})`);
+    if (parent) g.setAttribute('data-parent', parent);
+    if (id)     g.setAttribute('data-id', id);
+
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c.setAttribute('r', r);
+    c.setAttribute('class', 'bubble');
+    c.setAttribute('fill', fill);
+    c.setAttribute('stroke', 'rgba(255,255,255,.15)');
+    c.setAttribute('stroke-width', '1.5');
+    if (glow) c.setAttribute('filter', 'drop-shadow(0 10px 26px rgba(255,170,0,.35))');
+
+    // Titel (max 2 Zeilen)
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('dominant-baseline', 'central');
+    t.setAttribute('font-weight', bold ? '900' : '800');
+    t.setAttribute('fill', '#fff');
+    const titleFS = clamp(r * 0.52, 12, 26);
+    wrapSVGText(t, String(label || ''), titleFS, r * 1.6, 2);
+
+    // Subline (eine Zeile, ellipsized)
+    let s;
+    if (sub) {
+      s = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      s.setAttribute('text-anchor', 'middle');
+      s.setAttribute('dominant-baseline', 'hanging');
+      s.setAttribute('y', r * 0.62);
+      s.setAttribute('class', 'sub');
+      s.setAttribute('font-size', '11');
+      const subText  = String(sub).trim();
+      const maxChars = Math.floor((r * 1.7) / 6.2);
+      s.textContent  = subText.length > maxChars ? subText.slice(0, maxChars - 1) + '…' : subText;
+    }
+
+    g.appendChild(c);
+    g.appendChild(t);
+    if (s) g.appendChild(s);
+    nodesG.appendChild(g);
+
+    // Hover-Fokus + Tooltip
+    g.addEventListener('mouseenter', (ev) => {
+      $$('#nodes .node').forEach(n => n.classList.add('dim'));
+      g.classList.remove('dim');
+      showTip(ev,
+        `<strong>${escapeHTML(label || '')}</strong>` +
+        (sub ? `<div style="opacity:.85;margin-top:3px">${escapeHTML(sub)}</div>` : '')
+      );
+    });
+    g.addEventListener('mouseleave', () => {
+      $$('#nodes .node').forEach(n => n.classList.remove('dim'));
+      hideTip();
+    });
+
+    return g;
+  }
+}
+    function ensureDefs() {
+    if ($('#dna-defs')) return;                 // nur einmal anlegen
+    const svg = mount.querySelector('svg');
+    if (!svg) return;
+
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    defs.setAttribute('id', 'dna-defs');
+
+    // radialer Markenverlauf für den Center-Knoten
+    const grad = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
+    grad.setAttribute('id', 'grad-center');
+    grad.setAttribute('cx', '50%');
+    grad.setAttribute('cy', '50%');
+    grad.setAttribute('r',  '60%');
+
+    const s1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    s1.setAttribute('offset', '0%');
+    s1.setAttribute('stop-color', 'var(--brand-b)');
+
+    const s2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    s2.setAttribute('offset', '100%');
+    s2.setAttribute('stop-color', 'var(--brand-a)');
+
+    grad.appendChild(s1);
+    grad.appendChild(s2);
+    defs.appendChild(grad);
+
+    // vor den restlichen Inhalt hängen (damit der Fill sofort verfügbar ist)
+    svg.insertBefore(defs, svg.firstChild);
+    }
+
+    // Textumbruch für SVG: schätzt Breite und bricht bis maxLines
+function wrapSVGText(textEl, str, fontSize, maxWidth, maxLines = 2) {
+  textEl.setAttribute('font-size', fontSize);
+  const words = String(str).split(/\s+/).filter(Boolean);
+  const line = [];
+  let lineWidth = 0, lines = 0;
+
+  function commit() {
+    const tspan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+    tspan.setAttribute('x', '0');
+    tspan.setAttribute('dy', lines === 0 ? '0' : fontSize * 1.05);
+    tspan.textContent = line.join(' ');
+    textEl.appendChild(tspan);
+    line.length = 0; lineWidth = 0; lines++;
+  }
+
+  words.forEach(w => {
+    const wWidth = (w.length + 1) * fontSize * 0.58; // grobes Breitenmodell
+    if (lineWidth + wWidth > maxWidth && line.length) commit();
+    if (lines >= maxLines) return;
+    line.push(w);
+    lineWidth += wWidth;
+  });
+  if (lines < maxLines && line.length) commit();
+
+  // vertikal mittig zentrieren, wenn mehrere Zeilen
+  const tspans = [...textEl.querySelectorAll('tspan')];
+  if (tspans.length > 1) {
+    const totalH = (tspans.length - 1) * fontSize * 1.05;
+    tspans[0].setAttribute('dy', (-totalH / 2) + '');
+  }
+}
+
+// prüft, ob sich zwei BBoxen überlappen (mit etwas Puffer)
+function intersects(a, b, pad = 0) {
+  return !(
+    a.x + a.width  + pad < b.x ||
+    b.x + b.width  + pad < a.x ||
+    a.y + a.height + pad < b.y ||
+    b.y + b.height + pad < a.y
+  );
+}
+
+
+
+
+    // Zoom/Pan
+    const gZoom = () => $('#gZoom');
+    let scale = 1,
+      tx = 0,
+      ty = 0;
+    const apply = () => gZoom()?.setAttribute('transform', `translate(${tx},${ty}) scale(${scale})`);
+    let dragging = false,
+      lx = 0,
+      ly = 0;
+    mount.querySelector('#stage').addEventListener('mousedown', (e) => {
+      dragging = true;
+      lx = e.clientX;
+      ly = e.clientY;
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      tx += (e.clientX - lx) / (1 / scale);
+      ty += (e.clientY - ly) / (1 / scale);
+      lx = e.clientX;
+      ly = e.clientY;
+      apply();
+    });
+    window.addEventListener('mouseup', () => (dragging = false));
+    mount.querySelector('#stage').addEventListener(
+      'wheel',
+      (e) => {
+        const step = clamp(1 - e.deltaY * 0.001, 0.5, 1.5);
+        const rect = mount.querySelector('#stage').getBoundingClientRect();
+        const cx = (e.clientX - rect.left - rect.width / 2) / (1 / scale),
+          cy = (e.clientY - rect.top - rect.height / 2) / (1 / scale);
+        scale = clamp(scale * step, 0.4, 3.5);
+        tx = tx * step + cx * (1 - step);
+        ty = ty * step + cy * (1 - step);
+        apply();
+      },
+      { passive: true }
+    );
+    $('#btnPlus').addEventListener('click', () => {
+      scale = clamp(scale * 1.2, 0.4, 3.5);
+      apply();
+    });
+    $('#btnMinus').addEventListener('click', () => {
+      scale = clamp(scale / 1.2, 0.4, 3.5);
+      apply();
+    });
+    $('#btnCenter').addEventListener('click', () => {
+      scale = 1;
+      tx = 0;
+      ty = 0;
+      apply();
+    });
+    $('#btnClose').addEventListener('click', () => {
+      modal.classList.remove('is-open');
+      document.body.style.overflow = '';
+    });
+
+    // Tooltip
+    const tip = $('#tip');
+    const showTip = (ev, html) => {
+      tip.innerHTML = html;
+      tip.style.display = 'block';
+      const pad = 12;
+      let x = ev.clientX + pad,
+        y = ev.clientY + pad;
+      const w = tip.offsetWidth,
+        h = tip.offsetHeight;
+      if (x + w > window.innerWidth - 10) x = ev.clientX - w - pad;
+      if (y + h > window.innerHeight - 10) y = ev.clientY - h - pad;
+      tip.style.transform = `translate(${x}px,${y}px)`;
+    };
+    const hideTip = () => {
+      tip.style.display = 'none';
+    };
+
+    // Tips
+    function hashtagSuggest(model) {
+      const t = tokenize(
+        Object.values(model.seed.fields || {})
+          .map(toStr)
+          .join(' ')
+      );
+      const add = new Set();
+      const push = (...a) => a.forEach((x) => add.add(x));
+      if (t.includes('berlin')) push('#berlin', '#berlinart');
+      if (t.includes('graffiti')) push('#graffitiart', '#streetart', '#urbanart');
+      if (t.includes('acryl')) push('#acrylic', '#acrylicpainting');
+      if (t.includes('spray')) push('#spraypaint');
+      if (t.includes('collage')) push('#collage', '#mixedmedia');
+      push('#contemporaryart', '#artcollector', '#studio', '@artclub_wtf');
+      return [...add].slice(0, 16);
+    }
+    function makePitch(model) {
+      const id = model.summaries.identity?.['Wer bin ich']?.[0] || '';
+      const msg =
+        model.summaries.identity?.['Botschaft']?.[0] || model.summaries.story?.['Übergeordnete Botschaft']?.[0] || '';
+      const tech = model.summaries.brand?.['Techniken (warum)']?.[0] || '';
+      const aud = model.summaries.audience?.['Wer schätzt mich']?.[0] || '';
+      const clean = (s) => toStr(s).replace(/^\W+/, '').replace(/\s+/g, ' ').trim();
+      return (
+        clean([id, tech, msg, aud].filter(Boolean).join(' · ')) ||
+        'Zeitgenössische Arbeiten – Material, Urbanität & Resonanz.'
+      );
+    }
+    function genTips(model) {
+      const f = model.seed.fields || {};
+      const city = model.seed.city_guess || '';
+      const mediums = KEYSETS.mediums.filter((m) => tokenize(Object.values(f).join(' ')).includes(m));
+      const feed = [
+        'Abwechselnd: Werkabbildung · Prozess-Reel (15–30s) · Detail · Kontext im Raum.',
+        'Raster: Mo Werk, Di Detail, Do Reel („Walk & Talk“), Sa Studio-Moment. Täglich Story: Skizzen/Umfragen.',
+        'Reel-Hooks: „Von Beton zu Farbe…“, „3 Layer bis zur Tiefe“, „Fehler ➝ Technik…“',
+        'CTA: „Studio-Besuch? Nachricht ▶︎“, „Print-Drop Fr 18:00“, „Ausstellung: Save the Date“',
+      ];
+      const content = [
+        'Time-lapse: Layer-Aufbau (' + (mediums[0] || 'Acryl/Spray') + ').',
+        '„Vorher/Nachher im Raum“: Mockups in ' + (city || 'deiner Stadt') + '.',
+        'Serie „Ein Einfluss, ein Werk“: Zitat + Bild + 10-Sek. Kommentar.',
+        'Community-Prompt: Farbvarianten/ Namensfindung für neue Serie.',
+        '60-Sek. „Werk erklärt“: 3 Punkte, klare UT, kein Musik-Overload.',
+      ];
+      const places = [
+        'Interior/Design: 6–9 Werke kuratieren für Loft/Hotel/Praxis (Mockups).',
+        'Kontaktliste: 10 Off-Spaces/Galerien in ' + (city || 'deiner Region') + ' · persönlicher Elevator-Pitch.',
+        'Online: Behance Serie + Pinterest Moodboard · LinkedIn 1×/Monat.',
+        'Edition: kleine Open-Edition (3 Größen), klare Lieferzeit.',
+      ];
+      return { feed, content, places, tags: hashtagSuggest(model), pitch: makePitch(model) };
+    }
+    function renderPanel(model, tips) {
+      $('#pfName').textContent = model.name;
+      $('#pfPitch').textContent = tips.pitch;
+      const colors = model.palette.slice(0, 5);
+      const holder = $('#pfColors');
+      holder.innerHTML = '';
+      colors.forEach((c) => {
+        const s = document.createElement('span');
+        s.className = 'dna-pill';
+        s.textContent = c.toUpperCase();
+        s.style.borderColor = 'rgba(255,255,255,.18)';
+        s.style.background = c + '33';
+        holder.appendChild(s);
+      });
+      const UL = (id, arr) => {
+        const el = $(id);
+        el.innerHTML = '';
+        arr.forEach((t) => {
+          const li = document.createElement('li');
+          li.textContent = t;
+          el.appendChild(li);
+        });
+      };
+      UL('#tipFeed', tips.feed);
+      UL('#tipContent', tips.content);
+      UL('#tipPlace', tips.places);
+      const tags = $('#tipTags');
+      tags.innerHTML = '';
+      tips.tags.forEach((t) => {
+        const s = document.createElement('span');
+        s.className = 'dna-pill';
+        s.textContent = t;
+        tags.appendChild(s);
+      });
+    }
+
+    let booted = false;
+    function boot() {
+      if (booted) return;
+      booted = true;
+      let seed = {};
+      try {
+        seed = JSON.parse(document.getElementById('artist-dna-json')?.textContent || '{}');
+      } catch (e) {
+        console.warn('DNA JSON parse', e);
+      }
+      const model = buildModel(seed);
+
+      // Set brand gradient lokal (nur im Modal)
+      mount.style.setProperty('--brand-a', model.palette[0] || '#ff8a00');
+      mount.style.setProperty('--brand-b', model.palette[1] || '#ffcc00');
+
+      $('#dnaProgNum').textContent = model.completion + '%';
+      $('#dnaProgBar').style.width = model.completion + '%';
+
+      makeGraph(model);
+      renderPanel(model, genTips(model));
+      // center
+      apply();
+    }
+  })();
+</script>

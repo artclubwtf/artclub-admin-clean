@@ -1,0 +1,567 @@
+{% comment %}
+  ARTCLUB – Preferences Page v5
+  Template: page.newsletter-preferences.liquid
+  Link: {{ shop.url }}/pages/newsletter-preferences?email={{ customer.email | url_encode }}
+  Alles in Tags gespeichert – keine Metafields.
+{% endcomment %}
+
+<div id="ac-pref-root"></div>
+
+<style>
+*, *::before, *::after { box-sizing: border-box !important; }
+
+#ac-pref-root {
+  background: #fff !important;
+  min-height: 100vh !important;
+  font-family: -apple-system, 'Inter', BlinkMacSystemFont, sans-serif !important;
+  color: #1c1c1e !important;
+}
+
+.ac-pref-loader {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 100vh !important;
+}
+.ac-pref-spinner {
+  width: 24px !important; height: 24px !important;
+  border: 2px solid #e5e5ea !important;
+  border-top-color: #1c1c1e !important;
+  border-radius: 50% !important;
+  animation: ac-spin 0.6s linear infinite !important;
+}
+@keyframes ac-spin { to { transform: rotate(360deg); } }
+
+/* ── Onboarding ─────────────────────────────────────────────────────── */
+.ac-ob-wrap {
+  max-width: 480px !important;
+  margin: 0 auto !important;
+  padding: 0 24px 40px !important;
+  min-height: 100vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.ac-ob-progress {
+  display: flex !important;
+  gap: 6px !important;
+  padding: 56px 0 40px !important;
+}
+.ac-ob-dot {
+  height: 3px !important;
+  flex: 1 !important;
+  border-radius: 2px !important;
+  background: #e5e5ea !important;
+  transition: background 0.3s !important;
+}
+.ac-ob-dot.active { background: #1c1c1e !important; }
+
+.ac-ob-step { flex: 1 !important; display: none !important; flex-direction: column !important; }
+.ac-ob-step.visible { display: flex !important; animation: ac-fadeup 0.3s ease !important; }
+@keyframes ac-fadeup {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.ac-ob-label { font-size: 13px !important; font-weight: 600 !important; color: #8e8e93 !important; letter-spacing: 0.5px !important; text-transform: uppercase !important; margin: 0 0 10px !important; }
+.ac-ob-title { font-size: 28px !important; font-weight: 700 !important; letter-spacing: -0.4px !important; line-height: 1.15 !important; margin: 0 0 8px !important; }
+.ac-ob-sub   { font-size: 15px !important; color: #8e8e93 !important; margin: 0 0 32px !important; line-height: 1.5 !important; }
+
+.ac-ob-lang-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 12px !important; margin-bottom: auto !important; }
+.ac-ob-lang-card { background: #f2f2f7 !important; border-radius: 16px !important; padding: 28px 20px !important; cursor: pointer !important; transition: background 0.15s !important; user-select: none !important; }
+.ac-ob-lang-card.selected { background: #1c1c1e !important; }
+.ac-ob-lang-card.selected .ac-ob-lang-name,
+.ac-ob-lang-card.selected .ac-ob-lang-desc { color: #fff !important; }
+.ac-ob-lang-flag { font-size: 32px !important; display: block !important; margin-bottom: 12px !important; }
+.ac-ob-lang-name { font-size: 17px !important; font-weight: 600 !important; color: #1c1c1e !important; display: block !important; }
+.ac-ob-lang-desc { font-size: 13px !important; color: #8e8e93 !important; display: block !important; margin-top: 2px !important; }
+
+.ac-ob-ct-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px !important; margin-bottom: auto !important; }
+.ac-ob-ct-card { background: #f2f2f7 !important; border-radius: 14px !important; padding: 18px 16px !important; cursor: pointer !important; transition: background 0.15s !important; user-select: none !important; }
+.ac-ob-ct-card.selected { background: #1c1c1e !important; }
+.ac-ob-ct-card.selected .ac-ob-ct-name { color: #fff !important; }
+.ac-ob-ct-icon { font-size: 24px !important; display: block !important; margin-bottom: 8px !important; }
+.ac-ob-ct-name { font-size: 14px !important; font-weight: 600 !important; color: #1c1c1e !important; display: block !important; }
+
+.ac-ob-bubbles { display: flex !important; flex-wrap: wrap !important; gap: 10px !important; margin-bottom: auto !important; }
+.ac-ob-bubble {
+  padding: 10px 18px !important;
+  border-radius: 100px !important;
+  background: #f2f2f7 !important;
+  font-size: 15px !important;
+  font-weight: 500 !important;
+  color: #1c1c1e !important;
+  cursor: pointer !important;
+  transition: background 0.15s, color 0.15s !important;
+  user-select: none !important;
+}
+.ac-ob-bubble.selected { background: #1c1c1e !important; color: #fff !important; }
+
+.ac-ob-toggle-list { background: #f2f2f7 !important; border-radius: 16px !important; overflow: hidden !important; margin-bottom: auto !important; }
+.ac-ob-toggle-row { display: flex !important; align-items: center !important; justify-content: space-between !important; padding: 14px 18px !important; border-bottom: 1px solid rgba(0,0,0,0.06) !important; cursor: pointer !important; }
+.ac-ob-toggle-row:last-child { border-bottom: none !important; }
+.ac-ob-toggle-info strong { display: block !important; font-size: 15px !important; font-weight: 500 !important; }
+.ac-ob-toggle-info span   { display: block !important; font-size: 12px !important; color: #8e8e93 !important; margin-top: 1px !important; }
+
+.ac-ob-input-group { display: flex !important; flex-direction: column !important; gap: 12px !important; margin-bottom: auto !important; }
+.ac-ob-input-row   { display: flex !important; gap: 12px !important; }
+.ac-ob-input-wrap  { flex: 1 !important; display: flex !important; flex-direction: column !important; gap: 6px !important; }
+.ac-ob-input-label { font-size: 12px !important; font-weight: 600 !important; color: #8e8e93 !important; text-transform: uppercase !important; letter-spacing: 0.4px !important; }
+.ac-ob-input { background: #f2f2f7 !important; border: none !important; outline: none !important; border-radius: 12px !important; padding: 14px 16px !important; font-size: 16px !important; font-family: inherit !important; color: #1c1c1e !important; width: 100% !important; -webkit-appearance: none !important; }
+.ac-ob-input::placeholder { color: #c7c7cc !important; }
+
+.ac-ob-bottom { padding-top: 28px !important; }
+.ac-ob-nav { display: flex !important; gap: 10px !important; margin-bottom: 10px !important; }
+.ac-ob-back-btn { padding: 17px !important; background: #f2f2f7 !important; color: #1c1c1e !important; border: none !important; border-radius: 14px !important; font-size: 17px !important; font-weight: 600 !important; font-family: inherit !important; cursor: pointer !important; width: 56px !important; }
+.ac-pref-btn { flex: 1 !important; padding: 17px !important; background: #1c1c1e !important; color: #fff !important; border: none !important; border-radius: 14px !important; font-size: 17px !important; font-weight: 600 !important; font-family: inherit !important; cursor: pointer !important; transition: opacity 0.15s !important; width: 100% !important; }
+.ac-pref-btn:hover    { opacity: 0.85 !important; }
+.ac-pref-btn:disabled { opacity: 0.35 !important; cursor: not-allowed !important; }
+.ac-ob-skip-btn { display: block !important; width: 100% !important; text-align: center !important; padding: 10px !important; background: none !important; border: none !important; font-size: 15px !important; color: #8e8e93 !important; cursor: pointer !important; font-family: inherit !important; }
+
+/* Toggle switch */
+.ac-toggle { position: relative !important; width: 51px !important; min-width: 51px !important; height: 31px !important; }
+.ac-toggle input { display: none !important; }
+.ac-toggle-track { position: absolute !important; inset: 0 !important; background: #e5e5ea !important; border-radius: 31px !important; transition: background 0.2s !important; cursor: pointer !important; }
+.ac-toggle-track::after { content: '' !important; position: absolute !important; left: 2px !important; top: 2px !important; width: 27px !important; height: 27px !important; background: #fff !important; border-radius: 50% !important; transition: transform 0.2s !important; box-shadow: 0 2px 6px rgba(0,0,0,0.18) !important; }
+.ac-toggle input:checked ~ .ac-toggle-track { background: #1c1c1e !important; }
+.ac-toggle input:checked ~ .ac-toggle-track::after { transform: translateX(20px) !important; }
+
+/* ── Settings ───────────────────────────────────────────────────────── */
+.ac-set-wrap { max-width: 480px !important; margin: 0 auto !important; padding: 0 0 100px !important; }
+.ac-set-header { padding: 56px 24px 24px !important; display: flex !important; align-items: flex-end !important; justify-content: space-between !important; }
+.ac-set-title  { font-size: 28px !important; font-weight: 700 !important; letter-spacing: -0.3px !important; margin: 0 !important; }
+.ac-set-save-top { font-size: 15px !important; font-weight: 600 !important; background: none !important; border: none !important; font-family: inherit !important; cursor: pointer !important; padding: 8px 0 !important; color: #1c1c1e !important; }
+
+.ac-set-section { padding: 0 24px !important; margin-bottom: 32px !important; }
+.ac-set-section-title { font-size: 12px !important; font-weight: 600 !important; color: #8e8e93 !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; margin: 0 0 10px 4px !important; }
+
+.ac-set-group { background: #f2f2f7 !important; border-radius: 16px !important; overflow: hidden !important; }
+.ac-set-row { display: flex !important; align-items: center !important; padding: 13px 18px !important; border-bottom: 1px solid rgba(0,0,0,0.06) !important; gap: 12px !important; }
+.ac-set-row:last-child { border-bottom: none !important; }
+.ac-set-row-label { font-size: 15px !important; color: #1c1c1e !important; min-width: 110px !important; }
+.ac-set-row-input { flex: 1 !important; background: none !important; border: none !important; outline: none !important; font-size: 15px !important; font-family: inherit !important; color: #8e8e93 !important; text-align: right !important; padding: 0 !important; }
+.ac-set-row-input::placeholder { color: #c7c7cc !important; }
+
+.ac-set-segment { display: flex !important; background: #e5e5ea !important; border-radius: 10px !important; padding: 2px !important; gap: 2px !important; }
+.ac-set-seg-btn { flex: 1 !important; padding: 7px !important; border: none !important; border-radius: 8px !important; font-size: 14px !important; font-weight: 500 !important; font-family: inherit !important; background: transparent !important; color: #8e8e93 !important; cursor: pointer !important; transition: background 0.15s, color 0.15s !important; }
+.ac-set-seg-btn.active { background: #fff !important; color: #1c1c1e !important; box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important; }
+
+.ac-set-toggle-row { display: flex !important; align-items: center !important; justify-content: space-between !important; padding: 13px 18px !important; border-bottom: 1px solid rgba(0,0,0,0.06) !important; }
+.ac-set-toggle-row:last-child { border-bottom: none !important; }
+.ac-set-toggle-info strong { font-size: 15px !important; font-weight: 500 !important; display: block !important; }
+.ac-set-toggle-info span   { font-size: 12px !important; color: #8e8e93 !important; display: block !important; margin-top: 1px !important; }
+
+.ac-set-bubbles { display: flex !important; flex-wrap: wrap !important; gap: 8px !important; padding: 16px !important; background: #f2f2f7 !important; border-radius: 16px !important; }
+.ac-set-ct-row  { display: flex !important; gap: 8px !important; flex-wrap: wrap !important; padding: 12px !important; background: #f2f2f7 !important; border-radius: 16px !important; }
+
+.ac-set-save-bar { position: fixed !important; bottom: 0 !important; left: 0 !important; right: 0 !important; padding: 12px 24px 28px !important; background: rgba(255,255,255,0.92) !important; backdrop-filter: blur(12px) !important; -webkit-backdrop-filter: blur(12px) !important; display: none !important; }
+.ac-set-save-bar.visible { display: block !important; animation: ac-fadeup 0.2s ease !important; }
+
+.ac-toast { position: fixed !important; bottom: 40px !important; left: 50% !important; transform: translateX(-50%) !important; padding: 12px 24px !important; border-radius: 100px !important; font-size: 15px !important; font-weight: 500 !important; z-index: 999 !important; opacity: 0 !important; transition: opacity 0.2s !important; pointer-events: none !important; white-space: nowrap !important; }
+.ac-toast.success { background: #1c1c1e !important; color: #fff !important; }
+.ac-toast.error   { background: #ff3b30 !important; color: #fff !important; }
+.ac-toast.show    { opacity: 1 !important; }
+
+.ac-pref-error-page { display: flex !important; align-items: center !important; justify-content: center !important; height: 100vh !important; text-align: center !important; padding: 24px !important; }
+.ac-pref-error-page p { color: #8e8e93 !important; font-size: 15px !important; max-width: 280px !important; line-height: 1.5 !important; margin: 0 !important; }
+</style>
+
+<script>
+(function () {
+  // !! Worker-URL nach dem Deploy ersetzen !!
+  var WORKER_URL = 'https://artclubmailing.sk-cac.workers.dev/';
+
+  var root = document.getElementById('ac-pref-root');
+
+  var INTERESTS = [
+    { value: 'painting',     label: 'Malerei' },
+    { value: 'photography',  label: 'Fotografie' },
+    { value: 'sculpture',    label: 'Skulptur' },
+    { value: 'digital_art',  label: 'Digital Art' },
+    { value: 'street_art',   label: 'Street Art' },
+    { value: 'illustration', label: 'Illustration' },
+    { value: 'abstract',     label: 'Abstrakt' },
+    { value: 'conceptual',   label: 'Konzeptkunst' },
+    { value: 'printmaking',  label: 'Druckgrafik' },
+    { value: 'mixed_media',  label: 'Mixed Media' },
+    { value: 'installation', label: 'Installation' },
+    { value: 'emerging',     label: 'Emerging Artists' },
+    { value: 'textile',      label: 'Textilkunst' },
+    { value: 'performance',  label: 'Performance' },
+  ];
+
+  var TOPICS = [
+    { value: 'newsletter_news_events',      label: 'News & Events',      sub: 'Veranstaltungen, Ankündigungen' },
+    { value: 'newsletter_artworks_artists', label: 'Artworks & Artists', sub: 'Neue Werke, Künstlerporträts' },
+    { value: 'newsletter_artworld',         label: 'Artworld',           sub: 'Archive Magazine Artikel' },
+    { value: 'newsletter_discounts',        label: 'Discounts',          sub: 'Angebote für Abonnenten' },
+  ];
+
+  var CT = [
+    { value: 'interested', icon: '👀', label: 'Kunstinteressiert' },
+    { value: 'collector',  icon: '🖼️', label: 'Sammler:in' },
+    { value: 'artist',     icon: '🎨', label: 'Künstler:in' },
+    { value: 'business',   icon: '🏢', label: 'Unternehmen' },
+  ];
+
+  var OB_STEPS = 5;
+
+  var state = {
+    email: '', locale: null, newsletter_tags: [], art_interests: [],
+    collector_type: null, first_name: '', last_name: '', birthdate: '',
+    dirty: false, mode: 'loading', obStep: 0,
+  };
+
+  var params = new URLSearchParams(window.location.search);
+  state.email = params.get('email') || '';
+
+  if (!state.email || !state.email.includes('@')) { return render('error'); }
+
+  // localStorage-Key pro E-Mail
+  var LS_KEY = 'ac_ob_done_' + state.email.replace(/[^a-z0-9]/gi, '_');
+  var localDone = false;
+  try { localDone = localStorage.getItem(LS_KEY) === '1'; } catch(e) {}
+
+  // Sofort Settings zeigen wenn localStorage es sagt, sonst Loader
+  if (localDone) {
+    state.mode = 'settings';
+    render('settings');
+  } else {
+    render('loading');
+  }
+
+  fetch(WORKER_URL + '?email=' + encodeURIComponent(state.email))
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      state.locale          = d.locale          || null;
+      state.newsletter_tags = d.newsletter_tags || [];
+      state.art_interests   = d.art_interests   || [];
+      state.collector_type  = d.collector_type  || null;
+      state.first_name      = d.first_name      || '';
+      state.last_name       = d.last_name       || '';
+      state.birthdate       = d.birthdate       || '';
+
+      var done = d.onboarding_done;
+      try { if (done) localStorage.setItem(LS_KEY, '1'); } catch(e) {}
+
+      var newMode = done ? 'settings' : 'onboarding';
+      if (newMode !== state.mode) {
+        state.mode   = newMode;
+        state.obStep = 0;
+        render(state.mode);
+      } else if (state.mode === 'settings') {
+        renderSettings(); // Echte Daten nachladen
+      }
+    })
+    .catch(function (err) {
+      console.error('Load error:', err);
+      if (!localDone) {
+        state.mode = 'onboarding';
+        render('onboarding');
+      }
+    });
+
+  function render(mode) {
+    if (mode === 'loading')   { root.innerHTML = '<div class="ac-pref-loader"><span class="ac-pref-spinner"></span></div>'; return; }
+    if (mode === 'error')     { root.innerHTML = '<div class="ac-pref-error-page"><p>Dieser Link ist ungültig. Bitte öffne ihn direkt aus deiner E-Mail.</p></div>'; return; }
+    if (mode === 'onboarding') { renderOnboarding(); return; }
+    if (mode === 'settings')   { renderSettings();   return; }
+  }
+
+  // ── Onboarding ─────────────────────────────────────────────────────────
+  function renderOnboarding() {
+    var step = state.obStep;
+    var dots = '';
+    for (var i = 0; i < OB_STEPS; i++) dots += '<div class="ac-ob-dot' + (i <= step ? ' active' : '') + '"></div>';
+
+    var content = '';
+
+    if (step === 0) {
+      content = '<p class="ac-ob-label">Schritt 1 von 5</p>' +
+        '<h1 class="ac-ob-title">Willkommen bei ARTCLUB</h1>' +
+        '<p class="ac-ob-sub">In welcher Sprache sollen wir dir schreiben?</p>' +
+        '<div class="ac-ob-lang-grid">' +
+          langCard('de', '🇩🇪', 'Deutsch', 'Auf Deutsch', state.locale === 'de') +
+          langCard('en', '🇬🇧', 'English', 'In English',  state.locale === 'en') +
+        '</div>';
+    }
+
+    if (step === 1) {
+      content = '<p class="ac-ob-label">Schritt 2 von 5</p>' +
+        '<h1 class="ac-ob-title">Wer bist du?</h1>' +
+        '<p class="ac-ob-sub">Damit können wir dir relevantere Inhalte schicken.</p>' +
+        '<div class="ac-ob-ct-grid">' +
+          CT.map(function (ct) {
+            return '<div class="ac-ob-ct-card' + (state.collector_type === ct.value ? ' selected' : '') + '" data-ct="' + ct.value + '">' +
+              '<span class="ac-ob-ct-icon">' + ct.icon + '</span>' +
+              '<span class="ac-ob-ct-name">' + ct.label + '</span>' +
+            '</div>';
+          }).join('') +
+        '</div>';
+    }
+
+    if (step === 2) {
+      content = '<p class="ac-ob-label">Schritt 3 von 5</p>' +
+        '<h1 class="ac-ob-title">Kunstinteressen</h1>' +
+        '<p class="ac-ob-sub">Was begeistert dich? Wähle alles, was passt.</p>' +
+        '<div class="ac-ob-bubbles">' +
+          INTERESTS.map(function (i) {
+            return '<div class="ac-ob-bubble' + (state.art_interests.indexOf(i.value) !== -1 ? ' selected' : '') + '" data-interest="' + i.value + '">' + i.label + '</div>';
+          }).join('') +
+        '</div>';
+    }
+
+    if (step === 3) {
+      content = '<p class="ac-ob-label">Schritt 4 von 5</p>' +
+        '<h1 class="ac-ob-title">Newsletter</h1>' +
+        '<p class="ac-ob-sub">Worüber möchtest du informiert werden?</p>' +
+        '<div class="ac-ob-toggle-list">' +
+          TOPICS.map(function (t) {
+            var on = state.newsletter_tags.indexOf(t.value) !== -1;
+            return '<label class="ac-ob-toggle-row">' +
+              '<div class="ac-ob-toggle-info"><strong>' + t.label + '</strong><span>' + t.sub + '</span></div>' +
+              '<label class="ac-toggle"><input type="checkbox" data-tag="' + t.value + '"' + (on ? ' checked' : '') + '><span class="ac-toggle-track"></span></label>' +
+            '</label>';
+          }).join('') +
+        '</div>';
+    }
+
+    if (step === 4) {
+      content = '<p class="ac-ob-label">Schritt 5 von 5</p>' +
+        '<h1 class="ac-ob-title">Dein Profil</h1>' +
+        '<p class="ac-ob-sub">Optional – für personalisierte Empfehlungen.</p>' +
+        '<div class="ac-ob-input-group">' +
+          '<div class="ac-ob-input-row">' +
+            '<div class="ac-ob-input-wrap"><span class="ac-ob-input-label">Vorname</span>' +
+            '<input class="ac-ob-input" id="ob-fn" type="text" placeholder="Max" value="' + esc(state.first_name) + '"></div>' +
+            '<div class="ac-ob-input-wrap"><span class="ac-ob-input-label">Nachname</span>' +
+            '<input class="ac-ob-input" id="ob-ln" type="text" placeholder="Mustermann" value="' + esc(state.last_name) + '"></div>' +
+          '</div>' +
+          '<div class="ac-ob-input-wrap"><span class="ac-ob-input-label">Geburtsdatum</span>' +
+          '<input class="ac-ob-input" id="ob-bd" type="date" value="' + esc(state.birthdate) + '"></div>' +
+        '</div>';
+    }
+
+    var isLast = step === OB_STEPS - 1;
+    var navHtml = step > 0
+      ? '<div class="ac-ob-nav"><button class="ac-ob-back-btn" id="ac-ob-back">←</button><button class="ac-pref-btn" id="ac-ob-next">' + (isLast ? 'Fertig' : 'Weiter') + '</button></div>'
+      : '<button class="ac-pref-btn" id="ac-ob-next">Weiter</button>';
+    var skipHtml = (!isLast && step > 0) ? '<button class="ac-ob-skip-btn" id="ac-ob-skip">Überspringen</button>' : '';
+
+    root.innerHTML =
+      '<div class="ac-ob-wrap">' +
+        '<div class="ac-ob-progress">' + dots + '</div>' +
+        '<div class="ac-ob-step visible">' + content + '</div>' +
+        '<div class="ac-ob-bottom">' + navHtml + skipHtml + '</div>' +
+      '</div>' +
+      '<div class="ac-toast" id="ac-toast"></div>';
+
+    bindOnboarding(step);
+  }
+
+  function bindOnboarding(step) {
+    on('[data-locale]', 'click', function () {
+      state.locale = this.getAttribute('data-locale');
+      all('[data-locale]', function (e) { e.classList.remove('selected'); });
+      this.classList.add('selected');
+    });
+    on('[data-ct]', 'click', function () {
+      state.collector_type = this.getAttribute('data-ct');
+      all('[data-ct]', function (e) { e.classList.remove('selected'); });
+      this.classList.add('selected');
+    });
+    on('[data-interest]', 'click', function () {
+      var v = this.getAttribute('data-interest'), idx = state.art_interests.indexOf(v);
+      if (idx === -1) { state.art_interests.push(v); this.classList.add('selected'); }
+      else { state.art_interests.splice(idx, 1); this.classList.remove('selected'); }
+    });
+    on('[data-tag]', 'change', function () {
+      var v = this.getAttribute('data-tag'), idx = state.newsletter_tags.indexOf(v);
+      if (this.checked && idx === -1) state.newsletter_tags.push(v);
+      if (!this.checked && idx !== -1) state.newsletter_tags.splice(idx, 1);
+    });
+
+    var fnEl = root.querySelector('#ob-fn'), lnEl = root.querySelector('#ob-ln'), bdEl = root.querySelector('#ob-bd');
+    if (fnEl) fnEl.addEventListener('input', function () { state.first_name = this.value; });
+    if (lnEl) lnEl.addEventListener('input', function () { state.last_name  = this.value; });
+    if (bdEl) bdEl.addEventListener('input', function () { state.birthdate  = this.value; });
+
+    var backBtn = root.querySelector('#ac-ob-back');
+    if (backBtn) backBtn.addEventListener('click', function () { state.obStep--; renderOnboarding(); });
+    var skipBtn = root.querySelector('#ac-ob-skip');
+    if (skipBtn) skipBtn.addEventListener('click', function () { state.obStep++; renderOnboarding(); });
+
+    var nextBtn = root.querySelector('#ac-ob-next');
+    if (!nextBtn) return;
+    nextBtn.addEventListener('click', function () {
+      if (state.obStep < OB_STEPS - 1) { state.obStep++; renderOnboarding(); return; }
+      nextBtn.disabled = true;
+      nextBtn.textContent = 'Wird gespeichert...';
+      doSave(true, function () {
+        try { localStorage.setItem(LS_KEY, '1'); } catch(e) {}
+        state.mode = 'settings';
+        renderSettings();
+        showToast('Alles gespeichert ✓', 'success');
+      }, function (err) {
+        nextBtn.disabled = false;
+        nextBtn.textContent = 'Fertig';
+        showToast(err || 'Fehler', 'error');
+      });
+    });
+  }
+
+  // ── Settings ─────────────────────────────────────────────────────────
+  function renderSettings() {
+    var bubblesHtml = INTERESTS.map(function (i) {
+      return '<div class="ac-ob-bubble' + (state.art_interests.indexOf(i.value) !== -1 ? ' selected' : '') + '" data-interest="' + i.value + '">' + i.label + '</div>';
+    }).join('');
+
+    var ctHtml = CT.map(function (ct) {
+      return '<div class="ac-ob-bubble' + (state.collector_type === ct.value ? ' selected' : '') + '" data-ct="' + ct.value + '">' + ct.icon + ' ' + ct.label + '</div>';
+    }).join('');
+
+    var togglesHtml = TOPICS.map(function (t) {
+      var on = state.newsletter_tags.indexOf(t.value) !== -1;
+      return '<div class="ac-set-toggle-row">' +
+        '<div class="ac-set-toggle-info"><strong>' + t.label + '</strong><span>' + t.sub + '</span></div>' +
+        '<label class="ac-toggle"><input type="checkbox" data-tag="' + t.value + '"' + (on ? ' checked' : '') + '><span class="ac-toggle-track"></span></label>' +
+      '</div>';
+    }).join('');
+
+    root.innerHTML =
+      '<div class="ac-set-wrap">' +
+        '<div class="ac-set-header"><h1 class="ac-set-title">Einstellungen</h1><button class="ac-set-save-top" id="ac-set-save-top">Sichern</button></div>' +
+
+        sec('Profil',
+          '<div class="ac-set-group">' +
+            row('Vorname',      '<input class="ac-set-row-input" id="set-fn" type="text" placeholder="Max" value="' + esc(state.first_name) + '">') +
+            row('Nachname',     '<input class="ac-set-row-input" id="set-ln" type="text" placeholder="Mustermann" value="' + esc(state.last_name) + '">') +
+            row('Geburtsdatum', '<input class="ac-set-row-input" id="set-bd" type="date" value="' + esc(state.birthdate) + '">') +
+          '</div>') +
+
+        sec('Sprache',
+          '<div class="ac-set-group" style="padding:14px 18px !important;">' +
+            '<div class="ac-set-segment">' +
+              '<button class="ac-set-seg-btn' + (state.locale === 'de' ? ' active' : '') + '" data-locale="de">🇩🇪 Deutsch</button>' +
+              '<button class="ac-set-seg-btn' + (state.locale === 'en' ? ' active' : '') + '" data-locale="en">🇬🇧 English</button>' +
+            '</div></div>') +
+
+        sec('Kunstinteressen', '<div class="ac-set-bubbles">' + bubblesHtml + '</div>') +
+        sec('Newsletter',      '<div class="ac-set-group">'   + togglesHtml + '</div>') +
+        sec('Wer bist du?',    '<div class="ac-set-ct-row">'  + ctHtml      + '</div>') +
+
+      '</div>' +
+      '<div class="ac-set-save-bar" id="ac-set-save-bar"><button class="ac-pref-btn" id="ac-set-save-btn">Änderungen sichern</button></div>' +
+      '<div class="ac-toast" id="ac-toast"></div>';
+
+    bindSettings();
+  }
+
+  function bindSettings() {
+    var markDirty = function () {
+      state.dirty = true;
+      var bar = root.querySelector('#ac-set-save-bar');
+      if (bar) bar.classList.add('visible');
+    };
+
+    ['set-fn','set-ln','set-bd'].forEach(function (id) {
+      var el = root.querySelector('#' + id);
+      if (!el) return;
+      el.addEventListener('input', function () {
+        if (id === 'set-fn') state.first_name = this.value;
+        if (id === 'set-ln') state.last_name  = this.value;
+        if (id === 'set-bd') state.birthdate  = this.value;
+        markDirty();
+      });
+    });
+
+    on('[data-locale]', 'click', function () {
+      state.locale = this.getAttribute('data-locale');
+      all('[data-locale]', function (e) { e.classList.remove('active'); });
+      this.classList.add('active');
+      markDirty();
+    });
+    on('[data-interest]', 'click', function () {
+      var v = this.getAttribute('data-interest'), idx = state.art_interests.indexOf(v);
+      if (idx === -1) { state.art_interests.push(v); this.classList.add('selected'); }
+      else { state.art_interests.splice(idx, 1); this.classList.remove('selected'); }
+      markDirty();
+    });
+    on('[data-tag]', 'change', function () {
+      var v = this.getAttribute('data-tag'), idx = state.newsletter_tags.indexOf(v);
+      if (this.checked && idx === -1) state.newsletter_tags.push(v);
+      if (!this.checked && idx !== -1) state.newsletter_tags.splice(idx, 1);
+      markDirty();
+    });
+    on('[data-ct]', 'click', function () {
+      state.collector_type = this.getAttribute('data-ct');
+      all('[data-ct]', function (e) { e.classList.remove('selected'); });
+      this.classList.add('selected');
+      markDirty();
+    });
+
+    ['ac-set-save-top','ac-set-save-btn'].forEach(function (id) {
+      var btn = root.querySelector('#' + id);
+      if (!btn) return;
+      btn.addEventListener('click', function () {
+        btn.disabled = true;
+        doSave(false, function () {
+          state.dirty = false;
+          var bar = root.querySelector('#ac-set-save-bar');
+          if (bar) bar.classList.remove('visible');
+          btn.disabled = false;
+          showToast('Gespeichert ✓', 'success');
+        }, function (err) {
+          btn.disabled = false;
+          showToast(err || 'Fehler', 'error');
+        });
+      });
+    });
+  }
+
+  // ── Save ───────────────────────────────────────────────────────────────
+  function doSave(markDone, onSuccess, onError) {
+    fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email:                state.email,
+        locale:               state.locale,
+        newsletter_tags:      state.newsletter_tags,
+        art_interests:        state.art_interests,
+        collector_type:       state.collector_type,
+        first_name:           state.first_name,
+        last_name:            state.last_name,
+        birthdate:            state.birthdate,
+        mark_onboarding_done: markDone,
+      }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { d.success ? onSuccess() : onError(d.error); })
+      .catch(function () { onError('Verbindungsfehler'); });
+  }
+
+  function showToast(msg, type) {
+    var el = root.querySelector('#ac-toast');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'ac-toast ' + type + ' show';
+    setTimeout(function () { el.classList.remove('show'); }, 2500);
+  }
+
+  // ── DOM helpers ────────────────────────────────────────────────────────
+  function on(sel, evt, fn) { root.querySelectorAll(sel).forEach(function (el) { el.addEventListener(evt, fn); }); }
+  function all(sel, fn)     { root.querySelectorAll(sel).forEach(fn); }
+  function sec(title, inner) { return '<div class="ac-set-section"><p class="ac-set-section-title">' + title + '</p>' + inner + '</div>'; }
+  function row(label, input) { return '<div class="ac-set-row"><span class="ac-set-row-label">' + label + '</span>' + input + '</div>'; }
+  function langCard(v, flag, name, desc, sel) {
+    return '<div class="ac-ob-lang-card' + (sel ? ' selected' : '') + '" data-locale="' + v + '">' +
+      '<span class="ac-ob-lang-flag">' + flag + '</span>' +
+      '<span class="ac-ob-lang-name">' + name + '</span>' +
+      '<span class="ac-ob-lang-desc">' + desc + '</span>' +
+    '</div>';
+  }
+  function esc(str) { return (str || '').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+
+})();
+</script>

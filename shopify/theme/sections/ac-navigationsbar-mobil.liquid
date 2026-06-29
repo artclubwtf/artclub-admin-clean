@@ -1,0 +1,859 @@
+{% comment %}
+  AC Apple Navbar – Artclub
+  - Logo links
+  - Mitte: Artworks (Link) + beliebig viele Meta-Menüs (mit Mega-Dropdown & A–Z)
+  - Rechts: About, Suche, Warenkorb
+{% endcomment %}
+
+<header class="ac-apple-nav" role="banner">
+  <style>
+    .ac-apple-nav {
+      position: relative !important;
+      z-index: 50 !important;
+      width: 100% !important;
+      background: #ffffff !important;
+      border-bottom: 1px solid rgba(0,0,0,0.04) !important;
+      font-size: 13px !important;
+      line-height: 1 !important;
+    }
+
+    .ac-apple-nav__inner {
+      max-width: 980px !important;
+      margin: 0 auto !important;
+      padding: 12px 24px !important;
+      display: grid !important;
+      grid-template-columns: auto 1fr auto !important;
+      align-items: center !important;
+      gap: 24px !important;
+    }
+
+    /* Logo */
+
+    .ac-apple-nav__logo {
+      display: flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+    }
+
+    .ac-apple-nav__logo-link {
+      display: inline-flex !important;
+      align-items: center !important;
+      text-decoration: none !important;
+      color: #111111 !important;
+    }
+
+    .ac-apple-nav__logo-icon {
+      width: 16px !important;
+      height: 16px !important;
+      border-radius: 3px !important;
+      background: #111111 !important;
+      display: inline-block !important;
+    }
+
+    .ac-apple-nav__logo-text {
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      letter-spacing: .06em !important;
+      text-transform: lowercase !important;
+    }
+
+    /* Mitte: Menüzeile */
+
+    .ac-apple-nav__menu {
+      display: flex !important;
+      justify-content: center !important;
+      align-items: center !important;
+      gap: 24px !important;
+    }
+
+    .ac-apple-nav__item {
+      position: relative !important;
+    }
+
+    .ac-apple-nav__link {
+      text-decoration: none !important;
+      color: #111111 !important;
+      opacity: .9 !important;
+      padding: 4px 0 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      transition: opacity .16s ease !important;
+      white-space: nowrap !important;
+      cursor: pointer !important;
+    }
+
+    .ac-apple-nav__link:hover,
+    .ac-apple-nav__link:focus {
+      opacity: 1 !important;
+    }
+
+    /* Rechts: Icons */
+
+    .ac-apple-nav__actions {
+      display: flex !important;
+      align-items: center !important;
+      gap: 18px !important;
+      justify-content: flex-end !important;
+    }
+
+    .ac-apple-nav__icon-btn {
+      border: none !important;
+      background: transparent !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      cursor: pointer !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+
+    .ac-apple-nav__icon {
+      width: 15px !important;
+      height: 15px !important;
+      display: block !important;
+    }
+
+    .ac-apple-nav__cart-count {
+      position: relative !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 17px !important;
+      height: 17px !important;
+      border-radius: 999px !important;
+      background: #111111 !important;
+      color: #ffffff !important;
+      font-size: 10px !important;
+      margin-left: 4px !important;
+    }
+
+    /* Mega-Menü für Meta-Listen */
+
+
+
+
+
+    .ac-apple-nav__mega {
+      position: absolute !important;
+      left: 50% !important;
+      transform: translateX(-50%) !important;
+      top: 100% !important;
+      margin-top: 0 !important;
+      min-width: 720px !important;
+      background: #f5f5f7 !important;
+      padding: 32px 56px 40px !important;
+      border-bottom-left-radius: 24px !important;
+      border-bottom-right-radius: 24px !important;
+    }
+
+    .ac-apple-nav__mega-inner {
+      display: grid !important;
+      grid-template-columns: minmax(0, 1.5fr) minmax(0, 2fr) !important;
+      gap: 24px !important;
+    }
+
+    .ac-apple-nav__mega-heading {
+      font-size: 11px !important;
+      text-transform: uppercase !important;
+      letter-spacing: .12em !important;
+      opacity: .6 !important;
+      margin-bottom: 10px !important;
+    }
+
+    /* A–Z Filter & Liste */
+
+    .ac-meta-list-block__alpha {
+      display: flex !important;
+      flex-wrap: wrap !important;
+      gap: 4px !important;
+      margin-bottom: 8px !important;
+    }
+
+    .ac-meta-list-block__alpha-btn {
+      border: none !important;
+      background: transparent !important;
+      padding: 0 4px !important;
+      font-size: 11px !important;
+      cursor: pointer !important;
+      opacity: .6 !important;
+    }
+
+    .ac-meta-list-block__alpha-btn.is-active {
+      opacity: 1 !important;
+      text-decoration: underline !important;
+    }
+
+    .ac-meta-list-block__items {
+      max-height: 260px !important;
+      overflow-y: auto !important;
+      padding-right: 4px !important;
+    }
+
+    .ac-meta-list-block__item a {
+      display: block !important;
+      font-size: 13px !important;
+      text-decoration: none !important;
+      color: #111111 !important;
+      opacity: .85 !important;
+      margin-bottom: 4px !important;
+    }
+
+    .ac-meta-list-block__item a:hover {
+      opacity: 1 !important;
+    }
+
+    /* Mobile: kann vorerst vom normalen Header kommen */
+
+    @media (max-width: 960px) {
+      .ac-apple-nav__inner {
+        display: none !important;
+      }
+    }
+
+    .ac-apple-nav__logo-img {
+  height: auto !important;
+  width: 80px !important;
+  object-fit: contain!important; 
+  display: block !important;
+}
+.ac-apple-nav__logo-text-fallback {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+}
+
+
+.ac-apple-nav__mega {
+    position: absolute !important;
+    left: 0% !important;
+    top: 100% !important;
+    margin-top: 0 !important;
+    width: 100% !important;
+    background: #f5f5f7 !important;
+    padding: 32px 56px 40px !important;
+    border-bottom-left-radius: 24px !important;
+    border-bottom-right-radius: 24px !important;
+}
+
+.ac-apple-nav__mega {
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: 100% !important;
+  margin-top: 0 !important;
+
+  /* Full-width Panel über die ganze Seite */
+  width: 100vw !important;
+  background: #f5f5f7 !important;
+
+  /* Panel-Rand nur unten rund */
+  border-bottom-left-radius: 24px !important;
+  border-bottom-right-radius: 24px !important;
+
+  /* Vertikales Padding nur oben/unten,
+     horizontal kommt in der Inner-Klasse */
+  padding: 32px 0 40px 0 !important;
+
+  z-index: 40 !important;
+}
+
+
+#shopify-section-{{ section.id }} {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+
+.ac-apple-nav__mega {
+  position: absolute !important;
+  top: 100% !important;
+
+  /* Panel auf die Mitte der Seite ausrichten */
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+
+  /* Full-width über den Viewport */
+  width: 100vw !important;
+  max-width: 100vw !important;
+
+  background: #f5f5f7 !important;
+  padding: 32px 0 40px 0 !important;
+
+  border-bottom-left-radius: 24px !important;
+  border-bottom-right-radius: 24px !important;
+
+  z-index: 40 !important;
+}
+
+
+.ac-apple-nav__item {
+  position: static !important;  /* NICHT relativ – damit es NICHT der Bezugspunkt ist */
+}
+
+
+.ac-apple-nav {
+  position: relative !important;
+}
+
+
+.ac-apple-nav__mega {
+  position: absolute !important;
+  top: 100% !important;           /* direkt unter dem Header */
+
+  left: 50% !important;           /* Mitte des Viewports */
+  transform: translateX(-50%) !important;
+  width: 100vw !important;
+  max-width: 100vw !important;
+
+  background: #f5f5f7 !important;
+  padding: 32px 0 40px 0 !important;
+
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  z-index: 40 !important;
+}
+
+
+
+.ac-apple-nav__mega-inner {
+  max-width: 980px !important;  /* wie deine Nav */
+  margin: 0 auto !important;
+  padding: 0 56px !important;
+
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 2fr) !important;
+  gap: 24px !important;
+}
+
+header.ac-apple-nav{
+position: fixed!important;
+top:0!important;
+left: 0!important;
+width: 100%!important
+background:white;}
+
+
+.ac-apple-nav__inner {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 50px !important;
+}
+
+/* Mega-Menü wird über Klasse is-open gesteuert */
+.ac-apple-nav__item--has-children .ac-apple-nav__mega {
+  display: none !important;
+}
+
+.ac-apple-nav__item--has-children.is-open .ac-apple-nav__mega {
+  display: block !important;
+}
+
+
+  </style>
+
+  <div class="ac-apple-nav__inner">
+    {%- comment -%} Logo links {%- endcomment -%}
+    <div class="ac-apple-nav__logo">
+  {% if section.settings.logo_image != blank %}
+    <a href="/" class="ac-apple-nav__logo-link">
+      <img src="{{ section.settings.logo_image | image_url: width: 160 }}" alt="Logo" class="ac-apple-nav__logo-img" />
+    </a>
+  {% else %}
+    <a href="/" class="ac-apple-nav__logo-link ac-apple-nav__logo-text-fallback">
+      artclub
+    </a>
+  {% endif %}
+</div>
+
+    {%- comment -%} Mitte: Artworks – Meta-Menüs – About {%- endcomment -%}
+    <nav class="ac-apple-nav__menu" aria-label="Hauptnavigation">
+      {%- if section.settings.artworks_label != blank and section.settings.artworks_url != blank -%}
+        <div class="ac-apple-nav__item">
+          <a href="{{ section.settings.artworks_url }}" class="ac-apple-nav__link">
+            {{ section.settings.artworks_label }}
+          </a>
+        </div>
+      {%- endif -%}
+
+        {%- for block in section.blocks -%}
+    {% case block.type %}
+
+      {%- when 'meta_list' -%}
+        <div class="ac-apple-nav__item ac-apple-nav__item--has-children" {{ block.shopify_attributes }}>
+          <span class="ac-apple-nav__link">
+            {{ block.settings.label | default: block.settings.heading }}
+          </span>
+          <div class="ac-apple-nav__mega">
+            <div class="ac-apple-nav__mega-inner">
+              <div>
+                {%- if block.settings.heading != blank -%}
+                  <div class="ac-apple-nav__mega-heading">
+                    {{ block.settings.heading }}
+                  </div>
+                {%- endif -%}
+                {%- if block.settings.description != blank -%}
+                  <p style="font-size:13px;opacity:.8;margin:0;">
+                    {{ block.settings.description }}
+                  </p>
+                {%- endif -%}
+              </div>
+              <div>
+                {%- assign def_handle = block.settings.meta_definition_handle -%}
+                {%- if def_handle != blank -%}
+                  {%- assign items = shop.metaobjects[def_handle].values -%}
+
+                  {%- if block.settings.show_alpha -%}
+                    {%- assign letters = 'A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z' | split: ',' -%}
+                    <div class="ac-meta-list-block__alpha" data-meta-list="{{ block.id }}">
+                      <button type="button" class="ac-meta-list-block__alpha-btn is-active" data-letter="all">Alle</button>
+                      {%- for letter in letters -%}
+                        <button type="button" class="ac-meta-list-block__alpha-btn" data-letter="{{ letter }}">{{ letter }}</button>
+                      {%- endfor -%}
+                    </div>
+                  {%- endif -%}
+
+                  <div class="ac-meta-list-block__items" data-meta-list="{{ block.id }}">
+                    {%- for item in items -%}
+                      {%- assign label_field = block.settings.label_field | default: 'title' -%}
+                      {%- assign label = item[label_field] | default: item.title -%}
+                      {%- assign first_letter = label | slice: 0, 1 | upcase -%}
+                      <div class="ac-meta-list-block__item" data-letter="{{ first_letter }}">
+                        <a href="{{ item.system.url }}">
+                          {{ label }}
+                        </a>
+                      </div>
+                    {%- endfor -%}
+                  </div>
+                {%- endif -%}
+              </div>
+            </div>
+          </div>
+        </div>
+
+      {%- when 'simple_link' -%}
+        <!-- Einfacher Menüpunkt ohne Mega-Menü (z.B. Blog) -->
+        <div class="ac-apple-nav__item" {{ block.shopify_attributes }}>
+          {%- if block.settings.url != blank -%}
+            <a href="{{ block.settings.url }}" class="ac-apple-nav__link">
+              {{ block.settings.label }}
+            </a>
+          {%- else -%}
+            <span class="ac-apple-nav__link">
+              {{ block.settings.label }}
+            </span>
+          {%- endif -%}
+        </div>
+
+      {%- when 'links_mega' -%}
+        <!-- Custom Mega-Menü mit eigenen Links -->
+        <div class="ac-apple-nav__item ac-apple-nav__item--has-children" {{ block.shopify_attributes }}>
+          <span class="ac-apple-nav__link">
+            {{ block.settings.label }}
+          </span>
+          <div class="ac-apple-nav__mega">
+            <div class="ac-apple-nav__mega-inner">
+              <div>
+                {%- if block.settings.heading != blank -%}
+                  <div class="ac-apple-nav__mega-heading">
+                    {{ block.settings.heading }}
+                  </div>
+                {%- endif -%}
+                {%- if block.settings.description != blank -%}
+                  <p style="font-size:13px;opacity:.8;margin:0;">
+                    {{ block.settings.description }}
+                  </p>
+                {%- endif -%}
+              </div>
+              <div>
+                <div class="ac-apple-nav__mega-links-list">
+                  {%- for i in (1..10) -%}
+                    {%- assign label_key = 'link_' | append: i | append: '_label' -%}
+                    {%- assign url_key   = 'link_' | append: i | append: '_url' -%}
+                    {%- assign link_label = block.settings[label_key] -%}
+                    {%- assign link_url   = block.settings[url_key] -%}
+                    {%- if link_label != blank -%}
+                      <a href="{{ link_url | default: '#' }}">
+                        {{ link_label }}
+                      </a>
+                    {%- endif -%}
+                  {%- endfor -%}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+    {% endcase %}
+  {%- endfor -%}
+
+
+      {%- if section.settings.about_label != blank and section.settings.about_url != blank -%}
+        <div class="ac-apple-nav__item">
+          <a href="{{ section.settings.about_url }}" class="ac-apple-nav__link">
+            {{ section.settings.about_label }}
+          </a>
+        </div>
+      {%- endif -%}
+    </nav>
+
+    {%- comment -%} Rechts: Suche & Warenkorb {%- endcomment -%}
+    <div class="ac-apple-nav__actions">
+      {%- if section.settings.show_search -%}
+        <button type="button" class="ac-apple-nav__icon-btn" onclick="document.querySelector('[data-header-search-trigger]')?.click()">
+          <svg class="ac-apple-nav__icon" viewBox="0 0 17 17" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.5" stroke="currentColor" fill="none" stroke-width="1.2"/>
+            <line x1="10.5" y1="10.5" x2="15" y2="15" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      {%- endif -%}
+
+      {%- if section.settings.show_cart -%}
+        <a href="{{ routes.cart_url }}" class="ac-apple-nav__icon-btn">
+          <svg class="ac-apple-nav__icon" viewBox="0 0 16 18" aria-hidden="true">
+            <path d="M3 5.5C3 3.6 4.4 2 6.25 2h3.5C11.6 2 13 3.6 13 5.5V6H3v-.5Z" fill="none" stroke="currentColor" stroke-width="1"/>
+            <path d="M4 6h8l-.7 8.2A1.8 1.8 0 0 1 9.5 16H6.5a1.8 1.8 0 0 1-1.8-1.8L4 6Z" fill="none" stroke="currentColor" stroke-width="1"/>
+          </svg>
+          {%- if cart.item_count > 0 -%}
+            <span class="ac-apple-nav__cart-count">{{ cart.item_count }}</span>
+          {%- endif -%}
+        </a>
+      {%- endif -%}
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('.ac-meta-list-block__alpha').forEach(function(alphaWrap) {
+        var listId = alphaWrap.getAttribute('data-meta-list');
+        var listEl = document.querySelector('.ac-meta-list-block__items[data-meta-list="' + listId + '"]');
+        if (!listEl) return;
+
+        alphaWrap.querySelectorAll('.ac-meta-list-block__alpha-btn').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var letter = btn.getAttribute('data-letter');
+            alphaWrap.querySelectorAll('.ac-meta-list-block__alpha-btn').forEach(function(b) {
+              b.classList.toggle('is-active', b === btn);
+            });
+            listEl.querySelectorAll('.ac-meta-list-block__item').forEach(function(item) {
+              var itemLetter = item.getAttribute('data-letter');
+              if (letter === 'all' || itemLetter === letter) {
+                item.style.display = '';
+              } else {
+                item.style.display = 'none';
+              }
+            });
+          });
+        });
+      });
+    });
+  </script>
+  <script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // A–Z Filter
+    document.querySelectorAll('.ac-meta-list-block__alpha').forEach(function(alphaWrap) {
+      var listId = alphaWrap.getAttribute('data-meta-list');
+      var listEl = document.querySelector('.ac-meta-list-block__items[data-meta-list="' + listId + '"]');
+      if (!listEl) return;
+
+      alphaWrap.querySelectorAll('.ac-meta-list-block__alpha-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var letter = btn.getAttribute('data-letter');
+          alphaWrap.querySelectorAll('.ac-meta-list-block__alpha-btn').forEach(function(b) {
+            b.classList.toggle('is-active', b === btn);
+          });
+          listEl.querySelectorAll('.ac-meta-list-block__item').forEach(function(item) {
+            var itemLetter = item.getAttribute('data-letter');
+            if (letter === 'all' || itemLetter === letter) {
+              item.style.display = '';
+            } else {
+              item.style.display = 'none';
+            }
+          });
+        });
+      });
+    });
+
+    // Mega-Menü: stabil offen halten
+    document.querySelectorAll('.ac-apple-nav__item--has-children').forEach(function(item) {
+      var mega = item.querySelector('.ac-apple-nav__mega');
+      if (!mega) return;
+
+      function openMega() {
+        item.classList.add('is-open');
+      }
+
+      function closeMegaWithDelay() {
+        setTimeout(function() {
+          // nur schließen, wenn weder Item noch Panel noch gehovert werden
+          if (!item.matches(':hover') && !mega.matches(':hover')) {
+            item.classList.remove('is-open');
+          }
+        }, 80);
+      }
+
+      item.addEventListener('mouseenter', openMega);
+      item.addEventListener('mouseleave', closeMegaWithDelay);
+
+      mega.addEventListener('mouseenter', openMega);
+      mega.addEventListener('mouseleave', closeMegaWithDelay);
+    });
+  });
+</script>
+
+</header>
+<div style="height: 47px!important">&#10240</div>
+{% schema %}
+{
+  "name": "AC Apple Navbar – Artclub",
+  "settings": [
+    {
+  "type": "image_picker",
+  "id": "logo_image",
+  "label": "Logo-Bild",
+  "info": "SVG, PNG oder WebP empfohlen"
+},
+    {
+      "type": "text",
+      "id": "logo_text",
+      "label": "Logo-Text",
+      "default": "artclub"
+    },
+    {
+      "type": "text",
+      "id": "artworks_label",
+      "label": "Label für Artworks",
+      "default": "Artworks"
+    },
+    {
+      "type": "url",
+      "id": "artworks_url",
+      "label": "Link für Artworks (z. B. /collections/artworks)"
+    },
+    {
+      "type": "text",
+      "id": "about_label",
+      "label": "Label für About",
+      "default": "About"
+    },
+    {
+      "type": "url",
+      "id": "about_url",
+      "label": "Link für About-Seite"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_search",
+      "label": "Suche-Icon anzeigen",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_cart",
+      "label": "Warenkorb-Icon anzeigen",
+      "default": true
+    }
+  ],
+  "blocks": [
+  {
+    "type": "meta_list",
+    "name": "Meta-Menü (A–Z)",
+    "settings": [
+      {
+        "type": "text",
+        "id": "label",
+        "label": "Titel in Navbar",
+        "default": "Artists"
+      },
+      {
+        "type": "text",
+        "id": "heading",
+        "label": "Überschrift im Mega-Menü",
+        "default": "Alle Artists"
+      },
+      {
+        "type": "textarea",
+        "id": "description",
+        "label": "Beschreibung im Mega-Menü",
+        "default": "Beschreibung hier einfügen."
+      },
+      {
+        "type": "text",
+        "id": "meta_definition_handle",
+        "label": "Metaobject-Definition Handle (z. B. \"kunstler\")",
+        "default": "kunstler"
+      },
+      {
+        "type": "text",
+        "id": "label_field",
+        "label": "Feldname für Titel (z. B. \"name\" oder \"title\")",
+        "default": "name"
+      },
+      {
+        "type": "checkbox",
+        "id": "show_alpha",
+        "label": "Alphabetische Filter (A–Z) anzeigen",
+        "default": true
+      }
+    ]
+  },
+  {
+    "type": "simple_link",
+    "name": "Einfacher Link",
+    "settings": [
+      {
+        "type": "text",
+        "id": "label",
+        "label": "Titel in Navbar",
+        "default": "Blog"
+      },
+      {
+        "type": "url",
+        "id": "url",
+        "label": "Link-URL"
+      }
+    ]
+  },
+  {
+    "type": "links_mega",
+    "name": "Custom Mega-Menü (Links)",
+    "settings": [
+      {
+        "type": "text",
+        "id": "label",
+        "label": "Titel in Navbar",
+        "default": "Stories"
+      },
+      {
+        "type": "text",
+        "id": "heading",
+        "label": "Überschrift im Mega-Menü",
+        "default": "Stories & Formate"
+      },
+      {
+        "type": "textarea",
+        "id": "description",
+        "label": "Beschreibung im Mega-Menü",
+        "default": "Beschreibung hier einfügen."
+      },
+      {
+        "type": "text",
+        "id": "link_1_label",
+        "label": "Link 1 – Label",
+        "default": "Blog"
+      },
+      {
+        "type": "url",
+        "id": "link_1_url",
+        "label": "Link 1 – URL"
+      },
+      {
+        "type": "text",
+        "id": "link_2_label",
+        "label": "Link 2 – Label",
+        "default": "Interviews"
+      },
+      {
+        "type": "url",
+        "id": "link_2_url",
+        "label": "Link 2 – URL"
+      },
+      {
+        "type": "text",
+        "id": "link_3_label",
+        "label": "Link 3 – Label",
+        "default": "Behind the Scenes"
+      },
+      {
+        "type": "url",
+        "id": "link_3_url",
+        "label": "Link 3 – URL"
+      },
+      {
+        "type": "text",
+        "id": "link_4_label",
+        "label": "Link 4 – Label",
+        "default": "Presse"
+      },
+      {
+        "type": "url",
+        "id": "link_4_url",
+        "label": "Link 4 – URL"
+      },
+      {
+        "type": "text",
+        "id": "link_5_label",
+        "label": "Link 5 – Label",
+        "default": "Newsletter"
+      },
+      {
+        "type": "url",
+        "id": "link_5_url",
+        "label": "Link 5 – URL"
+      },
+      {
+        "type": "text",
+        "id": "link_6_label",
+        "label": "Link 6 – Label",
+        "default": "Link 6"
+      },
+      {
+        "type": "url",
+        "id": "link_6_url",
+        "label": "Link 6 – URL"
+      },
+      {
+        "type": "text",
+        "id": "link_7_label",
+        "label": "Link 7 – Label",
+        "default": "Link 7"
+      },
+      {
+        "type": "url",
+        "id": "link_7_url",
+        "label": "Link 7 – URL"
+      },
+      {
+        "type": "text",
+        "id": "link_8_label",
+        "label": "Link 8 – Label",
+        "default": "Link 8"
+      },
+      {
+        "type": "url",
+        "id": "link_8_url",
+        "label": "Link 8 – URL"
+      },
+      {
+        "type": "text",
+        "id": "link_9_label",
+        "label": "Link 9 – Label",
+        "default": "Link 9"
+      },
+      {
+        "type": "url",
+        "id": "link_9_url",
+        "label": "Link 9 – URL"
+      },
+      {
+        "type": "text",
+        "id": "link_10_label",
+        "label": "Link 10 – Label",
+        "default": "Link 10"
+      },
+      {
+        "type": "url",
+        "id": "link_10_url",
+        "label": "Link 10 – URL"
+      }
+    ]
+  }
+],
+"max_blocks": 20,
+  "presets": [
+    {
+      "name": "AC Apple Navbar – Artclub",
+      "category": "ARTCLUB"
+    }
+  ]
+}
+{% endschema %}

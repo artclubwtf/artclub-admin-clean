@@ -1,0 +1,598 @@
+{% comment %} sections/kunstler-uebersicht.liquid — Platform/Social redesign {% endcomment %}
+
+<style>
+  :root {
+    --p-bg:      #ffffff;
+    --p-surface: #f7f7f7;
+    --p-card:    #ffffff;
+    --p-border:  rgba(0,0,0,0.08);
+    --p-text:    #0f0f0f;
+    --p-muted:   #888888;
+    --p-accent:  #0f0f0f;
+    --p-pill-bg: rgba(0,0,0,0.04);
+    --p-pill-hover: rgba(0,0,0,0.08);
+  }
+
+  .pf-section {
+    background: var(--p-bg);
+    min-height: 100vh;
+    padding-bottom: 100px;
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: var(--p-text);
+  }
+
+  /* ── Header ── */
+  .pf-header {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 60px 40px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+  .pf-header__top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+  }
+  .pf-header__title {
+    font-family: 'Inter', sans-serif;
+    font-size: clamp(36px, 5.5vw, 72px);
+    font-weight: 800;
+    line-height: 1.0;
+    letter-spacing: -0.03em;
+    color: var(--p-text);
+    margin: 0;
+  }
+  .pf-header__title span { color: var(--p-accent); }
+  .pf-header__count {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--p-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding-top: 8px;
+    white-space: nowrap;
+  }
+
+  /* ── A–Z Nav ── */
+  .pf-nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .pf-nav__btn {
+    background: var(--p-pill-bg);
+    border: 1px solid var(--p-border);
+    color: var(--p-muted);
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    padding: 6px 13px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .pf-nav__btn:hover {
+    background: var(--p-pill-hover);
+    color: var(--p-text);
+  }
+  .pf-nav__btn.is-active {
+    background: var(--p-accent);
+    border-color: var(--p-accent);
+    color: #ffffff;
+  }
+
+  /* ── Grid ── */
+  .pf-grid {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 40px;
+    display: grid;
+    grid-template-columns: repeat({{ section.settings.columns_desktop }}, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 900px) {
+    .pf-grid { grid-template-columns: repeat({{ section.settings.columns_mobile }}, 1fr); padding: 0 16px; gap: 12px; }
+    .pf-header { padding: 40px 16px 28px; }
+  }
+
+  /* ── Artist Card ── */
+  .pf-card {
+    background: var(--p-card);
+    border: 1px solid var(--p-border);
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    position: relative;
+    transition: border-color 0.22s, transform 0.22s;
+    cursor: pointer;
+  }
+  .pf-card:hover {
+    border-color: rgba(255,255,255,0.18);
+    transform: translateY(-3px);
+  }
+
+  /* Cover image — square crop */
+  .pf-card__cover {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: #222;
+  }
+  .pf-card__cover-img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.45s cubic-bezier(0.25,0.46,0.45,0.94);
+  }
+  .pf-card:hover .pf-card__cover-img { transform: scale(1.06); }
+
+  /* Gradient overlay on cover */
+  .pf-card__cover::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(10,10,10,0.72) 0%, transparent 55%);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* Avatar — overlapping the cover bottom edge */
+  .pf-card__avatar-wrap {
+    position: absolute;
+    bottom: -22px;
+    left: 16px;
+    z-index: 2;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 2px solid var(--p-card);
+    overflow: hidden;
+    background: #2a2a2a;
+    flex-shrink: 0;
+  }
+  .pf-card__avatar-img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .pf-card__avatar-fallback {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Inter', sans-serif;
+    font-size: 18px; font-weight: 700;
+    color: #ffffff;
+    background: #555;
+  }
+
+  /* Body */
+  .pf-card__body {
+    padding: 32px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex: 1;
+  }
+  .pf-card__name {
+    font-family: 'Inter', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--p-text);
+    margin: 0;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pf-card__type {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--p-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0;
+  }
+
+  /* Follow row */
+  .pf-card__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--p-border);
+  }
+  .pf-follow-btn {
+    appearance: none;
+    border: 1px solid var(--p-border);
+    background: var(--p-pill-bg);
+    color: var(--p-text);
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.18s, border-color 0.18s, color 0.18s;
+    flex-shrink: 0;
+  }
+  .pf-follow-btn:hover,
+  .pf-follow-btn.is-following {
+    background: var(--p-accent);
+    border-color: var(--p-accent);
+    color: #ffffff;
+  }
+  .pf-follow-btn.is-following .pf-follow-btn__label::before { content: '✓ '; }
+
+  .pf-card__works-link {
+    font-size: 11px;
+    color: var(--p-muted);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color 0.15s;
+  }
+  .pf-card__works-link:hover { color: var(--p-text); }
+
+  /* Hidden */
+  .pf-card[hidden] { display: none !important; }
+
+  /* Empty */
+  .pf-empty {
+    display: none;
+    grid-column: 1 / -1;
+    padding: 80px 0;
+    text-align: center;
+    font-family: 'Inter', sans-serif;
+    font-size: 20px;
+    color: var(--p-muted);
+  }
+
+  /* Fade-in stagger */
+  .pf-card {
+    opacity: 0;
+    animation: pfFadeUp 0.4s ease forwards;
+  }
+  @keyframes pfFadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Modal */
+  .pf-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .pf-modal.is-open { display: flex; }
+  .pf-modal__backdrop {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.45);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .pf-modal__box {
+    position: relative;
+    background: #ffffff;
+    border: 1px solid var(--p-border);
+    border-radius: 20px;
+    width: 100%;
+    max-width: 420px;
+    padding: 40px 36px 36px;
+    animation: pfModalIn 0.28s cubic-bezier(0.34,1.2,0.64,1) both;
+  }
+  @keyframes pfModalIn {
+    from { opacity: 0; transform: scale(0.92) translateY(16px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .pf-modal__close {
+    position: absolute; top: 14px; right: 14px;
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--p-pill-bg); border: 1px solid var(--p-border);
+    color: var(--p-muted); font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: color 0.15s, background 0.15s;
+  }
+  .pf-modal__close:hover { color: var(--p-text); background: var(--p-pill-hover); }
+  .pf-modal__slide { display: none; }
+  .pf-modal__slide.is-active { display: block; }
+  .pf-modal__eyebrow {
+    font-size: 11px; font-weight: 500; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--p-accent); margin: 0 0 10px;
+  }
+  .pf-modal__heading {
+    font-family: 'Inter', sans-serif;
+    font-size: 26px; font-weight: 700;
+    color: var(--p-text); margin: 0 0 10px; line-height: 1.15;
+  }
+  .pf-modal__text {
+    font-size: 13px; color: var(--p-muted);
+    line-height: 1.65; margin: 0 0 28px;
+  }
+  .pf-modal__input {
+    width: 100%; padding: 13px 16px;
+    background: rgba(0,0,0,0.03);
+    border: 1px solid var(--p-border);
+    border-radius: 10px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px; color: var(--p-text);
+    outline: none; margin-bottom: 12px;
+    transition: border-color 0.18s;
+  }
+  .pf-modal__input:focus { border-color: var(--p-accent); }
+  .pf-modal__input::placeholder { color: var(--p-muted); }
+  .pf-modal__btn {
+    width: 100%; padding: 14px;
+    background: var(--p-accent);
+    color: #ffffff;
+    border: none; border-radius: 10px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px; font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.18s;
+  }
+  .pf-modal__btn:hover { opacity: 0.85; }
+  .pf-modal__check {
+    font-size: 36px; margin-bottom: 12px; display: block;
+    filter: grayscale(0);
+  }
+</style>
+
+<section class="pf-section">
+
+  <div class="pf-header">
+    <div class="pf-header__top">
+      <h1 class="pf-header__title">{{ section.settings.heading_text }}<span>.</span></h1>
+      <span class="pf-header__count" id="pf-count"></span>
+    </div>
+    <nav class="pf-nav" aria-label="Filter by letter">
+      <button class="pf-nav__btn is-active" data-letter="all">All</button>
+      {% assign letters = 'A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z' | split: ',' %}
+      {% for letter in letters %}
+        <button class="pf-nav__btn" data-letter="{{ letter }}">{{ letter }}</button>
+      {% endfor %}
+    </nav>
+  </div>
+
+  {% assign all_artists = metaobjects.kunstler.values %}
+  {% assign excluded_ids = section.blocks | map: 'settings.kunstler_object.id' %}
+
+  <div class="pf-grid" id="pf-grid">
+    {% assign idx = 0 %}
+    {% for artist in all_artists %}
+      {% unless excluded_ids contains artist.id %}
+        {% assign idx = idx | plus: 1 %}
+        {% assign name = artist.name | strip %}
+        {% assign first_letter = name | slice: 0, 1 | upcase %}
+
+        {% assign cover_src = '' %}
+        {% if artist.bild_1 != blank %}
+          {% assign cover_src = artist.bild_1 | image_url: width: 800 %}
+        {% elsif artist.bilder != blank %}
+          {% assign cover_src = artist.bilder | image_url: width: 800 %}
+        {% endif %}
+
+        {% assign avatar_src = '' %}
+        {% if artist.bilder != blank %}
+          {% assign avatar_src = artist.bilder | image_url: width: 120 %}
+        {% endif %}
+
+        <div
+          class="pf-card"
+          data-first-letter="{{ first_letter }}"
+          data-handle="{{ artist.system.handle }}"
+          style="animation-delay: {{ idx | times: 35 | at_most: 500 }}ms"
+        >
+          <a href="{{ artist.system.url }}" class="pf-card__cover" tabindex="-1" aria-hidden="true">
+            {% if cover_src != '' %}
+              <img src="{{ cover_src }}" alt="" class="pf-card__cover-img" loading="lazy">
+            {% endif %}
+            <div class="pf-card__avatar-wrap">
+              {% if avatar_src != '' %}
+                <img src="{{ avatar_src }}" alt="{{ name }}" class="pf-card__avatar-img">
+              {% else %}
+                <div class="pf-card__avatar-fallback">{{ name | slice: 0, 1 | upcase }}</div>
+              {% endif %}
+            </div>
+          </a>
+
+          <div class="pf-card__body">
+            <a href="{{ artist.system.url }}" style="text-decoration:none">
+              <h2 class="pf-card__name">{{ name }}</h2>
+            </a>
+            {% if artist.kuenstler_typ != blank %}
+              <p class="pf-card__type">{{ artist.kuenstler_typ }}</p>
+            {% endif %}
+          </div>
+
+          <div class="pf-card__footer">
+            {% if section.settings.show_button %}
+              <button
+                type="button"
+                class="pf-follow-btn"
+                data-artist-handle="{{ artist.system.handle }}"
+                data-artist-name="{{ name | escape }}"
+                aria-label="Follow {{ name | escape }}"
+              >
+                <span class="pf-follow-btn__label">{{ section.settings.button_text }}</span>
+              </button>
+            {% endif %}
+            <a href="{{ artist.system.url }}" class="pf-card__works-link">View works →</a>
+          </div>
+        </div>
+
+      {% endunless %}
+    {% endfor %}
+    <div class="pf-empty" id="pf-empty">No artists found.</div>
+  </div>
+
+</section>
+
+<!-- Newsletter Modal -->
+<div class="pf-modal" id="pf-modal" role="dialog" aria-modal="true">
+  <div class="pf-modal__backdrop" id="pf-modal-backdrop"></div>
+  <div class="pf-modal__box">
+    <button class="pf-modal__close" id="pf-modal-close" aria-label="Close">&times;</button>
+
+    <div class="pf-modal__slide is-active" data-step="1">
+      <p class="pf-modal__eyebrow">Follow Artist</p>
+      <h3 class="pf-modal__heading" id="pf-modal-name">{{ section.settings.popup_heading }}</h3>
+      <p class="pf-modal__text">{{ section.settings.popup_text }}</p>
+      <form id="pf-form" action="/contact" method="post">
+        <input type="hidden" name="form_type" value="customer">
+        <input type="hidden" name="utf8" value="✓">
+        <input type="email" name="contact[email]" class="pf-modal__input" placeholder="{{ section.settings.email_placeholder }}" required>
+      </form>
+      <button type="button" class="pf-modal__btn" id="pf-modal-next">{{ section.settings.submit_text }}</button>
+    </div>
+
+    <div class="pf-modal__slide" data-step="2">
+      <span class="pf-modal__check">🎨</span>
+      <p class="pf-modal__eyebrow">You're in</p>
+      <h3 class="pf-modal__heading">Check your inbox</h3>
+      <p class="pf-modal__text">Confirm your email to start following. We'll notify you about new works and events.</p>
+      <button type="button" class="pf-modal__btn" id="pf-modal-done">{{ section.settings.submit_text_2 }}</button>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var cards = Array.from(document.querySelectorAll('.pf-card[data-first-letter]'));
+  var navBtns = Array.from(document.querySelectorAll('.pf-nav__btn'));
+  var emptyEl = document.getElementById('pf-empty');
+  var countEl = document.getElementById('pf-count');
+
+  /* ── A–Z Filter ── */
+  function filterByLetter(letter) {
+    var visible = 0;
+    cards.forEach(function(card) {
+      var show = letter === 'all' || card.dataset.firstLetter === letter;
+      if (show) { card.removeAttribute('hidden'); visible++; }
+      else card.setAttribute('hidden', '');
+    });
+    if (emptyEl) emptyEl.style.display = visible === 0 ? 'block' : 'none';
+    if (countEl) countEl.textContent = visible + ' artist' + (visible !== 1 ? 's' : '');
+  }
+
+  navBtns.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      navBtns.forEach(function(b) { b.classList.remove('is-active'); });
+      btn.classList.add('is-active');
+      filterByLetter(btn.dataset.letter);
+    });
+  });
+  filterByLetter('all');
+
+  /* ── Follow state (localStorage) ── */
+  var FL_KEY = 'ac_follows';
+  function getFollows() {
+    try { var r = JSON.parse(localStorage.getItem(FL_KEY)); return Array.isArray(r) ? r : []; } catch(e) { return []; }
+  }
+  function saveFollows(arr) { try { localStorage.setItem(FL_KEY, JSON.stringify(arr)); } catch(e) {} }
+  function isFollowing(handle) { return getFollows().indexOf(String(handle)) !== -1; }
+
+  function paintFollow(btn, on) {
+    btn.classList.toggle('is-following', on);
+    btn.querySelector('.pf-follow-btn__label').textContent = on ? 'Following' : '{{ section.settings.button_text }}';
+  }
+
+  // Sync on load
+  document.querySelectorAll('.pf-follow-btn[data-artist-handle]').forEach(function(btn) {
+    paintFollow(btn, isFollowing(btn.dataset.artistHandle));
+  });
+
+  /* ── Modal ── */
+  var modal     = document.getElementById('pf-modal');
+  var closeBtn  = document.getElementById('pf-modal-close');
+  var backdrop  = document.getElementById('pf-modal-backdrop');
+  var nextBtn   = document.getElementById('pf-modal-next');
+  var doneBtn   = document.getElementById('pf-modal-done');
+  var modalName = document.getElementById('pf-modal-name');
+  var slides    = modal ? modal.querySelectorAll('.pf-modal__slide') : [];
+  var activeBtn = null;
+
+  function showStep(n) {
+    slides.forEach(function(s) { s.classList.toggle('is-active', s.dataset.step == n); });
+  }
+  function openModal(btn) {
+    activeBtn = btn;
+    if (modalName && btn.dataset.artistName) modalName.textContent = btn.dataset.artistName;
+    showStep(1);
+    modal.classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeModal() {
+    modal.classList.remove('is-open');
+    document.body.style.overflow = '';
+    showStep(1);
+    activeBtn = null;
+  }
+
+  document.querySelectorAll('.pf-follow-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var handle = btn.dataset.artistHandle;
+      if (isFollowing(handle)) {
+        // Unfollow
+        var follows = getFollows().filter(function(h) { return h !== handle; });
+        saveFollows(follows);
+        paintFollow(btn, false);
+      } else {
+        openModal(btn);
+      }
+    });
+  });
+
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  if (backdrop) backdrop.addEventListener('click', closeModal);
+  if (nextBtn) nextBtn.addEventListener('click', function() {
+    // Mark as following immediately
+    if (activeBtn) {
+      var handle = activeBtn.dataset.artistHandle;
+      var follows = getFollows();
+      if (follows.indexOf(handle) === -1) follows.push(handle);
+      saveFollows(follows);
+      paintFollow(activeBtn, true);
+    }
+    showStep(2);
+  });
+  if (doneBtn) doneBtn.addEventListener('click', closeModal);
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeModal(); });
+});
+</script>
+
+{% schema %}
+{
+  "name": "Künstler Übersicht",
+  "settings": [
+    {"type":"text","id":"heading_text","label":"Überschrift","default":"Our Artists"},
+    {"type":"range","id":"columns_desktop","label":"Spalten Desktop","min":2,"max":6,"step":1,"default":4},
+    {"type":"range","id":"columns_mobile","label":"Spalten Mobil","min":1,"max":3,"step":1,"default":2},
+    {"type":"checkbox","id":"show_button","label":"Follow-Button anzeigen","default":true},
+    {"type":"text","id":"button_text","label":"Button-Text","default":"Follow"},
+    {"type":"text","id":"email_placeholder","label":"E-Mail Placeholder","default":"Your email address"},
+    {"type":"text","id":"submit_text","label":"Subscribe Button","default":"Subscribe & Follow"},
+    {"type":"text","id":"submit_text_2","label":"Fertig-Button","default":"Done"},
+    {"type":"text","id":"popup_heading","label":"Popup-Überschrift (Fallback)","default":"Stay updated"},
+    {"type":"text","id":"popup_text","label":"Popup-Text","default":"Get notified about new works, events and updates from this artist."}
+  ],
+  "blocks": [
+    {"type":"exclude_artist","name":"Künstler ausschließen","settings":[{"type":"metaobject","id":"kunstler_object","label":"Künstler auswählen","metaobject_type":"kunstler"}]}
+  ],
+  "max_blocks": 50,
+  "presets": [{"name":"Künstler Übersicht","category":"ARTCLUB"}]
+}
+{% endschema %}

@@ -1,0 +1,350 @@
+{% comment %}
+  AC Apple-like Footer
+  - Clean columns, subtle borders, small type
+  - Optional newsletter row + legal bottom bar
+{% endcomment %}
+
+<footer id="ac-footer-{{ section.id }}" class="ac-footer">
+  <style>
+    #ac-footer-{{ section.id }}.ac-footer{
+      background: {{ section.settings.bg }} !important;
+      color: {{ section.settings.text }} !important;
+      border-top: 1px solid rgba(17,17,17,.10) !important;
+      padding: 44px 0 18px !important;
+    }
+
+    #ac-footer-{{ section.id }} .ac-footer__inner{
+      max-width: 1100px !important;
+      margin: 0 auto !important;
+      padding: 0 16px !important;
+    }
+
+    /* top row */
+    #ac-footer-{{ section.id }} .ac-footer__top{
+      display:flex !important;
+      align-items:flex-start !important;
+      justify-content:space-between !important;
+      gap: 18px !important;
+      padding-bottom: 22px !important;
+      border-bottom: 1px solid rgba(17,17,17,.10) !important;
+    }
+
+    #ac-footer-{{ section.id }} .ac-footer__brand{
+      min-width: 220px !important;
+    }
+
+    #ac-footer-{{ section.id }} .ac-footer__logo{
+      display:inline-flex !important;
+      align-items:center !important;
+      gap:10px !important;
+      text-decoration:none !important;
+      color: inherit !important;
+      font-weight: 700 !important;
+      letter-spacing: -0.02em !important;
+      font-size: 14px !important;
+    }
+    #ac-footer-{{ section.id }} .ac-footer__desc{
+      margin: 10px 0 0 !important;
+      font-size: 12px !important;
+      line-height: 1.45 !important;
+      color: rgba(17,17,17,.70) !important;
+      max-width: 320px !important;
+    }
+
+    /* columns */
+    #ac-footer-{{ section.id }} .ac-footer__cols{
+      display:grid !important;
+      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+      gap: 14px !important;
+      width: 100% !important;
+    }
+
+    #ac-footer-{{ section.id }} .ac-footer__colTitle{
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      letter-spacing: .10em !important;
+      text-transform: uppercase !important;
+      margin: 0 0 10px !important;
+      color: rgba(17,17,17,.85) !important;
+    }
+
+    #ac-footer-{{ section.id }} .ac-footer__list{
+      list-style:none !important;
+      padding:0 !important;
+      margin:0 !important;
+      display:flex !important;
+      flex-direction:column !important;
+      gap: 8px !important;
+    }
+
+    #ac-footer-{{ section.id }} .ac-footer__link{
+      display:inline-flex !important;
+      align-items:center !important;
+      gap: 8px !important;
+      text-decoration:none !important;
+      color: rgba(17,17,17,.72) !important;
+      font-size: 13px !important;
+      line-height: 1.25 !important;
+      transition: color .15s ease, transform .15s ease !important;
+    }
+    #ac-footer-{{ section.id }} .ac-footer__link:hover{
+      color: rgba(17,17,17,1) !important;
+      transform: translateY(-1px) !important;
+    }
+
+    /* newsletter */
+    #ac-footer-{{ section.id }} .ac-footer__newsletter{
+      margin-top: 18px !important;
+      display:flex !important;
+      align-items:center !important;
+      justify-content:space-between !important;
+      gap: 12px !important;
+      padding: 14px 0 0 !important;
+    }
+    #ac-footer-{{ section.id }} .ac-footer__newsletterLeft{
+      font-size: 12px !important;
+      color: rgba(17,17,17,.70) !important;
+      line-height:1.4 !important;
+    }
+
+    #ac-footer-{{ section.id }} .ac-footer__form{
+      display:flex !important;
+      align-items:center !important;
+      gap: 8px !important;
+      flex-wrap:wrap !important;
+    }
+
+    #ac-footer-{{ section.id }} .ac-footer__input{
+      height: 38px !important;
+      min-width: 230px !important;
+      max-width: 320px !important;
+      width: 100% !important;
+      border-radius: 999px !important;
+      border: 1px solid rgba(17,17,17,.14) !important;
+      background: rgba(17,17,17,.03) !important;
+      padding: 0 14px !important;
+      font-size: 13px !important;
+      outline: none !important;
+      color: inherit !important;
+    }
+    #ac-footer-{{ section.id }} .ac-footer__btn{
+      height: 38px !important;
+      border-radius: 999px !important;
+      padding: 0 14px !important;
+      border: 1px solid rgba(17,17,17,.14) !important;
+      background: rgba(17,17,17,1) !important;
+      color: #fff !important;
+      font-size: 13px !important;
+      font-weight: 650 !important;
+      cursor: pointer !important;
+      transition: transform .15s ease, filter .15s ease !important;
+    }
+    #ac-footer-{{ section.id }} .ac-footer__btn:hover{
+      transform: translateY(-1px) !important;
+      filter: brightness(1.05) !important;
+    }
+
+    /* bottom bar */
+    #ac-footer-{{ section.id }} .ac-footer__bottom{
+      display:flex !important;
+      align-items:center !important;
+      justify-content:space-between !important;
+      gap: 12px !important;
+      padding-top: 14px !important;
+      margin-top: 18px !important;
+      border-top: 1px solid rgba(17,17,17,.10) !important;
+      font-size: 12px !important;
+      color: rgba(17,17,17,.65) !important;
+      flex-wrap:wrap !important;
+    }
+
+    #ac-footer-{{ section.id }} .ac-footer__legal{
+      display:flex !important;
+      align-items:center !important;
+      gap: 12px !important;
+      flex-wrap:wrap !important;
+    }
+    #ac-footer-{{ section.id }} .ac-footer__legal a{
+      color: rgba(17,17,17,.65) !important;
+      text-decoration:none !important;
+    }
+    #ac-footer-{{ section.id }} .ac-footer__legal a:hover{
+      color: rgba(17,17,17,1) !important;
+    }
+
+    /* responsive */
+    @media(max-width: 900px){
+      #ac-footer-{{ section.id }} .ac-footer__top{
+        flex-direction:column !important;
+      }
+      #ac-footer-{{ section.id }} .ac-footer__cols{
+        grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+        gap: 18px !important;
+      }
+      #ac-footer-{{ section.id }} .ac-footer__brand{
+        min-width: 0 !important;
+      }
+    }
+    @media(max-width: 520px){
+      #ac-footer-{{ section.id }} .ac-footer__cols{
+        grid-template-columns: minmax(0,1fr) !important;
+      }
+      #ac-footer-{{ section.id }} .ac-footer__input{
+        min-width: 100% !important;
+        max-width: 100% !important;
+      }
+      #ac-footer-{{ section.id }} .ac-footer__btn{
+        width: 100% !important;
+      }
+      #ac-footer-{{ section.id }} .ac-footer__newsletter{
+        flex-direction:column !important;
+        align-items:flex-start !important;
+      }
+      #ac-footer-{{ section.id }} .ac-footer__form{
+        width: 100% !important;
+      }
+    }
+  </style>
+
+  <div class="ac-footer__inner">
+    <div class="ac-footer__top">
+      <div class="ac-footer__brand">
+        <a class="ac-footer__logo" href="{{ routes.root_url }}">
+          {{ section.settings.brand_label }}
+        </a>
+        {% if section.settings.brand_desc != blank %}
+          <p class="ac-footer__desc">{{ section.settings.brand_desc }}</p>
+        {% endif %}
+      </div>
+
+      <div class="ac-footer__cols">
+        {% for block in section.blocks %}
+          {% if block.type == 'col' %}
+            <div class="ac-footer__col" {{ block.shopify_attributes }}>
+              {% if block.settings.title != blank %}
+                <div class="ac-footer__colTitle">{{ block.settings.title }}</div>
+              {% endif %}
+              <ul class="ac-footer__list">
+                {% if block.settings.link_1_label != blank and block.settings.link_1_url != blank %}
+                  <li><a class="ac-footer__link" href="{{ block.settings.link_1_url }}">{{ block.settings.link_1_label }}</a></li>
+                {% endif %}
+                {% if block.settings.link_2_label != blank and block.settings.link_2_url != blank %}
+                  <li><a class="ac-footer__link" href="{{ block.settings.link_2_url }}">{{ block.settings.link_2_label }}</a></li>
+                {% endif %}
+                {% if block.settings.link_3_label != blank and block.settings.link_3_url != blank %}
+                  <li><a class="ac-footer__link" href="{{ block.settings.link_3_url }}">{{ block.settings.link_3_label }}</a></li>
+                {% endif %}
+                {% if block.settings.link_4_label != blank and block.settings.link_4_url != blank %}
+                  <li><a class="ac-footer__link" href="{{ block.settings.link_4_url }}">{{ block.settings.link_4_label }}</a></li>
+                {% endif %}
+                {% if block.settings.link_5_label != blank and block.settings.link_5_url != blank %}
+                  <li><a class="ac-footer__link" href="{{ block.settings.link_5_url }}">{{ block.settings.link_5_label }}</a></li>
+                {% endif %}
+              </ul>
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    {% if section.settings.show_newsletter %}
+      <div class="ac-footer__newsletter">
+        <div class="ac-footer__newsletterLeft">
+          {{ section.settings.newsletter_text }}
+        </div>
+
+        <form class="ac-footer__form" method="post" action="{{ routes.root_url }}contact#contact_form" accept-charset="UTF-8">
+          <input type="hidden" name="form_type" value="customer" />
+          <input type="hidden" name="utf8" value="✓" />
+          <input type="hidden" name="contact[tags]" value="newsletter" />
+
+          <input class="ac-footer__input" type="email" name="contact[email]" placeholder="{{ section.settings.newsletter_placeholder }}" required>
+          <button class="ac-footer__btn" type="submit">{{ section.settings.newsletter_button }}</button>
+        </form>
+      </div>
+    {% endif %}
+
+    <div class="ac-footer__bottom">
+      <div class="ac-footer__copy">
+        © {{ 'now' | date: '%Y' }} {{ section.settings.copyright_label }}
+      </div>
+
+      <div class="ac-footer__legal">
+        {% if section.settings.legal_1_label != blank and section.settings.legal_1_url != blank %}
+          <a href="{{ section.settings.legal_1_url }}">{{ section.settings.legal_1_label }}</a>
+        {% endif %}
+        {% if section.settings.legal_2_label != blank and section.settings.legal_2_url != blank %}
+          <a href="{{ section.settings.legal_2_url }}">{{ section.settings.legal_2_label }}</a>
+        {% endif %}
+        {% if section.settings.legal_3_label != blank and section.settings.legal_3_url != blank %}
+          <a href="{{ section.settings.legal_3_url }}">{{ section.settings.legal_3_label }}</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</footer>
+
+{% schema %}
+{
+  "name": "AC Apple-like Footer",
+  "settings": [
+    { "type": "color", "id": "bg", "label": "Background", "default": "#ffffff" },
+    { "type": "color", "id": "text", "label": "Text color", "default": "#111111" },
+
+    { "type": "text", "id": "brand_label", "label": "Brand label", "default": "artclub" },
+    { "type": "textarea", "id": "brand_desc", "label": "Brand description", "default": "Platform for art, exhibitions and a new kind of discovery." },
+
+    { "type": "checkbox", "id": "show_newsletter", "label": "Show newsletter", "default": true },
+    { "type": "text", "id": "newsletter_text", "label": "Newsletter text", "default": "Get updates on new artworks, drops and events." },
+    { "type": "text", "id": "newsletter_placeholder", "label": "Newsletter placeholder", "default": "Email address" },
+    { "type": "text", "id": "newsletter_button", "label": "Newsletter button", "default": "Subscribe" },
+
+    { "type": "text", "id": "copyright_label", "label": "Copyright label", "default": "ARTCLUB" },
+
+    { "type": "text", "id": "legal_1_label", "label": "Legal link 1 label", "default": "Imprint" },
+    { "type": "url", "id": "legal_1_url", "label": "Legal link 1 URL" },
+
+    { "type": "text", "id": "legal_2_label", "label": "Legal link 2 label", "default": "Privacy" },
+    { "type": "url", "id": "legal_2_url", "label": "Legal link 2 URL" },
+
+    { "type": "text", "id": "legal_3_label", "label": "Legal link 3 label", "default": "Terms" },
+    { "type": "url", "id": "legal_3_url", "label": "Legal link 3 URL" }
+  ],
+  "blocks": [
+    {
+      "type": "col",
+      "name": "Column",
+      "settings": [
+        { "type": "text", "id": "title", "label": "Title", "default": "Explore" },
+
+        { "type": "text", "id": "link_1_label", "label": "Link 1 label", "default": "Artworks" },
+        { "type": "url", "id": "link_1_url", "label": "Link 1 URL" },
+
+        { "type": "text", "id": "link_2_label", "label": "Link 2 label", "default": "Artists" },
+        { "type": "url", "id": "link_2_url", "label": "Link 2 URL" },
+
+        { "type": "text", "id": "link_3_label", "label": "Link 3 label", "default": "Magazine" },
+        { "type": "url", "id": "link_3_url", "label": "Link 3 URL" },
+
+        { "type": "text", "id": "link_4_label", "label": "Link 4 label", "default": "New" },
+        { "type": "url", "id": "link_4_url", "label": "Link 4 URL" },
+
+        { "type": "text", "id": "link_5_label", "label": "Link 5 label", "default": "Drops" },
+        { "type": "url", "id": "link_5_url", "label": "Link 5 URL" }
+      ]
+    }
+  ],
+  "max_blocks": 4,
+  "presets": [
+    {
+      "name": "AC Apple-like Footer",
+      "category": "ARTCLUB",
+      "blocks": [
+        { "type": "col", "settings": { "title": "Explore", "link_1_label": "Artworks", "link_2_label": "Artists", "link_3_label": "Magazine", "link_4_label": "New" } },
+        { "type": "col", "settings": { "title": "ARTCLUB", "link_1_label": "About", "link_2_label": "Support", "link_3_label": "Contact" } },
+        { "type": "col", "settings": { "title": "Social", "link_1_label": "Instagram", "link_2_label": "TikTok", "link_3_label": "YouTube" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

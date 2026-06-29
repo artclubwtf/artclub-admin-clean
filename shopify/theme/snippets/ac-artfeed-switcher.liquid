@@ -1,0 +1,142 @@
+{% comment %}
+  AC Artfeed Switcher (reusable)
+  Requires in DOM (inside the root):
+  - [data-ac-grid]   grid container
+  - [data-ac-back]   back button
+  - [data-ac-overlay] overlay element
+  Each card must have:
+  - .ac-artfeed-card[data-ac-handle="..."]
+  - clickable media link/button: [data-ac-open-story][data-ac-handle="..."]
+  Root must have:
+  - data-layout="mosaic|story"
+{% endcomment %}
+
+<script>
+(function(){
+  function init(root){
+    if(!root || root.dataset.acInit === '1') return;
+    root.dataset.acInit = '1';
+
+    var grid = root.querySelector('[data-ac-grid]');
+    var backBtn = root.querySelector('[data-ac-back]');
+    var overlay = root.querySelector('[data-ac-overlay]');
+    if(!grid || !backBtn || !overlay) return;
+
+    function withNoSmoothScroll(fn){
+      var html = document.documentElement;
+      var prev = html.style.scrollBehavior;
+      html.style.scrollBehavior = 'auto';
+      try{ fn(); } finally { html.style.scrollBehavior = prev || ''; }
+    }
+
+    function showOverlay(){ overlay.classList.add('is-on'); }
+    function hideOverlay(){ overlay.classList.remove('is-on'); }
+
+    function safeHandleSelector(handle){
+      return String(handle||'').replace(/"/g,'\\"');
+    }
+
+    function jumpToHandle(handle){
+      var sel = '.ac-artfeed-card[data-ac-handle="' + safeHandleSelector(handle) + '"]';
+      var target = root.querySelector(sel);
+      if(!target) return false;
+
+      var y = target.getBoundingClientRect().top + (window.pageYOffset||0) - 12;
+      withNoSmoothScroll(function(){
+        window.scrollTo({ top: y, left: 0, behavior: 'auto' });
+      });
+
+      var pill = target.querySelector('.ac-artfeed-card__more');
+      if(pill){
+        pill.classList.remove('is-peek');
+        void pill.offsetWidth;
+        pill.classList.add('is-peek');
+        window.setTimeout(function(){ pill.classList.remove('is-peek'); }, 950);
+      }
+      return true;
+    }
+
+    function getActiveStoryHandle(){
+      var cards = Array.prototype.slice.call(root.querySelectorAll('.ac-artfeed-card[data-ac-handle]'));
+      if(!cards.length) return null;
+
+      var aimY = window.innerHeight * 0.33;
+      var best = { handle:null, dist: Infinity };
+
+      cards.forEach(function(card){
+        var r = card.getBoundingClientRect();
+        var center = r.top + r.height * 0.35;
+        var d = Math.abs(center - aimY);
+        if(d < best.dist) best = { handle: card.getAttribute('data-ac-handle'), dist: d };
+      });
+
+      return best.handle;
+    }
+
+    function scrollToHandleInMosaic(handle){
+      return jumpToHandle(handle);
+    }
+
+    // Mosaic click => switch to story + jump
+    root.addEventListener('click', function(e){
+      var trigger = e.target.closest('[data-ac-open-story]');
+      if(!trigger || !root.contains(trigger)) return;
+
+      var layout = root.getAttribute('data-layout');
+      if(layout !== 'mosaic') return; // Story => normal navigation (product page)
+
+      e.preventDefault();
+
+      var handle = trigger.getAttribute('data-ac-handle');
+      if(!handle) return;
+
+      root.dataset.acMosaicScrollY = String(window.scrollY || window.pageYOffset || 0);
+      root.setAttribute('data-ac-can-back','1');
+
+      showOverlay();
+      root.setAttribute('data-layout','story');
+
+      requestAnimationFrame(function(){
+        requestAnimationFrame(function(){
+          setTimeout(function(){
+            jumpToHandle(handle);
+            hideOverlay();
+          }, 50);
+        });
+      });
+    });
+
+    // Back to mosaic => keep same artwork + old mosaic scroll fallback
+    backBtn.addEventListener('click', function(e){
+      e.preventDefault();
+
+      var activeHandle = getActiveStoryHandle();
+      if(activeHandle) root.dataset.acLastHandle = activeHandle;
+
+      showOverlay();
+      root.setAttribute('data-layout','mosaic');
+      root.setAttribute('data-ac-can-back','0');
+
+      requestAnimationFrame(function(){
+        requestAnimationFrame(function(){
+          setTimeout(function(){
+            var ok = false;
+            var h = root.dataset.acLastHandle;
+            if(h) ok = scrollToHandleInMosaic(h);
+
+            if(!ok){
+              var y = parseInt(root.dataset.acMosaicScrollY || '0', 10);
+              withNoSmoothScroll(function(){
+                window.scrollTo({ top: isNaN(y)?0:y, left:0, behavior:'auto' });
+              });
+            }
+            hideOverlay();
+          }, 50);
+        });
+      });
+    });
+  }
+
+  window.ACArtfeedInit = function(root){ init(root); };
+})();
+</script>

@@ -1,0 +1,275 @@
+{%- comment -%}
+/sections/header-mega-plus.liquid
+Ein umfassender Header mit Mega-Menu & Such-Overlay für ARTCLUB
+{%- endcomment -%}
+
+{% schema %}
+{
+  "name": "MegaPlus Header",
+  "settings": [
+    { "type":"image_picker","id":"logo","label":"Logo (SVG/PNG)" },
+    { "type":"link_list","id":"main_menu","label":"Hauptmenü" },
+    { "type":"text","id":"cta_text","label":"CTA-Button Text","default":"Sell your art" },
+    { "type":"url","id":"cta_link","label":"CTA-Button URL" },
+    { "type":"checkbox","id":"show_search","label":"Suche aktivieren","default":true },
+    { "type":"checkbox","id":"show_account","label":"Account-Icon","default":true },
+    { "type":"checkbox","id":"show_cart","label":"Cart-Icon","default":true }
+  ],
+  "presets":[{ "name":"MegaPlus Header","category":"Header" }]
+}
+{% endschema %}
+
+<style>
+/* ================= MegaPlus Header ================ */
+.header-plus {
+  position: sticky; top:0; left:0; right:0;
+  background:#fff; border-bottom:1px solid #eee; z-index:100;
+  font-family:sans-serif;
+}
+/* Grid: Desktop */
+.header-plus .container {
+  max-width:1400px; margin:0 auto;
+  display:grid; grid-template-columns:200px auto 200px;
+  align-items:center; padding:1rem 2rem;
+}
+
+/* === LEFT: Navigation with Mega-Flyouts === */
+.nav-left {
+  display:flex; gap:2rem;
+}
+.nav-left li { position:relative; list-style:none; }
+.nav-left a {
+  text-decoration:none; color:#111; font-weight:500; font-size:0.95rem;
+  padding:0.25rem; transition:color .2s;
+}
+.nav-left a:hover { color:#1a1aff; }
+
+/* Mega dropdown panel */
+.mega-panel {
+  position:absolute; top:100%; left:0;
+  width:600px; background:#fff; border:1px solid #ddd;
+  box-shadow:0 4px 16px rgba(0,0,0,0.1); border-radius:8px;
+  padding:1.5rem; opacity:0; visibility:hidden;
+  transition:opacity .2s;
+  display:grid; grid-template-columns:1fr 1fr; gap:2rem;
+}
+.nav-left li:hover .mega-panel {
+  opacity:1; visibility:visible;
+}
+
+/* Links inside mega */
+.mega-panel h4 { margin-top:0; font-size:1rem; font-weight:600; }
+.mega-panel ul { list-style:none; padding:0; margin:0.5rem 0 0; }
+.mega-panel ul li { margin:0.5rem 0; }
+.mega-panel ul a { text-decoration:none; color:#333; font-size:0.9rem; }
+.mega-panel ul a:hover { color:#1a1aff; }
+
+/* === CENTER: Logo & Search Toggle === */
+.center {
+  display:flex; align-items:center; justify-content:center; gap:1rem;
+}
+.logo img { max-height:40px; }
+.logo span { font-size:1.4rem; font-weight:600; color:#1a1aff; }
+.search-toggle {
+  background:none; border:none; cursor:pointer;
+  width:32px; height:32px;
+  display:flex; align-items:center; justify-content:center;
+}
+.search-toggle svg { width:24px; height:24px; stroke:#111; stroke-width:2;}
+
+/* === RIGHT: Icons + CTA === */
+.controls {
+  display:flex; align-items:center; justify-content:flex-end; gap:1rem;
+}
+.icon-btn {
+  background:none; border:none; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  color:#111; transition:color .2s;
+}
+.icon-btn:hover { color:#1a1aff; }
+.icon-btn svg {
+  width:20px; height:20px; stroke:currentColor; stroke-width:2;
+}
+
+.cta-btn {
+  padding:0.5rem 1rem; background:#1a1aff; color:#fff;
+  border:none; border-radius:999px; font-weight:500;
+  transition:background .2s;
+}
+.cta-btn:hover { background:#0000cc; }
+
+/* ============ MOBILE ============ */
+.burger {
+  display:none; background:none; border:none; cursor:pointer;
+  width:28px; height:28px;
+}
+.burger svg { width:24px; height:24px; stroke:#111; stroke-width:2;}
+
+@media(max-width:992px){
+  .header-plus .container { grid-template-columns:auto 1fr auto; }
+  .nav-left, .controls a:not(.burger), .cta-btn { display:none; }
+  .burger { display:flex; }
+}
+
+/* ========== DRAWER ========== */
+.drawer {
+  position:fixed; top:0; left:0; bottom:0;
+  width:280px; background:#fff; box-shadow:2px 0 12px rgba(0,0,0,0.1);
+  transform:translateX(-100%); transition:transform .3s ease;
+  z-index:150; padding:1rem;
+  display:flex; flex-direction:column;
+}
+.drawer.open { transform:translateX(0); }
+.drawer .close-btn {
+  background:none; border:none; cursor:pointer;
+  align-self:flex-end; margin-bottom:1rem;
+}
+.drawer nav ul { list-style:none; padding:0; margin:0; }
+.drawer nav ul li { margin:1rem 0; }
+.drawer nav ul li a {
+  text-decoration:none; color:#111; font-size:1.1rem; font-weight:500;
+}
+.drawer .drawer-search {
+  margin-bottom:1.5rem; display:flex;
+}
+.drawer .drawer-search input {
+  flex:1; padding:.5rem .75rem; border:1px solid #ccc;
+  border-radius:8px 0 0 8px; font-size:1rem;
+}
+.drawer .drawer-search button {
+  padding:0 .75rem; border:none; background:#eee; cursor:pointer;
+  border-radius:0 8px 8px 0;
+}
+.drawer .drawer-actions {
+  margin-top:auto;
+}
+.drawer .drawer-actions a {
+  display:block; padding:.75rem; text-decoration:none;
+  color:#111; border-top:1px solid #eee; font-size:1rem;
+}
+</style>
+
+<header class="header-plus">
+  <div class="container">
+    <!-- MOBILE BURGER -->
+    <button class="burger" aria-label="Menü öffnen" onclick="toggleDrawer(true)">
+      <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+
+    <!-- DESKTOP NAV -->
+    <ul class="nav-left">
+      {% assign menu = linklists[section.settings.main_menu] %}
+      {% for link in menu.links %}
+        <li>
+          <a href="{{ link.url }}">{{ link.title }}</a>
+          {% if link.links.size > 0 %}
+            <div class="mega-panel">
+              {% for sub in link.links %}
+                <div>
+                  <h4>{{ link.title }}</h4>
+                  <ul>
+                    {% for child in link.links %}
+                      <li><a href="{{ child.url }}">{{ child.title }}</a></li>
+                    {% endfor %}
+                  </ul>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+
+    <!-- LOGO + SEARCH -->
+    <div class="center">
+      <div class="logo">
+        <a href="/" aria-label="ARTCLUB">
+          {% if section.settings.logo %}
+            <img src="{{ section.settings.logo | img_url:'200x' }}" alt="ARTCLUB Logo">
+          {% else %}
+            <span>ARTCLUB</span>
+          {% endif %}
+        </a>
+      </div>
+      {% if section.settings.show_search %}
+        <button class="search-toggle" aria-label="Suche öffnen" onclick="openSearch()">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="22" y2="22"/></svg>
+        </button>
+      {% endif %}
+    </div>
+
+    <!-- ICONS + CTA -->
+    <div class="controls">
+      {% if section.settings.show_account %}
+        <button class="icon-btn" aria-label="Account" onclick="location.href='/account'">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M6 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
+        </button>
+      {% endif %}
+      {% if section.settings.show_cart %}
+        <button class="icon-btn" aria-label="Cart" onclick="location.href='/cart'">
+          <svg viewBox="0 0 24 24"><path d="M6 6h15l-1 9H6z"/><circle cx="9" cy="21" r="1"/><circle cx="18" cy="21" r="1"/></svg>
+        </button>
+      {% endif %}
+      {% if section.settings.cta_link %}
+        <a href="{{ section.settings.cta_link }}" class="cta-btn">{{ section.settings.cta_text }}</a>
+      {% endif %}
+    </div>
+  </div>
+</header>
+
+<!-- SEARCH OVERLAY -->
+<dialog id="searchOverlay" style="background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);border:none;padding:0;">
+  <div style="max-width:600px;margin:5% auto;background:#fff;padding:2rem;border-radius:8px;position:relative;">
+    <button style="position:absolute;top:1rem;right:1rem;background:none;border:none;cursor:pointer;font-size:1.5rem;" onclick="closeSearch()">&times;</button>
+    <form action="/search" method="get">
+      <input type="search" name="q" placeholder="Search artworks, artists…" style="width:100%;padding:1rem;border:1px solid #ccc;border-radius:8px;font-size:1rem;">
+    </form>
+  </div>
+</dialog>
+
+<!-- MOBILE DRAWER -->
+<div class="drawer" id="megaDrawer">
+  <button class="close-btn" aria-label="Schließen" onclick="toggleDrawer(false)">
+    <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+  </button>
+  {% if section.settings.show_search %}
+    <div class="drawer-search">
+      <form action="/search" method="get" style="display:flex;">
+        <input type="search" name="q" placeholder="Search…" style="flex:1;padding:.5rem;border:1px solid #ccc;border-radius:8px 0 0 8px;">
+        <button type="submit" style="padding:0 .75rem;border:none;background:#eee;border-radius:0 8px 8px 0;cursor:pointer;">
+          <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="22" y2="22"/></svg>
+        </button>
+      </form>
+    </div>
+  {% endif %}
+  <nav>
+    <ul>
+      {% for link in menu.links %}
+        <li><a href="{{ link.url }}">{{ link.title }}</a></li>
+      {% endfor %}
+    </ul>
+  </nav>
+  <div class="drawer-actions">
+    {% if section.settings.show_account %}
+      <a href="/account">Login</a>
+    {% endif %}
+    {% if section.settings.show_cart %}
+      <a href="/cart">Cart</a>
+    {% endif %}
+    {% if section.settings.cta_link %}
+      <a href="{{ section.settings.cta_link }}">{{ section.settings.cta_text }}</a>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+function toggleDrawer(open) {
+  document.getElementById('megaDrawer').classList.toggle('open', open);
+}
+function openSearch() {
+  document.getElementById('searchOverlay').showModal();
+}
+function closeSearch() {
+  document.getElementById('searchOverlay').close();
+}
+</script>
