@@ -60,19 +60,24 @@
     return String(hash);
   }
 
-  function ensureEmbedBaseStyles() {
-    if (document.head.querySelector("style[data-artclub-artist-embed-base-styles]")) return;
+  function isFontStylesheetLink(node) {
+    if (!node || node.tagName !== "LINK") return false;
+    var rel = trim(node.getAttribute("rel") || "").toLowerCase();
+    var href = trim(node.getAttribute("href") || "");
+    var asValue = trim(node.getAttribute("as") || "").toLowerCase();
 
-    var style = document.createElement("style");
-    style.setAttribute("data-artclub-artist-embed-base-styles", "true");
-    style.textContent = [
-      ".artclub-artist-embed, .artclub-artist-embed * { box-sizing: border-box; }",
-      ".artclub-artist-embed { width: 100%; max-width: none !important; margin: 0 !important; padding: 0 !important; font-size: 16px; line-height: normal; }",
-      ".artclub-artist-embed .artclub-artist-embed__status { margin: 0 auto; max-width: 80rem; padding: 2rem 0.75rem; color: #a3a3a3; font: 400 0.875rem/1.5 ui-sans-serif, system-ui, sans-serif; }",
-      ".artclub-artist-embed .artclub-artist-embed__app { display: block; width: 100%; max-width: none !important; margin: 0 !important; padding: 0 !important; }",
-      "@media (min-width: 640px) { .artclub-artist-embed .artclub-artist-embed__status { padding-left: 2rem; padding-right: 2rem; } }",
-    ].join("");
-    document.head.appendChild(style);
+    if ((rel === "preload" || rel === "prefetch") && asValue === "font") return true;
+    if (rel !== "stylesheet") return false;
+
+    return /font|fonts|typekit|googleapis/i.test(href);
+  }
+
+  function isFontStyleNode(node) {
+    if (!node || node.tagName !== "STYLE") return false;
+    if (node.hasAttribute("data-next-font")) return true;
+
+    var text = String(node.textContent || "");
+    return /@font-face|font-family/i.test(text);
   }
 
   function loadStylesheet(href) {
@@ -96,8 +101,13 @@
       }
 
       var link = document.createElement("link");
-      link.rel = "stylesheet";
+      var isStylesheet = /(?:^|[?&])css(?:=|$)|\.css(?:[?#]|$)/i.test(href);
+      link.rel = isStylesheet ? "stylesheet" : "preload";
       link.href = href;
+      if (!isStylesheet) {
+        link.as = "font";
+        link.crossOrigin = "anonymous";
+      }
       link.setAttribute("data-artclub-artist-embed-head-style", href);
       link.addEventListener("load", function () {
         resolve();
@@ -111,18 +121,20 @@
     return stylesheetPromises[href];
   }
 
-  function ensureHeadAssets(doc, baseUrl) {
+  function ensureHeadFontAssets(doc, baseUrl) {
     if (!doc || !doc.head) return Promise.resolve();
 
     var pending = [];
-    doc.head.querySelectorAll('link[rel="stylesheet"], style').forEach(function (node) {
+    doc.head.querySelectorAll("link, style").forEach(function (node) {
       if (node.tagName === "LINK") {
+        if (!isFontStylesheetLink(node)) return;
         var href = toAbsoluteUrl(node.getAttribute("href") || "", baseUrl);
         if (!href) return;
         pending.push(loadStylesheet(href));
         return;
       }
 
+      if (!isFontStyleNode(node)) return;
       var styleText = absolutizeCssUrls(node.textContent || "", baseUrl);
       var styleKey = simpleHash(styleText);
       if (document.head.querySelector('style[data-artclub-artist-embed-inline-style="' + styleKey + '"]')) return;
@@ -200,22 +212,8 @@
       node.setAttribute("href", toAbsoluteUrl(value, baseUrl));
     });
   }
-
-  function getRootFontSize() {
-    var computed = window.getComputedStyle ? window.getComputedStyle(document.documentElement).fontSize : "";
-    var numeric = Number.parseFloat(computed || "");
-    return Number.isFinite(numeric) && numeric > 0 ? numeric : 16;
-  }
-
-  function getRemScale() {
-    var rootFontSize = getRootFontSize();
-    if (!rootFontSize) return 1;
-    return 16 / rootFontSize;
-  }
-
   function renderStatus(container, message) {
-    ensureEmbedBaseStyles();
-    container.innerHTML = '<div class="artclub-artist-embed__status">' + message + "</div>";
+    container.textContent = message;
   }
 
   function getSlugFromAppUrl(appUrl) {
@@ -388,23 +386,6 @@
     });
   }
 
-  function applyScaleCompensation(appRoot) {
-    if (!appRoot || !appRoot.style) return;
-
-    var scale = getRemScale();
-    if (!Number.isFinite(scale) || scale <= 0.01) scale = 1;
-
-    appRoot.dataset.artclubRemScale = String(scale);
-    if (Math.abs(scale - 1) < 0.01 || typeof appRoot.style.zoom === "undefined") {
-      appRoot.style.zoom = "";
-      appRoot.style.width = "100%";
-      return;
-    }
-
-    appRoot.style.zoom = String(scale);
-    appRoot.style.width = String(100 / scale) + "%";
-  }
-
   function attachInteractions(scope, container, artist) {
     scope.querySelectorAll("[data-artclub-embed-tab]").forEach(function (button) {
       button.addEventListener("click", function () {
@@ -441,7 +422,6 @@
     var embedElement = extractEmbedElement(doc);
     if (!doc || !embedElement) throw new Error("artist_embed_markup_missing");
 
-    ensureEmbedBaseStyles();
     container.innerHTML = "";
 
     var appRoot = document.createElement("div");
@@ -455,8 +435,6 @@
     absolutizeEmbeddedUrls(contentRoot, appUrl);
     appRoot.appendChild(contentRoot);
     container.appendChild(appRoot);
-
-    applyScaleCompensation(appRoot);
 
     var artist = readArtistData(appRoot, container, appUrl);
     applyTrackingAttributes(appRoot, container, artist);
@@ -493,7 +471,7 @@
       })
       .then(function (html) {
         var doc = parseHtmlDocument(html);
-        return ensureHeadAssets(doc, appUrl).then(function () {
+        return ensureHeadFontAssets(doc, appUrl).then(function () {
           renderContainer(container, html, appUrl);
         });
       })
@@ -503,7 +481,6 @@
   }
 
   function boot() {
-    ensureEmbedBaseStyles();
     document.querySelectorAll("[data-artclub-artist-embed]").forEach(function (container) {
       loadContainer(container);
     });
