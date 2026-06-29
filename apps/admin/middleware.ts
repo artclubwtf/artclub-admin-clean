@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { getAuthSecret } from "@/lib/authSecret";
+import { buildPublicCorsHeaders } from "@/lib/publicCors";
 
 function redirectToLogin(req: NextRequest) {
   const callbackUrl = req.nextUrl.pathname + req.nextUrl.search;
@@ -26,6 +27,20 @@ function isEnabled(rawValue: string | undefined, fallback = false) {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const isPublicShopifyAsset = pathname.startsWith("/shopify/");
+  const isPublicArtistEmbedApi = pathname.startsWith("/api/public/artist-embed");
+
+  if (isPublicShopifyAsset || isPublicArtistEmbedApi) {
+    const headers = buildPublicCorsHeaders(req.headers.get("origin"));
+    if (req.method === "OPTIONS") {
+      return new NextResponse(null, { status: 204, headers });
+    }
+    const response = NextResponse.next();
+    for (const [key, value] of Object.entries(headers)) {
+      response.headers.set(key, value);
+    }
+    return response;
+  }
 
   const isApiPath = pathname.startsWith("/api");
   const isAdminPath = pathname.startsWith("/admin");
@@ -133,5 +148,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/artist/:path*", "/artists/:path*", "/api/:path*"],
+  matcher: ["/admin/:path*", "/artist/:path*", "/artists/:path*", "/api/:path*", "/shopify/:path*"],
 };
