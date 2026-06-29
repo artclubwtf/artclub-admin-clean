@@ -3,6 +3,9 @@
   if (window.__artclubArtistEmbedLoaded) return;
   window.__artclubArtistEmbedLoaded = true;
 
+  var stylesheetPromises = window.__artclubArtistEmbedStylesheetPromises || {};
+  window.__artclubArtistEmbedStylesheetPromises = stylesheetPromises;
+
   function trim(value) {
     return typeof value === "string" ? value.trim() : "";
   }
@@ -48,6 +51,93 @@
       });
   }
 
+  function simpleHash(value) {
+    var input = String(value || "");
+    var hash = 0;
+    for (var index = 0; index < input.length; index += 1) {
+      hash = (hash * 31 + input.charCodeAt(index)) >>> 0;
+    }
+    return String(hash);
+  }
+
+  function ensureEmbedBaseStyles() {
+    if (document.head.querySelector("style[data-artclub-artist-embed-base-styles]")) return;
+
+    var style = document.createElement("style");
+    style.setAttribute("data-artclub-artist-embed-base-styles", "true");
+    style.textContent = [
+      ".artclub-artist-embed, .artclub-artist-embed * { box-sizing: border-box; }",
+      ".artclub-artist-embed { width: 100%; max-width: none !important; margin: 0 !important; padding: 0 !important; font-size: 16px; line-height: normal; }",
+      ".artclub-artist-embed .artclub-artist-embed__status { margin: 0 auto; max-width: 80rem; padding: 2rem 0.75rem; color: #a3a3a3; font: 400 0.875rem/1.5 ui-sans-serif, system-ui, sans-serif; }",
+      ".artclub-artist-embed .artclub-artist-embed__app { display: block; width: 100%; max-width: none !important; margin: 0 !important; padding: 0 !important; }",
+      "@media (min-width: 640px) { .artclub-artist-embed .artclub-artist-embed__status { padding-left: 2rem; padding-right: 2rem; } }",
+    ].join("");
+    document.head.appendChild(style);
+  }
+
+  function loadStylesheet(href) {
+    if (!href) return Promise.resolve();
+    if (stylesheetPromises[href]) return stylesheetPromises[href];
+
+    stylesheetPromises[href] = new Promise(function (resolve) {
+      var existing = document.head.querySelector('link[data-artclub-artist-embed-head-style="' + href + '"]');
+      if (existing) {
+        if (existing.sheet) {
+          resolve();
+          return;
+        }
+        existing.addEventListener("load", function () {
+          resolve();
+        }, { once: true });
+        existing.addEventListener("error", function () {
+          resolve();
+        }, { once: true });
+        return;
+      }
+
+      var link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = href;
+      link.setAttribute("data-artclub-artist-embed-head-style", href);
+      link.addEventListener("load", function () {
+        resolve();
+      }, { once: true });
+      link.addEventListener("error", function () {
+        resolve();
+      }, { once: true });
+      document.head.appendChild(link);
+    });
+
+    return stylesheetPromises[href];
+  }
+
+  function ensureHeadAssets(doc, baseUrl) {
+    if (!doc || !doc.head) return Promise.resolve();
+
+    var pending = [];
+    doc.head.querySelectorAll('link[rel="stylesheet"], style').forEach(function (node) {
+      if (node.tagName === "LINK") {
+        var href = toAbsoluteUrl(node.getAttribute("href") || "", baseUrl);
+        if (!href) return;
+        pending.push(loadStylesheet(href));
+        return;
+      }
+
+      var styleText = absolutizeCssUrls(node.textContent || "", baseUrl);
+      var styleKey = simpleHash(styleText);
+      if (document.head.querySelector('style[data-artclub-artist-embed-inline-style="' + styleKey + '"]')) return;
+
+      var style = document.createElement("style");
+      style.setAttribute("data-artclub-artist-embed-inline-style", styleKey);
+      style.textContent = styleText;
+      document.head.appendChild(style);
+    });
+
+    return Promise.all(pending).then(function () {
+      return null;
+    });
+  }
+
   function extractEmbedElement(doc) {
     if (!doc) return null;
     return (
@@ -85,6 +175,24 @@
       if (nextSrcset) node.setAttribute("srcset", nextSrcset);
     });
 
+    root.querySelectorAll("source[srcset]").forEach(function (node) {
+      var srcset = trim(node.getAttribute("srcset") || "");
+      if (!srcset) return;
+
+      var nextSrcset = srcset
+        .split(",")
+        .map(function (candidate) {
+          var parts = trim(candidate).split(/\s+/);
+          if (!parts[0]) return "";
+          parts[0] = toAbsoluteUrl(parts[0], baseUrl);
+          return parts.join(" ");
+        })
+        .filter(Boolean)
+        .join(", ");
+
+      if (nextSrcset) node.setAttribute("srcset", nextSrcset);
+    });
+
     root.querySelectorAll("[href]").forEach(function (node) {
       var value = trim(node.getAttribute("href") || "");
       if (!value || value.charAt(0) === "#") return;
@@ -93,62 +201,21 @@
     });
   }
 
-  function createShadowRoot(container) {
-    if (!container.attachShadow) return container;
-    if (container.shadowRoot) return container.shadowRoot;
-    return container.attachShadow({ mode: "open" });
+  function getRootFontSize() {
+    var computed = window.getComputedStyle ? window.getComputedStyle(document.documentElement).fontSize : "";
+    var numeric = Number.parseFloat(computed || "");
+    return Number.isFinite(numeric) && numeric > 0 ? numeric : 16;
   }
 
-  function clearShadowRoot(root) {
-    while (root.firstChild) {
-      root.removeChild(root.firstChild);
-    }
-  }
-
-  function appendBaseStyles(root) {
-    var style = document.createElement("style");
-    style.textContent =
-      ":host{display:block;color:initial;font:initial}" +
-      ".artclub-artist-shadow-page{display:block;min-height:1px;background:#fff;color:#0a0a0a}" +
-      ".artclub-artist-shadow-status{margin:0 auto;max-width:80rem;padding:2rem 0.75rem;color:#a3a3a3;font:400 0.875rem/1.5 ui-sans-serif,system-ui,sans-serif}" +
-      "@media (min-width:640px){.artclub-artist-shadow-status{padding-left:2rem;padding-right:2rem}}";
-    root.appendChild(style);
-  }
-
-  function appendHeadStyles(doc, root, baseUrl) {
-    if (!doc || !doc.head) return;
-
-    doc.head.querySelectorAll('link[rel="stylesheet"], style').forEach(function (node) {
-      if (node.tagName === "LINK") {
-        var href = trim(node.getAttribute("href") || "");
-        if (!href) return;
-
-        var link = document.createElement("link");
-        link.rel = "stylesheet";
-        link.href = toAbsoluteUrl(href, baseUrl);
-
-        var media = trim(node.getAttribute("media") || "");
-        if (media) link.media = media;
-
-        root.appendChild(link);
-        return;
-      }
-
-      var style = document.createElement("style");
-      style.textContent = absolutizeCssUrls(node.textContent || "", baseUrl);
-      root.appendChild(style);
-    });
+  function getRemScale() {
+    var rootFontSize = getRootFontSize();
+    if (!rootFontSize) return 1;
+    return 16 / rootFontSize;
   }
 
   function renderStatus(container, message) {
-    var root = createShadowRoot(container);
-    clearShadowRoot(root);
-    appendBaseStyles(root);
-
-    var status = document.createElement("div");
-    status.className = "artclub-artist-shadow-status";
-    status.textContent = message;
-    root.appendChild(status);
+    ensureEmbedBaseStyles();
+    container.innerHTML = '<div class="artclub-artist-embed__status">' + message + "</div>";
   }
 
   function getSlugFromAppUrl(appUrl) {
@@ -248,21 +315,7 @@
       (productUrl
         ? '<a href="' +
           productUrl.replace(/"/g, "&quot;") +
-          '" target="_top" rel="noreferrer" class="inline-flex rounded-full border border-neutral-300 px-4 py-2 text-sm font-medium tracking-[-0.01em] text-neutral-950" data-artclub-track-click="shopify_product" data-artclub-source="shopify_artist_embed" data-artclub-artist-id="' +
-          trim(artist.canonicalArtistId || "") +
-          '" data-artclub-artist-slug="' +
-          trim(artist.slug || "") +
-          '" data-artclub-artist-name="' +
-          trim(artist.displayName || "") +
-          '" data-artclub-product-id="' +
-          trim(artwork.canonicalProductId || "") +
-          '" data-artclub-product-key="' +
-          trim(artwork.productKey || "") +
-          '" data-artclub-shopify-product-id="' +
-          trim(artwork.shopifyProductId || "") +
-          '" data-artclub-product-handle="' +
-          trim(artwork.productHandle || "") +
-          '">View on ARTCLUB</a>'
+          '" target="_top" rel="noreferrer" class="inline-flex rounded-full border border-neutral-300 px-4 py-2 text-sm font-medium tracking-[-0.01em] text-neutral-950" data-artclub-track-click="shopify_product">View on ARTCLUB</a>'
         : "") +
       "</div></div></div></div>"
     );
@@ -335,41 +388,21 @@
     });
   }
 
-  function attachArtworkImpressionObserver(scope, container, artist) {
-    if (container.__artclubArtworkImpressionObserver) {
-      container.__artclubArtworkImpressionObserver.disconnect();
+  function applyScaleCompensation(appRoot) {
+    if (!appRoot || !appRoot.style) return;
+
+    var scale = getRemScale();
+    if (!Number.isFinite(scale) || scale <= 0.01) scale = 1;
+
+    appRoot.dataset.artclubRemScale = String(scale);
+    if (Math.abs(scale - 1) < 0.01 || typeof appRoot.style.zoom === "undefined") {
+      appRoot.style.zoom = "";
+      appRoot.style.width = "100%";
+      return;
     }
-    if (!window.IntersectionObserver || !scope) return;
 
-    var seenProductKeys = new Set();
-    var observer = new window.IntersectionObserver(
-      function (entries) {
-        entries.forEach(function (entry) {
-          if (!entry.isIntersecting || entry.intersectionRatio < 0.5) return;
-
-          var target = entry.target;
-          var artwork = readArtworkDataFromCard(target);
-          if (!artwork || !artwork.productKey || seenProductKeys.has(artwork.productKey)) return;
-
-          seenProductKeys.add(artwork.productKey);
-          observer.unobserve(target);
-
-          dispatchDocumentEvent("artclub:artist-embed-artwork-impression", {
-            container: container,
-            artwork: artwork,
-            artist: artist,
-            target: target,
-          });
-        });
-      },
-      { threshold: [0.5] }
-    );
-
-    scope.querySelectorAll("[data-artclub-artwork-card='true']").forEach(function (card) {
-      observer.observe(card);
-    });
-
-    container.__artclubArtworkImpressionObserver = observer;
+    appRoot.style.zoom = String(scale);
+    appRoot.style.width = String(100 / scale) + "%";
   }
 
   function attachInteractions(scope, container, artist) {
@@ -396,30 +429,8 @@
         return;
       }
 
-      var productLink = target.closest("[data-artclub-track-click='shopify_product'], a[href*='/products/']");
-      if (productLink) {
-        dispatchDocumentEvent("artclub:artist-embed-product-click", {
-          container: container,
-          artist: artist,
-          artwork: {
-            canonicalProductId: trim(productLink.getAttribute("data-artclub-product-id") || ""),
-            productKey: trim(productLink.getAttribute("data-artclub-product-key") || ""),
-            shopifyProductId: trim(productLink.getAttribute("data-artclub-shopify-product-id") || ""),
-            productHandle: normalizeHandle(productLink.getAttribute("data-artclub-product-handle") || ""),
-          },
-          target: productLink,
-        });
-        return;
-      }
-
       var artworkCard = target.closest("[data-artclub-artwork-card='true']");
       if (artworkCard) {
-        dispatchDocumentEvent("artclub:artist-embed-artwork-click", {
-          container: container,
-          artwork: readArtworkDataFromCard(artworkCard),
-          artist: artist,
-          target: artworkCard,
-        });
         openArtworkModal(scope, container, artist, artworkCard);
       }
     });
@@ -430,19 +441,11 @@
     var embedElement = extractEmbedElement(doc);
     if (!doc || !embedElement) throw new Error("artist_embed_markup_missing");
 
-    var scope = createShadowRoot(container);
-    clearShadowRoot(scope);
-    appendBaseStyles(scope);
-    appendHeadStyles(doc, scope, appUrl);
+    ensureEmbedBaseStyles();
+    container.innerHTML = "";
 
-    var page = document.createElement("div");
-    page.className = "artclub-artist-shadow-page " + trim((doc.body && doc.body.className) || "");
-    page.setAttribute("data-artclub-shadow-page", "true");
-
-    if (doc.body) {
-      var bodyStyle = trim(doc.body.getAttribute("style") || "");
-      if (bodyStyle) page.setAttribute("style", bodyStyle);
-    }
+    var appRoot = document.createElement("div");
+    appRoot.className = "artclub-artist-embed__app";
 
     var template = document.createElement("template");
     template.innerHTML = embedElement.outerHTML || (doc.body ? doc.body.innerHTML : "");
@@ -450,17 +453,18 @@
     if (!contentRoot) throw new Error("artist_embed_content_missing");
 
     absolutizeEmbeddedUrls(contentRoot, appUrl);
-    page.appendChild(contentRoot);
-    scope.appendChild(page);
+    appRoot.appendChild(contentRoot);
+    container.appendChild(appRoot);
 
-    var artist = readArtistData(page, container, appUrl);
-    applyTrackingAttributes(page, container, artist);
-    attachArtworkImpressionObserver(page, container, artist);
-    attachInteractions(page, container, artist);
+    applyScaleCompensation(appRoot);
 
-    var activeTabButton = page.querySelector("[data-artclub-embed-tab-active='true']");
+    var artist = readArtistData(appRoot, container, appUrl);
+    applyTrackingAttributes(appRoot, container, artist);
+    attachInteractions(appRoot, container, artist);
+
+    var activeTabButton = appRoot.querySelector("[data-artclub-embed-tab-active='true']");
     var activeTab = activeTabButton ? activeTabButton.getAttribute("data-artclub-embed-tab") || "" : "artworks";
-    setActiveTab(page, activeTab || "artworks");
+    setActiveTab(appRoot, activeTab || "artworks");
 
     dispatchDocumentEvent("artclub:artist-embed-rendered", {
       container: container,
@@ -488,7 +492,10 @@
         return response.text();
       })
       .then(function (html) {
-        renderContainer(container, html, appUrl);
+        var doc = parseHtmlDocument(html);
+        return ensureHeadAssets(doc, appUrl).then(function () {
+          renderContainer(container, html, appUrl);
+        });
       })
       .catch(function () {
         renderStatus(container, "Artist profile unavailable.");
@@ -496,6 +503,7 @@
   }
 
   function boot() {
+    ensureEmbedBaseStyles();
     document.querySelectorAll("[data-artclub-artist-embed]").forEach(function (container) {
       loadContainer(container);
     });
