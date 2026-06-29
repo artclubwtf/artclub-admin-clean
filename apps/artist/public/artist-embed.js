@@ -3,54 +3,12 @@
   if (window.__artclubArtistEmbedLoaded) return;
   window.__artclubArtistEmbedLoaded = true;
 
-  var currentScript = document.currentScript;
-  var defaultBaseUrl = "";
-
-  if (currentScript && currentScript.src) {
-    try {
-      defaultBaseUrl = new URL(currentScript.src, window.location.href).origin;
-    } catch (_error) {
-      defaultBaseUrl = "";
-    }
-  }
-
   function trim(value) {
     return typeof value === "string" ? value.trim() : "";
   }
 
   function normalizeHandle(value) {
     return trim(value).replace(/^\/+|\/+$/g, "");
-  }
-
-  function ensureStylesheet(baseUrl) {
-    var normalizedBaseUrl = trim(baseUrl || defaultBaseUrl || "").replace(/\/+$/, "");
-    if (!normalizedBaseUrl) return;
-
-    var href = normalizedBaseUrl + "/artist-embed.css";
-    if (document.querySelector('link[data-artclub-artist-embed-css="' + href + '"]')) return;
-
-    var link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = href;
-    link.setAttribute("data-artclub-artist-embed-css", href);
-    document.head.appendChild(link);
-  }
-
-  function getContainerAppUrl(container) {
-    return container && container.dataset ? trim(container.dataset.artclubAppUrl || "") : "";
-  }
-
-  function getEmbedAssetBaseUrl(container) {
-    var appUrl = getContainerAppUrl(container);
-    if (appUrl) {
-      try {
-        return new URL(appUrl, window.location.href).origin;
-      } catch (_error) {
-        void 0;
-      }
-    }
-
-    return defaultBaseUrl;
   }
 
   function parseHtmlDocument(html) {
@@ -61,44 +19,136 @@
     }
   }
 
-  function absolutizeEmbeddedUrls(container, baseUrl) {
-    if (!container || !baseUrl) return;
+  function getContainerAppUrl(container) {
+    return container && container.dataset ? trim(container.dataset.artclubAppUrl || "") : "";
+  }
 
-    container.querySelectorAll("[src]").forEach(function (node) {
+  function toAbsoluteUrl(value, baseUrl) {
+    var normalized = trim(value);
+    if (!normalized) return "";
+
+    try {
+      return new URL(normalized, baseUrl).toString();
+    } catch (_error) {
+      return normalized;
+    }
+  }
+
+  function absolutizeCssUrls(cssText, baseUrl) {
+    return String(cssText || "")
+      .replace(/url\(([^)]+)\)/g, function (match, rawValue) {
+        var value = trim(String(rawValue || "").replace(/^['"]|['"]$/g, ""));
+        if (!value || /^(data:|blob:|https?:|\/\/|#)/i.test(value)) return match;
+        return 'url("' + toAbsoluteUrl(value, baseUrl).replace(/"/g, '\\"') + '")';
+      })
+      .replace(/@import\s+(?:url\()?['"]?([^'")\s]+)['"]?\)?/g, function (match, rawValue) {
+        var value = trim(rawValue || "");
+        if (!value || /^(data:|blob:|https?:|\/\/)/i.test(value)) return match;
+        return match.replace(rawValue, toAbsoluteUrl(value, baseUrl));
+      });
+  }
+
+  function extractEmbedElement(doc) {
+    if (!doc) return null;
+    return (
+      doc.querySelector("[data-artclub-public-profile='true']") ||
+      doc.querySelector("[data-artclub-public-shell='true']") ||
+      doc.querySelector("[data-artclub-public-artist-view='true']") ||
+      doc.body
+    );
+  }
+
+  function absolutizeEmbeddedUrls(root, baseUrl) {
+    if (!root || !baseUrl) return;
+
+    root.querySelectorAll("[src]").forEach(function (node) {
       var value = trim(node.getAttribute("src") || "");
       if (!value) return;
-      try {
-        node.setAttribute("src", new URL(value, baseUrl).toString());
-      } catch (_error) {
-        void 0;
-      }
+      node.setAttribute("src", toAbsoluteUrl(value, baseUrl));
     });
 
-    container.querySelectorAll("[href]").forEach(function (node) {
+    root.querySelectorAll("[srcset]").forEach(function (node) {
+      var srcset = trim(node.getAttribute("srcset") || "");
+      if (!srcset) return;
+
+      var nextSrcset = srcset
+        .split(",")
+        .map(function (candidate) {
+          var parts = trim(candidate).split(/\s+/);
+          if (!parts[0]) return "";
+          parts[0] = toAbsoluteUrl(parts[0], baseUrl);
+          return parts.join(" ");
+        })
+        .filter(Boolean)
+        .join(", ");
+
+      if (nextSrcset) node.setAttribute("srcset", nextSrcset);
+    });
+
+    root.querySelectorAll("[href]").forEach(function (node) {
       var value = trim(node.getAttribute("href") || "");
       if (!value || value.charAt(0) === "#") return;
       if (/^(mailto:|tel:|javascript:)/i.test(value)) return;
-      try {
-        node.setAttribute("href", new URL(value, baseUrl).toString());
-      } catch (_error) {
-        void 0;
-      }
+      node.setAttribute("href", toAbsoluteUrl(value, baseUrl));
     });
   }
 
-  function extractEmbedMarkup(doc) {
-    if (!doc) return "";
+  function createShadowRoot(container) {
+    if (!container.attachShadow) return container;
+    if (container.shadowRoot) return container.shadowRoot;
+    return container.attachShadow({ mode: "open" });
+  }
 
-    var publicProfile = doc.querySelector("[data-artclub-public-profile='true']");
-    if (publicProfile) return publicProfile.outerHTML;
+  function clearShadowRoot(root) {
+    while (root.firstChild) {
+      root.removeChild(root.firstChild);
+    }
+  }
 
-    var shell = doc.querySelector("[data-artclub-public-shell='true']");
-    if (shell) return shell.outerHTML;
+  function appendBaseStyles(root) {
+    var style = document.createElement("style");
+    style.textContent =
+      ":host{display:block;color:initial;font:initial}" +
+      ".artclub-artist-shadow-page{display:block;min-height:1px;background:#fff;color:#0a0a0a}" +
+      ".artclub-artist-shadow-status{margin:0 auto;max-width:80rem;padding:2rem 0.75rem;color:#a3a3a3;font:400 0.875rem/1.5 ui-sans-serif,system-ui,sans-serif}" +
+      "@media (min-width:640px){.artclub-artist-shadow-status{padding-left:2rem;padding-right:2rem}}";
+    root.appendChild(style);
+  }
 
-    var artistView = doc.querySelector("[data-artclub-public-artist-view='true']");
-    if (artistView) return artistView.outerHTML;
+  function appendHeadStyles(doc, root, baseUrl) {
+    if (!doc || !doc.head) return;
 
-    return doc.body ? doc.body.innerHTML : "";
+    doc.head.querySelectorAll('link[rel="stylesheet"], style').forEach(function (node) {
+      if (node.tagName === "LINK") {
+        var href = trim(node.getAttribute("href") || "");
+        if (!href) return;
+
+        var link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = toAbsoluteUrl(href, baseUrl);
+
+        var media = trim(node.getAttribute("media") || "");
+        if (media) link.media = media;
+
+        root.appendChild(link);
+        return;
+      }
+
+      var style = document.createElement("style");
+      style.textContent = absolutizeCssUrls(node.textContent || "", baseUrl);
+      root.appendChild(style);
+    });
+  }
+
+  function renderStatus(container, message) {
+    var root = createShadowRoot(container);
+    clearShadowRoot(root);
+    appendBaseStyles(root);
+
+    var status = document.createElement("div");
+    status.className = "artclub-artist-shadow-status";
+    status.textContent = message;
+    root.appendChild(status);
   }
 
   function getSlugFromAppUrl(appUrl) {
@@ -111,10 +161,11 @@
     }
   }
 
-  function readArtistData(container, appUrl) {
+  function readArtistData(scope, container, appUrl) {
     var view =
-      container.querySelector("[data-artclub-public-profile='true']") ||
-      container.querySelector("[data-artclub-public-artist-view='true']");
+      (scope && scope.querySelector && scope.querySelector("[data-artclub-public-profile='true']")) ||
+      (scope && scope.querySelector && scope.querySelector("[data-artclub-public-artist-view='true']"));
+
     return {
       canonicalArtistId: trim((view && view.getAttribute("data-artclub-artist-id")) || container.dataset.artclubArtistId || ""),
       slug: normalizeHandle((view && view.getAttribute("data-artclub-artist-slug")) || container.dataset.artclubArtistSlug || getSlugFromAppUrl(appUrl)),
@@ -141,18 +192,22 @@
     };
   }
 
-  function setActiveTab(container, nextTab) {
-    var tab = normalizeHandle(nextTab);
-    if (!tab) return;
+  function dispatchDocumentEvent(name, detail) {
+    document.dispatchEvent(new CustomEvent(name, { detail: detail }));
+  }
 
-    container.querySelectorAll("[data-artclub-embed-tab]").forEach(function (button) {
+  function setActiveTab(scope, nextTab) {
+    var tab = normalizeHandle(nextTab);
+    if (!tab || !scope) return;
+
+    scope.querySelectorAll("[data-artclub-embed-tab]").forEach(function (button) {
       var isActive = button.getAttribute("data-artclub-embed-tab") === tab;
       button.setAttribute("data-artclub-embed-tab-active", isActive ? "true" : "false");
       button.classList.toggle("text-neutral-950", isActive);
       button.classList.toggle("text-neutral-400", !isActive);
     });
 
-    container.querySelectorAll("[data-artclub-embed-panel]").forEach(function (panel) {
+    scope.querySelectorAll("[data-artclub-embed-panel]").forEach(function (panel) {
       panel.hidden = panel.getAttribute("data-artclub-embed-panel") !== tab;
     });
   }
@@ -193,49 +248,75 @@
       (productUrl
         ? '<a href="' +
           productUrl.replace(/"/g, "&quot;") +
-          '" target="_top" rel="noreferrer" class="inline-flex rounded-full border border-neutral-300 px-4 py-2 text-sm font-medium tracking-[-0.01em] text-neutral-950" data-artclub-track-click="shopify_product">View on ARTCLUB</a>'
+          '" target="_top" rel="noreferrer" class="inline-flex rounded-full border border-neutral-300 px-4 py-2 text-sm font-medium tracking-[-0.01em] text-neutral-950" data-artclub-track-click="shopify_product" data-artclub-source="shopify_artist_embed" data-artclub-artist-id="' +
+          trim(artist.canonicalArtistId || "") +
+          '" data-artclub-artist-slug="' +
+          trim(artist.slug || "") +
+          '" data-artclub-artist-name="' +
+          trim(artist.displayName || "") +
+          '" data-artclub-product-id="' +
+          trim(artwork.canonicalProductId || "") +
+          '" data-artclub-product-key="' +
+          trim(artwork.productKey || "") +
+          '" data-artclub-shopify-product-id="' +
+          trim(artwork.shopifyProductId || "") +
+          '" data-artclub-product-handle="' +
+          trim(artwork.productHandle || "") +
+          '">View on ARTCLUB</a>'
         : "") +
       "</div></div></div></div>"
     );
   }
 
-  function closeModal(container) {
-    var modal = container.querySelector("[data-artclub-embed-modal='true']");
-    if (!modal) return;
-    modal.remove();
+  function closeModal(scope) {
+    var modal = scope && scope.querySelector ? scope.querySelector("[data-artclub-embed-modal='true']") : null;
+    if (modal) modal.remove();
   }
 
-  function openArtworkModal(container, trigger) {
+  function openArtworkModal(scope, container, artist, trigger) {
     var artwork = readArtworkDataFromCard(trigger);
-    var artist = readArtistData(container, getContainerAppUrl(container));
     if (!artwork) return;
 
-    closeModal(container);
+    closeModal(scope);
 
     var modal = document.createElement("div");
     modal.setAttribute("data-artclub-embed-modal", "true");
     modal.innerHTML = buildModalMarkup(artist, artwork);
-    container.appendChild(modal);
+    scope.appendChild(modal);
 
-    document.dispatchEvent(
-      new CustomEvent("artclub:artist-embed-artwork-view", {
-        detail: {
-          container: container,
-          artwork: artwork,
-          artist: artist,
-          target: modal.querySelector("[data-artclub-source='shopify_artist_embed']") || modal,
-        },
-      })
-    );
+    dispatchDocumentEvent("artclub:artist-embed-artwork-view", {
+      container: container,
+      artwork: artwork,
+      artist: artist,
+      target: modal.querySelector("[data-artclub-source='shopify_artist_embed']") || modal,
+    });
   }
 
-  function applyTrackingAttributes(container, artist) {
+  function copyArtworkData(fromNode, toNode) {
+    if (!fromNode || !fromNode.dataset || !toNode) return;
+
+    [
+      ["artclubProductId", "data-artclub-product-id"],
+      ["artclubProductKey", "data-artclub-product-key"],
+      ["artclubShopifyProductId", "data-artclub-shopify-product-id"],
+      ["artclubProductHandle", "data-artclub-product-handle"],
+    ].forEach(function (entry) {
+      var datasetKey = entry[0];
+      var attr = entry[1];
+      var value = trim(fromNode.dataset[datasetKey] || "");
+      if (value && !trim(toNode.getAttribute(attr) || "")) {
+        toNode.setAttribute(attr, value);
+      }
+    });
+  }
+
+  function applyTrackingAttributes(scope, container, artist) {
     container.dataset.artclubSource = "shopify_artist_embed";
     if (artist.canonicalArtistId) container.dataset.artclubArtistId = artist.canonicalArtistId;
     if (artist.slug) container.dataset.artclubArtistSlug = artist.slug;
     if (artist.displayName) container.dataset.artclubArtistName = artist.displayName;
 
-    container.querySelectorAll("[data-artclub-artwork-card='true']").forEach(function (card) {
+    scope.querySelectorAll("[data-artclub-artwork-card='true']").forEach(function (card) {
       card.setAttribute("data-artclub-track-impression", "artwork");
       card.setAttribute("data-artclub-track-click", "artwork");
       card.setAttribute("data-artclub-source", "shopify_artist_embed");
@@ -244,86 +325,157 @@
       if (artist.displayName) card.setAttribute("data-artclub-artist-name", artist.displayName);
     });
 
-    container.querySelectorAll("a[href*='/products/']").forEach(function (link) {
+    scope.querySelectorAll("a[href*='/products/']").forEach(function (link) {
       link.setAttribute("data-artclub-track-click", "shopify_product");
       link.setAttribute("data-artclub-source", "shopify_artist_embed");
       if (artist.canonicalArtistId) link.setAttribute("data-artclub-artist-id", artist.canonicalArtistId);
       if (artist.slug) link.setAttribute("data-artclub-artist-slug", artist.slug);
       if (artist.displayName) link.setAttribute("data-artclub-artist-name", artist.displayName);
+      copyArtworkData(link.closest("[data-artclub-artwork-card='true']"), link);
     });
   }
 
-  function attachInteractions(container) {
-    container.querySelectorAll("[data-artclub-embed-tab]").forEach(function (button) {
+  function attachArtworkImpressionObserver(scope, container, artist) {
+    if (container.__artclubArtworkImpressionObserver) {
+      container.__artclubArtworkImpressionObserver.disconnect();
+    }
+    if (!window.IntersectionObserver || !scope) return;
+
+    var seenProductKeys = new Set();
+    var observer = new window.IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting || entry.intersectionRatio < 0.5) return;
+
+          var target = entry.target;
+          var artwork = readArtworkDataFromCard(target);
+          if (!artwork || !artwork.productKey || seenProductKeys.has(artwork.productKey)) return;
+
+          seenProductKeys.add(artwork.productKey);
+          observer.unobserve(target);
+
+          dispatchDocumentEvent("artclub:artist-embed-artwork-impression", {
+            container: container,
+            artwork: artwork,
+            artist: artist,
+            target: target,
+          });
+        });
+      },
+      { threshold: [0.5] }
+    );
+
+    scope.querySelectorAll("[data-artclub-artwork-card='true']").forEach(function (card) {
+      observer.observe(card);
+    });
+
+    container.__artclubArtworkImpressionObserver = observer;
+  }
+
+  function attachInteractions(scope, container, artist) {
+    scope.querySelectorAll("[data-artclub-embed-tab]").forEach(function (button) {
       button.addEventListener("click", function () {
         var tab = button.getAttribute("data-artclub-embed-tab") || "";
-        setActiveTab(container, tab);
+        setActiveTab(scope, tab);
       });
     });
 
-    container.querySelectorAll("[data-artclub-embed-artwork-index]").forEach(function (button) {
-      button.addEventListener("click", function () {
-        openArtworkModal(container, button);
-      });
-    });
-
-    container.addEventListener("click", function (event) {
+    scope.addEventListener("click", function (event) {
       var target = event.target;
       if (!target || !target.closest) return;
 
       if (target.closest("[data-artclub-embed-modal-close='true']")) {
-        closeModal(container);
+        closeModal(scope);
         return;
       }
 
       var overlay = target.closest("[data-artclub-embed-modal-overlay='true']");
       var dialog = target.closest("[data-artclub-source='shopify_artist_embed']");
       if (overlay && !dialog) {
-        closeModal(container);
+        closeModal(scope);
+        return;
+      }
+
+      var productLink = target.closest("[data-artclub-track-click='shopify_product'], a[href*='/products/']");
+      if (productLink) {
+        dispatchDocumentEvent("artclub:artist-embed-product-click", {
+          container: container,
+          artist: artist,
+          artwork: {
+            canonicalProductId: trim(productLink.getAttribute("data-artclub-product-id") || ""),
+            productKey: trim(productLink.getAttribute("data-artclub-product-key") || ""),
+            shopifyProductId: trim(productLink.getAttribute("data-artclub-shopify-product-id") || ""),
+            productHandle: normalizeHandle(productLink.getAttribute("data-artclub-product-handle") || ""),
+          },
+          target: productLink,
+        });
+        return;
+      }
+
+      var artworkCard = target.closest("[data-artclub-artwork-card='true']");
+      if (artworkCard) {
+        dispatchDocumentEvent("artclub:artist-embed-artwork-click", {
+          container: container,
+          artwork: readArtworkDataFromCard(artworkCard),
+          artist: artist,
+          target: artworkCard,
+        });
+        openArtworkModal(scope, container, artist, artworkCard);
       }
     });
   }
 
   function renderContainer(container, html, appUrl) {
     var doc = parseHtmlDocument(html);
-    var markup = extractEmbedMarkup(doc);
-    if (!markup) throw new Error("artist_embed_markup_missing");
+    var embedElement = extractEmbedElement(doc);
+    if (!doc || !embedElement) throw new Error("artist_embed_markup_missing");
 
-    container.innerHTML = markup;
-    absolutizeEmbeddedUrls(container, appUrl);
+    var scope = createShadowRoot(container);
+    clearShadowRoot(scope);
+    appendBaseStyles(scope);
+    appendHeadStyles(doc, scope, appUrl);
 
-    var artist = readArtistData(container, appUrl);
-    applyTrackingAttributes(container, artist);
-    attachInteractions(container);
+    var page = document.createElement("div");
+    page.className = "artclub-artist-shadow-page " + trim((doc.body && doc.body.className) || "");
+    page.setAttribute("data-artclub-shadow-page", "true");
 
-    var activeTabButton = container.querySelector("[data-artclub-embed-tab-active='true']");
+    if (doc.body) {
+      var bodyStyle = trim(doc.body.getAttribute("style") || "");
+      if (bodyStyle) page.setAttribute("style", bodyStyle);
+    }
+
+    var template = document.createElement("template");
+    template.innerHTML = embedElement.outerHTML || (doc.body ? doc.body.innerHTML : "");
+    var contentRoot = template.content.firstElementChild;
+    if (!contentRoot) throw new Error("artist_embed_content_missing");
+
+    absolutizeEmbeddedUrls(contentRoot, appUrl);
+    page.appendChild(contentRoot);
+    scope.appendChild(page);
+
+    var artist = readArtistData(page, container, appUrl);
+    applyTrackingAttributes(page, container, artist);
+    attachArtworkImpressionObserver(page, container, artist);
+    attachInteractions(page, container, artist);
+
+    var activeTabButton = page.querySelector("[data-artclub-embed-tab-active='true']");
     var activeTab = activeTabButton ? activeTabButton.getAttribute("data-artclub-embed-tab") || "" : "artworks";
-    setActiveTab(container, activeTab || "artworks");
+    setActiveTab(page, activeTab || "artworks");
 
-    document.dispatchEvent(
-      new CustomEvent("artclub:artist-embed-rendered", {
-        detail: {
-          container: container,
-          payload: artist,
-        },
-      })
-    );
+    dispatchDocumentEvent("artclub:artist-embed-rendered", {
+      container: container,
+      payload: artist,
+    });
   }
 
   function loadContainer(container) {
     var appUrl = getContainerAppUrl(container);
-    var baseUrl = getEmbedAssetBaseUrl(container);
     if (!appUrl) {
-      container.innerHTML = '<div class="mx-auto max-w-5xl px-3 py-8 text-sm text-neutral-400 sm:px-8">Artist app URL missing.</div>';
-      return;
-    }
-    if (!baseUrl) {
-      container.innerHTML = '<div class="mx-auto max-w-5xl px-3 py-8 text-sm text-neutral-400 sm:px-8">Artist profile unavailable.</div>';
+      renderStatus(container, "Artist app URL missing.");
       return;
     }
 
-    ensureStylesheet(baseUrl);
-    container.innerHTML = '<div class="mx-auto max-w-5xl px-3 py-8 text-sm text-neutral-400 sm:px-8">Loading artist profile…</div>';
+    renderStatus(container, "Loading artist profile…");
 
     fetch(appUrl, {
       method: "GET",
@@ -339,7 +491,7 @@
         renderContainer(container, html, appUrl);
       })
       .catch(function () {
-        container.innerHTML = '<div class="mx-auto max-w-5xl px-3 py-8 text-sm text-neutral-400 sm:px-8">Artist profile unavailable.</div>';
+        renderStatus(container, "Artist profile unavailable.");
       });
   }
 

@@ -349,6 +349,27 @@
   }
 
   function setupArtistEmbedTracking() {
+    function sendEmbedArtworkEvent(eventType, detail) {
+      detail = detail || {};
+      var target = detail.target || detail.container || null;
+      var artist = detail.artist || {};
+      var artwork = detail.artwork || {};
+      if (!target) return;
+
+      sendPayload(
+        payloadForEvent(eventType, target, {
+          source: "shopify_artist_embed",
+          canonicalArtistId: trim(artist.canonicalArtistId || ""),
+          artistSlug: normalizeHandle(artist.slug || ""),
+          artistName: trim(artist.displayName || ""),
+          canonicalProductId: trim(artwork.canonicalProductId || ""),
+          productKey: trim(artwork.productKey || ""),
+          shopifyProductId: trim(artwork.shopifyProductId || ""),
+          productHandle: normalizeHandle(artwork.productHandle || ""),
+        })
+      );
+    }
+
     document.addEventListener("artclub:artist-embed-rendered", function (event) {
       var detail = event.detail || {};
       var container = detail.container || null;
@@ -367,24 +388,19 @@
     });
 
     document.addEventListener("artclub:artist-embed-artwork-view", function (event) {
-      var detail = event.detail || {};
-      var target = detail.target || detail.container || null;
-      var artist = detail.artist || {};
-      var artwork = detail.artwork || {};
-      if (!target) return;
+      sendEmbedArtworkEvent("artwork_view", event.detail || {});
+    });
 
-      sendPayload(
-        payloadForEvent("artwork_view", target, {
-          source: "shopify_artist_embed",
-          canonicalArtistId: trim(artist.canonicalArtistId || ""),
-          artistSlug: normalizeHandle(artist.slug || ""),
-          artistName: trim(artist.displayName || ""),
-          canonicalProductId: trim(artwork.canonicalProductId || ""),
-          productKey: trim(artwork.productKey || ""),
-          shopifyProductId: trim(artwork.shopifyProductId || ""),
-          productHandle: normalizeHandle(artwork.productHandle || ""),
-        })
-      );
+    document.addEventListener("artclub:artist-embed-artwork-impression", function (event) {
+      sendEmbedArtworkEvent("artwork_impression", event.detail || {});
+    });
+
+    document.addEventListener("artclub:artist-embed-artwork-click", function (event) {
+      sendEmbedArtworkEvent("artwork_click", event.detail || {});
+    });
+
+    document.addEventListener("artclub:artist-embed-product-click", function (event) {
+      sendEmbedArtworkEvent("shopify_product_click", event.detail || {});
     });
   }
 

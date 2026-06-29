@@ -7,9 +7,10 @@ export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const isPublicArtistPage = pathname.startsWith("/artist/");
   const isPublicEmbedAsset = pathname === "/artist-embed.js" || pathname === "/artist-embed.css";
+  const isPublicNextStaticAsset = pathname.startsWith("/_next/static/");
   const headers = buildPublicCorsHeaders(req.headers.get("origin"));
 
-  if (!isPublicArtistPage && !isPublicEmbedAsset) {
+  if (!isPublicArtistPage && !isPublicEmbedAsset && !isPublicNextStaticAsset) {
     return NextResponse.next();
   }
 
@@ -25,5 +26,5 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/artist/:path*", "/artist-embed.js", "/artist-embed.css"],
+  matcher: ["/artist/:path*", "/artist-embed.js", "/artist-embed.css", "/_next/static/:path*"],
 };
