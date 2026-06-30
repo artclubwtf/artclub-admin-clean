@@ -22292,6 +22292,117 @@ var ArtclubArtistEmbed = (() => {
   function extractAppOrigin(appUrl) {
     return new URL(appUrl).origin;
   }
+  function isExternalUrl(value) {
+    return /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(value);
+  }
+  function absolutizeUrl(value, appUrl) {
+    const raw = trim2(value);
+    if (!raw || raw.startsWith("#") || isExternalUrl(raw) || /^(?:data:|blob:)/i.test(raw)) return raw;
+    try {
+      if (raw.startsWith("/")) {
+        return new URL(raw, extractAppOrigin(appUrl)).toString();
+      }
+      return new URL(raw, appUrl).toString();
+    } catch {
+      return raw;
+    }
+  }
+  function absolutizeSrcset(value, appUrl) {
+    const raw = trim2(value);
+    if (!raw) return raw;
+    return raw.split(",").map((candidate) => {
+      const parts = trim2(candidate).split(/\s+/);
+      if (!parts[0]) return "";
+      parts[0] = absolutizeUrl(parts[0], appUrl);
+      return parts.join(" ");
+    }).filter(Boolean).join(", ");
+  }
+  function rewriteCssUrls(value, appUrl) {
+    return String(value || "").replace(/url\(([^)]+)\)/g, (match, rawValue) => {
+      const cleaned = trim2(String(rawValue || "").replace(/^['"]|['"]$/g, ""));
+      if (!cleaned) return match;
+      const absolute = absolutizeUrl(cleaned, appUrl);
+      return absolute ? `url("${absolute.replace(/"/g, '\\"')}")` : match;
+    });
+  }
+  function absolutizeNodeUrls(root, appUrl) {
+    root.querySelectorAll("img[src], source[src], video[src], video[poster]").forEach((node) => {
+      if (node instanceof HTMLImageElement || node instanceof HTMLSourceElement || node instanceof HTMLVideoElement) {
+        const src = node.getAttribute("src");
+        if (src) node.setAttribute("src", absolutizeUrl(src, appUrl));
+      }
+      if (node instanceof HTMLVideoElement) {
+        const poster = node.getAttribute("poster");
+        if (poster) node.setAttribute("poster", absolutizeUrl(poster, appUrl));
+      }
+    });
+    root.querySelectorAll("img[srcset], source[srcset]").forEach((node) => {
+      const srcset = node.getAttribute("srcset");
+      if (srcset) node.setAttribute("srcset", absolutizeSrcset(srcset, appUrl));
+    });
+    root.querySelectorAll("a[href]").forEach((node) => {
+      const href = node.getAttribute("href");
+      if (!href) return;
+      node.setAttribute("href", absolutizeUrl(href, appUrl));
+    });
+    root.querySelectorAll("[style]").forEach((node) => {
+      const style = node.getAttribute("style");
+      if (!style || !style.includes("url(")) return;
+      node.setAttribute("style", rewriteCssUrls(style, appUrl));
+    });
+  }
+  function normalizeProfileUrls(profile, appUrl) {
+    return {
+      ...profile,
+      avatarUrl: absolutizeUrl(profile.avatarUrl, appUrl),
+      heroUrl: absolutizeUrl(profile.heroUrl, appUrl),
+      socialLinks: profile.socialLinks.map((item) => ({
+        ...item,
+        url: absolutizeUrl(item.url, appUrl)
+      })),
+      links: profile.links.map((item) => ({
+        ...item,
+        url: absolutizeUrl(item.url, appUrl)
+      })),
+      artworks: profile.artworks.map((artwork) => ({
+        ...artwork,
+        imageUrl: absolutizeUrl(artwork.imageUrl, appUrl),
+        galleryUrls: artwork.galleryUrls.map((url) => absolutizeUrl(url, appUrl)),
+        shopifyProductUrl: absolutizeUrl(artwork.shopifyProductUrl, appUrl)
+      })),
+      upcomingExhibitions: profile.upcomingExhibitions.map((item) => ({
+        ...item,
+        coverImageUrl: absolutizeUrl(item.coverImageUrl, appUrl)
+      })),
+      exhibitionHistory: profile.exhibitionHistory.map((item) => ({
+        ...item,
+        coverImageUrl: absolutizeUrl(item.coverImageUrl, appUrl)
+      })),
+      education: profile.education.map((item) => ({
+        ...item,
+        imageUrl: absolutizeUrl(item.imageUrl, appUrl)
+      })),
+      experience: profile.experience.map((item) => ({
+        ...item,
+        imageUrl: absolutizeUrl(item.imageUrl, appUrl)
+      }))
+    };
+  }
+  function attachUrlRewriteObserver(element, root, appUrl) {
+    element._artclubArtistEmbedUrlObserver?.disconnect();
+    absolutizeNodeUrls(root, appUrl);
+    if (typeof window.MutationObserver !== "function") return;
+    const observer = new window.MutationObserver(() => {
+      absolutizeNodeUrls(root, appUrl);
+    });
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["src", "srcset", "poster", "href", "style"]
+    });
+    element._artclubArtistEmbedUrlObserver = observer;
+  }
   function extractArtistSlug(appUrl) {
     const url = new URL(appUrl);
     const match = url.pathname.match(/\/artist\/([^/?#]+)/i);
@@ -22340,6 +22451,8 @@ var ArtclubArtistEmbed = (() => {
     }
     disconnectedCallback() {
       const self = this;
+      self._artclubArtistEmbedUrlObserver?.disconnect();
+      self._artclubArtistEmbedUrlObserver = null;
       self._artclubArtistEmbedRoot?.unmount();
       self._artclubArtistEmbedRoot = null;
       self._artclubArtistEmbedMounted = false;
@@ -22354,8 +22467,9 @@ var ArtclubArtistEmbed = (() => {
       }
       try {
         const mount = createShadowMount(this, appUrl);
-        const profile = await loadProfile(appUrl);
+        const profile = normalizeProfileUrls(await loadProfile(appUrl), appUrl);
         updateWrapperDataset(wrapper, profile);
+        attachUrlRewriteObserver(this, mount, appUrl);
         const reactRoot = (0, import_client.createRoot)(mount);
         this._artclubArtistEmbedRoot = reactRoot;
         reactRoot.render(
