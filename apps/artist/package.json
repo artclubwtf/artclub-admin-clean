@@ -20,6 +20,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "bcryptjs": "^3.0.3",
+    "esbuild": "^0.28.1",
     "mongoose": "^9.0.2",
     "next": "16.0.10",
     "next-auth": "^4.24.13",
@@ -28,8 +29,5 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "zod": "^4.2.1"
-  },
-  "devDependencies": {
-    "esbuild": "^0.28.1"
   }
 }
