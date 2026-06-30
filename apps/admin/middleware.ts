@@ -74,7 +74,7 @@ export async function middleware(req: NextRequest) {
     if (allowedApi) return NextResponse.next();
 
     try {
-      const token = await getToken({ req, secret: getAuthSecret() });
+      const token = await getToken({ req: req as unknown as Parameters<typeof getToken>[0]["req"], secret: getAuthSecret() });
       if (!token) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
@@ -127,7 +127,7 @@ export async function middleware(req: NextRequest) {
   if (!isAdminPath) return NextResponse.next();
 
   try {
-    const token = await getToken({ req, secret: getAuthSecret() });
+    const token = await getToken({ req: req as unknown as Parameters<typeof getToken>[0]["req"], secret: getAuthSecret() });
     if (!token) {
       return redirectToLogin(req);
     }

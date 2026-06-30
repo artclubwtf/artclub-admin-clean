@@ -7,14 +7,14 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build --webpack",
+    "build": "node scripts/build-artist-embed.mjs && next build --webpack",
     "start": "sh -c 'next start -p \"${PORT:-3000}\"'"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.954.0",
-    "@aws-sdk/s3-request-presigner": "^3.954.0",
     "@artclub/api-client": "workspace:*",
     "@artclub/models": "workspace:*",
+    "@aws-sdk/client-s3": "^3.954.0",
+    "@aws-sdk/s3-request-presigner": "^3.954.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -28,5 +28,8 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "zod": "^4.2.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
   }
 }

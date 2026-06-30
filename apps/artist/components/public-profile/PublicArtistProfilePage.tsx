@@ -20,7 +20,7 @@ type ArtistAnalyticsEventType =
   | "artwork_click"
   | "shopify_product_click";
 
-type ArtistAnalyticsSource = "artist_app" | "artist_app_embed";
+type ArtistAnalyticsSource = "artist_app";
 
 const ARTCLUB_ADMIN_BASE_URL = (process.env.NEXT_PUBLIC_ARTCLUB_ADMIN_BASE_URL || "https://coral-app-tsv6g.ondigitalocean.app").replace(/\/+$/, "");
 const ARTCLUB_ANALYTICS_ENDPOINT = `${ARTCLUB_ADMIN_BASE_URL}/api/analytics/track`;
@@ -61,9 +61,7 @@ function getVisitorId() {
   return created;
 }
 
-function getEmbedContext(): {
-  embedKey: string;
-  isEmbedded: boolean;
+function getPageAnalyticsContext(): {
   source: ArtistAnalyticsSource;
   path: string;
   pageUrl: string;
@@ -71,23 +69,16 @@ function getEmbedContext(): {
 } {
   if (typeof window === "undefined") {
     return {
-      embedKey: "",
-      isEmbedded: false,
       source: "artist_app",
       path: "",
       pageUrl: "",
       referrer: "",
     };
   }
-
-  const params = new URLSearchParams(window.location.search);
-  const isEmbedded = params.get("embed") === "1";
   const path = `${window.location.pathname}${window.location.search}`;
 
   return {
-    embedKey: trim(params.get("artclub_embed_key")),
-    isEmbedded,
-    source: isEmbedded ? "artist_app_embed" : "artist_app",
+    source: "artist_app",
     path,
     pageUrl: path,
     referrer: trim(document.referrer),
@@ -137,11 +128,6 @@ async function sendArtistAnalyticsEvent(params: {
   }
 }
 
-function postParentMessage(message: Record<string, unknown>) {
-  if (typeof window === "undefined" || window.parent === window) return;
-  window.parent.postMessage(message, "*");
-}
-
 export function PublicArtistProfilePage({ profile }: PublicArtistProfilePageProps) {
   const [activeTab, setActiveTab] = useState<PublicArtistProfileTabKey>("artworks");
   const [selectedArtwork, setSelectedArtwork] = useState<PublicArtistArtworkItem | null>(null);
@@ -156,11 +142,9 @@ export function PublicArtistProfilePage({ profile }: PublicArtistProfilePageProp
   }, []);
 
   useEffect(() => {
-    let isCancelled = false;
-
     async function trackArtistProfileView() {
-      const context = getEmbedContext();
-      const success = await sendArtistAnalyticsEvent({
+      const context = getPageAnalyticsContext();
+      await sendArtistAnalyticsEvent({
         eventType: "artist_profile_view",
         source: context.source,
         canonicalArtistId: profile.canonicalArtistId,
@@ -171,61 +155,10 @@ export function PublicArtistProfilePage({ profile }: PublicArtistProfilePageProp
         pageUrl: context.pageUrl,
         referrer: context.referrer,
       });
-
-      if (!isCancelled && success && context.isEmbedded) {
-        postParentMessage({
-          type: "artclub-artist-analytics",
-          event: "artist_profile_view_handled",
-          embedKey: context.embedKey,
-        });
-      }
     }
 
     void trackArtistProfileView();
-
-    return () => {
-      isCancelled = true;
-    };
   }, [profile.canonicalArtistId, profile.displayName, profile.slug]);
-
-  useEffect(() => {
-    const context = getEmbedContext();
-    if (!context.isEmbedded) return;
-
-    const publishHeight = () => {
-      const bodyHeight = document.body ? document.body.scrollHeight : 0;
-      const documentHeight = document.documentElement ? document.documentElement.scrollHeight : 0;
-      postParentMessage({
-        type: "artclub-artist-height",
-        height: Math.max(bodyHeight, documentHeight),
-        embedKey: context.embedKey,
-      });
-    };
-
-    const schedulePublish = () => window.requestAnimationFrame(publishHeight);
-    publishHeight();
-
-    window.addEventListener("load", publishHeight);
-    window.addEventListener("resize", schedulePublish);
-
-    const observer =
-      typeof window.ResizeObserver === "function"
-        ? new window.ResizeObserver(() => {
-            schedulePublish();
-          })
-        : null;
-
-    if (observer) {
-      if (document.body) observer.observe(document.body);
-      if (document.documentElement) observer.observe(document.documentElement);
-    }
-
-    return () => {
-      window.removeEventListener("load", publishHeight);
-      window.removeEventListener("resize", schedulePublish);
-      observer?.disconnect();
-    };
-  }, [profile.slug, profile.artworks.length]);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.IntersectionObserver !== "function") return;
@@ -244,7 +177,7 @@ export function PublicArtistProfilePage({ profile }: PublicArtistProfilePageProp
 
           seenProductKeys.add(productKey);
           void (async () => {
-            const context = getEmbedContext();
+            const context = getPageAnalyticsContext();
             await sendArtistAnalyticsEvent({
               eventType: "artwork_impression",
               source: context.source,
@@ -276,7 +209,7 @@ export function PublicArtistProfilePage({ profile }: PublicArtistProfilePageProp
 
   function trackArtworkEvent(eventType: Exclude<ArtistAnalyticsEventType, "artist_profile_view">, artwork: PublicArtistArtworkItem) {
     void (async () => {
-      const context = getEmbedContext();
+      const context = getPageAnalyticsContext();
       await sendArtistAnalyticsEvent({
         eventType,
         source: context.source,
