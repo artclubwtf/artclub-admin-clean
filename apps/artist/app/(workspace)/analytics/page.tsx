@@ -3,6 +3,8 @@ import { artistAnalyticsRange } from "@artclub/models";
 import { AnalyticsDashboard } from "@/components/analytics/AnalyticsDashboard";
 import { requireArtistContext } from "@/lib/server/artist-context";
 import { loadArtistAnalytics } from "@/lib/server/artist-analytics";
+import { NetworkAnalytics } from "@/components/network/NetworkAnalytics";
+import { isNetworkMvpEnabled } from "@/lib/server/network-flags";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -12,6 +14,7 @@ export default async function AnalyticsPage({
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  if (isNetworkMvpEnabled()) return <NetworkAnalytics />;
   const context = await requireArtistContext();
   const resolvedSearchParams = (await searchParams) || {};
   const rawRange = Array.isArray(resolvedSearchParams.range) ? resolvedSearchParams.range[0] : resolvedSearchParams.range;

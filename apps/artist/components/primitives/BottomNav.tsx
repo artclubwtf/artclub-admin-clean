@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { cn } from "@/lib/cn";
-import { bottomNavItems, type BottomNavItem } from "@/lib/navigation";
+import { bottomNavItems, networkNavItems, type BottomNavItem } from "@/lib/navigation";
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -77,13 +77,14 @@ const createActions = [
   { key: "series", label: "Add series", href: "/series?create=1" },
 ] as const;
 
-export function BottomNav() {
+export function BottomNav({ network = false }: { network?: boolean }) {
   const pathname = usePathname() || "/";
   const router = useRouter();
   const [sheetOpen, setSheetOpen] = useState(false);
-  const splitIndex = Math.floor(bottomNavItems.length / 2);
-  const leftItems = bottomNavItems.slice(0, splitIndex);
-  const rightItems = bottomNavItems.slice(splitIndex);
+  const items = network ? networkNavItems : bottomNavItems;
+  const splitIndex = Math.floor(items.length / 2);
+  const leftItems = items.slice(0, splitIndex);
+  const rightItems = items.slice(splitIndex);
   const columnCount = leftItems.length + rightItems.length + 1;
 
   useEffect(() => {
@@ -161,13 +162,13 @@ export function BottomNav() {
           <div className="flex justify-center pb-1">
             <button
               type="button"
-              onClick={() => setSheetOpen((current) => !current)}
+              onClick={() => network ? router.push("/create") : setSheetOpen((current) => !current)}
               className={cn(
                 "inline-flex h-14 w-14 items-center justify-center rounded-full bg-neutral-950 text-white transition-transform",
-                sheetOpen ? "scale-[0.98]" : "",
+                !network && sheetOpen ? "scale-[0.98]" : "",
               )}
               aria-label="Create"
-              aria-expanded={sheetOpen}
+              aria-expanded={network ? undefined : sheetOpen}
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden>
                 <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />

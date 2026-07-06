@@ -1,0 +1,1 @@
+import Link from "next/link";export default function Page(){return <div className="mx-auto max-w-lg py-20 text-center"><h1 className="text-3xl font-semibold">Donation cancelled</h1><p className="mt-3 text-neutral-500">No payment was confirmed.</p><Link href="/feed" className="mt-7 inline-block underline">Back to feed</Link></div>}

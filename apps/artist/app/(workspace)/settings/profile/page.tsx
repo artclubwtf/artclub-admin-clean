@@ -1,0 +1,2 @@
+import { ProfileSettingsClient } from "@/components/network/ProfileSettingsClient";import { requireNetworkContext,serializeNetworkProfile } from "@/lib/server/network-context";
+export default async function SettingsProfilePage(){const context=await requireNetworkContext();const value=serializeNetworkProfile(context.profile!);return <ProfileSettingsClient initial={{...value,disciplines:value.disciplines.join(", "),interests:value.interests.join(", ")}}/>}

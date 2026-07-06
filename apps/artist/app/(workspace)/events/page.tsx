@@ -1,0 +1,2 @@
+import { EventsClient } from "@/components/network/EventsClient";import { requireNetworkContext } from "@/lib/server/network-context";import { EVENT_CREATOR_TYPES } from "@/lib/server/network-service";
+export const dynamic="force-dynamic";export default async function EventsPage(){const context=await requireNetworkContext();return <EventsClient canCreate={EVENT_CREATOR_TYPES.has(context.profile!.profileType)}/>}

@@ -5,6 +5,8 @@ import { requireArtistContext } from "@/lib/server/artist-context";
 import { resolveArtistMediaUrls } from "@/lib/server/artist-media";
 import { ArtistMediaV2Model, ArtistSeriesModel, CanonicalProductModel } from "@/lib/server/models";
 import { artistProductOwnershipFilter } from "@/lib/server/product-ownership";
+import { isNetworkMvpEnabled } from "@/lib/server/network-flags";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -30,6 +32,7 @@ function computeProfileCompleteness(input: {
 }
 
 export default async function HomePage() {
+  if (isNetworkMvpEnabled()) redirect("/feed");
   const context = await requireArtistContext();
 
   const [artworkCount, seriesCount, recentMedia] = await Promise.all([

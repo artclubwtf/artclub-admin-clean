@@ -1,0 +1,1 @@
+import { DonationSettings } from "@/components/network/DonationSettings";import { requireNetworkContext } from "@/lib/server/network-context";import { redirect } from "next/navigation";export default async function Page(){const context=await requireNetworkContext();if(context.profile!.profileType!=="artist")redirect("/settings");return <DonationSettings/>}

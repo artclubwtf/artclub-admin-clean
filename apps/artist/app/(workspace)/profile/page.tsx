@@ -12,6 +12,10 @@ import { requireArtistContext } from "@/lib/server/artist-context";
 import { ArtistAnnouncementModel, CanonicalArtistModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 import { artistProductOwnershipFilter } from "@/lib/server/product-ownership";
 import { logArtistProfileRender } from "../../../../admin/lib/sync/syncLogger";
+import { ProfileView } from "@/components/network/ProfileView";
+import { isNetworkMvpEnabled } from "@/lib/server/network-flags";
+import { requireNetworkContext, serializeNetworkProfile } from "@/lib/server/network-context";
+import { ConnectionModel, NetworkEventModel, NetworkPostModel } from "@/lib/server/models";
 
 function formatCurrency(cents: number) {
   return new Intl.NumberFormat("en-DE", {
@@ -48,8 +52,19 @@ export default async function ProfilePage({
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const context = await requireArtistContext();
   const resolvedSearchParams = (await searchParams) || {};
+  const legacy = resolvedSearchParams.legacy === "1";
+  if (isNetworkMvpEnabled() && !legacy) {
+    const network = await requireNetworkContext();
+    const profile = network.profile!;
+    const [connections, posts, events] = await Promise.all([
+      ConnectionModel.countDocuments({ status: "accepted", $or: [{ requesterProfileId: profile._id }, { recipientProfileId: profile._id }] }),
+      NetworkPostModel.countDocuments({ authorProfileId: profile._id, status: "published" }),
+      NetworkEventModel.countDocuments({ organizerProfileId: profile._id, status: "published" }),
+    ]);
+    return <ProfileView profile={serializeNetworkProfile(profile)} counts={{ connections, posts, events }} mine />;
+  }
+  const context = await requireArtistContext();
   const createIntent = Array.isArray(resolvedSearchParams.create)
     ? resolvedSearchParams.create[0]
     : resolvedSearchParams.create;

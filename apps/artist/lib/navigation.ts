@@ -13,5 +13,12 @@ export const bottomNavItems: BottomNavItem[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
+export const networkNavItems: BottomNavItem[] = [
+  { href: "/feed", label: "Feed", icon: "home" },
+  { href: "/network", label: "Network", icon: "artworks" },
+  { href: "/messages", label: "Messages", icon: "earnings" },
+  { href: "/profile", label: "Profile", icon: "profile" },
+];
+
 export const publicRoutes = ["/login", "/register", "/account-pending"] as const;
 export const protectedRoutes = ["/", "/onboarding", "/artworks", "/analytics", "/earnings", "/media", "/profile", "/settings", "/series", "/messages", "/announcements"] as const;

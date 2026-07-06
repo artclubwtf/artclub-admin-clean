@@ -1,0 +1,2 @@
+import { EventFormClient } from "@/components/network/EventsClient";import { requireNetworkContext } from "@/lib/server/network-context";import { EVENT_CREATOR_TYPES } from "@/lib/server/network-service";import { redirect } from "next/navigation";
+export default async function NewEventPage(){const context=await requireNetworkContext();if(!EVENT_CREATOR_TYPES.has(context.profile!.profileType))redirect("/events");return <EventFormClient/>}
