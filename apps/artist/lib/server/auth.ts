@@ -29,11 +29,12 @@ export const authOptions: NextAuthOptions = {
         const shopDomain = parsed.data.shopDomain ? normalizeShopDomain(parsed.data.shopDomain) : undefined;
 
         await connectMongo();
-        const filter: Record<string, unknown> = { email, role: "artist" };
+        const filter: Record<string, unknown> = { email, role: { $in: ["artist", "customer"] } };
         if (shopDomain) filter.shopDomain = shopDomain;
 
         const user = await UserModel.findOne(filter).lean();
-        if (!user || !user.isActive || user.role !== "artist") return null;
+        if (!user || !user.isActive || !["artist", "customer"].includes(user.role)) return null;
+        const userRole: UserRole = user.role === "artist" ? "artist" : "customer";
 
         const isValid = await compare(password, user.passwordHash);
         if (!isValid) return null;
@@ -41,7 +42,7 @@ export const authOptions: NextAuthOptions = {
         return {
           id: user._id.toString(),
           email: user.email,
-          role: "artist",
+          role: userRole,
           artistId: user.artistId?.toString(),
           artistKey: user.artistKey ?? undefined,
           onboardingComplete: user.onboardingComplete === true,
@@ -80,8 +81,8 @@ export const authOptions: NextAuthOptions = {
         if ("onboardingComplete" in session && session.onboardingComplete !== undefined) {
           token.onboardingComplete = session.onboardingComplete as boolean;
         }
-        if ("role" in session && session.role === "artist") {
-          token.role = "artist";
+        if ("role" in session && (session.role === "artist" || session.role === "customer")) {
+          token.role = session.role;
         }
         if ("pendingRegistrationId" in session && session.pendingRegistrationId) {
           token.pendingRegistrationId = session.pendingRegistrationId as string;
@@ -96,7 +97,7 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         session.user.id = (token.id as string) ?? token.sub ?? "";
-        session.user.role = "artist";
+        session.user.role = (token.role as UserRole) || "customer";
         session.user.email = (token.email as string) ?? session.user.email;
         if (token.artistId) session.user.artistId = token.artistId as string;
         if (token.artistKey) (session.user as { artistKey?: string }).artistKey = token.artistKey as string;

@@ -23,3 +23,20 @@ export { OrderLineOverrideModel } from "../../../admin/models/OrderLineOverride"
 export { AnalyticsDailyAggregateModel } from "../../../admin/models/AnalyticsDailyAggregate";
 export { AnalyticsEventModel } from "../../../admin/models/AnalyticsEvent";
 export { AnalyticsUniqueVisitorModel } from "../../../admin/models/AnalyticsUniqueVisitor";
+export {
+  CollectionItemModel,
+  ConnectionModel,
+  DonationModel,
+  EventRSVPModel,
+  NetworkCommentModel,
+  NetworkConversationModel,
+  NetworkEventModel,
+  NetworkMessageModel,
+  NetworkModerationAuditModel,
+  NetworkNotificationModel,
+  NetworkPostModel,
+  NetworkProfileModel,
+  NetworkReportModel,
+  PostLikeModel,
+  SavedPostModel,
+} from "../../../admin/models/Network";

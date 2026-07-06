@@ -1,0 +1,5 @@
+import { networkReportInputSchema } from "@artclub/models";
+import { requireNetworkApiContext } from "@/lib/server/network-context";
+import { apiError, validId } from "@/lib/server/network-service";
+import { NetworkReportModel } from "@/lib/server/models";
+export async function POST(req: Request) { const auth = await requireNetworkApiContext(); if (!auth.ok) return auth.response; const parsed = networkReportInputSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success || !validId(parsed.data?.targetId)) return apiError("invalid_report", 400, parsed.success ? undefined : parsed.error.flatten()); const recent = await NetworkReportModel.countDocuments({ reporterProfileId: auth.context.profile._id, createdAt: { $gte: new Date(Date.now() - 60 * 60_000) } }); if (recent >= 20) return apiError("rate_limited", 429); const report = await NetworkReportModel.create({ ...parsed.data, reporterProfileId: auth.context.profile._id }); return Response.json({ ok: true, reportId: report._id.toString() }, { status: 201 }); }

@@ -16,3 +16,4 @@ export function createApiClient(opts: ApiClientOptions) {
 }
 
 export { createMobileApiClient } from "./mobile";
+export { createNetworkApiClient } from "./network";

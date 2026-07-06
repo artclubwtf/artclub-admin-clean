@@ -11,11 +11,17 @@ const analyticsEventSchema = new Schema(
     pageHandle: { type: String, trim: true },
     pageUrl: { type: String, trim: true },
     visitorIdHash: { type: String, required: true, trim: true },
+    userId: { type: Schema.Types.ObjectId, ref: "User" },
+    profileId: { type: Schema.Types.ObjectId, ref: "NetworkProfile" },
+    targetProfileId: { type: Schema.Types.ObjectId, ref: "NetworkProfile" },
+    sessionId: { type: String, trim: true },
     canonicalArtistId: { type: Schema.Types.ObjectId, ref: "CanonicalArtist" },
     artistSlug: { type: String, trim: true },
     artistMetaobjectId: { type: String, trim: true },
     artistName: { type: String, trim: true },
     canonicalProductId: { type: Schema.Types.ObjectId, ref: "CanonicalProduct" },
+    postId: { type: Schema.Types.ObjectId, ref: "NetworkPost" },
+    eventId: { type: Schema.Types.ObjectId, ref: "NetworkEvent" },
     productKey: { type: String, trim: true },
     shopifyProductId: { type: String, trim: true },
     productHandle: { type: String, trim: true },
@@ -36,6 +42,8 @@ analyticsEventSchema.index({ canonicalArtistId: 1, createdAt: -1, eventType: 1 }
 analyticsEventSchema.index({ canonicalProductId: 1, createdAt: -1, eventType: 1 });
 analyticsEventSchema.index({ resolutionStatus: 1, createdAt: -1 });
 analyticsEventSchema.index({ path: 1, createdAt: -1 });
+analyticsEventSchema.index({ eventType: 1, createdAt: -1 });
+analyticsEventSchema.index({ profileId: 1, createdAt: -1 });
 
 type AnalyticsEvent = InferSchemaType<typeof analyticsEventSchema>;
 

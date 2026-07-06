@@ -1,0 +1,3 @@
+import { requireNetworkApiContext } from "@/lib/server/network-context";
+import { DonationModel } from "@/lib/server/models";
+export async function GET() { const auth = await requireNetworkApiContext(); if (!auth.ok) return auth.response; const items = await DonationModel.find({ artistProfileId: auth.context.profile._id }).sort({ createdAt: -1 }).limit(100).lean(); return Response.json({ ok: true, donations: items.map((item) => ({ id: item._id.toString(), grossAmount: item.grossAmount, currency: item.currency, platformFee: item.platformFee, netAmount: item.netAmount, status: item.status, message: item.message || "", isAnonymous: item.isAnonymous, createdAt: item.createdAt, paidAt: item.paidAt, refundedAt: item.refundedAt })) }); }

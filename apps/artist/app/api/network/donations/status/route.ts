@@ -1,0 +1,4 @@
+import { requireNetworkApiContext } from "@/lib/server/network-context";
+import { stripeConfigured } from "@/lib/server/stripe";
+import { NetworkProfileModel } from "@/lib/server/models";
+export async function GET() { const auth = await requireNetworkApiContext(); if (!auth.ok) return auth.response; const profile = await NetworkProfileModel.findById(auth.context.profile._id).select("+stripeAccountId donationEnabled stripeOnboardingComplete profileType").lean(); return Response.json({ ok: true, configured: stripeConfigured(), eligible: profile?.profileType === "artist", donationEnabled: profile?.donationEnabled === true, onboardingComplete: profile?.stripeOnboardingComplete === true, state: !stripeConfigured() ? "setup_required" : profile?.stripeOnboardingComplete ? "ready" : "onboarding_required" }); }
