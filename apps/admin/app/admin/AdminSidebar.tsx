@@ -20,6 +20,7 @@ const navItems: NavItem[] = [
   { label: "Terms", href: "/admin/terms" },
   { label: "Orders", href: "/admin/orders" },
   { label: "Analytics", href: "/admin/analytics" },
+  { label: "Network", href: "/admin/network" },
   { label: "Products", href: "/admin/products" },
   { label: "Migration", href: "/admin/migration" },
   { label: "POS", href: "/admin/pos" },

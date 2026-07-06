@@ -61,6 +61,13 @@ function getVisitorId() {
   return created;
 }
 
+function allowedEmbedParentOrigin() {
+  try {
+    const origin = new URL(document.referrer).origin;
+    return origin === "https://artclub.wtf" || origin === "https://www.artclub.wtf" || /^https:\/\/[^/]+\.(?:myshopify\.com|shopifypreview\.com)$/.test(origin) ? origin : "";
+  } catch { return ""; }
+}
+
 function getPageAnalyticsContext(): {
   source: ArtistAnalyticsSource;
   path: string;
@@ -139,6 +146,21 @@ export function PublicArtistProfilePage({ profile }: PublicArtistProfilePageProp
     const handleHashChange = () => setActiveTab(parseTabFromHash(window.location.hash));
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  useEffect(() => {
+    const parentOrigin = allowedEmbedParentOrigin();
+    if (!parentOrigin || window.parent === window) return;
+    let frame = 0;
+    const sendHeight = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => window.parent.postMessage({ type: "artclub:artist-height", height: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight) }, parentOrigin));
+    };
+    const observer = new ResizeObserver(sendHeight);
+    observer.observe(document.documentElement);
+    window.addEventListener("load", sendHeight);
+    sendHeight();
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); window.removeEventListener("load", sendHeight); };
   }, []);
 
   useEffect(() => {

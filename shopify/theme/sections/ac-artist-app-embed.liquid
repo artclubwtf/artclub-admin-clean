@@ -1,0 +1,45 @@
+{% liquid
+  assign artist_app_url = metaobject.app_url.value | default: metaobject.app_url
+%}
+<section class="ac-artist-app" data-ac-artist-app>
+  {% if artist_app_url != blank %}
+    <div class="ac-artist-app__loading" data-ac-artist-loading>Loading artist profile…</div>
+    <iframe
+      class="ac-artist-app__frame"
+      data-ac-artist-frame
+      src="{{ artist_app_url }}"
+      title="{{ metaobject.name.value | default: 'Artist profile' | escape }}"
+      loading="eager"
+      scrolling="no"
+      referrerpolicy="strict-origin-when-cross-origin"
+    ></iframe>
+  {% elsif request.design_mode %}
+    <p class="ac-artist-app__setup">Set the artist metaobject’s app_url to enable this profile.</p>
+  {% endif %}
+</section>
+<style>
+  .ac-artist-app { width: 100%; min-height: 8rem; }
+  .ac-artist-app__frame { display: block; width: 100%; height: 36rem; border: 0; overflow: hidden; }
+  .ac-artist-app__loading { padding: 4rem 1rem; text-align: center; color: rgba(0,0,0,.48); }
+  .ac-artist-app__frame[data-loaded="true"] + .ac-artist-app__loading { display: none; }
+  .ac-artist-app__setup { padding: 2rem; text-align: center; }
+</style>
+<script>
+  (() => {
+    const section = document.currentScript.previousElementSibling.previousElementSibling;
+    const frame = section && section.querySelector('[data-ac-artist-frame]');
+    const loading = section && section.querySelector('[data-ac-artist-loading]');
+    if (!frame) return;
+    let appOrigin;
+    try { appOrigin = new URL(frame.src).origin; } catch (_) { return; }
+    frame.addEventListener('load', () => { frame.dataset.loaded = 'true'; if (loading) loading.hidden = true; });
+    window.addEventListener('message', (event) => {
+      if (event.source !== frame.contentWindow || event.origin !== appOrigin || event.data?.type !== 'artclub:artist-height') return;
+      const height = Number(event.data.height);
+      if (Number.isFinite(height)) frame.style.height = `${Math.min(Math.max(height, 240), 20000)}px`;
+    });
+  })();
+</script>
+{% schema %}
+{"name":"ARTCLUB Artist App","settings":[],"presets":[{"name":"ARTCLUB Artist App"}]}
+{% endschema %}
