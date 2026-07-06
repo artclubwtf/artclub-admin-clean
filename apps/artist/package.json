@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "node scripts/build-artist-embed.mjs && next build --webpack",
+    "test": "vitest run",
     "start": "sh -c 'next start -p \"${PORT:-3000}\"'"
   },
   "dependencies": {
@@ -29,5 +30,8 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "zod": "^4.2.1"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
   }
 }
