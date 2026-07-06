@@ -14,9 +14,12 @@ export function cursorFilter(cursor: string | null) {
   return cursor && Types.ObjectId.isValid(cursor) ? { _id: { $lt: new Types.ObjectId(cursor) } } : {};
 }
 
+export function profilePairKey(a: Types.ObjectId | string, b: Types.ObjectId | string) { return [String(a), String(b)].sort().join(":"); }
+
 export async function connectionState(a: Types.ObjectId | string, b: Types.ObjectId | string) {
+  const pairKey = profilePairKey(a, b);
   const relation = await ConnectionModel.findOne({
-    $or: [
+    $or: [{ pairKey },
       { requesterProfileId: a, recipientProfileId: b },
       { requesterProfileId: b, recipientProfileId: a },
     ],
@@ -34,7 +37,7 @@ export async function isBlocked(a: Types.ObjectId | string, b: Types.ObjectId | 
 
 export async function canMessage(sender: any, recipient: any) {
   const relation = await connectionState(sender._id, recipient._id);
-  return !recipient.suspendedAt && canSendNetworkMessage({ sameProfile: String(sender._id) === String(recipient._id), blocked: relation?.status === "blocked", connected: relation?.status === "accepted", recipientAllowsMessages: recipient.allowsMessages === true });
+  return !recipient.suspendedAt && canSendNetworkMessage({ sameProfile: String(sender._id) === String(recipient._id), blocked: relation?.status === "blocked", connected: relation?.status === "accepted", recipientAllowsMessages: false });
 }
 
 export async function notify(input: { recipientProfileId: unknown; actorProfileId?: unknown; type: string; targetType?: string; targetId?: unknown }) {

@@ -47,6 +47,7 @@ networkProfileSchema.index({ displayName: "text", username: "text", disciplines:
 
 const connectionSchema = new Schema(
   {
+    pairKey: { type: String, trim: true },
     requesterProfileId: { type: objectId, ref: "NetworkProfile", required: true },
     recipientProfileId: { type: objectId, ref: "NetworkProfile", required: true },
     status: { type: String, enum: ["pending", "accepted", "declined", "removed", "blocked"], required: true, default: "pending" },
@@ -56,6 +57,7 @@ const connectionSchema = new Schema(
   { timestamps: true },
 );
 connectionSchema.index({ requesterProfileId: 1, recipientProfileId: 1 }, { unique: true });
+connectionSchema.index({ pairKey: 1 }, { unique: true, sparse: true });
 connectionSchema.index({ recipientProfileId: 1, status: 1, createdAt: -1 });
 
 const postSchema = new Schema(
@@ -152,7 +154,7 @@ const messageSchema = new Schema(
 messageSchema.index({ conversationId: 1, createdAt: -1 });
 
 const notificationSchema = new Schema(
-  { recipientProfileId: { type: objectId, ref: "NetworkProfile", required: true }, actorProfileId: { type: objectId, ref: "NetworkProfile" }, type: { type: String, enum: ["connection_request", "connection_accepted", "post_like", "post_comment", "new_message", "event_rsvp", "event_update", "donation_received"], required: true }, targetType: String, targetId: objectId, readAt: Date },
+  { recipientProfileId: { type: objectId, ref: "NetworkProfile", required: true }, actorProfileId: { type: objectId, ref: "NetworkProfile" }, type: { type: String, enum: ["connection_request", "connection_accepted", "connection_declined", "message_request", "post_like", "post_comment", "profile_follow", "profile_like", "new_message", "event_rsvp", "event_update", "donation_received"], required: true }, targetType: String, targetId: objectId, readAt: Date },
   { timestamps: true },
 );
 notificationSchema.index({ recipientProfileId: 1, readAt: 1, createdAt: -1 });
@@ -177,6 +179,37 @@ const moderationAuditSchema = new Schema(
 );
 moderationAuditSchema.index({ createdAt: -1 });
 
+const followSchema = new Schema(
+  { followerProfileId: { type: objectId, ref: "NetworkProfile", required: true }, followedProfileId: { type: objectId, ref: "NetworkProfile", required: true } },
+  { timestamps: true },
+);
+followSchema.index({ followerProfileId: 1, followedProfileId: 1 }, { unique: true });
+followSchema.index({ followedProfileId: 1, createdAt: -1 });
+
+const profileLikeSchema = new Schema(
+  { likerProfileId: { type: objectId, ref: "NetworkProfile", required: true }, likedProfileId: { type: objectId, ref: "NetworkProfile", required: true } },
+  { timestamps: true },
+);
+profileLikeSchema.index({ likerProfileId: 1, likedProfileId: 1 }, { unique: true });
+profileLikeSchema.index({ likedProfileId: 1, createdAt: -1 });
+
+const messageRequestSchema = new Schema(
+  {
+    pairKey: { type: String, required: true, trim: true },
+    requesterProfileId: { type: objectId, ref: "NetworkProfile", required: true },
+    recipientProfileId: { type: objectId, ref: "NetworkProfile", required: true },
+    connectionId: { type: objectId, ref: "NetworkConnection", required: true },
+    text: { type: String, required: true, trim: true, maxlength: 100 },
+    status: { type: String, enum: ["pending", "accepted", "declined"], default: "pending" },
+    respondedAt: Date,
+    cooldownUntil: Date,
+    conversationId: { type: objectId, ref: "NetworkConversation" },
+  },
+  { timestamps: true },
+);
+messageRequestSchema.index({ pairKey: 1 }, { unique: true });
+messageRequestSchema.index({ recipientProfileId: 1, status: 1, createdAt: -1 });
+
 type ModelFor<T extends Schema> = Model<InferSchemaType<T>>;
 const getModel = <T extends Schema>(name: string, schema: T) => (models[name] as ModelFor<T>) || model(name, schema);
 
@@ -195,3 +228,6 @@ export const NetworkNotificationModel = getModel("NetworkNotification", notifica
 export const DonationModel = getModel("NetworkDonation", donationSchema);
 export const NetworkReportModel = getModel("NetworkReport", reportSchema);
 export const NetworkModerationAuditModel = getModel("NetworkModerationAudit", moderationAuditSchema);
+export const NetworkFollowModel = getModel("NetworkFollow", followSchema);
+export const NetworkProfileLikeModel = getModel("NetworkProfileLike", profileLikeSchema);
+export const NetworkMessageRequestModel = getModel("NetworkMessageRequest", messageRequestSchema);

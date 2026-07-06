@@ -1,6 +1,7 @@
 import { requireNetworkApiContext, serializeNetworkProfile } from "@/lib/server/network-context";
 import { apiError, canMessage, validId } from "@/lib/server/network-service";
 import { NetworkConversationModel, NetworkMessageModel, NetworkProfileModel } from "@/lib/server/models";
+import { materializeUnifiedProfile } from "@/lib/server/unified-profile";
 
 export async function GET(req: Request) {
   const auth = await requireNetworkApiContext(); if (!auth.ok) return auth.response;
@@ -16,8 +17,9 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const auth = await requireNetworkApiContext(); if (!auth.ok) return auth.response;
   const body = await req.json().catch(() => null) as { profileId?: string } | null;
-  if (!validId(body?.profileId) || String(body?.profileId) === String(auth.context.profile._id)) return apiError("invalid_recipient");
-  const recipient = await NetworkProfileModel.findOne({ _id: body.profileId, suspendedAt: { $exists: false } });
+  if (!body?.profileId) return apiError("invalid_recipient");
+  const recipient = await materializeUnifiedProfile(body.profileId);
+  if (String(recipient?._id) === String(auth.context.profile._id)) return apiError("invalid_recipient");
   if (!recipient) return apiError("profile_not_found", 404);
   if (!(await canMessage(auth.context.profile, recipient))) return apiError("messaging_not_allowed", 403);
   const participantKey = [auth.context.profile._id.toString(), recipient._id.toString()].sort().join(":");

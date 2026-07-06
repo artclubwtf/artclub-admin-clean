@@ -32,11 +32,16 @@ export {
   NetworkConversationModel,
   NetworkEventModel,
   NetworkMessageModel,
+  NetworkMessageRequestModel,
   NetworkModerationAuditModel,
   NetworkNotificationModel,
   NetworkPostModel,
+  NetworkFollowModel,
   NetworkProfileModel,
+  NetworkProfileLikeModel,
   NetworkReportModel,
   PostLikeModel,
   SavedPostModel,
 } from "../../../admin/models/Network";
+export { UserReactionModel } from "../../../admin/models/UserReaction";
+export { UserSavedModel } from "../../../admin/models/UserSaved";

@@ -63,7 +63,12 @@ export const networkPostInputSchema = z
 export type NetworkPostInput = z.infer<typeof networkPostInputSchema>;
 
 export const networkCommentInputSchema = z.object({ text: z.string().trim().min(1).max(2000) });
-export const connectionActionSchema = z.object({ action: z.enum(["accept", "decline", "remove", "block"]) });
+export const connectionActionSchema = z.object({ action: z.enum(["accept", "decline", "remove", "cancel", "block"]) });
+
+export const messageRequestInputSchema = z.object({
+  profileId: z.string().trim().min(1).max(80),
+  text: z.string().trim().min(1).max(100),
+});
 
 export const networkMessageInputSchema = z
   .object({ text: z.string().trim().max(5000).default(""), media: z.array(networkMediaSchema).max(4).default([]) })
@@ -121,12 +126,16 @@ export const networkReportInputSchema = z.object({
 export const networkAnalyticsEventTypes = [
   "landing_view", "signup_started", "signup_completed", "login_completed", "onboarding_started", "onboarding_completed",
   "profile_impression", "profile_view", "profile_share", "profile_link_click", "profile_message_click", "profile_donation_click",
+  "profile_link_copy", "profile_native_share", "profile_like", "profile_unlike", "profile_follow", "profile_unfollow",
   "feed_view", "post_impression", "post_view", "post_create", "post_like", "post_comment", "post_save", "post_share",
   "network_search", "profile_search_result_impression", "connection_request_sent", "connection_request_accepted", "connection_removed",
+  "connection_request_received", "connection_request_declined",
   "conversation_started", "message_sent", "message_received", "message_read",
+  "message_request_sent", "message_request_accepted", "message_request_declined",
   "event_impression", "event_view", "event_created", "event_published", "event_rsvp", "event_ticket_click", "event_share",
   "donation_started", "donation_checkout_opened", "donation_completed", "donation_failed", "donation_refunded",
   "shop_click", "artwork_shop_click", "product_view", "purchase_attributed",
+  "create_menu_opened", "artwork_upload_started", "artwork_upload_completed", "post_create_started", "post_created", "event_create_started", "event_created", "collection_item_created", "artwork_feed_impression", "artwork_feed_click", "post_engagement",
 ] as const;
 
 export const networkAnalyticsInputSchema = z.object({

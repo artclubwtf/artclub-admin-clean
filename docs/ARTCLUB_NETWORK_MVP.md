@@ -4,6 +4,9 @@
 
 - The monorepo uses Next.js 16, NextAuth JWT sessions, MongoDB/Mongoose and shared packages via pnpm workspaces.
 - `CanonicalArtist` and `CanonicalProduct` remain the canonical artist/artwork records synchronized with Shopify. Network records reference them by ObjectId.
+- Artist core fields are always resolved live from `User` + `CanonicalArtist`. `NetworkProfile` contributes only Network-specific fields. The same `UnifiedProfileView` renders `/artist/[slug]` and the authenticated profile route; viewer actions are layered on top.
+- Existing linked artists are merged into Discovery and profile resolution directly from `CanonicalArtist`, even when no `NetworkProfile` exists. Lazy profile materialization happens only when an ObjectId is required for an interaction; the backfill is optional optimization.
+- The feed merges `NetworkPost` and published `CanonicalProduct` records at read time with a stable `(createdAt, typed id)` cursor. It never creates artificial artwork posts.
 - The Artist app uses the same Mongo database and existing S3 uploader. Network images are limited to 20 MB; videos to 100 MB; accepted MIME types are explicit.
 - Existing Artist↔Team workspace messaging is preserved. Network direct messages use separate conversation/message collections because their participants and authorization rules differ.
 - Existing `AnalyticsEvent` is extended for Network identifiers. No second analytics event store is introduced.
@@ -54,7 +57,7 @@ NETWORK_SEED_ENABLED=false
 
 1. Deploy Admin and Artist previews from `experiment/artclub-network-mvp`; do not deploy this branch over production.
 2. Prefer a separate preview database. If the existing database is used, keep `NETWORK_MVP_ENABLED=false` until both apps are deployed.
-3. Enable the flag, authenticate in Admin, then `POST /api/admin/network/backfill`. The operation only inserts missing artist profiles and is repeatable.
+3. Enable the flag. Existing linked artists appear immediately; no migration is required. Optionally call `POST /api/admin/network/backfill` to pre-materialize interaction identities.
 4. Check `/admin/network` for users without profiles, artists without `linkedUserId`, duplicate slugs, reports, and product events.
 5. Configure S3 CORS for the Artist preview origin and Stripe webhooks before enabling donations.
 6. Set each Shopify artist metaobject `app_url` to the exact public Artist-app URL. The `ac-artist-app-embed` section reads this value directly and validates height messages against that URL's origin.
@@ -66,19 +69,21 @@ Preview seed data is explicitly opt-in and production-blocked. Set `NETWORK_SEED
 
 App: `/feed`, `/network`, `/create`, `/messages`, `/messages/[id]`, `/notifications`, `/profile`, `/profile/[slug]`, `/collection`, `/events`, `/events/[id]`, `/events/new`, `/settings`, `/settings/profile`, `/settings/artworks`, `/settings/earnings`, `/settings/donations`, `/settings/analytics`, `/settings/public-profile`, `/donations/success`, and `/donations/cancel`.
 
-API groups under `/api/network`: profile/search, feed/posts/likes/comments/saves, connections, conversations/messages/read, events/RSVP, collection, notifications, reports, uploads, donations, and analytics. Admin endpoints are under `/api/admin/network`; Stripe webhooks are under `/api/webhooks/stripe`.
+API groups under `/api/network`: unified profile/search, mixed feed, post/artwork interactions, normalized connections, follows, profile likes, 100-character message requests, conversations/messages/read, events/RSVP, collection, notifications, reports, uploads, donations, and analytics. Admin endpoints are under `/api/admin/network`; Stripe webhooks are under `/api/webhooks/stripe`.
 
 ## Manual acceptance flow
 
-1. Log in as an existing linked artist; verify automatic profile backfill and unchanged artworks/public profile.
+1. Before any backfill, log in as an existing linked artist; verify the artist appears in Discovery, `/profile/[slug]`, `/artist/[slug]`, and the feed with identical canonical content.
 2. Register a collector, complete Network onboarding, switch Light/Dark/System themes, and reload.
 3. Publish text, image, and video posts; like, comment, save, share, edit/delete via API, and verify cursor loading.
-4. Search the artist, request/accept a connection, open Connections feed, then start a chat, attach an image, and verify unread/read state in a second session.
-5. Create and publish an event as an eligible role, RSVP as the collector, open its ticket URL, then cancel it as organizer.
-6. Add a collection item and verify purchase price remains private.
-7. Complete Stripe Express onboarding in test mode, create Checkout, deliver signed test webhooks, and verify paid/refunded states and Artist history.
-8. Open `/admin/network`, review diagnostics, submit a report, hide content/suspend a profile, and verify the audit record.
-9. Open the Shopify artist metaobject page and verify no nested scrollbar, responsive height, exact `app_url`, and product links opening the parent tab.
+4. Search the artist, send a request, verify the recipient sees Incoming/Accept/Decline on profile, Notifications and Network → Requests, then accept and verify full chat access.
+5. Before accepting, send one message request of at most 100 characters; verify a second is rejected and the first becomes the conversation's initial message after acceptance.
+6. Follow/unfollow and appreciate/unappreciate a profile; verify counts persist and neither action unlocks messaging.
+7. Create and publish an event as an eligible role, RSVP as the collector, open its ticket URL, then cancel it as organizer.
+8. Add a collection item and verify purchase price remains private.
+9. Complete Stripe Express onboarding in test mode, create Checkout, deliver signed test webhooks, and verify paid/refunded states and Artist history.
+10. Open `/admin/network`, review diagnostics, submit a report, hide content/suspend a profile, and verify the audit record.
+11. Open the Shopify artist metaobject page and verify no nested scrollbar, responsive height, exact `app_url`, and product links opening the parent tab.
 
 ## Known limits
 

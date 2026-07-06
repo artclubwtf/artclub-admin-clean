@@ -1,42 +1,30 @@
-import { networkPostInputSchema } from "@artclub/models";
+import { networkPostInputSchema, stableFeedPage } from "@artclub/models";
 import { Types } from "mongoose";
 import { requireNetworkApiContext } from "@/lib/server/network-context";
-import { apiError, cursorFilter, serializePost, validId } from "@/lib/server/network-service";
-import { ConnectionModel, NetworkPostModel, PostLikeModel, SavedPostModel } from "@/lib/server/models";
+import { apiError, serializePost, validId } from "@/lib/server/network-service";
+import { resolveUnifiedArtistsByIds } from "@/lib/server/unified-profile";
+import { CanonicalProductModel, CanonicalVariantModel, ConnectionModel, NetworkFollowModel, NetworkPostModel, NetworkProfileModel, PostLikeModel, SavedPostModel, UserReactionModel, UserSavedModel } from "@/lib/server/models";
 
-export async function GET(req: Request) {
-  const auth = await requireNetworkApiContext();
-  if (!auth.ok) return auth.response;
-  const url = new URL(req.url);
-  const cursor = url.searchParams.get("cursor");
-  const tab = url.searchParams.get("tab") === "connections" ? "connections" : "for-you";
-  const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 20, 1), 50);
-  const profileId = auth.context.profile._id;
-  const filter: Record<string, unknown> = { ...cursorFilter(cursor), status: "published" };
-  if (tab === "connections") {
-    const relations = await ConnectionModel.find({ status: "accepted", $or: [{ requesterProfileId: profileId }, { recipientProfileId: profileId }] }).lean();
-    const ids = relations.map((item) => String(item.requesterProfileId) === String(profileId) ? item.recipientProfileId : item.requesterProfileId);
-    filter.authorProfileId = { $in: ids };
-    filter.visibility = { $in: ["public", "connections"] };
-  } else {
-    filter.visibility = "public";
+type Cursor={date:string;key:string};function decode(value:string|null):Cursor|null{try{return value?JSON.parse(Buffer.from(value,"base64url").toString()):null}catch{return null}}function encode(value:Cursor){return Buffer.from(JSON.stringify(value)).toString("base64url")}
+function before(field:string,cursor:Cursor|null){return cursor?{[field]:{$lte:new Date(cursor.date)}}:{}}
+function priceLabel(variants:any[],product:any){const prices=variants.map(item=>item.priceCents).filter((value:number)=>value>0);if(!product.forSale)return"Not for sale";if(!prices.length)return product.originalAvailable?"Available on request":"";return new Intl.NumberFormat("en-DE",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(Math.min(...prices)/100)}
+
+export async function GET(req:Request){
+  const auth=await requireNetworkApiContext();if(!auth.ok)return auth.response;const url=new URL(req.url);const cursor=decode(url.searchParams.get("cursor"));const limit=Math.min(Math.max(Number(url.searchParams.get("limit"))||20,1),40);const tab=url.searchParams.get("tab")||"for-you";const profileId=auth.context.profile._id;
+  let allowedProfileIds:Types.ObjectId[]|null=null;let allowedArtistIds:Types.ObjectId[]|null=null;
+  if(tab==="connections"||tab==="following"){
+    const [relations,follows]=await Promise.all([ConnectionModel.find({status:"accepted",$or:[{requesterProfileId:profileId},{recipientProfileId:profileId}]}).lean(),NetworkFollowModel.find({followerProfileId:profileId}).lean()]);
+    const ids=[...relations.map(item=>String(item.requesterProfileId)===String(profileId)?item.recipientProfileId:item.requesterProfileId),...follows.map(item=>item.followedProfileId)];allowedProfileIds=Array.from(new Map(ids.map(id=>[id.toString(),id])).values());
+    const profiles=await NetworkProfileModel.find({_id:{$in:allowedProfileIds},canonicalArtistId:{$exists:true}}).select({canonicalArtistId:1}).lean();allowedArtistIds=profiles.map(item=>item.canonicalArtistId!).filter(Boolean);
   }
-  const posts = await NetworkPostModel.find(filter).sort({ _id: -1 }).limit(limit + 1).populate("authorProfileId", "displayName username slug profileImageUrl profileType isVerified").lean();
-  const page = posts.slice(0, limit);
-  const ids = page.map((post) => post._id);
-  const [likes, saves] = await Promise.all([PostLikeModel.find({ postId: { $in: ids }, profileId }).select({ postId: 1 }).lean(), SavedPostModel.find({ postId: { $in: ids }, profileId }).select({ postId: 1 }).lean()]);
-  const viewer = { liked: new Set(likes.map((item) => item.postId.toString())), saved: new Set(saves.map((item) => item.postId.toString())), profileId };
-  return Response.json({ ok: true, posts: page.map((post) => serializePost(post, viewer)), nextCursor: posts.length > limit ? page.at(-1)?._id.toString() : null });
+  const postFilter:any={...before("createdAt",cursor),status:"published",visibility:tab==="for-you"?"public":{$in:["public","connections"]}};if(allowedProfileIds)postFilter.authorProfileId={$in:allowedProfileIds};
+  const artworkFilter:any={...before("createdAt",cursor),type:"artwork",status:{$in:["active","shopify_synced"]},approvalStatus:{$in:["published","approved"]},canonicalArtistId:{$exists:true,$ne:null}};if(allowedArtistIds)artworkFilter.canonicalArtistId={$in:allowedArtistIds};
+  const [posts,artworks]=await Promise.all([NetworkPostModel.find(postFilter).sort({createdAt:-1,_id:-1}).limit(limit*3).populate("authorProfileId","displayName username slug profileImageUrl profileType isVerified").lean(),CanonicalProductModel.find(artworkFilter).sort({createdAt:-1,_id:-1}).limit(limit*3).lean()]);
+  const postIds=posts.map(item=>item._id);const artworkTokens=artworks.map(item=>item.shopify?.productGid||`canonical:${item._id}`);const[likes,saves,reactions,artworkSaves,variants,artistsById]=await Promise.all([PostLikeModel.find({postId:{$in:postIds},profileId}).lean(),SavedPostModel.find({postId:{$in:postIds},profileId}).lean(),UserReactionModel.find({productGid:{$in:artworkTokens}}).lean(),UserSavedModel.find({productGid:{$in:artworkTokens}}).lean(),CanonicalVariantModel.find({productKey:{$in:artworks.map(item=>item.productKey)}}).lean(),resolveUnifiedArtistsByIds(artworks.map(item=>item.canonicalArtistId!).filter(Boolean))]);
+  const resolveUnifiedProfileByIdentity=async(identity:string)=>artistsById.get(identity.replace(/^artist:/,""));
+  const postViewer={liked:new Set(likes.map(item=>item.postId.toString())),saved:new Set(saves.map(item=>item.postId.toString())),profileId};const myUserId=auth.context.user._id.toString();const reactionCount=new Map<string,number>();const myReaction=new Set<string>();for(const item of reactions){reactionCount.set(item.productGid,(reactionCount.get(item.productGid)||0)+1);if(item.userId.toString()===myUserId)myReaction.add(item.productGid)}const mySaves=new Set(artworkSaves.filter(item=>item.userId.toString()===myUserId).map(item=>item.productGid));const variantsByKey=new Map<string,any[]>();for(const item of variants){const list=variantsByKey.get(item.productKey)||[];list.push(item);variantsByKey.set(item.productKey,list)}
+  const items:any[]=[];for(const post of posts)items.push({kind:"post",id:`post:${post._id}`,sortDate:post.createdAt,post:serializePost(post,postViewer)});for(const artwork of artworks){const artist=await resolveUnifiedProfileByIdentity(`artist:${artwork.canonicalArtistId}`);if(!artist)continue;const token=artwork.shopify?.productGid||`canonical:${artwork._id}`;items.push({kind:"artwork",id:`artwork:${artwork._id}`,sortDate:artwork.createdAt,artist,artwork:{id:artwork._id.toString(),title:artwork.title,description:artwork.description||"",year:artwork.year,imageUrl:artwork.images?.mediumUrl||artwork.images?.thumbUrl||artwork.images?.originalUrl||"",offering:artwork.offerings,priceLabel:priceLabel(variantsByKey.get(artwork.productKey)||[],artwork),shopUrl:artwork.handle?`https://${artwork.shopDomain}/products/${artwork.handle}`:"",liked:myReaction.has(token),saved:mySaves.has(token),likeCount:reactionCount.get(token)||0}})}
+  const eligible=stableFeedPage(items,cursor,items.length);const page=eligible.slice(0,limit);const last=page.at(-1);return Response.json({ok:true,items:page,nextCursor:eligible.length>limit&&last?encode({date:new Date(last.sortDate).toISOString(),key:last.id}):null});
 }
 
-export async function POST(req: Request) {
-  const auth = await requireNetworkApiContext();
-  if (!auth.ok) return auth.response;
-  const parsed = networkPostInputSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return apiError("invalid_post", 400, parsed.error.flatten());
-  for (const key of ["linkedArtworkId", "linkedEventId", "collectionItemId"] as const) {
-    if (parsed.data[key] && !validId(parsed.data[key])) return apiError(`invalid_${key}`, 400);
-  }
-  const post = await NetworkPostModel.create({ ...parsed.data, authorProfileId: auth.context.profile._id });
-  return Response.json({ ok: true, post: serializePost(post) }, { status: 201 });
-}
+export async function POST(req:Request){const auth=await requireNetworkApiContext();if(!auth.ok)return auth.response;const parsed=networkPostInputSchema.safeParse(await req.json().catch(()=>null));if(!parsed.success)return apiError("invalid_post",400,parsed.error.flatten());for(const key of["linkedArtworkId","linkedEventId","collectionItemId"]as const)if(parsed.data[key]&&!validId(parsed.data[key]))return apiError(`invalid_${key}`,400);const post=await NetworkPostModel.create({...parsed.data,authorProfileId:auth.context.profile._id});return Response.json({ok:true,item:{kind:"post",id:`post:${post._id}`,sortDate:post.createdAt,post:serializePost(post,{liked:new Set(),saved:new Set(),profileId:auth.context.profile._id})}},{status:201})}

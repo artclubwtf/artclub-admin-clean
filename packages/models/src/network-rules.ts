@@ -34,3 +34,18 @@ export function networkEngagementRate(input: { likes: number; comments: number; 
   const numerator = input.likes + input.comments + input.saves + input.shares + input.messageClicks;
   return numerator / Math.max(input.postImpressions + input.profileViews, 1) * 100;
 }
+
+export function connectionViewState(input: { status?: "pending" | "accepted" | "declined" | "removed" | "blocked"; requesterId?: string; viewerId: string }) {
+  if (!input.status || input.status === "removed") return "none" as const;
+  if (input.status === "accepted") return "connected" as const;
+  if (input.status === "blocked") return "blocked" as const;
+  if (input.status === "declined") return "declined" as const;
+  return input.requesterId === input.viewerId ? "outgoing_pending" as const : "incoming_pending" as const;
+}
+
+export function stableFeedPage<T extends { id: string; sortDate: string | Date }>(items: T[], cursor: { date: string; key: string } | null, limit: number) {
+  const sorted = [...items].sort((a, b) => new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime() || b.id.localeCompare(a.id));
+  const cursorTime = cursor ? new Date(cursor.date).getTime() : 0;
+  const eligible = cursor ? sorted.filter((item) => { const time = new Date(item.sortDate).getTime(); return time < cursorTime || (time === cursorTime && item.id < cursor.key); }) : sorted;
+  return eligible.slice(0, limit);
+}

@@ -12,10 +12,12 @@ import { requireArtistContext } from "@/lib/server/artist-context";
 import { ArtistAnnouncementModel, CanonicalArtistModel, CanonicalProductModel, CanonicalVariantModel } from "@/lib/server/models";
 import { artistProductOwnershipFilter } from "@/lib/server/product-ownership";
 import { logArtistProfileRender } from "../../../../admin/lib/sync/syncLogger";
-import { ProfileView } from "@/components/network/ProfileView";
+import { UnifiedProfileView } from "@/components/profile/UnifiedProfileView";
 import { isNetworkMvpEnabled } from "@/lib/server/network-flags";
 import { requireNetworkContext, serializeNetworkProfile } from "@/lib/server/network-context";
 import { ConnectionModel, NetworkEventModel, NetworkPostModel } from "@/lib/server/models";
+import { resolveUnifiedProfileBySlug } from "@/lib/server/unified-profile";
+import { loadPublicArtistPageBySlug } from "@/lib/server/public-artist-page";
 
 function formatCurrency(cents: number) {
   return new Intl.NumberFormat("en-DE", {
@@ -56,13 +58,10 @@ export default async function ProfilePage({
   const legacy = resolvedSearchParams.legacy === "1";
   if (isNetworkMvpEnabled() && !legacy) {
     const network = await requireNetworkContext();
-    const profile = network.profile!;
-    const [connections, posts, events] = await Promise.all([
-      ConnectionModel.countDocuments({ status: "accepted", $or: [{ requesterProfileId: profile._id }, { recipientProfileId: profile._id }] }),
-      NetworkPostModel.countDocuments({ authorProfileId: profile._id, status: "published" }),
-      NetworkEventModel.countDocuments({ organizerProfileId: profile._id, status: "published" }),
-    ]);
-    return <ProfileView profile={serializeNetworkProfile(profile)} counts={{ connections, posts, events }} mine />;
+    const profile = await resolveUnifiedProfileBySlug(network.profile!.slug);
+    if (!profile) return null;
+    const artistProfile = profile.profileType === "artist" ? await loadPublicArtistPageBySlug(profile.slug) : null;
+    return <UnifiedProfileView profile={profile} artistProfile={artistProfile} viewerMode="network" mine />;
   }
   const context = await requireArtistContext();
   const createIntent = Array.isArray(resolvedSearchParams.create)

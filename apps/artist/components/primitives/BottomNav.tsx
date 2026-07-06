@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { cn } from "@/lib/cn";
 import { bottomNavItems, networkNavItems, type BottomNavItem } from "@/lib/navigation";
+import { trackNetwork } from "@/lib/client/network-analytics";
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -76,11 +77,19 @@ const createActions = [
   { key: "experience", label: "Add experience", href: "/profile?create=experience" },
   { key: "series", label: "Add series", href: "/series?create=1" },
 ] as const;
+const networkCreateActions = [
+  { key: "artwork", label: "Upload artwork", href: "/artworks/new", roles: ["artist"] },
+  { key: "post", label: "Create post", href: "/create?type=post", roles: [] },
+  { key: "process", label: "Share process image or video", href: "/create?type=process", roles: [] },
+  { key: "event", label: "Create event", href: "/events/new", roles: ["artist","gallery","event_series","curator","institution"] },
+  { key: "collection", label: "Add to collection", href: "/collection?create=1", roles: ["collector","art_enthusiast","other"] },
+] as const;
 
 export function BottomNav({ network = false }: { network?: boolean }) {
   const pathname = usePathname() || "/";
   const router = useRouter();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [profileType,setProfileType]=useState("");
   const items = network ? networkNavItems : bottomNavItems;
   const splitIndex = Math.floor(items.length / 2);
   const leftItems = items.slice(0, splitIndex);
@@ -101,6 +110,8 @@ export function BottomNav({ network = false }: { network?: boolean }) {
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
   }, [sheetOpen]);
+  useEffect(()=>{if(network)fetch("/api/network/profile").then(response=>response.json()).then(data=>setProfileType(data.profile?.profileType||"")).catch(()=>undefined)},[network]);
+  const visibleCreateActions = network ? networkCreateActions.filter(action=>action.roles.length===0||action.roles.includes(profileType as never)) : createActions;
 
   return (
     <>
@@ -112,12 +123,13 @@ export function BottomNav({ network = false }: { network?: boolean }) {
           >
             <div className="mx-auto max-w-2xl rounded-[1.9rem] bg-neutral-50 p-3">
               <div className="space-y-0.5">
-                {createActions.map((action, index) => (
+                {visibleCreateActions.map((action, index) => (
                   <button
                     key={action.key}
                     type="button"
                     onClick={() => {
                       setSheetOpen(false);
+                      if(network)trackNetwork(action.key==="artwork"?"artwork_upload_started":action.key==="post"||action.key==="process"?"post_create_started":action.key==="event"?"event_create_started":"create_menu_opened");
                       router.push(action.href);
                     }}
                     className={cn(
@@ -162,13 +174,13 @@ export function BottomNav({ network = false }: { network?: boolean }) {
           <div className="flex justify-center pb-1">
             <button
               type="button"
-              onClick={() => network ? router.push("/create") : setSheetOpen((current) => !current)}
+              onClick={() => { if(network&&!sheetOpen)trackNetwork("create_menu_opened"); setSheetOpen((current) => !current); }}
               className={cn(
                 "inline-flex h-14 w-14 items-center justify-center rounded-full bg-neutral-950 text-white transition-transform",
-                !network && sheetOpen ? "scale-[0.98]" : "",
+                sheetOpen ? "scale-[0.98]" : "",
               )}
               aria-label="Create"
-              aria-expanded={network ? undefined : sheetOpen}
+              aria-expanded={sheetOpen}
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden>
                 <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
