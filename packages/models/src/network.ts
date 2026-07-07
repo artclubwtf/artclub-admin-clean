@@ -132,7 +132,7 @@ export const networkAnalyticsEventTypes = [
   "connection_request_received", "connection_request_declined",
   "conversation_started", "message_sent", "message_received", "message_read",
   "message_request_sent", "message_request_accepted", "message_request_declined",
-  "event_impression", "event_view", "event_created", "event_published", "event_rsvp", "event_ticket_click", "event_share",
+  "event_impression", "event_view", "event_created", "event_published", "event_edit", "event_cancelled", "event_rsvp", "event_rsvp_removed", "event_save", "event_ticket_click", "event_share",
   "donation_started", "donation_checkout_opened", "donation_completed", "donation_failed", "donation_refunded",
   "shop_click", "artwork_shop_click", "product_view", "purchase_attributed",
   "create_menu_opened", "artwork_upload_started", "artwork_upload_completed", "post_create_started", "post_created", "event_create_started", "event_created", "collection_item_created", "artwork_feed_impression", "artwork_feed_click", "post_engagement",

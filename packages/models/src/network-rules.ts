@@ -49,3 +49,28 @@ export function stableFeedPage<T extends { id: string; sortDate: string | Date }
   const eligible = cursor ? sorted.filter((item) => { const time = new Date(item.sortDate).getTime(); return time < cursorTime || (time === cursorTime && item.id < cursor.key); }) : sorted;
   return eligible.slice(0, limit);
 }
+
+/** Converts a datetime-local value in an IANA timezone into an unambiguous UTC date. */
+export function zonedDateTimeToUtc(value: string, timeZone: string) {
+  if (/Z$|[+-]\d\d:\d\d$/.test(value)) return new Date(value);
+  const parts = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!parts) return new Date(value);
+  const desired = Date.UTC(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]), Number(parts[4]), Number(parts[5]), Number(parts[6] || 0));
+  let guess = desired;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const formatted = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(new Date(guess));
+    const get = (type: Intl.DateTimeFormatPartTypes) => Number(formatted.find((part) => part.type === type)?.value || 0);
+    const represented = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
+    guess += desired - represented;
+  }
+  return new Date(guess);
+}
+
+export function eventRsvpState(input: { status: string; rsvpEnabled: boolean; endAt?: string | Date | null; startAt: string | Date; capacity?: number | null; rsvpCount: number; alreadyAttending?: boolean; now?: string | Date }) {
+  if (input.status !== "published") return "unavailable" as const;
+  if (!input.rsvpEnabled) return "disabled" as const;
+  const end = new Date(input.endAt || input.startAt).getTime();
+  if (end < new Date(input.now || Date.now()).getTime()) return "past" as const;
+  if (!input.alreadyAttending && input.capacity && input.rsvpCount >= input.capacity) return "full" as const;
+  return input.alreadyAttending ? "attending" as const : "available" as const;
+}

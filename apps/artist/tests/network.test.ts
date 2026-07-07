@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canApplyConnectionAction, canCreateNetworkEvent, canSendNetworkMessage, canViewNetworkPost, collectionItemInputSchema, connectionViewState, donationStatusForStripeEvent, messageRequestInputSchema, networkEngagementRate, networkEventInputSchema, networkPostInputSchema, networkProfileInputSchema, networkSlug, stableFeedPage } from "@artclub/models";
+import { canApplyConnectionAction, canCreateNetworkEvent, canSendNetworkMessage, canViewNetworkPost, collectionItemInputSchema, connectionViewState, donationStatusForStripeEvent, eventRsvpState, messageRequestInputSchema, networkEngagementRate, networkEventInputSchema, networkPostInputSchema, networkProfileInputSchema, networkSlug, stableFeedPage, zonedDateTimeToUtc } from "@artclub/models";
 
 describe("network permissions", () => {
   it("restricts event creation to eligible roles", () => { expect(canCreateNetworkEvent("artist")).toBe(true); expect(canCreateNetworkEvent("gallery")).toBe(true); expect(canCreateNetworkEvent("collector")).toBe(false); });
@@ -17,6 +17,9 @@ describe("network validation", () => {
   it("generates stable safe artist slugs", () => { expect(networkSlug("Éva Müller Studio")).toBe("eva-muller-studio"); });
   it("limits message requests to 100 characters",()=>{expect(messageRequestInputSchema.safeParse({profileId:"artist:123",text:"a".repeat(100)}).success).toBe(true);expect(messageRequestInputSchema.safeParse({profileId:"artist:123",text:"a".repeat(101)}).success).toBe(false)});
   it("paginates mixed feed items without repeating the cursor",()=>{const items=[{id:"post:b",sortDate:"2026-01-02"},{id:"artwork:a",sortDate:"2026-01-02"},{id:"post:a",sortDate:"2026-01-01"}];expect(stableFeedPage(items,{date:"2026-01-02",key:"post:b"},10).map(item=>item.id)).toEqual(["artwork:a","post:a"])});
+  it("paginates events with posts and artworks without duplicates",()=>{const items=[{id:"event:c",sortDate:"2026-01-03"},{id:"post:b",sortDate:"2026-01-02"},{id:"artwork:a",sortDate:"2026-01-01"}];expect(stableFeedPage(items,{date:"2026-01-03",key:"event:c"},10).map(item=>item.id)).toEqual(["post:b","artwork:a"])});
+  it("converts an explicit Berlin wall-clock time to UTC",()=>{expect(zonedDateTimeToUtc("2026-07-07T20:00","Europe/Berlin").toISOString()).toBe("2026-07-07T18:00:00.000Z")});
+  it("blocks RSVP for past, cancelled and full events",()=>{const base={status:"published",rsvpEnabled:true,startAt:"2026-07-08T18:00:00Z",rsvpCount:0,now:"2026-07-07T18:00:00Z"};expect(eventRsvpState(base)).toBe("available");expect(eventRsvpState({...base,status:"cancelled"})).toBe("unavailable");expect(eventRsvpState({...base,startAt:"2026-07-06T18:00:00Z"})).toBe("past");expect(eventRsvpState({...base,capacity:1,rsvpCount:1})).toBe("full")});
 });
 
 describe("donations and analytics", () => {

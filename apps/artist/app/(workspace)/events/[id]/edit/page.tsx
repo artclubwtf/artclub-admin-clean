@@ -1,0 +1,8 @@
+import {notFound} from "next/navigation";
+import {EventFormClient} from "@/components/network/EventsClient";
+import {requireNetworkContext} from "@/lib/server/network-context";
+import {NetworkEventModel} from "@/lib/server/models";
+import {validId} from "@/lib/server/network-service";
+export const dynamic="force-dynamic";
+function localInZone(date:Date|null|undefined,timeZone:string){if(!date)return undefined;const parts=new Intl.DateTimeFormat("en-CA",{timeZone,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(date);const get=(type:Intl.DateTimeFormatPartTypes)=>parts.find(part=>part.type===type)?.value||"";return`${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`}
+export default async function EditEventPage({params}:{params:Promise<{id:string}>}){const context=await requireNetworkContext();const{id}=await params;if(!validId(id))notFound();const event=await NetworkEventModel.findOne({_id:id,organizerProfileId:context.profile!._id,status:{$in:["draft","published"]}}).lean();if(!event)notFound();return <EventFormClient eventId={id} initial={{title:event.title,description:event.description||"",coverImageUrl:event.coverImageUrl||"",startAt:localInZone(event.startAt,event.timezone),endAt:localInZone(event.endAt,event.timezone),timezone:event.timezone,venueName:event.venueName||"",address:event.address||"",city:event.city||"",country:event.country||"",isOnline:event.isOnline,ticketUrl:event.ticketUrl||"",rsvpEnabled:event.rsvpEnabled,capacity:event.capacity,visibility:event.visibility,participantProfileIds:event.participantProfileIds.map(String),status:event.status}}/>}

@@ -42,6 +42,7 @@ export {
   NetworkReportModel,
   PostLikeModel,
   SavedPostModel,
+  SavedEventModel,
 } from "../../../admin/models/Network";
 export { UserReactionModel } from "../../../admin/models/UserReaction";
 export { UserSavedModel } from "../../../admin/models/UserSaved";

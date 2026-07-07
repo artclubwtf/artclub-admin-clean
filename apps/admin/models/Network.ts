@@ -129,16 +129,22 @@ const eventSchema = new Schema(
     capacity: Number,
     visibility: { type: String, enum: ["public", "connections", "private"], default: "public" },
     status: { type: String, enum: ["draft", "published", "cancelled", "completed"], default: "draft" },
+    publishedAt: Date,
     participantProfileIds: [{ type: objectId, ref: "NetworkProfile" }],
   },
   { timestamps: true },
 );
 eventSchema.index({ slug: 1 }, { unique: true });
 eventSchema.index({ status: 1, startAt: 1, city: 1 });
+eventSchema.index({ status: 1, visibility: 1, publishedAt: -1, createdAt: -1 });
 eventSchema.index({ organizerProfileId: 1, startAt: -1 });
+eventSchema.index({ participantProfileIds: 1, startAt: -1 });
 
 const rsvpSchema = new Schema({ eventId: { type: objectId, ref: "NetworkEvent", required: true }, profileId: { type: objectId, ref: "NetworkProfile", required: true }, status: { type: String, enum: ["going", "cancelled"], default: "going" } }, { timestamps: true });
 rsvpSchema.index({ eventId: 1, profileId: 1 }, { unique: true });
+
+const savedEventSchema = new Schema({ eventId: { type: objectId, ref: "NetworkEvent", required: true }, profileId: { type: objectId, ref: "NetworkProfile", required: true } }, { timestamps: true });
+savedEventSchema.index({ eventId: 1, profileId: 1 }, { unique: true });
 
 const conversationSchema = new Schema(
   { participantProfileIds: [{ type: objectId, ref: "NetworkProfile", required: true }], participantKey: { type: String, required: true }, lastMessageAt: Date, lastMessagePreview: { type: String, trim: true } },
@@ -222,6 +228,7 @@ export const SavedPostModel = getModel("NetworkSavedPost", savedPostSchema);
 export const CollectionItemModel = getModel("NetworkCollectionItem", collectionItemSchema);
 export const NetworkEventModel = getModel("NetworkEvent", eventSchema);
 export const EventRSVPModel = getModel("NetworkEventRSVP", rsvpSchema);
+export const SavedEventModel = getModel("NetworkSavedEvent", savedEventSchema);
 export const NetworkConversationModel = getModel("NetworkConversation", conversationSchema);
 export const NetworkMessageModel = getModel("NetworkMessage", messageSchema);
 export const NetworkNotificationModel = getModel("NetworkNotification", notificationSchema);

@@ -13,6 +13,7 @@ import { ArtistAnnouncementModel, CanonicalArtistModel, CanonicalProductModel, C
 import { artistProductOwnershipFilter } from "@/lib/server/product-ownership";
 import { logArtistProfileRender } from "../../../../admin/lib/sync/syncLogger";
 import { UnifiedProfileView } from "@/components/profile/UnifiedProfileView";
+import { ProfileEvents } from "@/components/profile/ProfileEvents";
 import { isNetworkMvpEnabled } from "@/lib/server/network-flags";
 import { requireNetworkContext, serializeNetworkProfile } from "@/lib/server/network-context";
 import { ConnectionModel, NetworkEventModel, NetworkPostModel } from "@/lib/server/models";
@@ -61,7 +62,7 @@ export default async function ProfilePage({
     const profile = await resolveUnifiedProfileBySlug(network.profile!.slug);
     if (!profile) return null;
     const artistProfile = profile.profileType === "artist" ? await loadPublicArtistPageBySlug(profile.slug) : null;
-    return <UnifiedProfileView profile={profile} artistProfile={artistProfile} viewerMode="network" mine />;
+    return <><UnifiedProfileView profile={profile} artistProfile={artistProfile} viewerMode="network" mine /><ProfileEvents profileId={profile.networkProfileId || profile.id} mine /></>;
   }
   const context = await requireArtistContext();
   const createIntent = Array.isArray(resolvedSearchParams.create)
