@@ -14,15 +14,23 @@ export const networkProfileTypeSchema = z.enum(networkProfileTypes);
 export type NetworkProfileType = z.infer<typeof networkProfileTypeSchema>;
 
 export const networkVisibilitySchema = z.enum(["public", "connections", "private"]);
+const persistedMediaUrl = z.union([z.url().max(2048), z.string().regex(/^\/api\/network\/media\/[^?#]+$/).max(2048)]);
 export const networkMediaSchema = z.object({
-  url: z.url().max(2048),
+  url: persistedMediaUrl,
   type: z.enum(["image", "video"]),
+  storageKey: z.string().trim().min(1).max(1024).optional(),
+  provider: z.enum(["s3"]).optional(),
+  mimeType: z.string().trim().max(120).optional(),
+  sizeBytes: z.number().int().nonnegative().optional(),
   alt: z.string().trim().max(300).optional(),
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
+  duration: z.number().nonnegative().optional(),
+  posterStorageKey: z.string().trim().min(1).max(1024).optional(),
+  posterUrl: persistedMediaUrl.optional(),
 });
 
-const optionalUrl = z.union([z.literal(""), z.url().max(2048)]).optional();
+const optionalUrl = z.union([z.literal(""), persistedMediaUrl]).optional();
 const optionalText = (max: number) => z.string().trim().max(max).optional();
 
 export const networkProfileInputSchema = z.object({
@@ -37,7 +45,9 @@ export const networkProfileInputSchema = z.object({
   website: optionalUrl,
   instagram: optionalText(100),
   profileImageUrl: optionalUrl,
+  profileImageStorageKey: optionalText(1024),
   coverImageUrl: optionalUrl,
+  coverImageStorageKey: optionalText(1024),
   isPublic: z.boolean().default(true),
   allowsMessages: z.boolean().default(false),
   donationEnabled: z.boolean().default(false),
@@ -83,6 +93,7 @@ export const networkEventInputSchema = z.object({
   title: z.string().trim().min(1).max(180),
   description: z.string().trim().max(5000).default(""),
   coverImageUrl: optionalUrl,
+  coverImageStorageKey: optionalText(1024),
   startAt: z.coerce.date(),
   endAt: z.coerce.date().optional(),
   timezone: z.string().trim().min(1).max(80),
@@ -103,11 +114,31 @@ export const networkEventInputSchema = z.object({
 });
 export type NetworkEventInput = z.infer<typeof networkEventInputSchema>;
 
+export type ExploreArtwork = {
+  id: string;
+  productKey: string;
+  title: string;
+  imageUrl: string;
+  width?: number;
+  height?: number;
+  category: string;
+  offering: string;
+  priceLabel: string;
+  shopUrl: string;
+  liked: boolean;
+  saved: boolean;
+  likeCount: number;
+  artist: { slug: string; displayName: string };
+};
+
+export type ExploreArtPage = { items: ExploreArtwork[]; nextCursor: string | null; facets: string[] };
+
 export const collectionItemInputSchema = z.object({
   canonicalProductId: optionalText(64),
   customArtistName: optionalText(160),
   customArtworkTitle: optionalText(200),
   customImageUrl: optionalUrl,
+  customImageStorageKey: optionalText(1024),
   acquiredAt: z.coerce.date().optional(),
   acquisitionSource: optionalText(160),
   purchasePriceVisibility: z.enum(["private", "public"]).default("private"),
@@ -138,6 +169,9 @@ export const networkAnalyticsEventTypes = [
   "event_impression", "event_view", "event_created", "event_published", "event_edit", "event_cancelled", "event_rsvp", "event_rsvp_removed", "event_save", "event_ticket_click", "event_share",
   "donation_started", "donation_checkout_opened", "donation_completed", "donation_failed", "donation_refunded",
   "shop_click", "artwork_shop_click", "product_view", "purchase_attributed",
+  "navigation_feed_opened", "navigation_explore_opened", "navigation_events_opened", "navigation_network_opened", "navigation_messages_opened",
+  "explore_view", "explore_artwork_impression", "explore_artwork_click", "explore_artist_click", "explore_artwork_like", "explore_artwork_save", "explore_artwork_share", "explore_shop_click", "explore_filter_changed",
+  "video_impression", "video_play", "video_pause", "video_complete", "video_unmute",
   "create_menu_opened", "artwork_upload_started", "artwork_upload_completed", "post_create_started", "post_created", "event_create_started", "event_created", "collection_item_created", "artwork_feed_impression", "artwork_feed_click", "post_engagement",
 ] as const;
 

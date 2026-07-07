@@ -19,6 +19,10 @@ export type ImageUploadItem = {
   filename?: string;
   width?: number;
   height?: number;
+  storageKey?: string;
+  provider?: "s3";
+  mimeType?: string;
+  sizeBytes?: number | null;
 };
 
 type ImageUploadProps<T extends ImageUploadItem> = {

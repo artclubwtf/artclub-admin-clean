@@ -1,5 +1,6 @@
 import { eventRsvpState, zonedDateTimeToUtc } from "@artclub/models";
 import { serializeNetworkProfile } from "@/lib/server/network-context";
+import { resolveNetworkMediaForRead } from "@/lib/server/network-media";
 
 export function normalizeEventTimes(body: Record<string, unknown>) {
   const timezone = typeof body.timezone === "string" ? body.timezone : "UTC";
@@ -23,7 +24,8 @@ export function serializeEvent(item: any, options: { viewerId: unknown; rsvpCoun
     title: item.title,
     slug: item.slug,
     description: item.description || "",
-    coverImageUrl: item.coverImageUrl || "",
+    coverImageUrl: resolveNetworkMediaForRead(item.coverImageUrl, item.coverImageStorageKey),
+    coverImageStorageKey: item.coverImageStorageKey || "",
     startAt: item.startAt,
     endAt: item.endAt,
     timezone: item.timezone,

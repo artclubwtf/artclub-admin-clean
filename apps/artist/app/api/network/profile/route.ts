@@ -5,6 +5,7 @@ import { uniqueProfileIdentity } from "@/lib/server/network-registration";
 import { apiError } from "@/lib/server/network-service";
 import { CanonicalArtistModel, NetworkProfileModel, UserModel } from "@/lib/server/models";
 import { resolveUnifiedProfileBySlug } from "@/lib/server/unified-profile";
+import { hydrateNetworkMediaKeys } from "@/lib/server/network-media";
 
 export async function GET() {
   const auth = await requireNetworkApiContext(); if (!auth.ok) return auth.response;
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
   const auth = await requireNetworkApiContext({ allowMissingProfile: true }); if (!auth.ok) return auth.response;
   const selectedType = auth.context.user.networkProfileType as (typeof networkOnboardingRoles)[number] | undefined;
   if (auth.context.user.networkRoleSelectionCompleted !== true || !networkOnboardingRoles.includes(selectedType as any)) return apiError("role_selection_required", 409);
-  const body = await req.json().catch(() => null);
+  const body = hydrateNetworkMediaKeys(await req.json().catch(() => null));
   const parsed = networkProfileInputSchema.safeParse({ ...(body || {}), profileType: selectedType });
   if (!parsed.success) return apiError("invalid_profile", 400, parsed.error.flatten());
   const session = await UserModel.startSession();
@@ -65,7 +66,7 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   const auth = await requireNetworkApiContext(); if (!auth.ok) return auth.response;
-  const parsed = networkProfileInputSchema.partial().safeParse(await req.json().catch(() => null));
+  const parsed = networkProfileInputSchema.partial().safeParse(hydrateNetworkMediaKeys(await req.json().catch(() => null)));
   if (!parsed.success) return apiError("invalid_profile", 400, parsed.error.flatten());
   const update: Record<string, unknown> = { ...parsed.data };
   if (parsed.data.username) { const identity = await uniqueProfileIdentity(parsed.data.username, undefined, auth.context.user._id); update.username = identity; update.slug = identity; }

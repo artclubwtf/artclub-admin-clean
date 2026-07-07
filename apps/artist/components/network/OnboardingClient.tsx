@@ -9,13 +9,13 @@ const api = createNetworkApiClient();
 const labels: Record<string, string> = { artist: "Artist profile", art_enthusiast: "Collector / Art Enthusiast profile", gallery: "Gallery profile", event_series: "Event Organizer profile", curator: "Curator profile", institution: "Institution profile" };
 
 export function OnboardingClient({ email, profileType, initial }: { email: string; profileType: string; initial?: any }) {
-  const [value, setValue] = useState({ displayName: initial?.displayName || "", username: initial?.username || email.split("@")[0].replace(/[^a-z0-9._-]/gi, "").toLowerCase(), city: initial?.city || "", country: initial?.country || "", disciplines: (initial?.disciplines || []).join(", "), interests: (initial?.interests || []).join(", "), bio: initial?.bio || "", website: initial?.website || "", instagram: initial?.instagram || "", profileImageUrl: initial?.profileImageUrl || "", coverImageUrl: initial?.coverImageUrl || "", isPublic: initial?.isPublic !== false, allowsMessages: initial?.allowsMessages === true, donationEnabled: initial?.donationEnabled === true });
+  const [value, setValue] = useState({ displayName: initial?.displayName || "", username: initial?.username || email.split("@")[0].replace(/[^a-z0-9._-]/gi, "").toLowerCase(), city: initial?.city || "", country: initial?.country || "", disciplines: (initial?.disciplines || []).join(", "), interests: (initial?.interests || []).join(", "), bio: initial?.bio || "", website: initial?.website || "", instagram: initial?.instagram || "", profileImageUrl: initial?.profileImageUrl || "", profileImageStorageKey: initial?.profileImageStorageKey || "", coverImageUrl: initial?.coverImageUrl || "", coverImageStorageKey: initial?.coverImageStorageKey || "", isPublic: initial?.isPublic !== false, allowsMessages: initial?.allowsMessages === true, donationEnabled: initial?.donationEnabled === true });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
   const submitting = useRef(false);
-  const avatarItems: ImageUploadItem[] = value.profileImageUrl ? [{ url: value.profileImageUrl }] : [];
-  const coverItems: ImageUploadItem[] = value.coverImageUrl ? [{ url: value.coverImageUrl }] : [];
+  const avatarItems: ImageUploadItem[] = value.profileImageUrl ? [{ url: value.profileImageUrl, storageKey: value.profileImageStorageKey }] : [];
+  const coverItems: ImageUploadItem[] = value.coverImageUrl ? [{ url: value.coverImageUrl, storageKey: value.coverImageStorageKey }] : [];
 
   async function submit(event: FormEvent) {
     event.preventDefault();

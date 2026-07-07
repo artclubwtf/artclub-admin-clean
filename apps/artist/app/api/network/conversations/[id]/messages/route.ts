@@ -2,6 +2,7 @@ import { networkMessageInputSchema } from "@artclub/models";
 import { requireNetworkApiContext } from "@/lib/server/network-context";
 import { apiError, canMessage, cursorFilter, notify, validId } from "@/lib/server/network-service";
 import { NetworkConversationModel, NetworkMessageModel, NetworkProfileModel } from "@/lib/server/models";
+import { resolveNetworkMediaItems } from "@/lib/server/network-media";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireNetworkApiContext(); if (!auth.ok) return auth.response;
@@ -10,7 +11,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const cursor = new URL(req.url).searchParams.get("cursor");
   const messages = await NetworkMessageModel.find({ conversationId: id, deletedAt: { $exists: false }, ...cursorFilter(cursor) }).sort({ _id: -1 }).limit(51).lean();
   const page = messages.slice(0, 50);
-  return Response.json({ ok: true, messages: page.reverse().map((message) => ({ id: message._id.toString(), text: message.text || "", media: message.media || [], mine: String(message.senderProfileId) === String(auth.context.profile._id), read: message.readBy.some((value) => String(value) !== String(message.senderProfileId)), createdAt: message.createdAt, editedAt: message.editedAt })), nextCursor: messages.length > 50 ? messages[49]._id.toString() : null });
+  return Response.json({ ok: true, messages: page.reverse().map((message) => ({ id: message._id.toString(), text: message.text || "", media: resolveNetworkMediaItems(message.media || []), mine: String(message.senderProfileId) === String(auth.context.profile._id), read: message.readBy.some((value) => String(value) !== String(message.senderProfileId)), createdAt: message.createdAt, editedAt: message.editedAt })), nextCursor: messages.length > 50 ? messages[49]._id.toString() : null });
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {

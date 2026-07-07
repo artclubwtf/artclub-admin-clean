@@ -7,6 +7,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { bottomNavItems, networkNavItems, type BottomNavItem } from "@/lib/navigation";
 import { trackNetwork } from "@/lib/client/network-analytics";
+import { NavigationIcon } from "@/components/navigation/NavigationIcon";
+import { primaryNavigation } from "@/lib/navigation";
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -17,6 +19,12 @@ function NavIcon({ item, active }: { item: BottomNavItem; active: boolean }) {
   const className = cn("h-[18px] w-[18px] transition-colors", active ? "text-[var(--text)]" : "text-[var(--text-faint)]");
 
   switch (item.icon) {
+    case "explore":
+    case "events":
+    case "messages":
+    case "network":
+    case "notifications":
+      return <NavigationIcon name={item.icon} className={className} />;
     case "home":
       return (
         <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
@@ -118,7 +126,7 @@ export function BottomNav({ network = false }: { network?: boolean }) {
       {sheetOpen ? (
         <div className="fixed inset-0 z-40 bg-[var(--overlay)]" onClick={() => setSheetOpen(false)}>
           <div
-            className="absolute inset-x-0 bottom-[calc(max(env(safe-area-inset-bottom),1rem)+5.4rem)] px-4 lg:bottom-8 lg:left-28 lg:right-auto lg:w-80 lg:px-0"
+            className="absolute inset-x-0 bottom-[calc(max(env(safe-area-inset-bottom),1rem)+5.4rem)] px-4 lg:bottom-8 lg:left-64 lg:right-auto lg:w-80 lg:px-0"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mx-auto max-w-2xl rounded-2xl bg-[var(--surface)] p-2 shadow-2xl">
@@ -147,9 +155,9 @@ export function BottomNav({ network = false }: { network?: boolean }) {
         </div>
       ) : null}
 
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 px-4 pb-[max(env(safe-area-inset-bottom),1rem)] lg:inset-y-0 lg:left-5 lg:right-auto lg:flex lg:items-center lg:px-0 lg:pb-0">
+      <div className={cn("pointer-events-none fixed inset-x-0 bottom-0 z-50 px-3 pb-[max(env(safe-area-inset-bottom),.6rem)]", network ? "lg:hidden" : "lg:inset-y-0 lg:left-5 lg:right-auto lg:flex lg:items-center lg:px-0 lg:pb-0")}>
         <nav
-          className="pointer-events-auto mx-auto grid max-w-2xl items-end rounded-full border border-[var(--divider)] bg-[color-mix(in_srgb,var(--surface)_90%,transparent)] px-2 py-2 shadow-lg backdrop-blur-xl lg:flex lg:w-[5.25rem] lg:flex-col lg:items-stretch lg:gap-1 lg:rounded-2xl lg:p-2"
+          className={cn("pointer-events-auto mx-auto grid max-w-2xl items-end bg-[color-mix(in_srgb,var(--surface)_94%,transparent)] px-1 py-1.5 shadow-[0_-8px_30px_rgba(0,0,0,.06)] backdrop-blur-xl", network ? "w-full rounded-2xl" : "rounded-full border border-[var(--divider)] lg:flex lg:w-[5.25rem] lg:flex-col lg:items-stretch lg:gap-1 lg:rounded-2xl lg:p-2")}
           style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
         >
           {leftItems.map((item) => {
@@ -160,8 +168,8 @@ export function BottomNav({ network = false }: { network?: boolean }) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex min-w-0 flex-col items-center justify-center gap-1 rounded-full px-2 py-2 text-[11px] font-medium tracking-[-0.01em] transition-colors",
-                  active ? "bg-[var(--surface-soft)] text-[var(--text)]" : "text-[var(--text-faint)]",
+                  "flex min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium tracking-[-0.01em] transition-colors",
+                  active ? "text-[var(--text)]" : "text-[var(--text-faint)]",
                 )}
                 aria-current={active ? "page" : undefined}
               >
@@ -196,8 +204,8 @@ export function BottomNav({ network = false }: { network?: boolean }) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex min-w-0 flex-col items-center justify-center gap-1 rounded-full px-2 py-2 text-[11px] font-medium tracking-[-0.01em] transition-colors",
-                  active ? "bg-[var(--surface-soft)] text-[var(--text)]" : "text-[var(--text-faint)]",
+                  "flex min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium tracking-[-0.01em] transition-colors",
+                  active ? "text-[var(--text)]" : "text-[var(--text-faint)]",
                 )}
                 aria-current={active ? "page" : undefined}
               >
@@ -208,6 +216,8 @@ export function BottomNav({ network = false }: { network?: boolean }) {
           })}
         </nav>
       </div>
+
+      {network ? <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-[var(--divider)] bg-[var(--surface)] px-5 py-6 lg:flex"><Link href="/feed" className="mb-10 text-lg font-semibold tracking-[-.04em]">ARTCLUB <span className="font-normal text-[var(--text-faint)]">Network</span></Link><nav className="space-y-1">{primaryNavigation.map(item=>{const active=isActive(pathname,item.href);return <Link key={item.id} href={item.href} onClick={()=>item.analyticsEvent&&trackNetwork(item.analyticsEvent)} aria-current={active?"page":undefined} className={cn("flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors",active?"bg-[var(--surface-soft)] font-medium text-[var(--text)]":"text-[var(--text-muted)] hover:bg-[var(--surface-soft)]")}><NavigationIcon name={item.icon}/><span>{item.label}</span></Link>})}</nav><button type="button" onClick={()=>setSheetOpen(current=>!current)} className="primary-action mt-7 w-full"><span className="mr-2 text-lg">+</span>Create</button><Link href="/settings" className="mt-auto flex items-center gap-3 px-3 py-3 text-sm text-[var(--text-muted)]"><NavigationIcon name="settings"/>Settings</Link></aside> : null}
     </>
   );
 }

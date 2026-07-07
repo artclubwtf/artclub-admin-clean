@@ -2,6 +2,7 @@ import { Types } from "mongoose";
 import { networkSlug } from "@artclub/models";
 import { CanonicalArtistModel, NetworkProfileModel, UserModel } from "@/lib/server/models";
 import { ensureArtistNetworkProfile } from "@/lib/server/network-context";
+import { resolveNetworkMediaForRead } from "@/lib/server/network-media";
 
 export type UnifiedProfile = {
   id: string;
@@ -35,7 +36,7 @@ function artistUnified(artist: any, user: any, profile?: any): UnifiedProfile {
     profileType: "artist", profileTypeSource: profile?.profileTypeSource, slug, displayName: artist.displayName || user.name || profile?.displayName || "Artist",
     username: profile?.username || artist.handle || slug, bio: artist.bio || "", city: artist.locationCity || "", country: artist.locationCountry || "",
     disciplines: profile?.disciplines || [], interests: profile?.interests || [], website: artist.websiteUrl || "", instagram: artist.instagram || "",
-    profileImageUrl: artist.profileImages?.avatarUrl || "", coverImageUrl: artist.profileImages?.heroUrl || "",
+    profileImageUrl: resolveNetworkMediaForRead(artist.profileImages?.avatarUrl, profile?.profileImageStorageKey), coverImageUrl: resolveNetworkMediaForRead(artist.profileImages?.heroUrl, profile?.coverImageStorageKey),
     isPublic: artist.publicProfile?.isVisible !== false && profile?.isPublic !== false, isVerified: profile?.isVerified === true,
     donationEnabled: profile?.donationEnabled === true,
   };
@@ -46,7 +47,7 @@ function standardUnified(profile: any): UnifiedProfile {
     id: profile._id.toString(), networkProfileId: profile._id.toString(), userId: profile.userId.toString(), profileType: profile.profileType, profileTypeSource: profile.profileTypeSource,
     slug: profile.slug, displayName: profile.displayName, username: profile.username, bio: profile.bio || "", city: profile.city || "", country: profile.country || "",
     disciplines: profile.disciplines || [], interests: profile.interests || [], website: profile.website || "", instagram: profile.instagram || "",
-    profileImageUrl: profile.profileImageUrl || "", coverImageUrl: profile.coverImageUrl || "", isPublic: profile.isPublic !== false,
+    profileImageUrl: resolveNetworkMediaForRead(profile.profileImageUrl, profile.profileImageStorageKey), coverImageUrl: resolveNetworkMediaForRead(profile.coverImageUrl, profile.coverImageStorageKey), isPublic: profile.isPublic !== false,
     isVerified: profile.isVerified === true, donationEnabled: profile.donationEnabled === true,
   };
 }

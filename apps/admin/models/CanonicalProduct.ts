@@ -126,6 +126,7 @@ canonicalProductSchema.index(
 );
 canonicalProductSchema.index({ shopDomain: 1, "sync.needsPush": 1, "sync.dirtyAt": 1 });
 canonicalProductSchema.index({ shopDomain: 1, legacyProductId: 1 });
+canonicalProductSchema.index({ type: 1, status: 1, createdAt: -1, _id: -1 });
 
 type CanonicalProduct = InferSchemaType<typeof canonicalProductSchema>;
 export type CanonicalProductType = (typeof canonicalProductTypes)[number];

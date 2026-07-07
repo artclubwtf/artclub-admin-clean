@@ -1,6 +1,7 @@
 import { Types } from "mongoose";
 import { ConnectionModel, NetworkNotificationModel } from "@/lib/server/models";
 import { canCreateNetworkEvent, canSendNetworkMessage } from "@artclub/models";
+import { resolveNetworkMediaForRead } from "@/lib/server/network-media";
 
 export function validId(value: unknown): value is string {
   return typeof value === "string" && Types.ObjectId.isValid(value);
@@ -48,7 +49,7 @@ export async function notify(input: { recipientProfileId: unknown; actorProfileI
 export function serializePost(post: any, viewer?: { liked: Set<string>; saved: Set<string>; profileId?: unknown }) {
   const author = post.authorProfileId && typeof post.authorProfileId === "object" && "displayName" in post.authorProfileId ? post.authorProfileId : null;
   return {
-    id: post._id.toString(), type: post.type, text: post.text || "", media: post.media || [], visibility: post.visibility,
+    id: post._id.toString(), type: post.type, text: post.text || "", media: (post.media || []).map((item: any) => ({ ...item, url: resolveNetworkMediaForRead(item.url, item.storageKey), ...(item.posterUrl ? { posterUrl: resolveNetworkMediaForRead(item.posterUrl, item.posterStorageKey) } : {}) })), visibility: post.visibility,
     linkedArtworkId: post.linkedArtworkId?.toString(), linkedEventId: post.linkedEventId?.toString(), collectionItemId: post.collectionItemId?.toString(),
     likeCount: post.likeCount || 0, commentCount: post.commentCount || 0, createdAt: post.createdAt, updatedAt: post.updatedAt,
     liked: viewer?.liked.has(post._id.toString()) || false, saved: viewer?.saved.has(post._id.toString()) || false,

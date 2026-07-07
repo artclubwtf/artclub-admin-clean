@@ -6,5 +6,9 @@ export function createNetworkApiClient(baseUrl = "") {
     if (!response.ok) { const error = new Error(payload?.error?.code || `request_failed_${response.status}`) as Error & { status: number; details?: unknown }; error.status = response.status; error.details = payload?.error?.details; throw error; }
     return payload as T;
   }
-  return { request };
+  function exploreArt(params: { cursor?: string; q?: string; category?: string; sort?: "recent" | "popular" } = {}) {
+    const search = new URLSearchParams(Object.entries(params).filter((entry): entry is [string, string] => Boolean(entry[1])));
+    return request<import("@artclub/models").ExploreArtPage>(`/explore-art?${search.toString()}`);
+  }
+  return { request, exploreArt };
 }

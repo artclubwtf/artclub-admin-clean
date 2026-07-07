@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/server/auth";
 import { connectMongo } from "@/lib/server/mongodb";
 import { CanonicalArtistModel, NetworkProfileModel, UserModel } from "@/lib/server/models";
 import { networkSlug } from "@artclub/models";
+import { resolveNetworkMediaForRead } from "@/lib/server/network-media";
 
 async function uniqueSlug(baseValue: string) {
   const base = networkSlug(baseValue);
@@ -87,7 +88,8 @@ export function serializeNetworkProfile(profile: any) {
     id: profile._id.toString(), profileType: profile.profileType, profileTypeSource: profile.profileTypeSource, slug: profile.slug, displayName: profile.displayName,
     username: profile.username, bio: profile.bio || "", city: profile.city || "", country: profile.country || "",
     disciplines: profile.disciplines || [], interests: profile.interests || [], website: profile.website || "",
-    instagram: profile.instagram || "", profileImageUrl: profile.profileImageUrl || "", coverImageUrl: profile.coverImageUrl || "",
+    instagram: profile.instagram || "", profileImageUrl: resolveNetworkMediaForRead(profile.profileImageUrl, profile.profileImageStorageKey), coverImageUrl: resolveNetworkMediaForRead(profile.coverImageUrl, profile.coverImageStorageKey),
+    profileImageStorageKey: profile.profileImageStorageKey || "", coverImageStorageKey: profile.coverImageStorageKey || "",
     isPublic: profile.isPublic !== false, isVerified: profile.isVerified === true, allowsMessages: profile.allowsMessages === true,
     donationEnabled: profile.donationEnabled === true, canonicalArtistId: profile.canonicalArtistId?.toString(),
   };

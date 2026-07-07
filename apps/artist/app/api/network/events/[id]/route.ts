@@ -3,6 +3,7 @@ import { requireNetworkApiContext } from "@/lib/server/network-context";
 import { normalizeEventTimes, serializeEvent } from "@/lib/server/network-events";
 import { apiError, validId } from "@/lib/server/network-service";
 import { EventRSVPModel, NetworkEventModel, SavedEventModel } from "@/lib/server/models";
+import { hydrateNetworkMediaKeys } from "@/lib/server/network-media";
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireNetworkApiContext();
@@ -29,7 +30,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const current = await NetworkEventModel.findOne({ _id: id, organizerProfileId: auth.context.profile._id });
   if (!current) return apiError("event_not_found", 404);
   if (["cancelled", "completed"].includes(current.status)) return apiError("event_not_editable", 409);
-  const body = normalizeEventTimes(await req.json().catch(() => ({})));
+  const body = normalizeEventTimes(hydrateNetworkMediaKeys(await req.json().catch(() => ({}))));
   const parsed = networkEventInputSchema.safeParse({ title: current.title, description: current.description || "", coverImageUrl: current.coverImageUrl || "", startAt: current.startAt, endAt: current.endAt, timezone: current.timezone, venueName: current.venueName || "", address: current.address || "", city: current.city || "", country: current.country || "", isOnline: current.isOnline, ticketUrl: current.ticketUrl || "", rsvpEnabled: current.rsvpEnabled, capacity: current.capacity, visibility: current.visibility, participantProfileIds: current.participantProfileIds.map(String), status: current.status === "published" ? "published" : "draft", ...body });
   if (!parsed.success) return apiError("invalid_event", 400, parsed.error.flatten());
   const publishing = current.status !== "published" && parsed.data.status === "published";

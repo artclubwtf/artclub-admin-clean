@@ -1,0 +1,8 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { Types } from "mongoose";
+
+import { CanonicalProductModel } from "@/lib/server/models";
+import { resolveUnifiedProfileByIdentity } from "@/lib/server/unified-profile";
+
+export default async function ExploreArtworkPage({params}:{params:Promise<{id:string}>}){const{id}=await params;if(!Types.ObjectId.isValid(id))notFound();const artwork=await CanonicalProductModel.findOne({_id:id,type:"artwork",status:{$in:["active","shopify_synced"]}}).lean();if(!artwork||!artwork.canonicalArtistId)notFound();const artist=await resolveUnifiedProfileByIdentity(`artist:${artwork.canonicalArtistId}`);if(!artist)notFound();const image=artwork.images?.originalUrl||artwork.images?.mediumUrl||artwork.images?.thumbUrl||"";return <main className="app-page max-w-6xl"><Link href="/explore-art" className="text-action">← Explore Art</Link><div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1.5fr)_minmax(18rem,.5fr)]"><div className="overflow-hidden rounded-2xl bg-[var(--surface-soft)]"><img src={image} alt={artwork.images?.altText||artwork.title} className="max-h-[80vh] w-full object-contain"/></div><aside><p className="eyebrow">Artwork</p><h1 className="page-heading mt-2">{artwork.title}</h1><Link href={`/profile/${artist.slug}`} className="mt-3 block text-[var(--text-muted)]">{artist.displayName}</Link>{artwork.year?<p className="meta-text mt-1">{artwork.year}</p>:null}{artwork.description?<p className="mt-6 whitespace-pre-wrap leading-7 text-[var(--text-muted)]">{artwork.description}</p>:null}{artwork.handle?<a href={`https://${artwork.shopDomain}/products/${artwork.handle}`} target="_blank" rel="noreferrer" className="primary-action mt-7">View in shop</a>:null}</aside></div></main>}

@@ -1,3 +1,6 @@
-import Link from "next/link";
-import {serializeNetworkProfile} from "@/lib/server/network-context";
-export function NetworkTopbar({profile}:{profile:any}){const value=serializeNetworkProfile(profile);return <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[var(--divider)] bg-[color-mix(in_srgb,var(--canvas)_88%,transparent)] backdrop-blur-xl"><Link href="/feed" className="text-lg font-semibold tracking-[-.04em]">ARTCLUB <span className="font-normal text-[var(--text-faint)]">Network</span></Link><nav className="flex items-center gap-5"><Link href="/events" className="hidden text-sm text-[var(--text-muted)] sm:block">Events</Link><Link href="/notifications" className="text-sm text-[var(--text-muted)]">Alerts</Link><Link href="/settings" className="hidden text-sm text-[var(--text-muted)] sm:block">Settings</Link><Link href="/profile" aria-label="Profile">{value.profileImageUrl?<img src={value.profileImageUrl} alt="" className="h-8 w-8 rounded-full object-cover"/>:<span className="grid h-8 w-8 place-items-center rounded-full bg-[var(--accent)] text-xs text-[var(--accent-text)]">{value.displayName.slice(0,1)}</span>}</Link></nav></header>}
+import { NetworkTopbarClient } from "@/components/layout/NetworkTopbarClient";
+import { serializeNetworkProfile } from "@/lib/server/network-context";
+
+export function NetworkTopbar({ profile }: { profile: any }) {
+  return <NetworkTopbarClient profile={serializeNetworkProfile(profile)} />;
+}
