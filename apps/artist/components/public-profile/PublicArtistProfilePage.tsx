@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 
 import type { PublicArtistArtworkItem, PublicArtistProfilePageData } from "@/lib/types";
 import {
@@ -11,6 +12,7 @@ import {
 
 type PublicArtistProfilePageProps = {
   profile: PublicArtistProfilePageData;
+  headerActions?: ReactNode;
 };
 
 type ArtistAnalyticsEventType =
@@ -135,7 +137,7 @@ async function sendArtistAnalyticsEvent(params: {
   }
 }
 
-export function PublicArtistProfilePage({ profile }: PublicArtistProfilePageProps) {
+export function PublicArtistProfilePage({ profile, headerActions }: PublicArtistProfilePageProps) {
   const [activeTab, setActiveTab] = useState<PublicArtistProfileTabKey>("artworks");
   const [selectedArtwork, setSelectedArtwork] = useState<PublicArtistArtworkItem | null>(null);
 
@@ -256,6 +258,7 @@ export function PublicArtistProfilePage({ profile }: PublicArtistProfilePageProp
   return (
     <PublicArtistProfileView
       profile={profile}
+      headerActions={headerActions}
       activeTab={activeTab}
       selectedArtwork={selectedArtwork}
       onArtworkClose={() => setSelectedArtwork(null)}

@@ -70,6 +70,13 @@ export async function PATCH(req: Request) {
   const update: Record<string, unknown> = { ...parsed.data };
   if (parsed.data.username) { const identity = await uniqueProfileIdentity(parsed.data.username, undefined, auth.context.user._id); update.username = identity; update.slug = identity; }
   const artist = await findSecureArtistForUser(auth.context.user);
+  if (!artist && parsed.data.profileType === "artist" && auth.context.profile.profileType !== "artist") {
+    await Promise.all([
+      UserModel.updateOne({ _id: auth.context.user._id }, { $set: { networkProfileType: "artist", networkRoleSelectionCompleted: true, networkOnboardingCompleted: false } }),
+      NetworkProfileModel.updateOne({ _id: auth.context.profile._id, userId: auth.context.user._id }, { $set: { profileType: "artist", profileTypeSource: "user_selected" } }),
+    ]);
+    return Response.json({ ok: true, next: "/onboarding/profile", profile: serializeNetworkProfile({ ...auth.context.profile.toObject(), profileType: "artist", profileTypeSource: "user_selected" }) });
+  }
   if (artist) {
     update.profileType = "artist"; update.profileTypeSource = "existing_artist_link";
     if (parsed.data.displayName !== undefined) artist.displayName = parsed.data.displayName;

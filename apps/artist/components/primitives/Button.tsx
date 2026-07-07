@@ -24,13 +24,13 @@ type NativeButtonProps = SharedProps &
 type ButtonProps = LinkButtonProps | NativeButtonProps;
 
 const tones: Record<ButtonTone, string> = {
-  primary: "bg-neutral-950 text-white",
-  secondary: "bg-neutral-100 text-neutral-950",
-  ghost: "bg-transparent text-neutral-500",
+  primary: "bg-[var(--accent)] text-[var(--accent-text)]",
+  secondary: "bg-[var(--surface-soft)] text-[var(--text)]",
+  ghost: "bg-transparent text-[var(--text-muted)]",
 };
 
 const baseClassName =
-  "inline-flex min-h-11 items-center justify-center rounded-full px-4 py-2.5 text-sm font-medium tracking-[-0.01em] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-950/10 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex min-h-11 items-center justify-center rounded-full px-4 py-2.5 text-sm font-medium tracking-[-0.01em] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--divider)] disabled:cursor-not-allowed disabled:opacity-50";
 
 export function Button(props: ButtonProps) {
   const tone = props.tone || "primary";

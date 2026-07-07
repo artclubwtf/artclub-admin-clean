@@ -14,7 +14,7 @@ function isActive(pathname: string, href: string) {
 }
 
 function NavIcon({ item, active }: { item: BottomNavItem; active: boolean }) {
-  const className = cn("h-[18px] w-[18px] transition-colors", active ? "text-neutral-950" : "text-neutral-400");
+  const className = cn("h-[18px] w-[18px] transition-colors", active ? "text-[var(--text)]" : "text-[var(--text-faint)]");
 
   switch (item.icon) {
     case "home":
@@ -116,12 +116,12 @@ export function BottomNav({ network = false }: { network?: boolean }) {
   return (
     <>
       {sheetOpen ? (
-        <div className="fixed inset-0 z-40 bg-neutral-950/18" onClick={() => setSheetOpen(false)}>
+        <div className="fixed inset-0 z-40 bg-[var(--overlay)]" onClick={() => setSheetOpen(false)}>
           <div
-            className="absolute inset-x-0 bottom-[calc(max(env(safe-area-inset-bottom),1rem)+5.4rem)] px-4"
+            className="absolute inset-x-0 bottom-[calc(max(env(safe-area-inset-bottom),1rem)+5.4rem)] px-4 lg:bottom-8 lg:left-28 lg:right-auto lg:w-80 lg:px-0"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="mx-auto max-w-2xl rounded-[1.9rem] bg-neutral-50 p-3">
+            <div className="mx-auto max-w-2xl rounded-2xl bg-[var(--surface)] p-2 shadow-2xl">
               <div className="space-y-0.5">
                 {visibleCreateActions.map((action, index) => (
                   <button
@@ -133,12 +133,12 @@ export function BottomNav({ network = false }: { network?: boolean }) {
                       router.push(action.href);
                     }}
                     className={cn(
-                      "flex w-full items-center justify-between rounded-[1.2rem] px-4 py-4 text-left text-[1rem] font-medium tracking-[-0.02em] text-neutral-900 transition-colors hover:bg-white",
+                      "flex w-full items-center justify-between rounded-xl px-4 py-3.5 text-left text-[.95rem] font-medium tracking-[-0.02em] text-[var(--text)] transition-colors hover:bg-[var(--surface-soft)]",
                       index > 0 ? "mt-1" : "",
                     )}
                   >
                     <span>{action.label}</span>
-                    <span className="text-neutral-300">+</span>
+                    <span className="text-[var(--text-faint)]">+</span>
                   </button>
                 ))}
               </div>
@@ -147,9 +147,9 @@ export function BottomNav({ network = false }: { network?: boolean }) {
         </div>
       ) : null}
 
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 px-4 pb-[max(env(safe-area-inset-bottom),1rem)]">
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 px-4 pb-[max(env(safe-area-inset-bottom),1rem)] lg:inset-y-0 lg:left-5 lg:right-auto lg:flex lg:items-center lg:px-0 lg:pb-0">
         <nav
-          className="pointer-events-auto mx-auto grid max-w-2xl items-end rounded-full bg-white/92 px-2 py-2 backdrop-blur-sm"
+          className="pointer-events-auto mx-auto grid max-w-2xl items-end rounded-full border border-[var(--divider)] bg-[color-mix(in_srgb,var(--surface)_90%,transparent)] px-2 py-2 shadow-lg backdrop-blur-xl lg:flex lg:w-[5.25rem] lg:flex-col lg:items-stretch lg:gap-1 lg:rounded-2xl lg:p-2"
           style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
         >
           {leftItems.map((item) => {
@@ -161,7 +161,7 @@ export function BottomNav({ network = false }: { network?: boolean }) {
                 href={item.href}
                 className={cn(
                   "flex min-w-0 flex-col items-center justify-center gap-1 rounded-full px-2 py-2 text-[11px] font-medium tracking-[-0.01em] transition-colors",
-                  active ? "bg-neutral-100 text-neutral-950" : "text-neutral-400",
+                  active ? "bg-[var(--surface-soft)] text-[var(--text)]" : "text-[var(--text-faint)]",
                 )}
                 aria-current={active ? "page" : undefined}
               >
@@ -171,12 +171,12 @@ export function BottomNav({ network = false }: { network?: boolean }) {
             );
           })}
 
-          <div className="flex justify-center pb-1">
+          <div className="flex justify-center pb-1 lg:order-first lg:mb-1 lg:pb-0">
             <button
               type="button"
               onClick={() => { if(network&&!sheetOpen)trackNetwork("create_menu_opened"); setSheetOpen((current) => !current); }}
               className={cn(
-                "inline-flex h-14 w-14 items-center justify-center rounded-full bg-neutral-950 text-white transition-transform",
+                "inline-flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-text)] transition-transform lg:h-12 lg:w-12",
                 sheetOpen ? "scale-[0.98]" : "",
               )}
               aria-label="Create"
@@ -197,7 +197,7 @@ export function BottomNav({ network = false }: { network?: boolean }) {
                 href={item.href}
                 className={cn(
                   "flex min-w-0 flex-col items-center justify-center gap-1 rounded-full px-2 py-2 text-[11px] font-medium tracking-[-0.01em] transition-colors",
-                  active ? "bg-neutral-100 text-neutral-950" : "text-neutral-400",
+                  active ? "bg-[var(--surface-soft)] text-[var(--text)]" : "text-[var(--text-faint)]",
                 )}
                 aria-current={active ? "page" : undefined}
               >

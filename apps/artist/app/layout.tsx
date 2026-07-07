@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { Metadata } from "next";
 
 import { ChunkLoadRecovery } from "@/components/system/ChunkLoadRecovery";
+import { ThemeSync } from "@/components/system/ThemeSync";
 
 import "./globals.css";
 
@@ -14,7 +15,8 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html lang="en" suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('artclub-theme')||'system';var d=t==='dark'||(t==='system'&&matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.dataset.theme=d?'dark':'light'}catch(e){}})()` }} /></head>
-      <body className="bg-white text-neutral-950 antialiased">
+      <body className="antialiased">
+        <ThemeSync />
         <ChunkLoadRecovery />
         {children}
       </body>
