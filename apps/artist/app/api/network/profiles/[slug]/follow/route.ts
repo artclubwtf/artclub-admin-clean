@@ -1,0 +1,23 @@
+import { requireNetworkApiContext } from "@/lib/server/network-context";
+import { apiError, connectionState, notify } from "@/lib/server/network-service";
+import { materializeUnifiedProfile } from "@/lib/server/unified-profile";
+import { NetworkFollowModel } from "@/lib/server/models";
+
+export async function POST(_: Request, { params }: { params: Promise<{ slug: string }> }) {
+  const auth = await requireNetworkApiContext(); if (!auth.ok) return auth.response;
+  const { slug } = await params; const target = await materializeUnifiedProfile(decodeURIComponent(slug));
+  if (!target) return apiError("profile_not_found", 404);
+  if (String(target._id) === String(auth.context.profile._id)) return apiError("cannot_follow_self", 409);
+  if ((await connectionState(auth.context.profile._id, target._id))?.status === "blocked") return apiError("profile_blocked", 403);
+  await NetworkFollowModel.updateOne({ followerProfileId: auth.context.profile._id, followedProfileId: target._id }, { $setOnInsert: { followerProfileId: auth.context.profile._id, followedProfileId: target._id } }, { upsert: true });
+  await notify({ recipientProfileId: target._id, actorProfileId: auth.context.profile._id, type: "profile_follow", targetType: "profile", targetId: target._id });
+  return Response.json({ ok: true, followed: true });
+}
+
+export async function DELETE(_: Request, { params }: { params: Promise<{ slug: string }> }) {
+  const auth = await requireNetworkApiContext(); if (!auth.ok) return auth.response;
+  const { slug } = await params; const target = await materializeUnifiedProfile(decodeURIComponent(slug));
+  if (!target) return apiError("profile_not_found", 404);
+  await NetworkFollowModel.deleteOne({ followerProfileId: auth.context.profile._id, followedProfileId: target._id });
+  return Response.json({ ok: true, followed: false });
+}
