@@ -65,6 +65,9 @@ importers:
       react-dom:
         specifier: 19.2.1
         version: 19.2.1(react@19.2.1)
+      sharp:
+        specifier: 0.34.5
+        version: 0.34.5
       tailwindcss:
         specifier: ^4
         version: 4.1.18

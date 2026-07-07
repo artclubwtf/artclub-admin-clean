@@ -85,6 +85,14 @@ export async function PATCH(req: Request) {
     if (parsed.data.country !== undefined) artist.locationCountry = parsed.data.country;
     if (parsed.data.website !== undefined) artist.websiteUrl = parsed.data.website;
     if (parsed.data.instagram !== undefined) artist.instagram = parsed.data.instagram;
+    if (parsed.data.profileImageUrl !== undefined || parsed.data.coverImageUrl !== undefined) {
+      artist.profileImages = {
+        ...(artist.profileImages || {}),
+        avatarUrl: parsed.data.profileImageUrl !== undefined ? parsed.data.profileImageUrl : artist.profileImages?.avatarUrl || "",
+        heroUrl: parsed.data.coverImageUrl !== undefined ? parsed.data.coverImageUrl : artist.profileImages?.heroUrl || "",
+        galleryUrls: artist.profileImages?.galleryUrls || [],
+      };
+    }
     await artist.save();
   } else if (parsed.data.profileType && networkOnboardingRoles.includes(parsed.data.profileType as any)) {
     update.profileTypeSource = "user_selected";
