@@ -16,6 +16,7 @@ const userSchema = new Schema(
     pendingRegistrationId: { type: Schema.Types.ObjectId, ref: "ArtistApplication" },
     onboardingStatus: { type: String, enum: ["pending", "accepted", "rejected"] },
     accountSource: { type: String, enum: userAccountSources },
+    registrationAttemptId: { type: String, trim: true, select: false },
     passwordHash: { type: String, required: true },
     mustChangePassword: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
@@ -23,8 +24,8 @@ const userSchema = new Schema(
   { timestamps: true },
 );
 
-userSchema.index({ email: 1, shopDomain: 1 }, { unique: true });
-userSchema.index({ shopDomain: 1, artistKey: 1 }, { unique: true, sparse: true });
+userSchema.index({ registrationAttemptId: 1 }, { unique: true, partialFilterExpression: { registrationAttemptId: { $type: "string" } } });
+userSchema.index({ shopDomain: 1, artistKey: 1 }, { unique: true, partialFilterExpression: { artistKey: { $type: "string" } } });
 
 type User = InferSchemaType<typeof userSchema>;
 export type UserRole = (typeof userRoles)[number];

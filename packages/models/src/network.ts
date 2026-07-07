@@ -162,4 +162,5 @@ export const networkRegistrationInputSchema = z.object({
   name: z.string().trim().min(2).max(120),
   email: z.email().max(254).transform((value) => value.toLowerCase()),
   password: z.string().min(10).max(128),
+  registrationAttemptId: z.uuid().optional(),
 });
