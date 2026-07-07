@@ -125,6 +125,7 @@ export async function uploadToS3(
       Body: nodeBody as any,
       ContentType: contentType,
       ContentLength: size,
+      CacheControl: "public, max-age=31536000, immutable",
     }),
   );
   const url = cfg.publicBaseUrl
@@ -177,7 +178,7 @@ export async function downloadFromS3(key: string) {
 export async function createMultipartUpload(key: string, contentType: string) {
   const cfg = resolveConfig();
   const s3 = getClient();
-  const res = await s3.send(new CreateMultipartUploadCommand({ Bucket: cfg.bucket, Key: key, ContentType: contentType }));
+  const res = await s3.send(new CreateMultipartUploadCommand({ Bucket: cfg.bucket, Key: key, ContentType: contentType, CacheControl: "public, max-age=31536000, immutable" }));
   if (!res.UploadId) throw new Error("Failed to create multipart upload");
   return { uploadId: res.UploadId, bucket: cfg.bucket, key };
 }

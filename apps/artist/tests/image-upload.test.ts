@@ -12,8 +12,15 @@ describe("image upload processing", () => {
     const result = await processImageUpload(input, "avatar");
     const metadata = await sharp(result.buffer).metadata();
     expect(result.mimeType).toBe("image/webp");
-    expect([result.width, result.height]).toEqual([512, 512]);
+    expect([result.width, result.height]).toEqual([256, 256]);
     expect(metadata.exif).toBeUndefined();
+  });
+
+  it("uses a 4:5 web variant for event flyers", async () => {
+    const input = await sharp({ create: { width: 2400, height: 1600, channels: 3, background: "#223344" } }).jpeg().toBuffer();
+    const result = await processImageUpload(input, "event-cover");
+    expect([result.width, result.height]).toEqual([1280, 1600]);
+    expect(result.mimeType).toBe("image/webp");
   });
 
   it("keeps artwork resolution and uses a higher-quality output", async () => {

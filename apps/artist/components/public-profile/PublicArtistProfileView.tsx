@@ -409,7 +409,7 @@ export function PublicArtistProfileView({
             {headerActions ? <div className="mt-5">{headerActions}</div> : null}
 
             {heroAnnouncement ? (
-              <div className="mt-5 border-l-2 border-[var(--divider)] px-4 py-1">
+              <div className="mt-5 rounded-xl bg-[var(--surface-muted)] px-4 py-3">
                 <div className="text-xs uppercase tracking-[0.18em] text-neutral-400">Announcement</div>
                 <div className="mt-1 text-sm font-medium tracking-[-0.01em] text-neutral-950">{heroAnnouncement.title}</div>
                 <div className="mt-1 text-sm leading-6 text-neutral-500">{heroAnnouncement.body}</div>
@@ -418,7 +418,7 @@ export function PublicArtistProfileView({
           </div>
         </div>
 
-        <div className="mx-5 mt-6 overflow-x-auto border-b border-[var(--divider)] sm:mx-0">
+        <div className="mx-5 mt-6 overflow-x-auto sm:mx-0">
           <div className="flex min-w-max items-center gap-6 px-0">
             {publicArtistProfileTabs.map((tab) => (
               <button
@@ -427,7 +427,7 @@ export function PublicArtistProfileView({
                 data-artclub-embed-tab={tab.key}
                 data-artclub-embed-tab-active={activeTab === tab.key ? "true" : "false"}
                 onClick={onTabChange ? () => onTabChange(tab.key) : undefined}
-                className={`border-b pb-3 pt-1 text-sm font-medium tracking-[-0.01em] ${activeTab === tab.key ? "border-[var(--text)] text-[var(--text)]" : "border-transparent text-[var(--text-faint)]"}`}
+                className={`relative pb-3 pt-1 text-sm font-medium tracking-[-0.01em] after:absolute after:bottom-1 after:left-1/4 after:h-0.5 after:w-1/2 after:rounded-full ${activeTab === tab.key ? "text-[var(--text)] after:bg-[var(--primary)]" : "text-[var(--text-faint)]"}`}
               >
                 {tab.label}
               </button>

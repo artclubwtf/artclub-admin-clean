@@ -26,6 +26,8 @@ export type UnifiedProfile = {
   isPublic: boolean;
   isVerified: boolean;
   donationEnabled: boolean;
+  shopEnabled?: boolean;
+  shopStatus?: "disabled" | "setup_required" | "pending" | "ready" | "error";
 };
 
 function artistUnified(artist: any, user: any, profile?: any): UnifiedProfile {
@@ -39,6 +41,8 @@ function artistUnified(artist: any, user: any, profile?: any): UnifiedProfile {
     profileImageUrl: resolveNetworkMediaForRead(artist.profileImages?.avatarUrl, profile?.profileImageStorageKey), coverImageUrl: resolveNetworkMediaForRead(artist.profileImages?.heroUrl, profile?.coverImageStorageKey),
     isPublic: artist.publicProfile?.isVisible !== false && profile?.isPublic !== false, isVerified: profile?.isVerified === true,
     donationEnabled: profile?.donationEnabled === true,
+    shopEnabled: artist.shopParticipation?.enabled === true,
+    shopStatus: artist.shopParticipation?.status || (artist.shopify?.metaobjectGid || artist.shopifyMetaobjectId ? "ready" : "disabled"),
   };
 }
 

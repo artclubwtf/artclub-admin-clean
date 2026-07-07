@@ -35,12 +35,16 @@ export function parseImageUploadVariant(value: FormDataEntryValue | null): Image
 
 export async function processImageUpload(buffer: Buffer, variant: ImageUploadVariant) {
   let source: sharp.Sharp;
+  let sourceWidth = 0;
+  let sourceHeight = 0;
   try {
     source = sharp(buffer, { failOn: "error", limitInputPixels: 100_000_000 }).rotate();
     const metadata = await source.metadata();
     if (!metadata.format || !supportedInputFormats.has(metadata.format) || !metadata.width || !metadata.height) {
       throw new ImageUploadError("invalid_image_data");
     }
+    sourceWidth = metadata.width;
+    sourceHeight = metadata.height;
     if (metadata.width > 12_000 || metadata.height > 12_000) throw new ImageUploadError("image_dimensions_too_large");
   } catch (error) {
     if (error instanceof ImageUploadError) throw error;
@@ -72,13 +76,17 @@ export async function processImageUpload(buffer: Buffer, variant: ImageUploadVar
 
   const dimensions =
     variant === "avatar"
-      ? { width: 512, height: 512, fit: "cover" as const }
-      : variant === "profile-cover" || variant === "event-cover"
-        ? { width: 2_000, height: 1_125, fit: "cover" as const }
-        : { width: 2_000, height: 2_000, fit: "inside" as const };
+      ? { width: 256, height: 256, fit: "cover" as const }
+      : variant === "profile-cover"
+        ? { width: 1_800, height: 1_013, fit: "cover" as const }
+        : variant === "event-cover"
+          ? (() => { const width = Math.max(1, Math.min(1_800, Math.floor(sourceWidth), Math.floor(sourceHeight * .8))); return { width, height: Math.round(width * 1.25), fit: "cover" as const }; })()
+          : variant === "post"
+            ? { width: 1_600, height: 2_000, fit: "inside" as const }
+            : { width: 960, height: 1_200, fit: "inside" as const };
   const result = await source
     .resize({ ...dimensions, position: "centre", withoutEnlargement: true })
-    .webp({ quality: 83, smartSubsample: true })
+    .webp({ quality: variant === "post" || variant === "event-cover" ? 88 : 84, smartSubsample: true })
     .toBuffer({ resolveWithObject: true });
   const blur = await sharp(result.data).resize({ width: 24, height: 24, fit: "inside" }).webp({ quality: 40 }).toBuffer();
   return {

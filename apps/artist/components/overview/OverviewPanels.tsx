@@ -18,7 +18,7 @@ export function OverviewPanels({ overview }: OverviewPanelsProps) {
     <div className="space-y-8">
       <PageTitle
         title="Home"
-        subtitle="A quiet workspace overview sourced from real canonical records, without mock KPIs or synthetic activity."
+        subtitle="Your profile and artwork activity."
         action={<Button href="/artworks/new">New artwork</Button>}
       />
 

@@ -51,6 +51,7 @@ export const networkProfileInputSchema = z.object({
   isPublic: z.boolean().default(true),
   allowsMessages: z.boolean().default(false),
   donationEnabled: z.boolean().default(false),
+  shopEnabled: z.boolean().optional(),
 });
 export type NetworkProfileInput = z.infer<typeof networkProfileInputSchema>;
 
@@ -94,6 +95,8 @@ export const networkEventInputSchema = z.object({
   description: z.string().trim().max(5000).default(""),
   coverImageUrl: optionalUrl,
   coverImageStorageKey: optionalText(1024),
+  coverOriginalUrl: optionalUrl,
+  coverOriginalStorageKey: optionalText(1024),
   startAt: z.coerce.date(),
   endAt: z.coerce.date().optional(),
   timezone: z.string().trim().min(1).max(80),

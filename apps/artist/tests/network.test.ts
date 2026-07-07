@@ -11,6 +11,7 @@ describe("network permissions", () => {
 
 describe("network validation", () => {
   it("validates onboarding and normalizes usernames", () => { const result=networkProfileInputSchema.parse({profileType:"collector",displayName:"Ada",username:"ADA.COLLECTS"});expect(result.username).toBe("ada.collects"); });
+  it("accepts an explicit artist shop opt-in without defaulting it on",()=>{expect(networkProfileInputSchema.parse({profileType:"artist",displayName:"Ada",username:"ada.artist",shopEnabled:true}).shopEnabled).toBe(true);expect(networkProfileInputSchema.parse({profileType:"artist",displayName:"Ada",username:"ada.artist"}).shopEnabled).toBeUndefined()});
   it("rejects empty posts", () => { expect(networkPostInputSchema.safeParse({type:"text",text:"",media:[]}).success).toBe(false); });
   it("requires a location for published events", () => { expect(networkEventInputSchema.safeParse({title:"Opening",startAt:new Date(),timezone:"Europe/Berlin",status:"published"}).success).toBe(false); });
   it("keeps external collection price private by default", () => { const value=collectionItemInputSchema.parse({customArtistName:"A",customArtworkTitle:"B"});expect(value.purchasePriceVisibility).toBe("private"); });

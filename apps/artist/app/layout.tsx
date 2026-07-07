@@ -7,8 +7,8 @@ import { ThemeSync } from "@/components/system/ThemeSync";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ARTCLUB Network – Das Netzwerk der Kunst",
-  description: "Build your identity, connect and participate in the international art world.",
+  title: "ARTCLUB – The network of art",
+  description: "The network of art.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

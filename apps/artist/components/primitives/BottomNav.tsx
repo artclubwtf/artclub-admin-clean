@@ -9,6 +9,17 @@ import { bottomNavItems, networkNavItems, type BottomNavItem } from "@/lib/navig
 import { trackNetwork } from "@/lib/client/network-analytics";
 import { NavigationIcon } from "@/components/navigation/NavigationIcon";
 import { primaryNavigation } from "@/lib/navigation";
+import { ArtclubLogo } from "@/components/branding/ArtclubLogo";
+
+const desktopNavigation: BottomNavItem[] = [
+  primaryNavigation[0],
+  primaryNavigation[1],
+  { id: "network", href: "/network", label: "Network", icon: "network", analyticsEvent: "navigation_network_opened" },
+  primaryNavigation[2],
+  primaryNavigation[3],
+  { id: "notifications", href: "/notifications", label: "Notifications", icon: "notifications" },
+  primaryNavigation[4],
+];
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -126,7 +137,7 @@ export function BottomNav({ network = false }: { network?: boolean }) {
       {sheetOpen ? (
         <div className="fixed inset-0 z-40 bg-[var(--overlay)]" onClick={() => setSheetOpen(false)}>
           <div
-            className="absolute inset-x-0 bottom-[calc(max(env(safe-area-inset-bottom),1rem)+5.4rem)] px-4 lg:bottom-8 lg:left-64 lg:right-auto lg:w-80 lg:px-0"
+            className="absolute inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] px-3 lg:bottom-8 lg:left-64 lg:right-auto lg:w-80 lg:px-0"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mx-auto max-w-2xl rounded-2xl bg-[var(--surface)] p-2 shadow-2xl">
@@ -155,10 +166,10 @@ export function BottomNav({ network = false }: { network?: boolean }) {
         </div>
       ) : null}
 
-      <div className={cn("pointer-events-none fixed inset-x-0 bottom-0 z-50 px-3 pb-[max(env(safe-area-inset-bottom),.6rem)]", network ? "lg:hidden" : "lg:inset-y-0 lg:left-5 lg:right-auto lg:flex lg:items-center lg:px-0 lg:pb-0")}>
+      <div className={cn("pointer-events-none fixed inset-x-0 bottom-0 z-50", network ? "lg:hidden" : "px-3 pb-[max(env(safe-area-inset-bottom),.6rem)] lg:inset-y-0 lg:left-5 lg:right-auto lg:flex lg:items-center lg:px-0 lg:pb-0")}>
         <nav
-          className={cn("pointer-events-auto mx-auto grid max-w-2xl items-end bg-[color-mix(in_srgb,var(--surface)_94%,transparent)] px-1 py-1.5 shadow-[0_-8px_30px_rgba(0,0,0,.06)] backdrop-blur-xl", network ? "w-full rounded-2xl" : "rounded-full border border-[var(--divider)] lg:flex lg:w-[5.25rem] lg:flex-col lg:items-stretch lg:gap-1 lg:rounded-2xl lg:p-2")}
-          style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
+          className={cn("pointer-events-auto mx-auto grid items-end bg-[var(--surface)] px-1 pt-1.5", network ? "w-full max-w-none border-t border-[var(--border)]" : "max-w-2xl rounded-full border border-[var(--divider)] lg:flex lg:w-[5.25rem] lg:flex-col lg:items-stretch lg:gap-1 lg:rounded-2xl lg:p-2")}
+          style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`, paddingBottom: network ? "env(safe-area-inset-bottom)" : undefined }}
         >
           {leftItems.map((item) => {
             const active = isActive(pathname, item.href);
@@ -179,20 +190,21 @@ export function BottomNav({ network = false }: { network?: boolean }) {
             );
           })}
 
-          <div className="flex justify-center pb-1 lg:order-first lg:mb-1 lg:pb-0">
+          <div className="flex justify-center lg:order-first lg:mb-1">
             <button
               type="button"
               onClick={() => { if(network&&!sheetOpen)trackNetwork("create_menu_opened"); setSheetOpen((current) => !current); }}
               className={cn(
-                "inline-flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-text)] transition-transform lg:h-12 lg:w-12",
+                "inline-flex min-h-[3.25rem] w-full flex-col items-center justify-center gap-1 bg-transparent text-[10px] font-medium text-[var(--text-faint)] transition-colors lg:h-12 lg:w-12 lg:rounded-full lg:bg-[var(--primary)] lg:text-[var(--primary-foreground)]",
                 sheetOpen ? "scale-[0.98]" : "",
               )}
               aria-label="Create"
               aria-expanded={sheetOpen}
             >
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden>
+              <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" aria-hidden>
                 <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
               </svg>
+              <span className="lg:hidden">Create</span>
             </button>
           </div>
 
@@ -217,7 +229,7 @@ export function BottomNav({ network = false }: { network?: boolean }) {
         </nav>
       </div>
 
-      {network ? <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-[var(--divider)] bg-[var(--surface)] px-5 py-6 lg:flex"><Link href="/feed" className="mb-10 text-lg font-semibold tracking-[-.04em]">ARTCLUB <span className="font-normal text-[var(--text-faint)]">Network</span></Link><nav className="space-y-1">{primaryNavigation.map(item=>{const active=isActive(pathname,item.href);return <Link key={item.id} href={item.href} onClick={()=>item.analyticsEvent&&trackNetwork(item.analyticsEvent)} aria-current={active?"page":undefined} className={cn("flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors",active?"bg-[var(--surface-soft)] font-medium text-[var(--text)]":"text-[var(--text-muted)] hover:bg-[var(--surface-soft)]")}><NavigationIcon name={item.icon}/><span>{item.label}</span></Link>})}</nav><button type="button" onClick={()=>setSheetOpen(current=>!current)} className="primary-action mt-7 w-full"><span className="mr-2 text-lg">+</span>Create</button><Link href="/settings" className="mt-auto flex items-center gap-3 px-3 py-3 text-sm text-[var(--text-muted)]"><NavigationIcon name="settings"/>Settings</Link></aside> : null}
+      {network ? <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-[var(--border)] bg-[var(--surface)] px-5 py-6 lg:flex"><ArtclubLogo className="mb-9 h-7 w-auto"/><nav className="space-y-1">{desktopNavigation.map(item=>{const active=isActive(pathname,item.href);return <Link key={item.id} href={item.href} onClick={()=>item.analyticsEvent&&trackNetwork(item.analyticsEvent)} aria-current={active?"page":undefined} className={cn("flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",active?"bg-[var(--surface-muted)] font-medium text-[var(--text)]":"text-[var(--text-muted)] hover:bg-[var(--surface-muted)]")}><NavigationIcon name={item.icon}/><span>{item.label}</span></Link>})}<Link href="/settings" className={cn("flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm",isActive(pathname,"/settings")?"bg-[var(--surface-muted)] font-medium text-[var(--text)]":"text-[var(--text-muted)] hover:bg-[var(--surface-muted)]")}><NavigationIcon name="settings"/>Settings</Link></nav><button type="button" onClick={()=>setSheetOpen(current=>!current)} className="primary-action mt-7 w-full"><svg viewBox="0 0 24 24" className="mr-2 h-5 w-5" fill="none" aria-hidden><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>Create</button></aside> : null}
     </>
   );
 }

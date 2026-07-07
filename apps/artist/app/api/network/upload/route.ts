@@ -44,11 +44,19 @@ export async function POST(req: Request) {
     }
     const processed = isVideo ? null : await processImageUpload(raw, variant);
     const extension = processed?.extension || file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
-    const key = `network/${ownerId}/${variant}/${randomUUID()}.${extension}`;
+    const assetId = randomUUID();
+    const key = `network/${ownerId}/${variant}/${assetId}.${extension}`;
     const body = processed?.buffer || raw;
     const mimeType = processed?.mimeType || file.type;
     const uploaded = await uploadToS3(key, body, mimeType, `upload.${extension}`, body.length);
     const url = buildNetworkMediaUrl(req.url, uploaded.key);
+    let original: { key: string; url: string } | undefined;
+    if (!isVideo && variant === "event-cover") {
+      const inputExtension = file.type.includes("png") ? "png" : file.type.includes("webp") ? "webp" : file.type.includes("hei") ? "heic" : "jpg";
+      const originalKey = `network/${ownerId}/event-cover-original/${assetId}.${inputExtension}`;
+      const stored = await uploadToS3(originalKey, raw, file.type, file.name, raw.length);
+      original = { key: stored.key, url: buildNetworkMediaUrl(req.url, stored.key) };
+    }
     const suppliedWidth=Number(data?.get("width")||0);const suppliedHeight=Number(data?.get("height")||0);const suppliedDuration=Number(data?.get("duration")||0);const posterStorageKey=String(data?.get("posterStorageKey")||"");const posterUrl=String(data?.get("posterUrl")||"");
     return Response.json({
       ok: true,
@@ -62,6 +70,7 @@ export async function POST(req: Request) {
         width: processed?.width,
         height: processed?.height,
         blurDataUrl: processed?.blurDataUrl,
+        ...(original ? { originalStorageKey: original.key, originalUrl: original.url } : {}),
         ...(isVideo&&suppliedWidth>0&&suppliedWidth<=12000?{width:Math.round(suppliedWidth)}:{}),
         ...(isVideo&&suppliedHeight>0&&suppliedHeight<=12000?{height:Math.round(suppliedHeight)}:{}),
         ...(isVideo&&suppliedDuration>0&&suppliedDuration<=24*60*60?{duration:suppliedDuration}:{}),

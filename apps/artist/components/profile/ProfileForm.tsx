@@ -536,7 +536,7 @@ export function ProfileForm({ initialProfile, artworksPreview, initialAnnounceme
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
-          <div className="text-[11px] uppercase tracking-[0.22em] text-neutral-400">ARTCLUB for Artists</div>
+          <div className="eyebrow">ARTCLUB – The network of art</div>
           <h1 className="text-[1.55rem] font-semibold tracking-[-0.04em] text-neutral-950">Public profile editor</h1>
           <p className="max-w-2xl text-sm leading-6 text-neutral-500">
             This page is your editable preview. Each public section can be adjusted directly from its own modal.
@@ -653,7 +653,7 @@ export function ProfileForm({ initialProfile, artworksPreview, initialAnnounceme
             )}
           </Section>
 
-          <div className="mt-6 overflow-x-auto border-b border-neutral-200/90">
+          <div className="mt-6 overflow-x-auto">
             <div className="flex min-w-max items-center gap-6 px-1">
               {tabs.map((tab) => (
                 <button

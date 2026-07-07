@@ -6,6 +6,14 @@ import { apiError } from "@/lib/server/network-service";
 import { CanonicalArtistModel, NetworkProfileModel, UserModel } from "@/lib/server/models";
 import { resolveUnifiedProfileBySlug } from "@/lib/server/unified-profile";
 import { hydrateNetworkMediaKeys } from "@/lib/server/network-media";
+import { autoPushArtistToShopify } from "@/lib/server/shopify-auto-sync";
+
+async function finalizeShopParticipation(artist: any) {
+  if (!artist?.shopParticipation?.enabled) return;
+  const result = await autoPushArtistToShopify({ shopDomain: artist.shopDomain, artistKey: artist.artistKey, shouldPush: true });
+  const status = result.ok ? (result.queued ? "pending" : "ready") : "setup_required";
+  await CanonicalArtistModel.updateOne({ _id: artist._id }, { $set: { "shopParticipation.status": status, "shopParticipation.lastAttemptAt": new Date() } });
+}
 
 export async function GET() {
   const auth = await requireNetworkApiContext(); if (!auth.ok) return auth.response;
@@ -32,7 +40,7 @@ export async function POST(req: Request) {
         const artistKey = user.artistKey || `artist_${user._id}`;
         artist = await CanonicalArtistModel.findOneAndUpdate(
           { shopDomain: user.shopDomain, artistKey },
-          { $set: { linkedUserId: user._id, displayName: parsed.data.displayName, handle: identity, bio: parsed.data.bio || "", locationCity: parsed.data.city || "", locationCountry: parsed.data.country || "", websiteUrl: parsed.data.website || "", instagram: parsed.data.instagram || "", profileImages: { avatarUrl: parsed.data.profileImageUrl || "", heroUrl: parsed.data.coverImageUrl || "", galleryUrls: [] }, accountStatus: "linked", linkStatus: "linked" }, $setOnInsert: { shopDomain: user.shopDomain, artistKey } },
+          { $set: { linkedUserId: user._id, displayName: parsed.data.displayName, handle: identity, bio: parsed.data.bio || "", locationCity: parsed.data.city || "", locationCountry: parsed.data.country || "", websiteUrl: parsed.data.website || "", instagram: parsed.data.instagram || "", profileImages: { avatarUrl: parsed.data.profileImageUrl || "", heroUrl: parsed.data.coverImageUrl || "", galleryUrls: [] }, accountStatus: "linked", linkStatus: "linked", ...(parsed.data.shopEnabled !== undefined ? { shopParticipation: { enabled: parsed.data.shopEnabled, status: parsed.data.shopEnabled ? "setup_required" : "disabled", ...(parsed.data.shopEnabled ? { requestedAt: new Date() } : {}) } } : {}) }, $setOnInsert: { shopDomain: user.shopDomain, artistKey } },
           { upsert: true, new: true, session },
         );
         user.role = "artist"; user.artistKey = artistKey;
@@ -43,19 +51,22 @@ export async function POST(req: Request) {
         const ownerExists = await UserModel.exists({ _id: profile.userId }).session(session);
         if (ownerExists) throw new Error("artist_profile_owned_by_another_user");
       }
-      const profileData = { ...parsed.data, profileType: selectedType, profileTypeSource: source, slug: identity, username: identity, userId: user._id, ...(artist ? { canonicalArtistId: artist._id } : {}) };
+      const { shopEnabled: _shopEnabled, ...networkFields } = parsed.data;
+      const profileData = { ...networkFields, profileType: selectedType, profileTypeSource: source, slug: identity, username: identity, userId: user._id, ...(artist ? { canonicalArtistId: artist._id } : {}) };
       if (profile) { profile.set(profileData); await profile.save({ session }); }
       else { profile = new NetworkProfileModel(profileData); await profile.save({ session }); }
       if (artist) {
         artist.linkedUserId = user._id; artist.accountStatus = "linked"; artist.linkStatus = "linked";
         artist.displayName = parsed.data.displayName; artist.bio = parsed.data.bio || ""; artist.locationCity = parsed.data.city || ""; artist.locationCountry = parsed.data.country || ""; artist.websiteUrl = parsed.data.website || ""; artist.instagram = parsed.data.instagram || "";
         artist.profileImages = { ...(artist.profileImages || {}), avatarUrl: parsed.data.profileImageUrl || artist.profileImages?.avatarUrl || "", heroUrl: parsed.data.coverImageUrl || artist.profileImages?.heroUrl || "", galleryUrls: artist.profileImages?.galleryUrls || [] };
+        if (parsed.data.shopEnabled !== undefined) artist.shopParticipation = { ...(artist.shopParticipation || {}), enabled: parsed.data.shopEnabled, status: parsed.data.shopEnabled ? "setup_required" : "disabled", ...(parsed.data.shopEnabled ? { requestedAt: artist.shopParticipation?.requestedAt || new Date() } : {}) };
         await artist.save({ session });
       }
       user.networkProfileType = selectedType; user.networkRoleSelectionCompleted = true; user.networkOnboardingCompleted = true; await user.save({ session });
       return profile;
     });
     if (!result) return apiError("profile_creation_failed", 500);
+    if (parsed.data.shopEnabled && result.canonicalArtistId) { const artist = await CanonicalArtistModel.findById(result.canonicalArtistId); await finalizeShopParticipation(artist); }
     return Response.json({ ok: true, profile: serializeNetworkProfile(result) }, { status: auth.context.profile ? 200 : 201 });
   } catch (error: any) {
     if (error?.code === 11000) return apiError("profile_identity_conflict", 409);
@@ -69,6 +80,7 @@ export async function PATCH(req: Request) {
   const parsed = networkProfileInputSchema.partial().safeParse(hydrateNetworkMediaKeys(await req.json().catch(() => null)));
   if (!parsed.success) return apiError("invalid_profile", 400, parsed.error.flatten());
   const update: Record<string, unknown> = { ...parsed.data };
+  delete update.shopEnabled;
   if (parsed.data.username) { const identity = await uniqueProfileIdentity(parsed.data.username, undefined, auth.context.user._id); update.username = identity; update.slug = identity; }
   const artist = await findSecureArtistForUser(auth.context.user);
   if (!artist && parsed.data.profileType === "artist" && auth.context.profile.profileType !== "artist") {
@@ -94,7 +106,9 @@ export async function PATCH(req: Request) {
         galleryUrls: artist.profileImages?.galleryUrls || [],
       };
     }
+    if (parsed.data.shopEnabled !== undefined) artist.shopParticipation = { ...(artist.shopParticipation || {}), enabled: parsed.data.shopEnabled, status: parsed.data.shopEnabled ? "setup_required" : "disabled", ...(parsed.data.shopEnabled ? { requestedAt: artist.shopParticipation?.requestedAt || new Date() } : {}) };
     await artist.save();
+    if (parsed.data.shopEnabled) await finalizeShopParticipation(artist);
   } else if (parsed.data.profileType && networkOnboardingRoles.includes(parsed.data.profileType as any)) {
     update.profileTypeSource = "user_selected";
     await UserModel.updateOne({ _id: auth.context.user._id }, { $set: { networkProfileType: parsed.data.profileType, networkRoleSelectionCompleted: true, networkOnboardingCompleted: true } });

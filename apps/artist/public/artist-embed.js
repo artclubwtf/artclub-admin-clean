@@ -21764,7 +21764,7 @@ var ArtclubArtistEmbed = (() => {
     { key: "links", label: "Links" }
   ];
   function SocialIcon({ type }) {
-    const className = "h-[18px] w-[18px] text-neutral-900";
+    const className = "h-[18px] w-[18px] text-[var(--text)]";
     switch (type) {
       case "instagram":
         return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("svg", { viewBox: "0 0 24 24", fill: "none", className, "aria-hidden": true, children: [
@@ -21813,7 +21813,7 @@ var ArtclubArtistEmbed = (() => {
     trackingSource,
     onSelect
   }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "grid grid-cols-2 gap-x-4 gap-y-8", children: artworks.map((artwork, index) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-3 md:gap-x-6 md:gap-y-10", children: artworks.map((artwork, index) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
       "button",
       {
         type: "button",
@@ -22009,29 +22009,30 @@ var ArtclubArtistEmbed = (() => {
     onArtworkClose,
     onArtworkSelect,
     onShopifyProductClick,
-    onTabChange
+    onTabChange,
+    headerActions
   }) {
     const heroAnnouncement = profile.announcements.find((item) => item.isPinned) || profile.announcements[0] || null;
     return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
       "div",
       {
-        className: "min-h-screen bg-white",
+        className: "min-h-screen bg-[var(--canvas)] text-[var(--text)]",
         "data-artclub-public-profile": "true",
         "data-artclub-public-artist-view": "true",
         "data-artclub-artist-id": profile.canonicalArtistId,
         "data-artclub-artist-slug": profile.slug,
         "data-artclub-artist-name": profile.displayName,
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "mx-auto max-w-5xl px-3 py-3 sm:px-8 sm:py-8", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "overflow-hidden rounded-[1rem] bg-white", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "mx-auto max-w-6xl px-0 py-0 sm:px-8 sm:py-8", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "overflow-hidden bg-[var(--canvas)] sm:rounded-2xl", children: [
               /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "relative", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "overflow-hidden rounded-[1rem] bg-neutral-100", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ProfileImage, { src: profile.heroUrl || profile.avatarUrl, alt: profile.displayName, className: "h-44 w-full object-cover sm:h-64" }) }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "absolute -bottom-14 right-3 h-32 w-32 overflow-hidden rounded-full border-[5px] border-white bg-neutral-100 sm:right-8 sm:h-44 sm:w-44", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ProfileImage, { src: profile.avatarUrl || profile.heroUrl, alt: profile.displayName, className: "h-full w-full object-cover" }) })
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "overflow-hidden bg-[var(--surface-soft)] sm:rounded-2xl", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ProfileImage, { src: profile.heroUrl || profile.avatarUrl, alt: profile.displayName, className: "h-44 w-full object-cover sm:h-64" }) }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "absolute -bottom-14 right-5 h-32 w-32 overflow-hidden rounded-full border-[5px] border-[var(--canvas)] bg-[var(--surface-soft)] sm:right-8 sm:h-44 sm:w-44", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ProfileImage, { src: profile.avatarUrl || profile.heroUrl, alt: profile.displayName, className: "h-full w-full object-cover" }) })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "px-2 pb-4 pt-4 sm:px-6", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "px-5 pb-4 pt-5 sm:px-6", children: [
                 /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "max-w-[14rem] space-y-1 sm:max-w-md", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", { className: "text-[1.7rem] font-semibold tracking-[-0.04em] text-neutral-950", children: profile.displayName }),
-                  profile.bio ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "text-[0.95rem] leading-6 text-neutral-400", children: profile.bio }) : null
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", { className: "text-[1.9rem] font-semibold tracking-[-0.04em] text-[var(--text)]", children: profile.displayName }),
+                  profile.bio ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "text-[0.95rem] leading-6 text-[var(--text-muted)]", children: profile.bio }) : null
                 ] }),
                 profile.socialLinks.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "mt-4 flex items-center gap-3", children: profile.socialLinks.map((link) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
                   "a",
@@ -22039,32 +22040,33 @@ var ArtclubArtistEmbed = (() => {
                     href: link.url,
                     target: "_blank",
                     rel: "noreferrer",
-                    className: "inline-flex h-9 w-9 items-center justify-center rounded-full bg-neutral-100",
+                    className: "inline-flex h-9 w-9 items-center justify-center rounded-full bg-[var(--surface-soft)]",
                     "aria-label": link.label,
                     children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SocialIcon, { type: link.type })
                   },
                   link.id
                 )) }) : null,
-                heroAnnouncement ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "mt-5 rounded-[1rem] bg-neutral-50 px-4 py-3", children: [
+                headerActions ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "mt-5", children: headerActions }) : null,
+                heroAnnouncement ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "mt-5 rounded-xl bg-[var(--surface-muted)] px-4 py-3", children: [
                   /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "text-xs uppercase tracking-[0.18em] text-neutral-400", children: "Announcement" }),
                   /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "mt-1 text-sm font-medium tracking-[-0.01em] text-neutral-950", children: heroAnnouncement.title }),
                   /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "mt-1 text-sm leading-6 text-neutral-500", children: heroAnnouncement.body })
                 ] }) : null
               ] })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "mt-6 overflow-x-auto border-b border-neutral-200/90", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "flex min-w-max items-center gap-6 px-1", children: publicArtistProfileTabs.map((tab) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "mx-5 mt-6 overflow-x-auto sm:mx-0", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "flex min-w-max items-center gap-6 px-0", children: publicArtistProfileTabs.map((tab) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
               "button",
               {
                 type: "button",
                 "data-artclub-embed-tab": tab.key,
                 "data-artclub-embed-tab-active": activeTab === tab.key ? "true" : "false",
                 onClick: onTabChange ? () => onTabChange(tab.key) : void 0,
-                className: `pb-3 pt-1 text-[1.02rem] font-medium tracking-[-0.02em] ${activeTab === tab.key ? "text-neutral-950" : "text-neutral-400"}`,
+                className: `relative pb-3 pt-1 text-sm font-medium tracking-[-0.01em] after:absolute after:bottom-1 after:left-1/4 after:h-0.5 after:w-1/2 after:rounded-full ${activeTab === tab.key ? "text-[var(--text)] after:bg-[var(--primary)]" : "text-[var(--text-faint)]"}`,
                 children: tab.label
               },
               tab.key
             )) }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "py-5", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "px-5 py-6 sm:px-0", children: [
               /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { "data-artclub-embed-panel": "artworks", hidden: activeTab !== "artworks", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ArtworksTab, { artworks: profile.artworks, artist: profile, trackingSource, onSelect: onArtworkSelect }) }),
               /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { "data-artclub-embed-panel": "exhibitions", hidden: activeTab !== "exhibitions", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ExhibitionsTab, { upcoming: profile.upcomingExhibitions, history: profile.exhibitionHistory }) }),
               /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { "data-artclub-embed-panel": "education", hidden: activeTab !== "education", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(EducationTab, { items: profile.education }) }),

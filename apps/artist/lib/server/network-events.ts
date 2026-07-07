@@ -26,6 +26,8 @@ export function serializeEvent(item: any, options: { viewerId: unknown; rsvpCoun
     description: item.description || "",
     coverImageUrl: resolveNetworkMediaForRead(item.coverImageUrl, item.coverImageStorageKey),
     coverImageStorageKey: item.coverImageStorageKey || "",
+    coverOriginalUrl: resolveNetworkMediaForRead(item.coverOriginalUrl, item.coverOriginalStorageKey),
+    coverOriginalStorageKey: item.coverOriginalStorageKey || "",
     startAt: item.startAt,
     endAt: item.endAt,
     timezone: item.timezone,

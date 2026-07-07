@@ -99,7 +99,7 @@ export function MessagesInbox({ initialConversations }: MessagesInboxProps) {
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-4 pt-8">
         <div className="space-y-2">
-          <div className="text-[0.68rem] font-medium uppercase tracking-[0.28em] text-neutral-400">ARTCLUB for Artists</div>
+          <div className="eyebrow">ARTCLUB – The network of art</div>
           <h1 className="text-3xl font-semibold tracking-[-0.04em] text-neutral-950">Messages</h1>
           <p className="max-w-xl text-sm leading-6 text-neutral-500">Your real conversations with the ARTCLUB team.</p>
         </div>

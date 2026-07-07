@@ -52,12 +52,9 @@ export function LoginForm() {
 
   return (
     <div className="space-y-8 pb-8">
-      <PageTitle
-        title="Login"
-        subtitle="Sign in to the new artist workspace. Workspace routes are protected and load the current artist context server-side."
-      />
+      <PageTitle title="Login" />
 
-      <Section title="Artist access" subtitle="Use your existing artist account.">
+      <Section title="ARTCLUB – The network of art">
         <form className="space-y-4" onSubmit={handleSubmit}>
           <Input
             label="Email"
@@ -84,9 +81,9 @@ export function LoginForm() {
         </form>
       </Section>
 
-      <p className="text-sm text-neutral-500">
+      <p className="text-sm text-[var(--text-muted)]">
         Need an account?{" "}
-        <Link href="/register" className="font-medium text-neutral-950">
+        <Link href="/register" className="font-medium text-[var(--text)]">
           Create one
         </Link>
       </p>

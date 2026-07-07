@@ -217,7 +217,7 @@ export function MessagesPanel({ initialConversations, initialDetail }: MessagesP
       <div className="grid gap-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.25fr)]">
         <Section
           title="Conversations"
-          subtitle="Real workspace threads connected to your artist account."
+          subtitle="Your conversations."
           action={
             <Button tone={createOpen ? "secondary" : "primary"} type="button" onClick={() => setCreateOpen((current) => !current)}>
               {createOpen ? "Close" : "New conversation"}

@@ -91,7 +91,7 @@ export function SettingsForm({ initialConsents }: SettingsFormProps) {
         </form>
       </Section>
 
-      <Section title="Session" subtitle="Sign out of the artist workspace.">
+      <Section title="Session">
         <Button type="button" tone="secondary" onClick={() => void signOut({ callbackUrl: "/login" })}>
           Sign out
         </Button>

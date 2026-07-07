@@ -170,7 +170,7 @@ export function OnboardingForm({ initial }: OnboardingFormProps) {
     <form className="space-y-8 pb-8" onSubmit={handleSubmit}>
       <PageTitle
         title="Onboarding"
-        subtitle="Complete your core artist profile against the real canonical artist records before entering the workspace."
+        subtitle="Complete your profile."
       />
 
       <MultiStepForm
@@ -242,7 +242,7 @@ export function OnboardingForm({ initial }: OnboardingFormProps) {
         ) : null}
 
         {step === 4 ? (
-          <Section title="Review" subtitle="Check the core setup before entering the artist workspace.">
+          <Section title="Review" subtitle="Check your profile before continuing.">
             <div className="space-y-4">
               <div className="rounded-[1.75rem] bg-neutral-50 px-4 py-4 text-sm leading-7 text-neutral-600">
                 <div><span className="font-medium text-neutral-900">Display name:</span> {displayName || "Not set"}</div>

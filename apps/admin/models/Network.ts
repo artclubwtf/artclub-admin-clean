@@ -127,6 +127,8 @@ const eventSchema = new Schema(
     description: { type: String, trim: true },
     coverImageUrl: { type: String, trim: true },
     coverImageStorageKey: { type: String, trim: true },
+    coverOriginalUrl: { type: String, trim: true },
+    coverOriginalStorageKey: { type: String, trim: true },
     startAt: { type: Date, required: true },
     endAt: Date,
     timezone: { type: String, required: true, trim: true },

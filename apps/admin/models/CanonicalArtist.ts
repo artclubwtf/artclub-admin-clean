@@ -116,6 +116,16 @@ const canonicalArtistPublicProfileSchema = new Schema(
   { _id: false },
 );
 
+const canonicalArtistShopParticipationSchema = new Schema(
+  {
+    enabled: { type: Boolean, default: false },
+    status: { type: String, enum: ["disabled", "setup_required", "pending", "ready", "error"], default: "disabled" },
+    requestedAt: Date,
+    lastAttemptAt: Date,
+  },
+  { _id: false },
+);
+
 const canonicalArtistShopifySchema = new Schema(
   {
     metaobjectGid: { type: String },
@@ -169,6 +179,7 @@ const canonicalArtistSchema = new Schema(
     exhibitions: { type: [canonicalArtistExhibitionSchema], default: [] },
     profileLinks: { type: [canonicalArtistProfileLinkSchema], default: [] },
     publicProfile: { type: canonicalArtistPublicProfileSchema, default: () => ({ isVisible: true }) },
+    shopParticipation: { type: canonicalArtistShopParticipationSchema, default: () => ({ enabled: false, status: "disabled" }) },
     shopify: { type: canonicalArtistShopifySchema, default: () => ({}) },
     sync: { type: canonicalArtistSyncSchema, default: () => ({ dirtyFields: [] }) },
   },

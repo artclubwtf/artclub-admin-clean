@@ -23,6 +23,8 @@ export type ImageUploadItem = {
   provider?: "s3";
   mimeType?: string;
   sizeBytes?: number | null;
+  originalUrl?: string;
+  originalStorageKey?: string;
 };
 
 type ImageUploadProps<T extends ImageUploadItem> = {
@@ -93,7 +95,7 @@ export function ImageUpload<T extends ImageUploadItem>({
   const [retryFiles, setRetryFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
 
-  const previewClass = variant === "avatar" ? "aspect-square rounded-full" : variant.includes("cover") ? "aspect-[16/9] rounded-2xl" : "aspect-[4/3] rounded-2xl";
+  const previewClass = variant === "avatar" ? "aspect-square rounded-full" : variant === "event-cover" ? "aspect-[4/5] rounded-2xl" : variant === "profile-cover" ? "aspect-[16/9] rounded-2xl" : "aspect-[4/3] rounded-2xl";
 
   async function upload(files: File[]) {
     if (uploading || disabled || !files.length) return;

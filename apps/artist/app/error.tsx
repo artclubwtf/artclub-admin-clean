@@ -40,7 +40,7 @@ export default function GlobalError({
   return (
     <div className="flex min-h-screen items-center justify-center bg-white px-6">
       <div className="max-w-md space-y-4 text-center">
-        <div className="text-[11px] uppercase tracking-[0.22em] text-neutral-400">ARTCLUB for Artists</div>
+        <div className="eyebrow">ARTCLUB – The network of art</div>
         <h1 className="text-2xl font-semibold tracking-[-0.04em] text-neutral-950">
           {chunkLoadError ? "Refreshing to load the latest version" : "Something went wrong"}
         </h1>
