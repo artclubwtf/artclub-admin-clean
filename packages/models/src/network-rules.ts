@@ -1,7 +1,7 @@
 import type { NetworkProfileType } from "./network";
 
 export function networkSlug(value: string) {
-  return value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "member";
+  return value.toLowerCase().replace(/ß/g, "ss").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "member";
 }
 
 export function canCreateNetworkEvent(profileType: NetworkProfileType, isAdmin = false) {
@@ -73,4 +73,31 @@ export function eventRsvpState(input: { status: string; rsvpEnabled: boolean; en
   if (end < new Date(input.now || Date.now()).getTime()) return "past" as const;
   if (!input.alreadyAttending && input.capacity && input.rsvpCount >= input.capacity) return "full" as const;
   return input.alreadyAttending ? "attending" as const : "available" as const;
+}
+
+export function duplicateKeyFields(error: { code?: number; keyPattern?: Record<string, unknown>; keyValue?: Record<string, unknown> }) {
+  return Array.from(new Set([...Object.keys(error.keyPattern || {}), ...Object.keys(error.keyValue || {})]));
+}
+
+export function duplicateRegistrationError(error: { code?: number; keyPattern?: Record<string, unknown>; keyValue?: Record<string, unknown> }) {
+  const fields = duplicateKeyFields(error);
+  if (fields.includes("email")) return "email" as const;
+  if (fields.includes("slug")) return "slug" as const;
+  if (fields.includes("username")) return "username" as const;
+  if (fields.includes("userId") || fields.includes("profileId")) return "identity" as const;
+  if (fields.includes("registrationAttemptId")) return "attempt" as const;
+  if (fields.includes("artistKey")) return "artistKey" as const;
+  return "other" as const;
+}
+
+export function profileIdentityCandidate(name: string, suffix = 0) {
+  const base = networkSlug(name);
+  return suffix > 0 ? `${base.slice(0, Math.max(1, 60 - String(suffix + 1).length - 1))}-${suffix + 1}` : base;
+}
+
+export function networkOnboardingPath(user: any, profile: any) {
+  const confirmed = profile && ["user_selected", "existing_artist_link", "admin_assigned"].includes(profile.profileTypeSource || "");
+  if (user.networkRoleSelectionCompleted !== true || !confirmed) return "/onboarding/role";
+  if (user.networkOnboardingCompleted !== true || !profile) return "/onboarding/profile";
+  return null;
 }

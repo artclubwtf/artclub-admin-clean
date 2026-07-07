@@ -1,67 +1,92 @@
-import { networkProfileInputSchema } from "@artclub/models";
+import { networkOnboardingRoles, networkProfileInputSchema } from "@artclub/models";
 import { requireNetworkApiContext, serializeNetworkProfile } from "@/lib/server/network-context";
+import { findSecureArtistForUser } from "@/lib/server/network-onboarding";
+import { uniqueProfileIdentity } from "@/lib/server/network-registration";
 import { apiError } from "@/lib/server/network-service";
-import { NetworkProfileModel } from "@/lib/server/models";
-import { CanonicalArtistModel } from "@/lib/server/models";
+import { CanonicalArtistModel, NetworkProfileModel, UserModel } from "@/lib/server/models";
 import { resolveUnifiedProfileBySlug } from "@/lib/server/unified-profile";
 
 export async function GET() {
-  const auth = await requireNetworkApiContext();
-  if (!auth.ok) return auth.response;
+  const auth = await requireNetworkApiContext(); if (!auth.ok) return auth.response;
   const profile = await resolveUnifiedProfileBySlug(auth.context.profile.slug);
   return Response.json({ ok: true, profile: profile || serializeNetworkProfile(auth.context.profile) });
 }
 
 export async function POST(req: Request) {
-  const auth = await requireNetworkApiContext({ allowMissingProfile: true });
-  if (!auth.ok) return auth.response;
-  if (auth.context.profile) return apiError("profile_already_exists", 409);
-  const parsed = networkProfileInputSchema.safeParse(await req.json().catch(() => null));
+  const auth = await requireNetworkApiContext({ allowMissingProfile: true }); if (!auth.ok) return auth.response;
+  const selectedType = auth.context.user.networkProfileType as (typeof networkOnboardingRoles)[number] | undefined;
+  if (auth.context.user.networkRoleSelectionCompleted !== true || !networkOnboardingRoles.includes(selectedType as any)) return apiError("role_selection_required", 409);
+  const body = await req.json().catch(() => null);
+  const parsed = networkProfileInputSchema.safeParse({ ...(body || {}), profileType: selectedType });
   if (!parsed.success) return apiError("invalid_profile", 400, parsed.error.flatten());
-  if (auth.context.user.role === "artist" && parsed.data.profileType !== "artist") return apiError("artist_profile_type_required", 403);
+  const session = await UserModel.startSession();
   try {
-    const profile = await NetworkProfileModel.create({ ...parsed.data, slug: parsed.data.username, userId: auth.context.user._id });
-    return Response.json({ ok: true, profile: serializeNetworkProfile(profile) }, { status: 201 });
+    const result = await session.withTransaction(async () => {
+      const user = await UserModel.findById(auth.context.user._id).session(session);
+      if (!user) throw new Error("user_not_found");
+      let artist = await findSecureArtistForUser(user, session);
+      const identity = await uniqueProfileIdentity(parsed.data.username || parsed.data.displayName, session, user._id);
+      let source: "existing_artist_link" | "user_selected" = artist ? "existing_artist_link" : "user_selected";
+      if (selectedType === "artist" && !artist) {
+        const artistKey = user.artistKey || `artist_${user._id}`;
+        artist = await CanonicalArtistModel.findOneAndUpdate(
+          { shopDomain: user.shopDomain, artistKey },
+          { $set: { linkedUserId: user._id, displayName: parsed.data.displayName, handle: identity, bio: parsed.data.bio || "", locationCity: parsed.data.city || "", locationCountry: parsed.data.country || "", websiteUrl: parsed.data.website || "", instagram: parsed.data.instagram || "", profileImages: { avatarUrl: parsed.data.profileImageUrl || "", heroUrl: parsed.data.coverImageUrl || "", galleryUrls: [] }, accountStatus: "linked", linkStatus: "linked" }, $setOnInsert: { shopDomain: user.shopDomain, artistKey } },
+          { upsert: true, new: true, session },
+        );
+        user.role = "artist"; user.artistKey = artistKey;
+      }
+      let profile = await NetworkProfileModel.findOne({ userId: user._id }).session(session);
+      if (!profile && artist) profile = await NetworkProfileModel.findOne({ canonicalArtistId: artist._id }).session(session);
+      if (profile && String(profile.userId) !== String(user._id)) {
+        const ownerExists = await UserModel.exists({ _id: profile.userId }).session(session);
+        if (ownerExists) throw new Error("artist_profile_owned_by_another_user");
+      }
+      const profileData = { ...parsed.data, profileType: selectedType, profileTypeSource: source, slug: identity, username: identity, userId: user._id, ...(artist ? { canonicalArtistId: artist._id } : {}) };
+      if (profile) { profile.set(profileData); await profile.save({ session }); }
+      else { profile = new NetworkProfileModel(profileData); await profile.save({ session }); }
+      if (artist) {
+        artist.linkedUserId = user._id; artist.accountStatus = "linked"; artist.linkStatus = "linked";
+        artist.displayName = parsed.data.displayName; artist.bio = parsed.data.bio || ""; artist.locationCity = parsed.data.city || ""; artist.locationCountry = parsed.data.country || ""; artist.websiteUrl = parsed.data.website || ""; artist.instagram = parsed.data.instagram || "";
+        artist.profileImages = { ...(artist.profileImages || {}), avatarUrl: parsed.data.profileImageUrl || artist.profileImages?.avatarUrl || "", heroUrl: parsed.data.coverImageUrl || artist.profileImages?.heroUrl || "", galleryUrls: artist.profileImages?.galleryUrls || [] };
+        await artist.save({ session });
+      }
+      user.networkProfileType = selectedType; user.networkRoleSelectionCompleted = true; user.networkOnboardingCompleted = true; await user.save({ session });
+      return profile;
+    });
+    if (!result) return apiError("profile_creation_failed", 500);
+    return Response.json({ ok: true, profile: serializeNetworkProfile(result) }, { status: auth.context.profile ? 200 : 201 });
   } catch (error: any) {
-    if (error?.code === 11000) return apiError("username_unavailable", 409);
-    throw error;
-  }
+    if (error?.code === 11000) return apiError("profile_identity_conflict", 409);
+    console.error("[network-onboarding] profile_failed", { name: error?.name || "Error", code: error?.code || null });
+    return apiError("profile_creation_failed", 500);
+  } finally { await session.endSession(); }
 }
 
 export async function PATCH(req: Request) {
-  const auth = await requireNetworkApiContext();
-  if (!auth.ok) return auth.response;
+  const auth = await requireNetworkApiContext(); if (!auth.ok) return auth.response;
   const parsed = networkProfileInputSchema.partial().safeParse(await req.json().catch(() => null));
   if (!parsed.success) return apiError("invalid_profile", 400, parsed.error.flatten());
   const update: Record<string, unknown> = { ...parsed.data };
-  if (parsed.data.username) update.slug = parsed.data.username;
-  if (auth.context.user.role === "artist") {
-    delete update.profileType;
-    const artist = await CanonicalArtistModel.findOne({ linkedUserId: auth.context.user._id });
-    if (!artist) return apiError("artist_not_linked", 409);
-    if (parsed.data.username && parsed.data.username !== artist.publicSlug) {
-      const collision = await CanonicalArtistModel.exists({ _id: { $ne: artist._id }, shopDomain: artist.shopDomain, publicSlug: parsed.data.username });
-      if (collision) return apiError("username_unavailable", 409);
-      artist.publicSlug = parsed.data.username; artist.handle = parsed.data.username;
-    }
+  if (parsed.data.username) { const identity = await uniqueProfileIdentity(parsed.data.username, undefined, auth.context.user._id); update.username = identity; update.slug = identity; }
+  const artist = await findSecureArtistForUser(auth.context.user);
+  if (artist) {
+    update.profileType = "artist"; update.profileTypeSource = "existing_artist_link";
     if (parsed.data.displayName !== undefined) artist.displayName = parsed.data.displayName;
     if (parsed.data.bio !== undefined) artist.bio = parsed.data.bio;
     if (parsed.data.city !== undefined) artist.locationCity = parsed.data.city;
     if (parsed.data.country !== undefined) artist.locationCountry = parsed.data.country;
     if (parsed.data.website !== undefined) artist.websiteUrl = parsed.data.website;
     if (parsed.data.instagram !== undefined) artist.instagram = parsed.data.instagram;
-    if (parsed.data.isPublic !== undefined) artist.publicProfile = { ...(artist.publicProfile || {}), isVisible: parsed.data.isPublic };
-    if (parsed.data.profileImageUrl !== undefined || parsed.data.coverImageUrl !== undefined) artist.profileImages = { ...(artist.profileImages || {}), ...(parsed.data.profileImageUrl !== undefined ? { avatarUrl: parsed.data.profileImageUrl } : {}), ...(parsed.data.coverImageUrl !== undefined ? { heroUrl: parsed.data.coverImageUrl } : {}) };
     await artist.save();
-    for (const key of ["displayName","bio","city","country","website","instagram","profileImageUrl","coverImageUrl"] as const) delete update[key];
-  }
+  } else if (parsed.data.profileType && networkOnboardingRoles.includes(parsed.data.profileType as any)) {
+    update.profileTypeSource = "user_selected";
+    await UserModel.updateOne({ _id: auth.context.user._id }, { $set: { networkProfileType: parsed.data.profileType, networkRoleSelectionCompleted: true, networkOnboardingCompleted: true } });
+  } else delete update.profileType;
   try {
     const profile = await NetworkProfileModel.findOneAndUpdate({ _id: auth.context.profile._id, userId: auth.context.user._id }, { $set: update }, { new: true, runValidators: true });
     if (!profile) return apiError("profile_not_found", 404);
     const unified = await resolveUnifiedProfileBySlug(profile.slug);
     return Response.json({ ok: true, profile: unified || serializeNetworkProfile(profile) });
-  } catch (error: any) {
-    if (error?.code === 11000) return apiError("username_unavailable", 409);
-    throw error;
-  }
+  } catch (error: any) { if (error?.code === 11000) return apiError("username_unavailable", 409); throw error; }
 }

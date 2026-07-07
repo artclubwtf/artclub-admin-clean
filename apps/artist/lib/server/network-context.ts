@@ -74,6 +74,7 @@ export async function requireNetworkApiContext(options: { allowMissingProfile?: 
     const context = await loadNetworkContext();
     if (!context) return { ok: false as const, response: NextResponse.json({ ok: false, error: { code: "unauthorized" } }, { status: 401 }) };
     if (!context.profile && !options.allowMissingProfile) return { ok: false as const, response: NextResponse.json({ ok: false, error: { code: "network_onboarding_required" } }, { status: 403 }) };
+    if (!options.allowMissingProfile && context.user.networkOnboardingCompleted !== true) return { ok: false as const, response: NextResponse.json({ ok: false, error: { code: "network_onboarding_required", next: context.user.networkRoleSelectionCompleted === true ? "/onboarding/profile" : "/onboarding/role" } }, { status: 403 }) };
     return { ok: true as const, context };
   } catch (error) {
     console.error("Failed to load network API context", error);
@@ -83,7 +84,7 @@ export async function requireNetworkApiContext(options: { allowMissingProfile?: 
 
 export function serializeNetworkProfile(profile: any) {
   return {
-    id: profile._id.toString(), profileType: profile.profileType, slug: profile.slug, displayName: profile.displayName,
+    id: profile._id.toString(), profileType: profile.profileType, profileTypeSource: profile.profileTypeSource, slug: profile.slug, displayName: profile.displayName,
     username: profile.username, bio: profile.bio || "", city: profile.city || "", country: profile.country || "",
     disciplines: profile.disciplines || [], interests: profile.interests || [], website: profile.website || "",
     instagram: profile.instagram || "", profileImageUrl: profile.profileImageUrl || "", coverImageUrl: profile.coverImageUrl || "",

@@ -9,6 +9,7 @@ export type UnifiedProfile = {
   canonicalArtistId?: string;
   userId: string;
   profileType: string;
+  profileTypeSource?: string;
   slug: string;
   displayName: string;
   username: string;
@@ -31,7 +32,7 @@ function artistUnified(artist: any, user: any, profile?: any): UnifiedProfile {
   return {
     id: profile?._id?.toString() || `artist:${artist._id}`,
     networkProfileId: profile?._id?.toString(), canonicalArtistId: artist._id.toString(), userId: user._id.toString(),
-    profileType: "artist", slug, displayName: artist.displayName || user.name || profile?.displayName || "Artist",
+    profileType: "artist", profileTypeSource: profile?.profileTypeSource, slug, displayName: artist.displayName || user.name || profile?.displayName || "Artist",
     username: profile?.username || artist.handle || slug, bio: artist.bio || "", city: artist.locationCity || "", country: artist.locationCountry || "",
     disciplines: profile?.disciplines || [], interests: profile?.interests || [], website: artist.websiteUrl || "", instagram: artist.instagram || "",
     profileImageUrl: artist.profileImages?.avatarUrl || "", coverImageUrl: artist.profileImages?.heroUrl || "",
@@ -42,7 +43,7 @@ function artistUnified(artist: any, user: any, profile?: any): UnifiedProfile {
 
 function standardUnified(profile: any): UnifiedProfile {
   return {
-    id: profile._id.toString(), networkProfileId: profile._id.toString(), userId: profile.userId.toString(), profileType: profile.profileType,
+    id: profile._id.toString(), networkProfileId: profile._id.toString(), userId: profile.userId.toString(), profileType: profile.profileType, profileTypeSource: profile.profileTypeSource,
     slug: profile.slug, displayName: profile.displayName, username: profile.username, bio: profile.bio || "", city: profile.city || "", country: profile.country || "",
     disciplines: profile.disciplines || [], interests: profile.interests || [], website: profile.website || "", instagram: profile.instagram || "",
     profileImageUrl: profile.profileImageUrl || "", coverImageUrl: profile.coverImageUrl || "", isPublic: profile.isPublic !== false,

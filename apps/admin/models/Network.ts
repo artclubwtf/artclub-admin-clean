@@ -16,6 +16,7 @@ const networkProfileSchema = new Schema(
   {
     userId: { type: objectId, ref: "User", required: true },
     profileType: { type: String, enum: ["artist", "collector", "gallery", "event_series", "curator", "institution", "art_enthusiast", "other"], required: true },
+    profileTypeSource: { type: String, enum: ["automatic_legacy", "existing_artist_link", "user_selected", "admin_assigned"] },
     slug: { type: String, required: true, lowercase: true, trim: true },
     displayName: { type: String, required: true, trim: true },
     username: { type: String, required: true, lowercase: true, trim: true },

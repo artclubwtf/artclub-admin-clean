@@ -67,7 +67,7 @@ async function loadArtistContextResult(): Promise<ArtistContextLoadResult> {
   await ensureCanonicalArtistIndexes();
 
   const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== "artist" || !session.user.id || !Types.ObjectId.isValid(session.user.id)) {
+  if (!session?.user || !session.user.id || !Types.ObjectId.isValid(session.user.id)) {
     return { status: "unauthenticated" };
   }
 

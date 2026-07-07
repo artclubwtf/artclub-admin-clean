@@ -44,6 +44,9 @@ export const networkProfileInputSchema = z.object({
 });
 export type NetworkProfileInput = z.infer<typeof networkProfileInputSchema>;
 
+export const networkOnboardingRoles = ["artist", "art_enthusiast", "gallery", "event_series", "curator", "institution"] as const;
+export const networkOnboardingRoleSchema = z.object({ profileType: z.enum(networkOnboardingRoles) });
+
 export const networkPostTypes = ["text", "image", "video", "process", "artwork", "collection_item", "event", "update"] as const;
 export const networkPostInputSchema = z
   .object({
@@ -160,7 +163,7 @@ export const donationCheckoutInputSchema = z.object({
 
 export const networkRegistrationInputSchema = z.object({
   name: z.string().trim().min(2).max(120),
-  email: z.email().max(254).transform((value) => value.toLowerCase()),
+  email: z.string().trim().toLowerCase().pipe(z.email().max(254)),
   password: z.string().min(10).max(128),
   registrationAttemptId: z.uuid().optional(),
 });
