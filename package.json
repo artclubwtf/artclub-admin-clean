@@ -1,6 +1,9 @@
 {
   "name": "artclub-platform",
   "private": true,
+  "engines": {
+    "node": "20.x"
+  },
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "dev:admin": "pnpm --filter admin dev",
