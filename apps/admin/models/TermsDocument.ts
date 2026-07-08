@@ -11,7 +11,6 @@ const termsDocumentSchema = new Schema(
   { timestamps: true },
 );
 
-termsDocumentSchema.index({ key: 1 }, { unique: true });
 termsDocumentSchema.index({ slug: 1 }, { unique: true });
 termsDocumentSchema.index({ isActive: 1, slug: 1 });
 

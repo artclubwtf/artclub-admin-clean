@@ -7,6 +7,7 @@ import {
   serializeProfileLinks,
 } from "@/lib/server/artist-profile-content";
 import { normalizePublicArtistMediaUrl, normalizePublicArtistMediaUrls } from "@/lib/server/artist-media";
+import { resolveShopifyMediaImageGids, type ResolvedShopifyMediaImage } from "@/lib/server/shopify-media";
 
 function isActiveAnnouncement(item: ArtistAnnouncementItem) {
   if (!item.isPublished) return false;
@@ -34,10 +35,11 @@ type RenderableArtistProfileImages = {
   media?: any[];
 };
 
-export function resolveRenderableArtistProfileImages(profileImages: any): {
+export async function resolveRenderableArtistProfileImages(profileImages: any, options?: { resolveGids?: (ids: string[]) => Promise<{ lookup: Record<string, ResolvedShopifyMediaImage>; unresolved: string[]; error: string | null }> }): Promise<{
   profileImages: RenderableArtistProfileImages;
   unresolvedGids: Array<{ fieldKey: string; rawValue: string }>;
-} {
+  resolutionError: string | null;
+}> {
   const media = Array.isArray(profileImages?.media) ? profileImages.media : [];
   const mediaByGid = new Map<string, any>();
   const mediaByFieldKey = new Map<string, any>();
@@ -53,29 +55,36 @@ export function resolveRenderableArtistProfileImages(profileImages: any): {
     }
   }
 
-  const unresolvedGids: Array<{ fieldKey: string; rawValue: string }> = [];
-  const resolveOne = (rawValue: string | undefined | null, fieldKey: string) => {
+  const pending = new Map<string, string[]>();
+  const resolveCached = (rawValue: string | undefined | null, fieldKey: string) => {
     const trimmed = rawValue?.trim() || "";
     if (!trimmed) return "";
     if (!isShopifyGid(trimmed)) return trimmed;
     const mediaItem = mediaByGid.get(trimmed) || mediaByFieldKey.get(fieldKey);
     const resolvedUrl = typeof mediaItem?.url === "string" ? mediaItem.url.trim() : "";
     if (resolvedUrl) return resolvedUrl;
-    unresolvedGids.push({ fieldKey, rawValue: trimmed });
+    pending.set(trimmed, [...(pending.get(trimmed) || []), fieldKey]);
     return "";
   };
 
   const galleryFieldKeys = ["bild_1", "bild_2", "bild_3"];
+  const avatarUrl = resolveCached(profileImages?.avatarUrl, "bild_1");
+  const heroUrl = resolveCached(profileImages?.heroUrl, "bilder");
+  const gallery = (Array.isArray(profileImages?.galleryUrls) ? profileImages.galleryUrls : []).map((value: string, index: number) => ({ value, fieldKey: galleryFieldKeys[index] || `gallery_${index}`, cached: resolveCached(value, galleryFieldKeys[index] || `gallery_${index}`) }));
+  const resolved = pending.size ? await (options?.resolveGids || resolveShopifyMediaImageGids)([...pending.keys()]) : { lookup: {}, unresolved: [], error: null };
+  const finalUrl = (raw: string | undefined | null, cached: string) => cached || resolved.lookup[raw?.trim() || ""]?.url || "";
+  const unresolvedGids = [...pending.entries()].flatMap(([rawValue, fields]) => resolved.lookup[rawValue] ? [] : fields.map(fieldKey => ({ fieldKey, rawValue })));
   return {
     profileImages: {
       ...(profileImages || {}),
-      avatarUrl: resolveOne(profileImages?.avatarUrl, "bild_1"),
-      heroUrl: resolveOne(profileImages?.heroUrl, "bilder"),
-      galleryUrls: (Array.isArray(profileImages?.galleryUrls) ? profileImages.galleryUrls : [])
-        .map((value: string, index: number) => resolveOne(value, galleryFieldKeys[index] || `gallery_${index}`))
+      avatarUrl: finalUrl(profileImages?.avatarUrl, avatarUrl),
+      heroUrl: finalUrl(profileImages?.heroUrl, heroUrl),
+      galleryUrls: gallery
+        .map((item: { value: string; fieldKey: string; cached: string }) => finalUrl(item.value, item.cached))
         .filter((value: string) => Boolean(value)),
     },
     unresolvedGids,
+    resolutionError: resolved.error,
   };
 }
 

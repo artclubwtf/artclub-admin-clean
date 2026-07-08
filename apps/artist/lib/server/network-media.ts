@@ -4,12 +4,23 @@ export function isSafeNetworkStorageKey(key: string) {
   return key.startsWith("network/") && !key.includes("..") && !key.includes("\\") && key.length <= 1024;
 }
 
-export function buildNetworkMediaUrl(requestUrl: string, storageKey: string) {
+export function buildNetworkMediaUrl(_requestUrl: string, storageKey: string) {
   if (!isSafeNetworkStorageKey(storageKey)) throw new Error("invalid_storage_key");
   const publicUrl = getPublicS3Url(storageKey);
   if (publicUrl) return publicUrl;
   const encodedPath = storageKey.split("/").map(encodeURIComponent).join("/");
-  return new URL(`/api/network/media/${encodedPath}`, requestUrl).toString();
+  return `/api/network/media/${encodedPath}`;
+}
+
+export function normalizePersistedNetworkMediaUrl(value: string | null | undefined, storageKey?: string | null) {
+  const key = storageKey || tryExtractNetworkStorageKey(value) || tryExtractS3KeyFromUrl(value);
+  if (!key || !isSafeNetworkStorageKey(key)) return value || "";
+  const normalized = value?.trim() || "";
+  const isInternalMediaPath = (() => { try { return new URL(normalized, "https://artclub.invalid").pathname.startsWith("/api/network/media/"); } catch { return false; } })();
+  if (!normalized || isInternalMediaPath || /[?&](X-Amz-Signature|signature|expires)=/i.test(normalized)) {
+    return getPublicS3Url(key) || `/api/network/media/${key.split("/").map(encodeURIComponent).join("/")}`;
+  }
+  return normalized;
 }
 
 export function tryExtractNetworkStorageKey(value: unknown) {
@@ -43,9 +54,7 @@ export function hydrateNetworkMediaKeys<T>(input: T): T {
 }
 
 export function resolveNetworkMediaForRead(url: string | null | undefined, storageKey?: string | null) {
-  const key = storageKey || tryExtractNetworkStorageKey(url) || tryExtractS3KeyFromUrl(url);
-  if (!key || !isSafeNetworkStorageKey(key)) return url || "";
-  return getPublicS3Url(key) || `/api/network/media/${key.split("/").map(encodeURIComponent).join("/")}`;
+  return normalizePersistedNetworkMediaUrl(url, storageKey);
 }
 
 export function resolveNetworkMediaItems(items: any[]) {

@@ -1,6 +1,6 @@
 import { networkEventInputSchema } from "@artclub/models";
 import { requireNetworkApiContext } from "@/lib/server/network-context";
-import { normalizeEventTimes, serializeEvent } from "@/lib/server/network-events";
+import { buildEventStartAtConstraint, buildEventStartAtFilter, normalizeEventTimes, serializeEvent, type NetworkEventWhen } from "@/lib/server/network-events";
 import { apiError, cursorFilter, EVENT_CREATOR_TYPES } from "@/lib/server/network-service";
 import { EventRSVPModel, NetworkEventModel, SavedEventModel } from "@/lib/server/models";
 import { hydrateNetworkMediaKeys } from "@/lib/server/network-media";
@@ -9,11 +9,16 @@ function slugify(value: string) { return value.toLowerCase().normalize("NFKD").r
 async function eventSlug(title: string) { const base = slugify(title); for (let i = 0; i < 100; i += 1) { const value = i ? `${base}-${i + 1}` : base; if (!(await NetworkEventModel.exists({ slug: value }))) return value; } return `${base}-${Date.now()}`; }
 export async function GET(req: Request) {
   const auth = await requireNetworkApiContext(); if (!auth.ok) return auth.response;
-  const url = new URL(req.url); const mode = url.searchParams.get("when") || "upcoming"; const cursor = url.searchParams.get("cursor"); const scope = url.searchParams.get("scope"); const profileId = url.searchParams.get("profileId");
-  const dateFilter = mode === "past" ? { $lt: new Date() } : mode === "all" ? {} : { $gte: new Date() };
+  const url = new URL(req.url); const rawMode = url.searchParams.get("when") || "upcoming"; const cursor = url.searchParams.get("cursor"); const scope = url.searchParams.get("scope"); const profileId = url.searchParams.get("profileId");
+  if (!["upcoming", "past", "all"].includes(rawMode)) return apiError("invalid_event_period", 400);
+  const mode = rawMode as NetworkEventWhen;
+  const dateResult = buildEventStartAtFilter({ when: mode, from: url.searchParams.get("from"), to: url.searchParams.get("to") });
+  if (!dateResult.ok) return apiError(dateResult.error, 400);
   const ownership = scope === "mine" ? { organizerProfileId: auth.context.profile._id } : profileId && /^[a-f\d]{24}$/i.test(profileId) ? { $or: [{ organizerProfileId: profileId }, { participantProfileIds: profileId }] } : {};
   const access = scope === "mine" ? {} : { status: { $in: ["published", "cancelled"] }, visibility: "public" };
-  const items = await NetworkEventModel.find({ ...cursorFilter(cursor), ...access, ...ownership, startAt: dateFilter }).sort(mode === "upcoming" ? { startAt: 1 } : { startAt: -1 }).limit(31).populate("organizerProfileId", "displayName username slug profileImageUrl profileType isVerified donationEnabled allowsMessages").populate("participantProfileIds", "displayName username slug profileImageUrl profileType isVerified").lean();
+  const validDateConstraint = buildEventStartAtConstraint(dateResult.filter, scope === "mine");
+  const query: Record<string, unknown> = { ...cursorFilter(cursor), ...access, ...ownership, ...validDateConstraint };
+  const items = await NetworkEventModel.find(query).sort(mode === "upcoming" ? { startAt: 1 } : { startAt: -1 }).limit(31).populate("organizerProfileId", "displayName username slug profileImageUrl profileType isVerified donationEnabled allowsMessages").populate("participantProfileIds", "displayName username slug profileImageUrl profileType isVerified").lean();
   const page = items.slice(0, 30); const ids = page.map((item) => item._id);
   const counts = await EventRSVPModel.aggregate([{ $match: { eventId: { $in: ids }, status: "going" } }, { $group: { _id: "$eventId", count: { $sum: 1 } } }]);
   const [mine, saved] = await Promise.all([EventRSVPModel.find({ eventId: { $in: ids }, profileId: auth.context.profile._id, status: "going" }).lean(), SavedEventModel.find({ eventId: { $in: ids }, profileId: auth.context.profile._id }).lean()]); const countMap = new Map(counts.map((item) => [item._id.toString(), item.count])); const mineSet = new Set(mine.map((item) => item.eventId.toString())); const savedSet = new Set(saved.map((item) => item.eventId.toString()));

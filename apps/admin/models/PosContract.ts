@@ -9,7 +9,6 @@ const posContractSchema = new Schema(
   { timestamps: { createdAt: true, updatedAt: false }, collection: "pos_contracts" },
 );
 
-posContractSchema.index({ txId: 1 }, { unique: true });
 posContractSchema.index({ createdAt: -1 });
 
 type PosContract = InferSchemaType<typeof posContractSchema>;

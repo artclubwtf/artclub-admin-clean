@@ -53,14 +53,15 @@ export async function loadPublicArtistPageBySlug(rawSlug: string): Promise<Publi
 
   if (!artist) return null;
 
-  const { profileImages: renderableProfileImages, unresolvedGids } = resolveRenderableArtistProfileImages(artist.profileImages);
-  for (const unresolved of unresolvedGids) {
-    logArtistProfileRender("artist_profile_image_gid_without_url", {
+  const { profileImages: renderableProfileImages, unresolvedGids, resolutionError } = await resolveRenderableArtistProfileImages(artist.profileImages);
+  if (unresolvedGids.length) {
+    logArtistProfileRender("artist_profile_media_resolution_incomplete", {
       service: "artist",
       canonicalArtistId: String(artist._id),
       publicSlug: artist.publicSlug || artist.handle || slug,
-      fieldKey: unresolved.fieldKey,
-      rawValue: unresolved.rawValue,
+      fieldKeys: Array.from(new Set(unresolvedGids.map(item => item.fieldKey))),
+      unresolvedCount: unresolvedGids.length,
+      reason: resolutionError || "shopify_media_not_found",
     });
   }
   const renderableArtist = {
