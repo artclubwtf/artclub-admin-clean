@@ -32,7 +32,7 @@ function computeProfileCompleteness(input: {
 }
 
 export default async function HomePage() {
-  if (isNetworkMvpEnabled()) redirect("/feed");
+  if (isNetworkMvpEnabled()) redirect("/home");
   const context = await requireArtistContext();
 
   const [artworkCount, seriesCount, recentMedia] = await Promise.all([

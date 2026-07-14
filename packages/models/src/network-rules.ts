@@ -8,6 +8,59 @@ export function canCreateNetworkEvent(profileType: NetworkProfileType, isAdmin =
   return isAdmin || ["artist", "gallery", "event_series", "curator", "institution"].includes(profileType);
 }
 
+export type ProfileCompletionInput = {
+  profileType: NetworkProfileType;
+  displayName?: string | null;
+  profileImageUrl?: string | null;
+  bio?: string | null;
+  city?: string | null;
+  country?: string | null;
+  website?: string | null;
+  instagram?: string | null;
+  disciplines?: string[] | null;
+  interests?: string[] | null;
+  artworkCount?: number;
+  eventCount?: number;
+};
+
+export type ProfileCompletionTask = {
+  id: "name" | "profile_image" | "bio" | "location" | "role" | "relevant_info" | "artwork" | "discipline" | "event" | "website" | "share";
+  label: string;
+  href: string;
+};
+
+export function calculateProfileCompletion(input: ProfileCompletionInput) {
+  const checks: Array<{ task: ProfileCompletionTask; complete: boolean }> = [
+    { task: { id: "name", label: "Add your name", href: "/settings/profile" }, complete: Boolean(input.displayName?.trim()) },
+    { task: { id: "profile_image", label: "Add profile image", href: "/settings/profile" }, complete: Boolean(input.profileImageUrl?.trim()) },
+    { task: { id: "bio", label: "Add bio", href: "/settings/profile" }, complete: Boolean(input.bio?.trim()) },
+    { task: { id: "location", label: "Add city or country", href: "/settings/profile" }, complete: Boolean(input.city?.trim() || input.country?.trim()) },
+    { task: { id: "role", label: "Confirm your role", href: "/settings/profile" }, complete: Boolean(input.profileType) },
+    { task: { id: "relevant_info", label: "Add a link or relevant information", href: "/settings/profile" }, complete: Boolean(input.website?.trim() || input.instagram?.trim() || input.disciplines?.length || input.interests?.length) },
+  ];
+
+  if (input.profileType === "artist") {
+    checks.push(
+      { task: { id: "artwork", label: "Add artwork", href: "/artworks/new" }, complete: (input.artworkCount || 0) > 0 },
+      { task: { id: "discipline", label: "Add discipline", href: "/settings/profile" }, complete: Boolean(input.disciplines?.length) },
+    );
+  }
+  if (input.profileType === "event_series") {
+    checks.push(
+      { task: { id: "website", label: "Add website", href: "/settings/profile" }, complete: Boolean(input.website?.trim() || input.instagram?.trim()) },
+      { task: { id: "event", label: "Add your first event", href: "/events/new" }, complete: (input.eventCount || 0) > 0 },
+    );
+  }
+
+  const completed = checks.filter((item) => item.complete).length;
+  return {
+    completed,
+    total: checks.length,
+    percentage: checks.length ? Math.round((completed / checks.length) * 100) : 0,
+    missing: checks.filter((item) => !item.complete).map((item) => item.task),
+  };
+}
+
 export function canSendNetworkMessage(input: { sameProfile: boolean; blocked: boolean; connected: boolean; recipientAllowsMessages: boolean; senderIsAdmin?: boolean }) {
   return !input.sameProfile && !input.blocked && (input.senderIsAdmin === true || input.connected || input.recipientAllowsMessages);
 }

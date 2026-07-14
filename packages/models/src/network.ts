@@ -165,14 +165,18 @@ export const networkAnalyticsEventTypes = [
   "profile_impression", "profile_view", "profile_share", "profile_link_click", "profile_message_click", "profile_donation_click",
   "profile_link_copy", "profile_native_share", "profile_like", "profile_unlike", "profile_follow", "profile_unfollow",
   "feed_view", "post_impression", "post_view", "post_create", "post_like", "post_comment", "post_save", "post_share",
+  "home_view", "home_profile_completion_click", "home_message_click", "home_event_click", "home_connection_request_accept", "home_suggested_profile_click", "home_updates_opened",
+  "updates_view", "update_impression", "update_open", "update_comment", "update_save", "update_share",
+  "profile_edit_started", "profile_completed", "profile_share",
   "network_search", "profile_search_result_impression", "connection_request_sent", "connection_request_accepted", "connection_removed",
   "connection_request_received", "connection_request_declined",
-  "conversation_started", "message_sent", "message_received", "message_read",
+  "conversation_started", "conversation_opened", "message_sent", "message_received", "message_read",
   "message_request_sent", "message_request_accepted", "message_request_declined",
   "event_impression", "event_view", "event_created", "event_published", "event_edit", "event_cancelled", "event_rsvp", "event_rsvp_removed", "event_save", "event_ticket_click", "event_share",
   "donation_started", "donation_checkout_opened", "donation_completed", "donation_failed", "donation_refunded",
   "shop_click", "artwork_shop_click", "product_view", "purchase_attributed",
   "navigation_feed_opened", "navigation_explore_opened", "navigation_events_opened", "navigation_network_opened", "navigation_messages_opened",
+  "navigation_home", "navigation_network", "navigation_messages", "navigation_events", "navigation_profile", "navigation_create", "navigation_notifications",
   "explore_view", "explore_artwork_impression", "explore_artwork_click", "explore_artist_click", "explore_artwork_like", "explore_artwork_save", "explore_artwork_share", "explore_shop_click", "explore_filter_changed",
   "video_impression", "video_play", "video_pause", "video_complete", "video_unmute",
   "create_menu_opened", "artwork_upload_started", "artwork_upload_completed", "post_create_started", "post_created", "event_create_started", "event_created", "collection_item_created", "artwork_feed_impression", "artwork_feed_click", "post_engagement",
@@ -188,6 +192,8 @@ export const networkAnalyticsInputSchema = z.object({
   source: z.string().trim().min(1).max(80).default("network"),
   path: optionalText(500),
   referrer: optionalText(1000),
+  platform: z.enum(["web", "ios", "android"]).default("web"),
+  appVersion: optionalText(40),
 });
 
 export const donationCheckoutInputSchema = z.object({
