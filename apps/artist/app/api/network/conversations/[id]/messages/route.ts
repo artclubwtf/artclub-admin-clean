@@ -1,17 +1,20 @@
 import { networkMessageInputSchema } from "@artclub/models";
 import { requireNetworkApiContext } from "@/lib/server/network-context";
 import { apiError, canMessage, cursorFilter, notify, validId } from "@/lib/server/network-service";
-import { NetworkConversationModel, NetworkMessageModel, NetworkProfileModel } from "@/lib/server/models";
+import { ConnectionModel, NetworkConversationModel, NetworkMessageModel, NetworkProfileModel } from "@/lib/server/models";
+import { serializeNetworkProfile } from "@/lib/server/network-context";
 import { resolveNetworkMediaItems } from "@/lib/server/network-media";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireNetworkApiContext(); if (!auth.ok) return auth.response;
   const { id } = await params; if (!validId(id)) return apiError("invalid_conversation_id");
-  const conversation = await NetworkConversationModel.findOne({ _id: id, participantProfileIds: auth.context.profile._id }).lean(); if (!conversation) return apiError("conversation_not_found", 404);
+  const conversation = await NetworkConversationModel.findOne({ _id: id, participantProfileIds: auth.context.profile._id }).populate("participantProfileIds", "displayName username slug profileImageUrl profileType city country").lean(); if (!conversation) return apiError("conversation_not_found", 404);
   const cursor = new URL(req.url).searchParams.get("cursor");
   const messages = await NetworkMessageModel.find({ conversationId: id, deletedAt: { $exists: false }, ...cursorFilter(cursor) }).sort({ _id: -1 }).limit(51).lean();
   const page = messages.slice(0, 50);
-  return Response.json({ ok: true, messages: page.reverse().map((message) => ({ id: message._id.toString(), text: message.text || "", media: resolveNetworkMediaItems(message.media || []), mine: String(message.senderProfileId) === String(auth.context.profile._id), read: message.readBy.some((value) => String(value) !== String(message.senderProfileId)), createdAt: message.createdAt, editedAt: message.editedAt })), nextCursor: messages.length > 50 ? messages[49]._id.toString() : null });
+  const participant = (conversation.participantProfileIds as any[]).find((value: any) => String(value._id) !== String(auth.context.profile._id));
+  const relation = participant ? await ConnectionModel.findOne({ status: { $in: ["accepted", "blocked"] }, $or: [{ requesterProfileId: auth.context.profile._id, recipientProfileId: participant._id }, { requesterProfileId: participant._id, recipientProfileId: auth.context.profile._id }] }).lean() : null;
+  return Response.json({ ok: true, participant: participant ? serializeNetworkProfile(participant) : null, connection: relation ? { id: relation._id.toString(), state: relation.status === "accepted" ? "connected" : relation.status } : null, muted: (conversation.mutedBy || []).some((value: any) => String(value) === String(auth.context.profile._id)), messages: page.reverse().map((message) => ({ id: message._id.toString(), text: message.text || "", media: resolveNetworkMediaItems(message.media || []), mine: String(message.senderProfileId) === String(auth.context.profile._id), read: message.readBy.some((value) => String(value) !== String(message.senderProfileId)), createdAt: message.createdAt, editedAt: message.editedAt })), nextCursor: messages.length > 50 ? messages[49]._id.toString() : null });
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {

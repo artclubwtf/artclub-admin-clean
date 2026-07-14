@@ -161,7 +161,7 @@ const savedEventSchema = new Schema({ eventId: { type: objectId, ref: "NetworkEv
 savedEventSchema.index({ eventId: 1, profileId: 1 }, { unique: true });
 
 const conversationSchema = new Schema(
-  { participantProfileIds: [{ type: objectId, ref: "NetworkProfile", required: true }], participantKey: { type: String, required: true }, lastMessageAt: Date, lastMessagePreview: { type: String, trim: true } },
+  { participantProfileIds: [{ type: objectId, ref: "NetworkProfile", required: true }], participantKey: { type: String, required: true }, lastMessageAt: Date, lastMessagePreview: { type: String, trim: true }, mutedBy: [{ type: objectId, ref: "NetworkProfile" }] },
   { timestamps: true },
 );
 conversationSchema.index({ participantKey: 1 }, { unique: true });
