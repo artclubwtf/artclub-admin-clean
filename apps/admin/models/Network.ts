@@ -230,6 +230,21 @@ const messageRequestSchema = new Schema(
 messageRequestSchema.index({ pairKey: 1 }, { unique: true });
 messageRequestSchema.index({ recipientProfileId: 1, status: 1, createdAt: -1 });
 
+const mobilePushTokenSchema = new Schema(
+  {
+    userId: { type: objectId, ref: "User", required: true },
+    profileId: { type: objectId, ref: "NetworkProfile", required: true },
+    token: { type: String, required: true, trim: true },
+    deviceId: { type: String, required: true, trim: true },
+    platform: { type: String, enum: ["ios", "android"], required: true },
+    enabled: { type: Boolean, default: true },
+    lastRegisteredAt: { type: Date, required: true, default: Date.now },
+  },
+  { timestamps: true },
+);
+mobilePushTokenSchema.index({ token: 1 }, { unique: true });
+mobilePushTokenSchema.index({ userId: 1, deviceId: 1 }, { unique: true });
+
 type ModelFor<T extends Schema> = Model<InferSchemaType<T>>;
 const getModel = <T extends Schema>(name: string, schema: T) => (models[name] as ModelFor<T>) || model(name, schema);
 
@@ -252,3 +267,4 @@ export const NetworkModerationAuditModel = getModel("NetworkModerationAudit", mo
 export const NetworkFollowModel = getModel("NetworkFollow", followSchema);
 export const NetworkProfileLikeModel = getModel("NetworkProfileLike", profileLikeSchema);
 export const NetworkMessageRequestModel = getModel("NetworkMessageRequest", messageRequestSchema);
+export const MobilePushTokenModel = getModel("MobilePushToken", mobilePushTokenSchema);

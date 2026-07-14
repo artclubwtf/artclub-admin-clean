@@ -1,0 +1,20 @@
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import { Pressable, RefreshControl, Text, View } from "react-native";
+
+import { track } from "../../src/analytics";
+import { useAuth } from "../../src/auth";
+import { useTheme } from "../../src/theme";
+import { Avatar, Button, Empty, ErrorState, Field, Loading, Page, Row } from "../../src/ui";
+
+const tabs = ["Discover", "Requests", "Connections", "Following"] as const;
+export default function Network() {
+  const { api } = useAuth(); const { colors } = useTheme(); const router = useRouter();
+  const [tab, setTab] = useState<(typeof tabs)[number]>("Discover"); const [q, setQ] = useState(""); const [items, setItems] = useState<any[]>([]); const [error, setError] = useState(""); const [loading, setLoading] = useState(true);
+  const load = useCallback(async () => { setLoading(true); try { const path = tab === "Discover" ? `/profiles?q=${encodeURIComponent(q)}` : `/connections?status=${tab === "Requests" ? "pending" : tab.toLowerCase()}`; const data = await api.request(path); setItems(tab === "Discover" ? data.profiles : data.connections); setError(""); } catch { setError("The network could not be loaded."); } finally { setLoading(false); } }, [api, q, tab]);
+  useFocusEffect(useCallback(() => { void load(); void track(api, "navigation_network"); }, [load, api]));
+  useEffect(() => { if (tab !== "Discover") return; const timer = setTimeout(() => { void load(); if (q) void track(api, "network_search", { queryLength: q.length }); }, 350); return () => clearTimeout(timer); }, [q, tab, load, api]);
+  async function connect(profileId: string) { await api.request("/connections", { method: "POST", body: JSON.stringify({ profileId }) }); void track(api, "connection_request_sent", { profileId }); await load(); }
+  async function respond(id: string, action: string) { await api.request(`/connections/${id}`, { method: "PATCH", body: JSON.stringify({ action }) }); await load(); }
+  return <Page title="Network" subtitle="Discover people by relevance, role and place." refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={colors.text}/>}><View style={{ flexDirection: "row", gap: 6 }}>{tabs.map((item) => <Pressable key={item} onPress={() => setTab(item)} style={{ flex: 1, minHeight: 40, alignItems: "center", justifyContent: "center", borderBottomWidth: tab === item ? 2 : 0, borderColor: colors.text }}><Text style={{ color: tab === item ? colors.text : colors.textMuted, fontSize: 11, fontWeight: "600" }}>{item}</Text></Pressable>)}</View>{tab === "Discover" ? <Field label="Search profiles" placeholder="Name, city, discipline" value={q} onChangeText={setQ}/> : null}{error ? <ErrorState message={error} retry={load}/> : loading && !items.length ? <Loading/> : items.length ? items.map((entry) => { const profile = tab === "Discover" ? entry : entry.profile; return <Row key={entry.id} onPress={() => router.push(`/artist/${profile.slug}` as never)}><Avatar profile={profile}/><View style={{ flex: 1 }}><Text style={{ color: colors.text, fontWeight: "600" }}>{profile.displayName}</Text><Text style={{ color: colors.textMuted, fontSize: 12 }}>{tab === "Discover" ? entry.reason : `${profile.profileType.replaceAll("_", " ")}${profile.city ? ` · ${profile.city}` : ""}`}</Text></View>{tab === "Discover" ? <Button label="Connect" variant="secondary" onPress={() => void connect(profile.id)}/> : tab === "Requests" && entry.incoming ? <><Button label="Accept" onPress={() => void respond(entry.id, "accept")}/><Pressable onPress={() => void respond(entry.id, "decline")}><Text style={{ color: colors.textMuted }}>Decline</Text></Pressable></> : tab === "Connections" ? <Button label="Message" variant="secondary" onPress={() => void api.request("/conversations", { method: "POST", body: JSON.stringify({ profileId: profile.id }) }).then((result: any) => router.push(`/messages/${result.conversation.id}` as never))}/> : null}</Row>; }) : <Empty text={tab === "Discover" ? "No profiles match this search." : `No ${tab.toLowerCase()} yet.`}/>}</Page>;
+}

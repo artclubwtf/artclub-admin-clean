@@ -1,13 +1,12 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
-    "entryPoint": "./index.ts",
+    "name": "ARTCLUB",
+    "slug": "artclub-network",
     "scheme": "artclub",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -16,22 +15,36 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "wtf.artclub.app",
+      "bundleIdentifier": "com.artclubmm.network",
+      "associatedDomains": ["applinks:network.artclub.wtf"],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
+      "package": "com.artclubmm.network",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": true,
+      "intentFilters": [{
+        "action": "VIEW",
+        "autoVerify": true,
+        "data": [{ "scheme": "https", "host": "network.artclub.wtf", "pathPrefix": "/" }],
+        "category": ["BROWSABLE", "DEFAULT"]
+      }]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      ["expo-image-picker", { "photosPermission": "ARTCLUB uses your library to add artworks, profile media and updates.", "cameraPermission": "ARTCLUB uses the camera to capture artwork and process media." }],
+      ["expo-notifications", { "icon": "./assets/adaptive-icon.png", "color": "#171717" }]
+    ],
     "extra": {
       "eas": {
         "projectId": "3c7f6b1c-e1b1-48fe-b1c9-7a7d908713b0"

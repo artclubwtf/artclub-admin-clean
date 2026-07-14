@@ -117,6 +117,13 @@ export const networkEventInputSchema = z.object({
 });
 export type NetworkEventInput = z.infer<typeof networkEventInputSchema>;
 
+export const mobilePushTokenInputSchema = z.object({
+  token: z.string().trim().regex(/^ExponentPushToken\[[^\]]+\]$/).max(200),
+  deviceId: z.string().trim().min(1).max(200),
+  platform: z.enum(["ios", "android"]),
+});
+export type MobilePushTokenInput = z.infer<typeof mobilePushTokenInputSchema>;
+
 export type ExploreArtwork = {
   id: string;
   productKey: string;
