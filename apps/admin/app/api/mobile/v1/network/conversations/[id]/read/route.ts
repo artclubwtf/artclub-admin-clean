@@ -1,0 +1,4 @@
+import { Types } from "mongoose";
+import { mobileError, mobileNetworkContext } from "@/lib/mobileNetwork";
+import { NetworkConversationModel, NetworkMessageModel } from "@/models/Network";
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) { const auth = await mobileNetworkContext(req); if (!auth.ok) return auth.response; const { id } = await params; if (!Types.ObjectId.isValid(id) || !(await NetworkConversationModel.exists({ _id: id, participantProfileIds: auth.profile!._id }))) return mobileError("conversation_not_found", 404); await NetworkMessageModel.updateMany({ conversationId: id, senderProfileId: { $ne: auth.profile!._id }, readBy: { $ne: auth.profile!._id } }, { $addToSet: { readBy: auth.profile!._id } }); return Response.json({ ok: true }); }

@@ -59,7 +59,7 @@ export async function getMobileUserByToken(token: string): Promise<MobileUserPay
   }
 
   const user = await UserModel.findById(session.userId).lean();
-  if (!user || !user.isActive || user.role !== "customer") return null;
+  if (!user || !user.isActive || !["customer", "artist"].includes(user.role)) return null;
 
   return {
     id: user._id.toString(),
@@ -72,4 +72,12 @@ export async function getMobileUserFromRequest(req: Request): Promise<MobileUser
   const token = extractBearerToken(req);
   if (!token) return null;
   return getMobileUserByToken(token);
+}
+
+export async function revokeMobileSession(req: Request) {
+  const token = extractBearerToken(req);
+  if (!token) return false;
+  await connectMongo();
+  const result = await MobileSessionModel.deleteOne({ tokenHash: hashToken(token) });
+  return result.deletedCount > 0;
 }

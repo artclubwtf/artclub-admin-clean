@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getMobileUserFromRequest } from "@/lib/mobileAuth";
+import { getMobileUserFromRequest, revokeMobileSession } from "@/lib/mobileAuth";
 
 export async function GET(req: Request) {
   try {
@@ -15,4 +15,9 @@ export async function GET(req: Request) {
     const message = err instanceof Error ? err.message : "Failed to load user";
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+export async function DELETE(req: Request) {
+  await revokeMobileSession(req);
+  return new Response(null, { status: 204 });
 }

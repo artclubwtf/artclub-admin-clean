@@ -11,7 +11,9 @@
   },
   "dependencies": {
     "@artclub/api-client": "workspace:*",
+    "@artclub/design-tokens": "workspace:*",
     "@artclub/models": "workspace:*",
+    "@artclub/network-analytics": "workspace:*",
     "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-navigation/bottom-tabs": "^6.6.1",
     "@react-navigation/native": "^6.1.17",

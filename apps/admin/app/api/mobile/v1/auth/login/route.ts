@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     }
 
     await connectMongo();
-    const user = await UserModel.findOne({ email, role: "customer" }).lean();
+    const user = await UserModel.findOne({ email, role: { $in: ["customer", "artist"] } }).lean();
     if (!user || !user.isActive) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }

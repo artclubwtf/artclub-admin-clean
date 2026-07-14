@@ -1,0 +1,2 @@
+import { getS3ObjectUrl } from "@/lib/s3";
+export async function GET(_: Request, { params }: { params: Promise<{ key: string[] }> }) { const { key } = await params; const value = key.join("/"); if (!/^network\/[a-zA-Z0-9/_-]+\.[a-zA-Z0-9]+$/.test(value) || value.includes("..")) return new Response("Not found", { status: 404 }); try { return Response.redirect(await getS3ObjectUrl(value, 300), 307); } catch { return new Response("Unavailable", { status: 503 }); } }

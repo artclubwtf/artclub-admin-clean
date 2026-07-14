@@ -1,7 +1,12 @@
 export type NetworkApiError = { code: string; details?: unknown };
-export function createNetworkApiClient(baseUrl = "") {
+export type NetworkApiClientOptions = { baseUrl?: string; getAccessToken?: () => string | null | Promise<string | null>; prefix?: string };
+export function createNetworkApiClient(input: string | NetworkApiClientOptions = "") {
+  const options = typeof input === "string" ? { baseUrl: input } : input;
+  const baseUrl = (options.baseUrl || "").replace(/\/$/, "");
+  const prefix = options.prefix || "/api/network";
   async function request<T>(path: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(`${baseUrl}/api/network${path}`, { ...init, headers: { ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...init?.headers } });
+    const token = await options.getAccessToken?.();
+    const response = await fetch(`${baseUrl}${prefix}${path}`, { ...init, headers: { ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init?.headers } });
     const payload = response.status === 204 ? null : await response.json().catch(() => null);
     if (!response.ok) { const error = new Error(payload?.error?.code || `request_failed_${response.status}`) as Error & { status: number; details?: unknown }; error.status = response.status; error.details = payload?.error?.details; throw error; }
     return payload as T;
