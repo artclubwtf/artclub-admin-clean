@@ -13,7 +13,7 @@ export const fetchCache = "force-no-store";
 export default async function RegisterPage() {
   if (isNetworkMvpEnabled()) {
     const network = await loadNetworkContext();
-    if (network) redirect(networkOnboardingPath(network.user, network.profile) || "/feed");
+    if (network) redirect(networkOnboardingPath(network.user, network.profile) || "/home");
     return <NetworkRegisterForm />;
   }
   const context = await getArtistContext();

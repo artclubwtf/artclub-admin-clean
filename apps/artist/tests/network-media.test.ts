@@ -17,5 +17,5 @@ describe("persistent network media",()=>{
 });
 
 describe("network navigation",()=>{
-  it("uses one canonical destination set",()=>{expect(primaryNavigation.map(item=>item.href)).toEqual(["/feed","/explore-art","/events","/messages","/profile"]);expect(networkNavItems.map(item=>item.href)).toEqual(["/feed","/explore-art","/events","/profile"])});
+  it("uses one canonical destination set",()=>{expect(primaryNavigation.map(item=>item.href)).toEqual(["/home","/network","/messages","/events","/profile"]);expect(networkNavItems.map(item=>item.href)).toEqual(["/home","/network","/messages","/events","/profile"])});
 });

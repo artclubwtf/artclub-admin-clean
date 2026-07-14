@@ -11,7 +11,7 @@ function before(field:string,cursor:Cursor|null){return cursor?{[field]:{$lte:ne
 function priceLabel(variants:any[],product:any){const prices=variants.map(item=>item.priceCents).filter((value:number)=>value>0);if(!product.forSale)return"Not for sale";if(!prices.length)return product.originalAvailable?"Available on request":"";return new Intl.NumberFormat("en-DE",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(Math.min(...prices)/100)}
 
 export async function GET(req:Request){
-  const auth=await requireNetworkApiContext();if(!auth.ok)return auth.response;const url=new URL(req.url);const cursor=decode(url.searchParams.get("cursor"));const limit=Math.min(Math.max(Number(url.searchParams.get("limit"))||20,1),40);const filter=url.searchParams.get("filter")||"all";const tab=filter==="following"?"following":"for-you";const profileId=auth.context.profile._id;
+  const auth=await requireNetworkApiContext();if(!auth.ok)return auth.response;const url=new URL(req.url);const cursor=decode(url.searchParams.get("cursor"));const limit=Math.min(Math.max(Number(url.searchParams.get("limit"))||20,1),40);const filter=url.searchParams.get("filter")||"all";const tab=url.searchParams.get("scope")==="network"||filter==="following"?"following":"for-you";const profileId=auth.context.profile._id;
   let allowedProfileIds:Types.ObjectId[]|null=null;let allowedArtistIds:Types.ObjectId[]|null=null;
   if(tab==="following"){
     const [relations,follows]=await Promise.all([ConnectionModel.find({status:"accepted",$or:[{requesterProfileId:profileId},{recipientProfileId:profileId}]}).lean(),NetworkFollowModel.find({followerProfileId:profileId}).lean()]);

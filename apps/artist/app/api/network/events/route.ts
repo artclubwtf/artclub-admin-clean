@@ -2,7 +2,7 @@ import { networkEventInputSchema } from "@artclub/models";
 import { requireNetworkApiContext } from "@/lib/server/network-context";
 import { buildEventStartAtConstraint, buildEventStartAtFilter, normalizeEventTimes, serializeEvent, type NetworkEventWhen } from "@/lib/server/network-events";
 import { apiError, cursorFilter, EVENT_CREATOR_TYPES } from "@/lib/server/network-service";
-import { EventRSVPModel, NetworkEventModel, SavedEventModel } from "@/lib/server/models";
+import { ConnectionModel, EventRSVPModel, NetworkEventModel, SavedEventModel } from "@/lib/server/models";
 import { hydrateNetworkMediaKeys } from "@/lib/server/network-media";
 
 function slugify(value: string) { return value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "event"; }
@@ -14,7 +14,12 @@ export async function GET(req: Request) {
   const mode = rawMode as NetworkEventWhen;
   const dateResult = buildEventStartAtFilter({ when: mode, from: url.searchParams.get("from"), to: url.searchParams.get("to") });
   if (!dateResult.ok) return apiError(dateResult.error, 400);
-  const ownership = scope === "mine" ? { organizerProfileId: auth.context.profile._id } : profileId && /^[a-f\d]{24}$/i.test(profileId) ? { $or: [{ organizerProfileId: profileId }, { participantProfileIds: profileId }] } : {};
+  let ownership: Record<string, unknown> = scope === "mine" ? { organizerProfileId: auth.context.profile._id } : profileId && /^[a-f\d]{24}$/i.test(profileId) ? { $or: [{ organizerProfileId: profileId }, { participantProfileIds: profileId }] } : {};
+  if (scope === "network") {
+    const relations = await ConnectionModel.find({ status: "accepted", $or: [{ requesterProfileId: auth.context.profile._id }, { recipientProfileId: auth.context.profile._id }] }).select({ requesterProfileId: 1, recipientProfileId: 1 }).lean();
+    const ids = relations.map((item) => String(item.requesterProfileId) === String(auth.context.profile._id) ? item.recipientProfileId : item.requesterProfileId);
+    ownership = { $or: [{ organizerProfileId: { $in: ids } }, { participantProfileIds: { $in: ids } }] };
+  }
   const access = scope === "mine" ? {} : { status: { $in: ["published", "cancelled"] }, visibility: "public" };
   const validDateConstraint = buildEventStartAtConstraint(dateResult.filter, scope === "mine");
   const query: Record<string, unknown> = { ...cursorFilter(cursor), ...access, ...ownership, ...validDateConstraint };

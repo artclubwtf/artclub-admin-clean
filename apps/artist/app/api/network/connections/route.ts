@@ -4,6 +4,10 @@ import { materializeUnifiedProfile } from "@/lib/server/unified-profile";
 import { ConnectionModel, NetworkFollowModel, NetworkMessageRequestModel } from "@/lib/server/models";
 export async function GET(req: Request) {
   const auth = await requireNetworkApiContext(); if (!auth.ok) return auth.response; const mode = new URL(req.url).searchParams.get("status") || "accepted";
+  if (mode === "following") {
+    const follows = await NetworkFollowModel.find({ followerProfileId: auth.context.profile._id }).sort({ createdAt: -1 }).populate("followedProfileId", "displayName username slug profileImageUrl profileType city country").lean();
+    return Response.json({ ok: true, connections: follows.map((item: any) => ({ id: item._id.toString(), state: "following", incoming: false, profile: item.followedProfileId ? serializeNetworkProfile(item.followedProfileId) : null, createdAt: item.createdAt })) });
+  }
   const query: any = mode === "pending" ? { recipientProfileId: auth.context.profile._id, status: "pending" } : { status: "accepted", $or: [{ requesterProfileId: auth.context.profile._id }, { recipientProfileId: auth.context.profile._id }] };
   const items = await ConnectionModel.find(query).sort({ createdAt: -1 }).populate("requesterProfileId", "displayName username slug profileImageUrl profileType").populate("recipientProfileId", "displayName username slug profileImageUrl profileType").lean();
   const messages = await NetworkMessageRequestModel.find({ connectionId: { $in: items.map(item=>item._id) }, status: "pending" }).lean(); const messageByConnection = new Map(messages.map(item=>[item.connectionId.toString(),item.text]));

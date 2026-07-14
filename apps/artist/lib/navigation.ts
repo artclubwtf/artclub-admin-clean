@@ -2,19 +2,20 @@ export type NavigationIcon = "home" | "explore" | "events" | "messages" | "profi
 export type BottomNavItem = { id: string; href: string; label: string; icon: NavigationIcon; analyticsEvent?: string };
 
 export const primaryNavigation: BottomNavItem[] = [
-  { id: "feed", href: "/feed", label: "Feed", icon: "home", analyticsEvent: "navigation_feed_opened" },
-  { id: "explore", href: "/explore-art", label: "Explore Art", icon: "explore", analyticsEvent: "navigation_explore_opened" },
-  { id: "events", href: "/events", label: "Events", icon: "events", analyticsEvent: "navigation_events_opened" },
-  { id: "messages", href: "/messages", label: "Messages", icon: "messages", analyticsEvent: "navigation_messages_opened" },
-  { id: "profile", href: "/profile", label: "Profile", icon: "profile" },
+  { id: "home", href: "/home", label: "Home", icon: "home", analyticsEvent: "navigation_home" },
+  { id: "network", href: "/network", label: "Network", icon: "network", analyticsEvent: "navigation_network" },
+  { id: "messages", href: "/messages", label: "Messages", icon: "messages", analyticsEvent: "navigation_messages" },
+  { id: "events", href: "/events", label: "Events", icon: "events", analyticsEvent: "navigation_events" },
+  { id: "profile", href: "/profile", label: "Profile", icon: "profile", analyticsEvent: "navigation_profile" },
 ];
 
 export const secondaryNavigation = {
-  network: { id: "network", href: "/network", label: "Network", icon: "network" as const, analyticsEvent: "navigation_network_opened" },
-  notifications: { id: "notifications", href: "/notifications", label: "Notifications", icon: "notifications" as const },
+  updates: { id: "updates", href: "/updates", label: "Updates", icon: "home" as const, analyticsEvent: "updates_view" },
+  explore: { id: "explore", href: "/explore-art", label: "Explore Art", icon: "explore" as const, analyticsEvent: "navigation_explore_opened" },
+  notifications: { id: "notifications", href: "/notifications", label: "Notifications", icon: "notifications" as const, analyticsEvent: "navigation_notifications" },
 };
 
-export const networkNavItems = primaryNavigation.filter(item => item.id !== "messages");
+export const networkNavItems = primaryNavigation;
 
 export const bottomNavItems: BottomNavItem[] = [
   { id: "home", href: "/", label: "Home", icon: "home" },
@@ -26,4 +27,4 @@ export const bottomNavItems: BottomNavItem[] = [
 ];
 
 export const publicRoutes = ["/login", "/register", "/account-pending"] as const;
-export const protectedRoutes = ["/", "/onboarding", "/artworks", "/analytics", "/earnings", "/media", "/profile", "/settings", "/series", "/messages", "/announcements", "/explore-art"] as const;
+export const protectedRoutes = ["/", "/home", "/updates", "/onboarding", "/artworks", "/analytics", "/earnings", "/media", "/profile", "/settings", "/series", "/messages", "/announcements", "/explore-art"] as const;

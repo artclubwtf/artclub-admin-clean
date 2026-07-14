@@ -5,20 +5,17 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { cn } from "@/lib/cn";
-import { bottomNavItems, networkNavItems, type BottomNavItem } from "@/lib/navigation";
+import { bottomNavItems, networkNavItems, secondaryNavigation, type BottomNavItem } from "@/lib/navigation";
 import { trackNetwork } from "@/lib/client/network-analytics";
 import { NavigationIcon } from "@/components/navigation/NavigationIcon";
 import { primaryNavigation } from "@/lib/navigation";
 import { ArtclubLogo } from "@/components/branding/ArtclubLogo";
 
 const desktopNavigation: BottomNavItem[] = [
-  primaryNavigation[0],
-  primaryNavigation[1],
-  { id: "network", href: "/network", label: "Network", icon: "network", analyticsEvent: "navigation_network_opened" },
-  primaryNavigation[2],
-  primaryNavigation[3],
-  { id: "notifications", href: "/notifications", label: "Notifications", icon: "notifications" },
-  primaryNavigation[4],
+  ...primaryNavigation,
+  secondaryNavigation.updates,
+  secondaryNavigation.explore,
+  secondaryNavigation.notifications,
 ];
 
 function isActive(pathname: string, href: string) {
@@ -97,9 +94,9 @@ const createActions = [
   { key: "series", label: "Add series", href: "/series?create=1" },
 ] as const;
 const networkCreateActions = [
-  { key: "artwork", label: "Upload artwork", href: "/artworks/new", roles: ["artist"] },
-  { key: "post", label: "Create post", href: "/create?type=post", roles: [] },
-  { key: "process", label: "Share process image or video", href: "/create?type=process", roles: [] },
+  { key: "artwork", label: "Add artwork", href: "/artworks/new", roles: ["artist"] },
+  { key: "post", label: "Publish update", href: "/create?type=post", roles: [] },
+  { key: "process", label: "Share process", href: "/create?type=process", roles: ["artist"] },
   { key: "event", label: "Create event", href: "/events/new", roles: ["artist","gallery","event_series","curator","institution"] },
   { key: "collection", label: "Add to collection", href: "/collection?create=1", roles: ["collector","art_enthusiast","other"] },
 ] as const;
@@ -110,7 +107,7 @@ export function BottomNav({ network = false }: { network?: boolean }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [profileType,setProfileType]=useState("");
   const items = network ? networkNavItems : bottomNavItems;
-  const splitIndex = Math.floor(items.length / 2);
+  const splitIndex = network ? items.length : Math.floor(items.length / 2);
   const leftItems = items.slice(0, splitIndex);
   const rightItems = items.slice(splitIndex);
   const columnCount = leftItems.length + rightItems.length + 1;
@@ -140,7 +137,7 @@ export function BottomNav({ network = false }: { network?: boolean }) {
             className="absolute inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] px-3 lg:bottom-8 lg:left-64 lg:right-auto lg:w-80 lg:px-0"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="mx-auto max-w-2xl rounded-2xl bg-[var(--surface)] p-2 shadow-2xl">
+            <div className="mx-auto max-w-2xl rounded-[8px] border border-[var(--border)] bg-[var(--surface)] p-2">
               <div className="space-y-0.5">
                 {visibleCreateActions.map((action, index) => (
                   <button
@@ -152,7 +149,7 @@ export function BottomNav({ network = false }: { network?: boolean }) {
                       router.push(action.href);
                     }}
                     className={cn(
-                      "flex w-full items-center justify-between rounded-xl px-4 py-3.5 text-left text-[.95rem] font-medium tracking-[-0.02em] text-[var(--text)] transition-colors hover:bg-[var(--surface-soft)]",
+                      "flex w-full items-center justify-between rounded-[4px] px-4 py-3.5 text-left text-[.95rem] font-medium tracking-[-0.02em] text-[var(--text)] transition-colors hover:bg-[var(--surface-soft)]",
                       index > 0 ? "mt-1" : "",
                     )}
                   >
@@ -190,7 +187,7 @@ export function BottomNav({ network = false }: { network?: boolean }) {
             );
           })}
 
-          <div className="flex justify-center lg:order-first lg:mb-1">
+          {!network ? <div className="flex justify-center lg:order-first lg:mb-1">
             <button
               type="button"
               onClick={() => { if(network&&!sheetOpen)trackNetwork("create_menu_opened"); setSheetOpen((current) => !current); }}
@@ -206,7 +203,7 @@ export function BottomNav({ network = false }: { network?: boolean }) {
               </svg>
               <span className="lg:hidden">Create</span>
             </button>
-          </div>
+          </div> : null}
 
           {rightItems.map((item) => {
             const active = isActive(pathname, item.href);
@@ -229,7 +226,7 @@ export function BottomNav({ network = false }: { network?: boolean }) {
         </nav>
       </div>
 
-      {network ? <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-[var(--border)] bg-[var(--surface)] px-5 py-6 lg:flex"><ArtclubLogo className="mb-9 h-7 w-auto"/><nav className="space-y-1">{desktopNavigation.map(item=>{const active=isActive(pathname,item.href);return <Link key={item.id} href={item.href} onClick={()=>item.analyticsEvent&&trackNetwork(item.analyticsEvent)} aria-current={active?"page":undefined} className={cn("flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",active?"bg-[var(--surface-muted)] font-medium text-[var(--text)]":"text-[var(--text-muted)] hover:bg-[var(--surface-muted)]")}><NavigationIcon name={item.icon}/><span>{item.label}</span></Link>})}<Link href="/settings" className={cn("flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm",isActive(pathname,"/settings")?"bg-[var(--surface-muted)] font-medium text-[var(--text)]":"text-[var(--text-muted)] hover:bg-[var(--surface-muted)]")}><NavigationIcon name="settings"/>Settings</Link></nav><button type="button" onClick={()=>setSheetOpen(current=>!current)} className="primary-action mt-7 w-full"><svg viewBox="0 0 24 24" className="mr-2 h-5 w-5" fill="none" aria-hidden><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>Create</button></aside> : null}
+      {network ? <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-[var(--border)] bg-[var(--surface)] px-5 py-6 lg:flex"><ArtclubLogo className="mb-9 h-5 w-auto"/><nav className="space-y-1">{desktopNavigation.map((item,index)=>{const active=isActive(pathname,item.href);const secondary=index>=primaryNavigation.length;return <div key={item.id} className={secondary&&index===primaryNavigation.length?"mt-5 border-t border-[var(--divider)] pt-5":""}><Link href={item.href} onClick={()=>item.analyticsEvent&&trackNetwork(item.analyticsEvent)} aria-current={active?"page":undefined} className={cn("flex items-center gap-3 rounded-[4px] px-3 py-2.5 text-sm transition-colors",active?"bg-[var(--surface-muted)] font-medium text-[var(--text)]":"text-[var(--text-muted)] hover:bg-[var(--surface-muted)]")}><NavigationIcon name={item.icon}/><span>{item.label}</span></Link></div>})}<Link href="/settings" className={cn("flex items-center gap-3 rounded-[4px] px-3 py-2.5 text-sm",isActive(pathname,"/settings")?"bg-[var(--surface-muted)] font-medium text-[var(--text)]":"text-[var(--text-muted)] hover:bg-[var(--surface-muted)]")}><NavigationIcon name="settings"/>Settings</Link></nav><button type="button" onClick={()=>{trackNetwork("navigation_create");setSheetOpen(current=>!current)}} className="primary-action mt-7 w-full"><svg viewBox="0 0 24 24" className="mr-2 h-5 w-5" fill="none" aria-hidden><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>Create</button></aside> : null}
     </>
   );
 }
