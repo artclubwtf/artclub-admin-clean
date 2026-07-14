@@ -1,9 +1,34 @@
 import { networkEventInputSchema } from "@artclub/models";
 
 import { mobileError, mobileNetworkContext, serializeMobileProfile } from "@/lib/mobileNetwork";
-import { EventRSVPModel, NetworkEventModel } from "@/models/Network";
+import { ConnectionModel, EventRSVPModel, NetworkEventModel, NetworkFollowModel } from "@/models/Network";
 
 const creators = new Set(["artist", "gallery", "event_series", "curator", "institution"]);
 function eventJson(item: any, attending = false, rsvpCount = 0) { return { id: String(item._id), title: item.title, description: item.description || "", coverImageUrl: item.coverImageUrl || "", startAt: item.startAt, endAt: item.endAt, timezone: item.timezone, venueName: item.venueName || "", address: item.address || "", city: item.city || "", country: item.country || "", isOnline: item.isOnline === true, ticketUrl: item.ticketUrl || "", rsvpEnabled: item.rsvpEnabled !== false, capacity: item.capacity, status: item.status, attending, rsvpCount, organizer: item.organizerProfileId && typeof item.organizerProfileId === "object" ? serializeMobileProfile(item.organizerProfileId) : null }; }
-export async function GET(req: Request) { const auth = await mobileNetworkContext(req); if (!auth.ok) return auth.response; const url = new URL(req.url); const when = url.searchParams.get("when") === "past" ? "past" : "upcoming"; const scope = url.searchParams.get("scope"); const query: any = { startAt: when === "past" ? { $lt: new Date() } : { $gte: new Date() }, ...(scope === "mine" ? { organizerProfileId: auth.profile!._id } : { status: "published", visibility: "public" }) }; const rows = await NetworkEventModel.find(query).sort({ startAt: when === "past" ? -1 : 1 }).limit(30).populate("organizerProfileId", "displayName username slug profileImageUrl profileType city country").lean(); const ids = rows.map((item) => item._id); const [mine, counts] = await Promise.all([EventRSVPModel.find({ eventId: { $in: ids }, profileId: auth.profile!._id, status: "going" }).lean(), EventRSVPModel.aggregate([{ $match: { eventId: { $in: ids }, status: "going" } }, { $group: { _id: "$eventId", count: { $sum: 1 } } }])]); const mineSet = new Set(mine.map((item) => String(item.eventId))); const countMap = new Map(counts.map((item) => [String(item._id), item.count])); return Response.json({ ok: true, events: rows.map((item) => eventJson(item, mineSet.has(String(item._id)), countMap.get(String(item._id)) || 0)) }); }
-export async function POST(req: Request) { const auth = await mobileNetworkContext(req); if (!auth.ok) return auth.response; if (!creators.has(auth.profile!.profileType)) return mobileError("event_role_forbidden", 403); const parsed = networkEventInputSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return mobileError("invalid_event", 400, parsed.error.flatten()); const base = parsed.data.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70) || "event"; const item = await NetworkEventModel.create({ ...parsed.data, slug: `${base}-${Date.now().toString(36)}`, organizerProfileId: auth.profile!._id, ...(parsed.data.status === "published" ? { publishedAt: new Date() } : {}) }); return Response.json({ ok: true, event: eventJson(item) }, { status: 201 }); }
+
+export async function GET(req: Request) {
+  const auth = await mobileNetworkContext(req); if (!auth.ok) return auth.response;
+  const url = new URL(req.url); const when = url.searchParams.get("when") === "past" ? "past" : "upcoming"; const scope = url.searchParams.get("scope");
+  const query: any = { startAt: when === "past" ? { $lt: new Date() } : { $gte: new Date() }, ...(scope === "mine" ? { organizerProfileId: auth.profile!._id } : { status: "published", visibility: "public" }) };
+  if (scope === "network") {
+    const [connections, follows] = await Promise.all([
+      ConnectionModel.find({ status: "accepted", $or: [{ requesterProfileId: auth.profile!._id }, { recipientProfileId: auth.profile!._id }] }).lean(),
+      NetworkFollowModel.find({ followerProfileId: auth.profile!._id }).lean(),
+    ]);
+    const organizerIds = [...connections.map((item) => String(item.requesterProfileId) === String(auth.profile!._id) ? item.recipientProfileId : item.requesterProfileId), ...follows.map((item) => item.followedProfileId)];
+    query.organizerProfileId = { $in: organizerIds };
+  }
+  const rows = await NetworkEventModel.find(query).sort({ startAt: when === "past" ? -1 : 1 }).limit(30).populate("organizerProfileId", "displayName username slug profileImageUrl profileType city country").lean();
+  const ids = rows.map((item) => item._id);
+  const [mine, counts] = await Promise.all([EventRSVPModel.find({ eventId: { $in: ids }, profileId: auth.profile!._id, status: "going" }).lean(), EventRSVPModel.aggregate([{ $match: { eventId: { $in: ids }, status: "going" } }, { $group: { _id: "$eventId", count: { $sum: 1 } } }])]);
+  const mineSet = new Set(mine.map((item) => String(item.eventId))); const countMap = new Map(counts.map((item) => [String(item._id), item.count]));
+  return Response.json({ ok: true, events: rows.map((item) => eventJson(item, mineSet.has(String(item._id)), countMap.get(String(item._id)) || 0)) });
+}
+
+export async function POST(req: Request) {
+  const auth = await mobileNetworkContext(req); if (!auth.ok) return auth.response; if (!creators.has(auth.profile!.profileType)) return mobileError("event_role_forbidden", 403);
+  const parsed = networkEventInputSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return mobileError("invalid_event", 400, parsed.error.flatten());
+  const base = parsed.data.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70) || "event";
+  const item = await NetworkEventModel.create({ ...parsed.data, slug: `${base}-${Date.now().toString(36)}`, organizerProfileId: auth.profile!._id, ...(parsed.data.status === "published" ? { publishedAt: new Date() } : {}) });
+  return Response.json({ ok: true, event: eventJson(item) }, { status: 201 });
+}
